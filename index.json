@@ -22,7 +22,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.39",
+      "version": "0.5.40",
       "runtimes": [
         "claude",
         "codex"
@@ -47,7 +47,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.39",
+      "version": "0.5.40",
       "runtimes": [
         "claude",
         "codex"
@@ -72,7 +72,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.39",
+      "version": "0.5.40",
       "runtimes": [
         "claude",
         "codex"
@@ -97,7 +97,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.39",
+      "version": "0.5.40",
       "runtimes": [
         "claude",
         "codex"
@@ -122,7 +122,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.39",
+      "version": "0.5.40",
       "runtimes": [
         "claude",
         "codex"
@@ -147,7 +147,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.39",
+      "version": "0.5.40",
       "runtimes": [
         "claude",
         "codex"
@@ -172,7 +172,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.39",
+      "version": "0.5.40",
       "runtimes": [
         "claude",
         "codex"
@@ -197,7 +197,7 @@
       ],
       "category": "setup",
       "maturity": "beta",
-      "version": "0.2.49",
+      "version": "0.2.50",
       "runtimes": [
         "claude",
         "codex"
@@ -222,7 +222,7 @@
       ],
       "category": "setup",
       "maturity": "beta",
-      "version": "0.2.49",
+      "version": "0.2.50",
       "runtimes": [
         "claude",
         "codex"
@@ -247,7 +247,7 @@
       ],
       "category": "setup",
       "maturity": "beta",
-      "version": "0.2.49",
+      "version": "0.2.50",
       "runtimes": [
         "claude",
         "codex"
@@ -272,7 +272,7 @@
       ],
       "category": "design",
       "maturity": "beta",
-      "version": "0.1.7",
+      "version": "0.1.8",
       "runtimes": [
         "claude"
       ],
@@ -293,7 +293,7 @@
       ],
       "category": "implementation",
       "maturity": "beta",
-      "version": "0.4.43",
+      "version": "0.4.44",
       "runtimes": [
         "claude",
         "codex"
@@ -318,7 +318,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.11.3",
+      "version": "0.11.4",
       "runtimes": [
         "claude",
         "codex"
@@ -343,7 +343,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.11.3",
+      "version": "0.11.4",
       "runtimes": [
         "claude",
         "codex"
@@ -368,7 +368,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.11.3",
+      "version": "0.11.4",
       "runtimes": [
         "claude",
         "codex"
@@ -393,7 +393,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.11.3",
+      "version": "0.11.4",
       "runtimes": [
         "claude",
         "codex"
@@ -402,7 +402,7 @@
         "claude": "native",
         "codex": "native"
       },
-      "digest": "sha256:415cead6c41f1e13de7c7edb2c57c15fba1f9f142104b42054077f55a8d94eee"
+      "digest": "sha256:64db9b589f26a46dbdb8042f591ad54dca0cee2e1188fbee5e0b6e7ceede4f8f"
     },
     {
       "name": "stark-memory",
@@ -418,7 +418,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.11.3",
+      "version": "0.11.4",
       "runtimes": [
         "claude"
       ],
@@ -441,7 +441,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.11.3",
+      "version": "0.11.4",
       "runtimes": [
         "claude",
         "codex"
@@ -466,7 +466,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.11.3",
+      "version": "0.11.4",
       "runtimes": [
         "claude",
         "codex"
@@ -491,7 +491,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.11.3",
+      "version": "0.11.4",
       "runtimes": [
         "claude"
       ],
@@ -514,7 +514,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.11.3",
+      "version": "0.11.4",
       "runtimes": [
         "claude"
       ],
@@ -536,7 +536,7 @@
       ],
       "category": "planning",
       "maturity": "beta",
-      "version": "0.4.18",
+      "version": "0.4.19",
       "runtimes": [
         "claude",
         "codex"
@@ -560,7 +560,7 @@
       ],
       "category": "planning",
       "maturity": "beta",
-      "version": "0.4.18",
+      "version": "0.4.19",
       "runtimes": [
         "claude",
         "codex"
@@ -585,7 +585,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.27",
+      "version": "0.5.28",
       "runtimes": [
         "claude",
         "codex"
@@ -610,7 +610,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.27",
+      "version": "0.5.28",
       "runtimes": [
         "claude",
         "codex"
@@ -635,7 +635,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.27",
+      "version": "0.5.28",
       "runtimes": [
         "claude",
         "codex"
@@ -660,7 +660,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.27",
+      "version": "0.5.28",
       "runtimes": [
         "claude",
         "codex"
@@ -685,7 +685,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.27",
+      "version": "0.5.28",
       "runtimes": [
         "claude",
         "codex"
@@ -700,27 +700,27 @@
   "pluginAssets": [
     {
       "bundle": "stark-analyze",
-      "version": "0.5.39",
+      "version": "0.5.40",
       "digest": "sha256:42ee5266e52dc6166629b7e32f781f70d3fd1a3e140314404a4e6fd77f73c540"
     },
     {
       "bundle": "stark-design",
-      "version": "0.1.7",
+      "version": "0.1.8",
       "digest": "sha256:7b200484db2256c8e3edc1ee46dd680b894043f5b07ce03b6d8fe486feb2418a"
     },
     {
       "bundle": "stark-implement",
-      "version": "0.4.43",
+      "version": "0.4.44",
       "digest": "sha256:536627a388f6518c15374d29bd11640ee5d24501261aaae7474891883428956f"
     },
     {
       "bundle": "stark-ops",
-      "version": "0.11.3",
+      "version": "0.11.4",
       "digest": "sha256:8903642d997f754220bb39976c8a111bc29b5cae5ebfc264810e9d3a2cf8da01"
     },
     {
       "bundle": "stark-plan",
-      "version": "0.4.18",
+      "version": "0.4.19",
       "digest": "sha256:00968d1cde917236a59e96ec8d661edda1e3bd23b60a0892c43c889ea7439719"
     }
   ]
