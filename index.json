@@ -22,7 +22,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.40",
+      "version": "0.5.41",
       "runtimes": [
         "claude",
         "codex"
@@ -47,7 +47,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.40",
+      "version": "0.5.41",
       "runtimes": [
         "claude",
         "codex"
@@ -72,7 +72,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.40",
+      "version": "0.5.41",
       "runtimes": [
         "claude",
         "codex"
@@ -97,7 +97,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.40",
+      "version": "0.5.41",
       "runtimes": [
         "claude",
         "codex"
@@ -122,7 +122,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.40",
+      "version": "0.5.41",
       "runtimes": [
         "claude",
         "codex"
@@ -131,7 +131,7 @@
         "claude": "native",
         "codex": "native"
       },
-      "digest": "sha256:e49aa43fb300ee054f6c639e7377d8cb6a2bdc4f6a1ab8cd23ed14f47b8aca6b"
+      "digest": "sha256:aeb56ef1572bd829460be6617b7391cef1105fe7f41feaff7b567763ee35293e"
     },
     {
       "name": "stark-terraform-review",
@@ -147,7 +147,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.40",
+      "version": "0.5.41",
       "runtimes": [
         "claude",
         "codex"
@@ -156,7 +156,7 @@
         "claude": "native",
         "codex": "native"
       },
-      "digest": "sha256:7033b7d38ec6fad11ad9e259616ba552f8ffcee6aa9f18ddf31bfa0f6097b285"
+      "digest": "sha256:55caa7adcb2133621c83f01bf21177219069fcd30b05bb41ccecc9fac93ea496"
     },
     {
       "name": "stark-terragrunt-review",
@@ -172,7 +172,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.40",
+      "version": "0.5.41",
       "runtimes": [
         "claude",
         "codex"
@@ -181,7 +181,7 @@
         "claude": "native",
         "codex": "native"
       },
-      "digest": "sha256:312b67bf035ef7f5783b381a39292032241b9c776803c9211823ab90b73a6842"
+      "digest": "sha256:1c953397b8b07b4080ec602b21330fcc97312421d23b49046a23639bbd6d593b"
     },
     {
       "name": "stark-adr",
@@ -293,7 +293,7 @@
       ],
       "category": "implementation",
       "maturity": "beta",
-      "version": "0.4.44",
+      "version": "0.4.45",
       "runtimes": [
         "claude",
         "codex"
@@ -302,7 +302,7 @@
         "claude": "native",
         "codex": "native"
       },
-      "digest": "sha256:1517875696874089d048d55fb47b993a9d544be32cc594b25afd822f7c64d642"
+      "digest": "sha256:ec419fd27b00d0048c8c3b5dc0eb3f0f39ec8669ebf89aabbd167d3e947780f3"
     },
     {
       "name": "stark-bury",
@@ -450,7 +450,7 @@
         "claude": "native",
         "codex": "native"
       },
-      "digest": "sha256:009d075f24ad5a0c13b658c6edb350506da4adf3b1decad5c63f57208166c223"
+      "digest": "sha256:1b7f72abba2214c861ace0ff60869a035eee3b0cb5b4db7ca8f90e964712c107"
     },
     {
       "name": "team-leader-agent",
@@ -515,7 +515,7 @@
       ],
       "category": "planning",
       "maturity": "beta",
-      "version": "0.4.19",
+      "version": "0.4.20",
       "runtimes": [
         "claude",
         "codex"
@@ -539,7 +539,7 @@
       ],
       "category": "planning",
       "maturity": "beta",
-      "version": "0.4.19",
+      "version": "0.4.20",
       "runtimes": [
         "claude",
         "codex"
@@ -548,7 +548,7 @@
         "claude": "native",
         "codex": "native"
       },
-      "digest": "sha256:b111bd3da357ac63f0e27461ca11dfc6c4810a177c8a8686313ac112e2c9b89f"
+      "digest": "sha256:e26893aa9eaa72673d78e5d3e61b380eae231fb82fb17a315eaf44b5b02bac71"
     },
     {
       "name": "stark-blog-sharpen",
@@ -679,7 +679,7 @@
   "pluginAssets": [
     {
       "bundle": "stark-analyze",
-      "version": "0.5.40",
+      "version": "0.5.41",
       "digest": "sha256:42ee5266e52dc6166629b7e32f781f70d3fd1a3e140314404a4e6fd77f73c540"
     },
     {
@@ -689,7 +689,7 @@
     },
     {
       "bundle": "stark-implement",
-      "version": "0.4.44",
+      "version": "0.4.45",
       "digest": "sha256:536627a388f6518c15374d29bd11640ee5d24501261aaae7474891883428956f"
     },
     {
@@ -699,7 +699,7 @@
     },
     {
       "bundle": "stark-plan",
-      "version": "0.4.19",
+      "version": "0.4.20",
       "digest": "sha256:00968d1cde917236a59e96ec8d661edda1e3bd23b60a0892c43c889ea7439719"
     }
   ]

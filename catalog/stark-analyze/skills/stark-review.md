@@ -2,7 +2,7 @@
 name: stark-review
 type: skill
 description: Single-agent PR review. Uses triage-selected PR review domains by default, or one forced agent via `--agent`.
-version: 0.5.40
+version: 0.5.41
 maturity: beta
 runtimes:
   - claude
@@ -117,9 +117,9 @@ overrides:
 
       ### 2. Verify read access and provision the worktree
 
-      Use the caller's existing `gh` authentication for read access. Do not mint a
-      provider-specific posting token in the wrapper. The dispatcher owns posting
-      credentials, and reaches that path only after explicit `--post` consent.
+      Use the operator's existing `gh` login as `aryeh-stark` for reads and reviews.
+      The dispatcher posts only after explicit `--post` consent.
+      Model attribution appears in the review text.
 
       ```bash
       gh auth status
@@ -431,26 +431,12 @@ read prompts from inside the PR head, which is an injection vector.
 CONFIG_ROOT="$(pwd)"
 ```
 
-### 2. Provision a GitHub token (only if unset)
+### 2. Verify GitHub identity
 
-The TS tool authenticates via `gh api`, which uses `GH_TOKEN` if set. Provision
-a stark-claude installation token only when the caller has not already supplied
-one — never overwrite a caller-provided token.
-
-```bash
-if [ -z "${GH_TOKEN:-}" ]; then
-    if GH_TOKEN_TMP=$(node "$TOOLS/github_app.ts" --app stark-claude token 2>/dev/null); then
-        export GH_TOKEN="$GH_TOKEN_TMP"
-    else
-        if [ -n "${DRY_RUN:-}" ]; then
-            warn "GH_TOKEN not set and github_app.ts token failed; --dry-run continues without posting auth"
-        else
-            error "GH_TOKEN not set and github_app.ts token failed; cannot post review"
-            exit 1
-        fi
-    fi
-fi
-```
+The TS tool uses the operator's existing `gh` login.
+Run `gh api user --jq .login`; expect `aryeh-stark`.
+If authentication fails, report it. Authentication changes require operator action.
+Review model attribution appears in the text.
 
 ### 3. Verify gh and provision the worktree
 
@@ -723,4 +709,4 @@ state — surface the path and let the user inspect.
 | Worktree creation fails                          | Stop; do not fall back to the main checkout |
 | Repo mismatch                                    | Stop and ask to run from the matching local checkout |
 | Fork PR                                          | Review-only; no fix-loop |
-| `GH_TOKEN` unset and `github_app.ts token` fails | `--dry-run` continues with a warning; otherwise stop |
+| `gh api user` fails or reports another identity | Stop and report the authentication issue |

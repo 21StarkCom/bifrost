@@ -2,7 +2,7 @@
 name: stark-terragrunt-review
 type: skill
 description: Multi-agent code review of Terragrunt orchestration — terragrunt.hcl, root.hcl, terragrunt.stack.hcl, units, includes, dependency/generate/remote_state blocks, the DRY values pattern, multi-account/multi-env live repos — for dependency correctness, state isolation, mock-output safety, and HCL pitfalls. Runs across one or more configurable LLMs (claude/codex/gemini), each as its own subagent, then merges + cross-validates findings. Use whenever the user wants to review, audit, or sanity-check a Terragrunt repo/catalog/live tree, or asks about dependency ordering / mock outputs / state keys / include hierarchy. Review-only; defers resource/module HCL to stark-terraform-review.
-version: 0.5.40
+version: 0.5.41
 maturity: beta
 runtimes:
   - claude
@@ -205,7 +205,7 @@ Raw input: `$ARGUMENTS`
 - `--no-tools` — skip host scanners.
 - `--trust-source` — allow the HCL-**evaluating** Terragrunt scanners (`terragrunt hcl validate`, `find --dag`). These execute the reviewed config (Terragrunt can eval `run_cmd`), so they're **off by default** and should only be enabled for source you trust (e.g. your own repo). Untrusted/PR review: leave off.
 - `--min-severity S` — `critical|high|medium|low` floor.
-- `--pr N --repo O/R` — post merged findings to PR N (first agent's GitHub App).
+- `--pr N --repo O/R` — post merged findings to PR N (through the operator's gh login, with model attribution).
 - `--dry-run` — resolve only, dispatch nothing.
 - `--json` — receipt JSON instead of the markdown report.
 

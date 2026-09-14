@@ -2,7 +2,7 @@
 name: stark-build
 type: skill
 description: 'Stage 2 — autonomous implementation from an accepted stark-author spec: one fresh headless session per task, gated by checks the agent cannot edit (PreToolUse path-deny + Stop-hook gate), evidence per task, commit per green task, held-out e2e gate, one cross-vendor advisory review, ONE bounded fix round for medium+ findings, draft PR. No LLM review loops. Use for build, implement a spec.'
-version: 0.4.44
+version: 0.4.45
 maturity: beta
 runtimes:
   - claude
@@ -472,10 +472,10 @@ overrides:
       / security hole; high = wrong output or a broken spec contract; medium = a
       real defect on a reachable edge path; low = everything else."*
 
-      Post the findings as ONE PR comment authored by the selected reviewer's app
-      identity (`stark-claude`, `stark-codex`, or `stark-gemini`) — ALL of them,
-      every severity, before any fixing. Then re-run the pass NEVER, whatever Phase
-      4b does. [RQ6][A1]
+      Post ALL findings as one review through `gh` as `aryeh-stark`.
+      Identify the selected review model. Anchor findings where possible;
+      put unanchorable findings in the review body. Include every severity
+      before fixing. Never re-run this pass, whatever Phase 4b does. [RQ6][A1]
 
       ## Phase 4b — ONE fix round, medium+ only (skip with `--no-fix`) [§3.7]
 
@@ -899,10 +899,10 @@ consequence if left unfixed: critical = data loss / crash on the normal path
 / security hole; high = wrong output or a broken spec contract; medium = a
 real defect on a reachable edge path; low = everything else."*
 
-Post the findings as ONE PR comment authored by stark-codex
-(`github_app.ts --app stark-codex pr comment ...`) — ALL of them, every
-severity, before any fixing. Then re-run the pass NEVER, whatever Phase 4b
-does.
+Post ALL findings as one review through `gh` as `aryeh-stark`.
+Identify Codex as the review model. Anchor findings where possible;
+put unanchorable findings in the review body. Include every severity
+before fixing. Never re-run this pass, whatever Phase 4b does.
 
 ## Phase 4b — ONE fix round, medium+ only (skip with `--no-fix`)
 
