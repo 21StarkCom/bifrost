@@ -1,7 +1,7 @@
 {
   "name": "stark-ops",
-  "version": "0.26.1",
-  "description": "Repository operations beyond the spec-driven pipeline — cut releases, housekeep stale issues/branches/worktrees, run session start/end, and hand off work across sessions.",
+  "version": "0.27.0",
+  "description": "Repository operations beyond the spec-driven pipeline — coordinate Minions with Gru, cut releases, run session start/end, and hand off work across sessions.",
   "author": {
     "name": "21 Stark AI",
     "email": "engineering@21stark.com",
@@ -11,7 +11,7 @@
   "repository": "https://github.com/21StarkCom/bifrost",
   "keywords": [
     "release",
-    "housekeeping",
+    "coordination",
     "session",
     "handover",
     "git"
@@ -19,8 +19,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Stark Ops",
-    "shortDescription": "Repository operations beyond the spec-driven pipeline — cut releases, housekeep stale",
-    "longDescription": "Repository operations beyond the spec-driven pipeline — cut releases, housekeep stale issues/branches/worktrees, run session start/end, and hand off work across sessions.",
+    "shortDescription": "Repository operations beyond the spec-driven pipeline — coordinate Minions with Gru, cut",
+    "longDescription": "Repository operations beyond the spec-driven pipeline — coordinate Minions with Gru, cut releases, run session start/end, and hand off work across sessions.",
     "developerName": "21 Stark AI",
     "category": "Ops",
     "capabilities": [

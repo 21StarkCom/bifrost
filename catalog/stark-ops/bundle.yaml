@@ -1,10 +1,10 @@
 name: stark-ops
-version: 0.11.4
-description: Repository operations beyond the spec-driven pipeline — cut releases, housekeep stale issues/branches/worktrees, run session start/end, and hand off work across sessions.
+version: 0.12.0
+description: Repository operations beyond the spec-driven pipeline — coordinate Minions with Gru, cut releases, run session start/end, and hand off work across sessions.
 category: ops
 tags:
   - release
-  - housekeeping
+  - coordination
   - session
   - handover
   - git
@@ -18,7 +18,6 @@ runtimes:
 # Membership manifest consumed by the generator (`stark sync`).
 skills:
   - stark-handover
-  - stark-housekeeping
   - stark-release
   - stark-session
   - stark-gha-cost

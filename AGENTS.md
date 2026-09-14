@@ -27,6 +27,8 @@ Go tests use `_test.go` files beside packages. Web tests use Vitest with `.test.
 
 ## Codex Agent Notes
 
+The `stark-ops` bundle includes Gru's leader and Minion skills. Their complete Codex variants come from stark-skills runtime overrides. The retired housekeeping skill is no longer a bundle member; the live adapter test uses `stark-handover` to verify explicit invocation policy.
+
 Prefer editing `catalog/`, `engine/`, `server/`, or `web/src/` over generated outputs. Standalone Codex installs render to `.agents/skills/<name>/SKILL.md`; native marketplace packages render separately to `dist/codex-plugins/<bundle>/skills/<name>/SKILL.md`, with invocation policy in `agents/openai.yaml`. Commands, prompts, and agents become skills. Per-skill `references/`, `scripts/`, and `assets/` are vendored beside them. MCP fragments merge into `.codex/config.toml` for standalone installs; native plugin MCP requires plugin-root `.mcp.json`. Secret environment variables use Codex's `env_vars = ["ENV_KEY"]` forwarding contract rather than literal `${ENV_KEY}` values. Never commit local install outputs such as `.codex/`, `.stark/`, or arbitrary `.agents/` content; the generated `.agents/plugins/marketplace.json` is the sole exception.
 
 ## Commit, PR, and Security Guidelines

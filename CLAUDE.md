@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
+The `stark-ops` bundle includes Gru's leader and Minion skills. Their complete Codex variants come from stark-skills runtime overrides. The retired housekeeping skill is no longer a bundle member; the live adapter test uses `stark-handover` to verify explicit invocation policy.
+
 `bifrost` (branded **Bifröst**; GitHub slug `21StarkCom/bifrost`) is the **canonical, multi-runtime marketplace** for stark bundles. The engine renders each bundle into per-runtime trees (`dist/claude/`, `dist/codex/`, `dist/gemini/`) plus a signed `index.json` / `bundles/*.json` web registry. The repo doubles as a native **Claude Code marketplace** — `.claude-plugin/marketplace.json` at the repo root IS the manifest CC reads when you `/plugin marketplace add 21StarkCom/bifrost`.
 
 **Source of truth = stark-skills.** The catalog's `skills/` + `commands/` are **generated** from a stark-skills checkout by `stark sync` (driven by each `bundle.yaml`'s `skills:`/`commands:` membership manifest); do NOT hand-edit them. What IS curated in this repo: each `bundle.yaml` (metadata + membership), and `mcp/` artifacts (stark-skills defines no MCP servers). See "Generation pipeline" below.

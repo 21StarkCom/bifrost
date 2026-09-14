@@ -82,8 +82,8 @@
     {
       "name": "stark-ops",
       "source": "./dist/claude/stark-ops",
-      "description": "Repository operations beyond the spec-driven pipeline — cut releases, housekeep stale issues/branches/worktrees, run session start/end, and hand off work across sessions.",
-      "version": "0.11.4",
+      "description": "Repository operations beyond the spec-driven pipeline — coordinate Minions with Gru, cut releases, run session start/end, and hand off work across sessions.",
+      "version": "0.12.0",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -91,7 +91,7 @@
       "category": "ops",
       "tags": [
         "release",
-        "housekeeping",
+        "coordination",
         "session",
         "handover",
         "git"
