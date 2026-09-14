@@ -695,7 +695,7 @@
     {
       "bundle": "stark-ops",
       "version": "0.12.0",
-      "digest": "sha256:aa742bcf86513dc37be9718912154f5f1b82eb01b1b020b4c769eade6d0cf1bd"
+      "digest": "sha256:0e1438ec1272321c35a42fc696a4cbef6f9633a6efccac2c65266babf534bc6e"
     },
     {
       "bundle": "stark-plan",
