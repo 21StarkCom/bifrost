@@ -34,7 +34,7 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 
 ### Fixed
 - Publish stark-skills v0.11.1: scope native Gru discovery to the recorded provider, preserve ownership on same-session resume, and prevent stale records from hiding a live previous leader.
-- Deliver queued Codex reports by yielding waiting turns. Validate reviewer-applied fixes and preserve the final reviewed head during integration.
+- Instruct native Codex leaders and Minions to end waiting turns so Hermod can deliver queued reports. Instruct Minions and Gru to validate reviewer-applied fixes and merge only the reviewed head.
 - Refresh all seven Claude bundles and all six native Codex packages. Live acceptance remains in progress; these changes address the first observed attachment blocker (STARK-4919, #238).
 
 ## [0.27.2] — 2026-09-15
