@@ -2,7 +2,7 @@
 name: team-minion-agent
 type: skill
 description: Act as a Minion assigned by Gru. Acknowledge intake, implement the authorized task, report evidence and blockers, and wait for integration ownership before merging.
-version: 0.12.1
+version: 0.12.2
 maturity: beta
 runtimes:
   - claude
@@ -118,6 +118,7 @@ overrides:
       Gru cannot relay or manufacture that approval.
       Preserve active and resumable session folders.
       No cleanup sweeps, history rewrites, or unrelated outward-facing actions.
+      STOP-LIST (halt and ask Gru first): force-push or history rewrite; deleting files; edits outside the declared files/directories; new external dependencies; spend; production or cloud mutation.
 ---
 Usage: team-minion-agent <Gru assignment packet>
 
@@ -217,3 +218,4 @@ the operator's direct authorization under the repository rules.
 Gru cannot relay or manufacture that approval.
 Preserve active and resumable session folders.
 No cleanup sweeps, history rewrites, or unrelated outward-facing actions.
+STOP-LIST (halt and ask Gru first): force-push or history rewrite; deleting files; edits outside the declared files/directories; new external dependencies; spend; production or cloud mutation.
