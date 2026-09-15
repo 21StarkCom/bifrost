@@ -2,7 +2,7 @@
 name: team-minion-agent
 type: skill
 description: Act as a Minion assigned by Gru. Acknowledge intake, implement the authorized task, report evidence and blockers, and wait for integration ownership before merging.
-version: 0.12.0
+version: 0.12.1
 maturity: beta
 runtimes:
   - claude
@@ -58,6 +58,7 @@ overrides:
 
       Use Hermod peer messaging. Never type reports into another terminal.
       Use your real Codex thread identity and Hermod's native queue adapter.
+      When waiting for Gru after a report, end your turn so queued replies can arrive.
       Claude's `SendMessage`, `ListAgents`, `/clear`, and `/effort` do not apply.
       Resolve the leader's stable peer identity before sending.
       Reply with `hermod msg reply <message-id> -- <json-report>`
@@ -86,6 +87,9 @@ overrides:
       Run the required `/code-review xhigh --fix` gate.
       Post every finding through the repository-approved review path.
       Fix findings or answer their threads with concrete reasons.
+      Inspect and validate the reviewer's applied fixes, then record the final head.
+      Repeat review only for substantive changes outside those reviewed fixes.
+      Gru requires a posted review on the merged head; repost it after any new head.
       Use the repository's mandated GitHub identity for PR actions.
 
       Send `ready` with the PR, head SHA, review receipt,
@@ -182,6 +186,9 @@ Run the repository's required checks and behavioral verification.
 Run the required `/code-review xhigh --fix` gate.
 Post every finding through the repository-approved review path.
 Fix findings or answer their threads with concrete reasons.
+Inspect and validate the reviewer's applied fixes, then record the final head.
+Repeat review only for substantive changes outside those reviewed fixes.
+Gru requires a posted review on the merged head; repost it after any new head.
 Use the repository's mandated GitHub identity for PR actions.
 
 Send `ready` with the PR, head SHA, review receipt,
