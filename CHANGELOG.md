@@ -30,6 +30,11 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 <!-- stark-gh:pr-merge pr=196 runId=c1422f87-9818-4484-94b7-36bd3219bffb -->
 - Publish native Codex skills for `stark-bury`, `stark-handoff`, and `simple-gate`.
 
+## [0.27.7] - 2026-09-15
+
+### Changed
+- Refresh marketplace packages from [stark-skills@a835cff](https://github.com/21StarkCom/stark-skills/commit/a835cff28412423198d7c957f7246a557bccd122).
+
 ## [0.27.6] - 2026-09-15
 
 ### Changed
