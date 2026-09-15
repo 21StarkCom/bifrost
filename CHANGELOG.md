@@ -43,6 +43,9 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 - Instruct native Codex leaders and Minions to end waiting turns so Hermod can deliver queued reports. Instruct Minions and Gru to validate reviewer-applied fixes and merge only the reviewed head.
 - Refresh all seven Claude bundles and all six native Codex packages. Live acceptance remains in progress; these changes address the first observed attachment blocker (STARK-4919, #238).
 
+### Not covered
+- Review audit: automation merged #238 before its required code review. The retrospective review is recorded on #238. 0.27.4 is the reviewed follow-up.
+
 ## [0.27.2] — 2026-09-15
 
 ### Added
