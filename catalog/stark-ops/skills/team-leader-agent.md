@@ -2,7 +2,7 @@
 name: team-leader-agent
 type: skill
 description: Gru leads authorized Minion work from intake through verified completion. Use for objectives or existing tickets requiring worker dispatch, dependency coordination, bounded recovery, status, resume, or stop.
-version: 0.12.3
+version: 0.12.4
 maturity: beta
 runtimes:
   - claude
