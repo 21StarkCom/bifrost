@@ -81,11 +81,17 @@ func TestRealAdapterRendersCommittedCatalog(t *testing.T) {
 			t.Fatalf("install: %v", err)
 		}
 		// real skill body (codex runtime variant), not a fake placeholder
-		skill, _ := os.ReadFile(filepath.Join(dest, ".agents/skills/stark-handover/SKILL.md"))
+		skill, err := os.ReadFile(filepath.Join(dest, ".agents/skills/stark-handover/SKILL.md"))
+		if err != nil {
+			t.Fatal(err)
+		}
 		if !strings.Contains(string(skill), "Usage: stark-handover [save|resume|status]") {
 			t.Fatalf("SKILL.md missing real body:\n%s", skill)
 		}
-		metadata, _ := os.ReadFile(filepath.Join(dest, ".agents/skills/stark-handover/agents/openai.yaml"))
+		metadata, err := os.ReadFile(filepath.Join(dest, ".agents/skills/stark-handover/agents/openai.yaml"))
+		if err != nil {
+			t.Fatal(err)
+		}
 		if !strings.Contains(string(metadata), "allow_implicit_invocation: false") {
 			t.Fatalf("skill lost its explicit-only boundary:\n%s", metadata)
 		}
@@ -94,7 +100,10 @@ func TestRealAdapterRendersCommittedCatalog(t *testing.T) {
 		if _, err := install.Install(dest, p, install.Options{}); err != nil {
 			t.Fatalf("re-install: %v", err)
 		}
-		second, _ := os.ReadFile(filepath.Join(dest, ".agents/skills/stark-handover/SKILL.md"))
+		second, err := os.ReadFile(filepath.Join(dest, ".agents/skills/stark-handover/SKILL.md"))
+		if err != nil {
+			t.Fatal(err)
+		}
 		if string(first) != string(second) {
 			t.Fatalf("real install not idempotent")
 		}

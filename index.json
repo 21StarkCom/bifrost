@@ -131,7 +131,7 @@
         "claude": "native",
         "codex": "native"
       },
-      "digest": "sha256:aeb56ef1572bd829460be6617b7391cef1105fe7f41feaff7b567763ee35293e"
+      "digest": "sha256:245fc7012c7e7001d4bd7043b2252e238904b7aaa84f977c0062913b6eb43738"
     },
     {
       "name": "stark-terraform-review",
@@ -197,7 +197,7 @@
       ],
       "category": "setup",
       "maturity": "beta",
-      "version": "0.2.50",
+      "version": "0.2.51",
       "runtimes": [
         "claude",
         "codex"
@@ -222,7 +222,7 @@
       ],
       "category": "setup",
       "maturity": "beta",
-      "version": "0.2.50",
+      "version": "0.2.51",
       "runtimes": [
         "claude",
         "codex"
@@ -247,7 +247,7 @@
       ],
       "category": "setup",
       "maturity": "beta",
-      "version": "0.2.50",
+      "version": "0.2.51",
       "runtimes": [
         "claude",
         "codex"
@@ -272,7 +272,7 @@
       ],
       "category": "design",
       "maturity": "beta",
-      "version": "0.1.8",
+      "version": "0.1.9",
       "runtimes": [
         "claude"
       ],
@@ -475,7 +475,7 @@
         "claude": "native",
         "codex": "native"
       },
-      "digest": "sha256:c3e9bcd678b731a1616b15874facf542fc4d74e461afdead1060f7c1fe53a3e2"
+      "digest": "sha256:42938a4659dd57d6d19eef99156834608fb2b82ef565d4a1cdb3271b05ac234d"
     },
     {
       "name": "team-minion-agent",
@@ -564,7 +564,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.28",
+      "version": "0.5.29",
       "runtimes": [
         "claude",
         "codex"
@@ -589,7 +589,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.28",
+      "version": "0.5.29",
       "runtimes": [
         "claude",
         "codex"
@@ -614,7 +614,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.28",
+      "version": "0.5.29",
       "runtimes": [
         "claude",
         "codex"
@@ -639,7 +639,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.28",
+      "version": "0.5.29",
       "runtimes": [
         "claude",
         "codex"
@@ -664,7 +664,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.28",
+      "version": "0.5.29",
       "runtimes": [
         "claude",
         "codex"
@@ -684,7 +684,7 @@
     },
     {
       "bundle": "stark-design",
-      "version": "0.1.8",
+      "version": "0.1.9",
       "digest": "sha256:7b200484db2256c8e3edc1ee46dd680b894043f5b07ce03b6d8fe486feb2418a"
     },
     {
@@ -695,7 +695,7 @@
     {
       "bundle": "stark-ops",
       "version": "0.12.0",
-      "digest": "sha256:0e1438ec1272321c35a42fc696a4cbef6f9633a6efccac2c65266babf534bc6e"
+      "digest": "sha256:04d567f562090153300e8fdc76e489c507ecf87946eec7860d5bd62608e84acf"
     },
     {
       "bundle": "stark-plan",

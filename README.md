@@ -23,7 +23,7 @@ The repo is also a native marketplace for both hosts. Claude Code reads `.claude
 /plugin install stark-ops@bifrost
 ```
 
-Each plugin is **self-contained** — its supporting tool scripts, prompts, config, and standard per-skill `references/`, `scripts/`, and `assets/` are vendored into the bundle, so `/plugin install` works with **no `install.sh`** and no stark-skills checkout on your machine. Only prerequisite: **Node ≥ 22.6** (skills run `node --experimental-strip-types`; `stark doctor` checks it).
+Each plugin is **self-contained** — its supporting tool scripts, prompts, config, and standard per-skill `references/`, `scripts/`, and `assets/` are vendored into the bundle, so `/plugin install` works with **no `install.sh`** and no stark-skills checkout on your machine. Only prerequisite: **Node ≥ 24** (skills run plain `node` with native TypeScript and SQLite; `stark doctor` checks it).
 
 ## Install (Codex)
 
@@ -32,8 +32,8 @@ codex plugin marketplace add 21StarkCom/bifrost
 codex plugin add stark-ops@bifrost
 ```
 
-Start a new thread after installing or updating, then invoke housekeeping with
-`$stark-housekeeping --dry-run` (or select it through `/skills`). Codex installs
+Start a new thread after installing or updating, then verify the install with
+`$stark-handover status` (or select a skill through `/skills`). Codex installs
 native skills from `dist/codex-plugins/`; it does not migrate the Claude command
 files.
 
