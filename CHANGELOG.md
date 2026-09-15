@@ -30,6 +30,22 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 <!-- stark-gh:pr-merge pr=196 runId=c1422f87-9818-4484-94b7-36bd3219bffb -->
 - Publish native Codex skills for `stark-bury`, `stark-handoff`, and `simple-gate`.
 
+## [0.27.4] - 2026-09-15
+
+### Fixed
+- Republish the audited native Codex packages with a fresh cache version after the 0.27.3 automation merged before its required review. The full retrospective findings are recorded on #238; this follow-up completes review before merge.
+- Record accurate 0.27.3 release notes, including the distinction between runtime fixes and skill instructions. Live Gru acceptance remains in progress (STARK-4919).
+
+## [0.27.3] - 2026-09-15
+
+### Fixed
+- Publish stark-skills v0.11.1: scope native Gru discovery to the recorded provider, preserve ownership on same-session resume, and prevent stale records from hiding a live previous leader.
+- Instruct native Codex leaders and Minions to end waiting turns so Hermod can deliver queued reports. Instruct Minions and Gru to validate reviewer-applied fixes and merge only the reviewed head.
+- Refresh all seven Claude bundles and all six native Codex packages. Live acceptance remains in progress; these changes address the first observed attachment blocker (STARK-4919, #238).
+
+### Not covered
+- Review audit: automation merged #238 before its required code review. The retrospective review is recorded on #238. 0.27.4 is the reviewed follow-up.
+
 ## [0.27.2] — 2026-09-15
 
 ### Added
