@@ -23,7 +23,7 @@ func newDoctorCmd() *cobra.Command {
 			var emulated []string
 
 			// Environment: vendored skill tools run via
-			// `node --experimental-strip-types` (Node >= 22.6). Checked always,
+			// plain `node` (Node >= 24.0). Checked always,
 			// even with no installed manifest.
 			if okMsg, brokenMsg := nodeVersionCheck(); brokenMsg != "" {
 				broken = append(broken, brokenMsg)
@@ -69,29 +69,28 @@ func newDoctorCmd() *cobra.Command {
 	return cmd
 }
 
-// minNodeMajor / minNodeMinor is the floor for native TypeScript stripping
-// (`node --experimental-strip-types`), which every vendored skill tool needs.
+// Match the vendored tools' Node >= 24 contract: plain TypeScript and node:sqlite.
 const (
-	minNodeMajor = 22
-	minNodeMinor = 6
+	minNodeMajor = 24
+	minNodeMinor = 0
 )
 
-// nodeVersionCheck verifies Node is on PATH and >= 22.6. Exactly one of the two
+// nodeVersionCheck verifies Node is on PATH and >= 24.0. Exactly one of the two
 // return values is non-empty.
 func nodeVersionCheck() (okMsg, brokenMsg string) {
 	out, err := exec.Command("node", "--version").Output()
 	if err != nil {
 		return "", fmt.Sprintf("node: not found on PATH — skills cannot run (need >= %d.%d)", minNodeMajor, minNodeMinor)
 	}
-	v := strings.TrimSpace(string(out)) // e.g. "v22.6.0"
+	v := strings.TrimSpace(string(out)) // e.g. "v24.0.0"
 	maj, min, parsed := parseNodeVersion(v)
 	if !parsed {
 		return "", fmt.Sprintf("node: unparseable version %q (need >= %d.%d)", v, minNodeMajor, minNodeMinor)
 	}
 	if maj < minNodeMajor || (maj == minNodeMajor && min < minNodeMinor) {
-		return "", fmt.Sprintf("node %s too old — need >= %d.%d for --experimental-strip-types", v, minNodeMajor, minNodeMinor)
+		return "", fmt.Sprintf("node %s too old — need >= %d.%d for native TypeScript and SQLite", v, minNodeMajor, minNodeMinor)
 	}
-	return fmt.Sprintf("node %s (>= %d.%d, supports --experimental-strip-types)", v, minNodeMajor, minNodeMinor), ""
+	return fmt.Sprintf("node %s (>= %d.%d, supports native TypeScript and SQLite)", v, minNodeMajor, minNodeMinor), ""
 }
 
 func parseNodeVersion(v string) (maj, min int, ok bool) {

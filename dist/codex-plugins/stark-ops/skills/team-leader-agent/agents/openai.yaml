@@ -1,0 +1,5 @@
+interface:
+  display_name: "Team Leader Agent"
+  short_description: "Gru leads authorized Minion work from intake through verified"
+policy:
+  allow_implicit_invocation: true

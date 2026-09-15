@@ -2,7 +2,7 @@
 name: stark-author
 type: skill
 description: 'Stage 1 — spec+plan authoring in one session, the operator decides: tier check, time-boxed recon, plain-language interview (only what only they know), one self-contained doc, one zero-context advisory pass, plain-language sign-off, commit-pinned handoff. No LLM review loops. Use for author, spec, plan a change.'
-version: 0.4.19
+version: 0.4.20
 maturity: beta
 runtimes:
   - claude
@@ -368,8 +368,7 @@ overrides:
       2. Branch `spec/<slug>` from the default branch; commit **both files** (the
          spec and its `.human.md` sidecar); push.
       3. Open a **draft** PR. It must be authored by **`aryeh-stark`**, so this goes
-         through `gh` — never `github_app.ts`, whose installation token authors as
-         `app/stark-claude[bot]`. (`--ready` on the skill opts out of draft.)
+         through `gh` as `aryeh-stark`. (`--ready` opts out of draft.)
 
       ```bash
       gh pr create --head "spec/<slug>" --base main --draft \
@@ -683,8 +682,7 @@ On go (all git via Bash; never touch the default branch):
 2. Branch `spec/<slug>` from the default branch; commit **both files** (the spec
    and its `.human.md` sidecar); push.
 3. Open a **draft** PR. It must be authored by **`aryeh-stark`**, so this goes
-   through `gh` — never `github_app.ts`, whose installation token authors as
-   `app/stark-claude[bot]`. (`--ready` on the skill opts out of draft.)
+   through `gh` as `aryeh-stark`. (`--ready` opts out of draft.)
 
 ```bash
 gh pr create --head "spec/<slug>" --base main --draft \

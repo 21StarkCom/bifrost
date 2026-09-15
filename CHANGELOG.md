@@ -30,6 +30,25 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 <!-- stark-gh:pr-merge pr=196 runId=c1422f87-9818-4484-94b7-36bd3219bffb -->
 - Publish native Codex skills for `stark-bury`, `stark-handoff`, and `simple-gate`.
 
+## [0.27.2] — 2026-09-15
+
+### Added
+- Rework `team-leader-agent` and `team-minion-agent` into Gru's leader and Minion skills, and package Gru's durable coordination tools (`gru.ts`), operating instructions, and research for Claude Code and native Codex (STARK-4919, #237).
+
+### Changed
+- Review posting uses the existing operator GitHub login. Model attribution remains in review text; retired review App authentication and key references are removed from both runtimes.
+- Require Node ≥ 24 for native TypeScript and SQLite tooling; `stark doctor` now enforces the supported runtime.
+
+### Removed
+- Retired `stark-housekeeping` from `stark-ops` so source synchronization succeeds; `stark-ops` minor-bumped for the membership change.
+
+### Fixed
+- Package reviewed fixes for PR-head fetching, disposable verification checkout cleanup, and late worker attachment during cancellation.
+- Normalize equivalent worker paths during retirement and preserve credential filtering in Codex-dispatched Gemini environments.
+
+### Not covered
+- Gru's live Codex leader/Minions evaluation remains incomplete pending Hermod STARK-4911. This release does not claim live native parity.
+
 ## [0.15.2] — 2026-08-05
 
 ### Fixed

@@ -1,0 +1,5 @@
+interface:
+  display_name: "Team Minion Agent"
+  short_description: "Act as a Minion assigned by Gru. Acknowledge intake, implement"
+policy:
+  allow_implicit_invocation: true

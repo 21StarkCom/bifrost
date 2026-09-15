@@ -40,7 +40,7 @@ describe('engine-contract fidelity (real committed data)', () => {
     expect(screen.getByText(/no dependencies/i)).toBeInTheDocument();
     // and a real per-artifact derived output path renders (CC-3 outputs[rt][0].path).
     // stark-ops ships no MCP server (stark-skills defines none), so no .mcp.json renders.
-    expect(screen.getByText('.agents/skills/stark-housekeeping/SKILL.md')).toBeInTheDocument();
+    expect(screen.getByText('.agents/skills/team-leader-agent/SKILL.md')).toBeInTheDocument();
     expect(screen.queryByText('.mcp.json')).not.toBeInTheDocument();
   });
 });

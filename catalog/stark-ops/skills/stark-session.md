@@ -2,7 +2,7 @@
 name: stark-session
 type: skill
 description: Session start (context, git state, briefing) and end (tests, merge, push). Use for session start/end, catch me up.
-version: 0.11.4
+version: 0.12.0
 maturity: beta
 runtimes:
   - claude
@@ -195,7 +195,7 @@ overrides:
       gh pr list --head "$(git branch --show-current)" --json number,title,state
       ```
 
-      For each open PR: offer to merge via `gh pr merge <number> --<pr_merge_strategy>`. On failure: report and ask "Skip this PR?". Uses your PAT — not GitHub App bots.
+      For each open PR: offer to merge via `gh pr merge <number> --<pr_merge_strategy>`. On failure: report and ask "Skip this PR?". Uses the existing `gh` login as `aryeh-stark`.
 
       ### Phase 3 — Commit docs
 
@@ -475,7 +475,7 @@ gh auth status   # skip with warning if fails
 gh pr list --head "$(git branch --show-current)" --json number,title,state
 ```
 
-For each open PR: offer to merge via `gh pr merge <number> --<pr_merge_strategy>`. On failure: report and ask "Skip this PR?". Uses your PAT — not GitHub App bots.
+For each open PR: offer to merge via `gh pr merge <number> --<pr_merge_strategy>`. On failure: report and ask "Skip this PR?". Uses the existing `gh` login as `aryeh-stark`.
 
 ### Phase 3 — Commit docs
 

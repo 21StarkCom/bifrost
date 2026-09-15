@@ -65,7 +65,7 @@ func TestRealAdapterRendersCommittedCatalog(t *testing.T) {
 
 	t.Run("codex", func(t *testing.T) {
 		// stark-gh, the only bundle that shipped commands, was retired in STARK-2211,
-		// so the live command-rendering subject is gone. stark-housekeeping is a
+		// so the live command-rendering subject is gone. stark-handover is a
 		// disable-model-invocation skill, which preserves the explicit-only
 		// (allow_implicit_invocation: false) assertion this test exists to guard.
 		dest := t.TempDir()
@@ -81,11 +81,17 @@ func TestRealAdapterRendersCommittedCatalog(t *testing.T) {
 			t.Fatalf("install: %v", err)
 		}
 		// real skill body (codex runtime variant), not a fake placeholder
-		skill, _ := os.ReadFile(filepath.Join(dest, ".agents/skills/stark-housekeeping/SKILL.md"))
-		if !strings.Contains(string(skill), "Usage: stark-housekeeping [--dry-run]") {
+		skill, err := os.ReadFile(filepath.Join(dest, ".agents/skills/stark-handover/SKILL.md"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(skill), "Usage: stark-handover [save|resume|status]") {
 			t.Fatalf("SKILL.md missing real body:\n%s", skill)
 		}
-		metadata, _ := os.ReadFile(filepath.Join(dest, ".agents/skills/stark-housekeeping/agents/openai.yaml"))
+		metadata, err := os.ReadFile(filepath.Join(dest, ".agents/skills/stark-handover/agents/openai.yaml"))
+		if err != nil {
+			t.Fatal(err)
+		}
 		if !strings.Contains(string(metadata), "allow_implicit_invocation: false") {
 			t.Fatalf("skill lost its explicit-only boundary:\n%s", metadata)
 		}
@@ -94,7 +100,10 @@ func TestRealAdapterRendersCommittedCatalog(t *testing.T) {
 		if _, err := install.Install(dest, p, install.Options{}); err != nil {
 			t.Fatalf("re-install: %v", err)
 		}
-		second, _ := os.ReadFile(filepath.Join(dest, ".agents/skills/stark-housekeeping/SKILL.md"))
+		second, err := os.ReadFile(filepath.Join(dest, ".agents/skills/stark-handover/SKILL.md"))
+		if err != nil {
+			t.Fatal(err)
+		}
 		if string(first) != string(second) {
 			t.Fatalf("real install not idempotent")
 		}
@@ -105,7 +114,7 @@ func TestRealAdapterRendersCommittedCatalog(t *testing.T) {
 		if err := install.Remove(dest, res.ManifestPath); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := os.Stat(filepath.Join(dest, ".agents/skills/stark-housekeeping/SKILL.md")); !os.IsNotExist(err) {
+		if _, err := os.Stat(filepath.Join(dest, ".agents/skills/stark-handover/SKILL.md")); !os.IsNotExist(err) {
 			t.Fatalf("remove left the managed skill behind: %v", err)
 		}
 	})

@@ -30,8 +30,8 @@ Net effect: a teammate runs `/plugin install <bundle>` and everything works —
 
 ### Runtime prerequisite
 
-Skills shell out to the vendored tools via `node --experimental-strip-types`,
-which needs **Node ≥ 22.6** (24+ recommended). `stark doctor` verifies this.
+Skills shell out to the vendored TypeScript and SQLite tools via plain `node`.
+The supported runtime is **Node ≥ 24**. `stark doctor` verifies this.
 
 ### Codex installs vendor the same assets
 
@@ -67,7 +67,9 @@ retargets the reference shapes in each rendered body:
   `<plugin>/skills/<name>/SKILL.md` (`../../` **is** the plugin root) and a command
   at `<plugin>/commands/<name>.md` (`../`); on Codex both classes emit at
   `.agents/skills/<name>/SKILL.md`, so any `../` run is short of the bundle root.
-- **Tool invocations** (`node --experimental-strip-types …/tools/x.ts`) are prefixed
+- Current source-owned Codex skill preambles export `STARK_ASSET_ROOT` before
+  invoking tools through plain `node`. Legacy invocations using
+  `node --experimental-strip-types …/tools/x.ts` are additionally prefixed
   with an inline `STARK_ASSET_ROOT="${STARK_PLUGIN_ROOT:-…}"` export. A `${VAR:-…}`
   on the command line is shell *substitution*, not an export — so without this the
   tool's own `assetRoot()` (precedence `STARK_ASSET_ROOT` > `CLAUDE_PLUGIN_ROOT` >

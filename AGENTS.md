@@ -6,6 +6,7 @@ The **stark-skills** repo is the source of truth. Here, `catalog/<bundle>/bundle
 
 ## Build, Test, and Development Commands
 
+- Vendored skill tools require Node ≥ 24 for plain TypeScript and SQLite. `stark doctor` enforces this floor.
 - `cd engine && go test ./... -count=1 && go vet ./...`: engine test/vet.
 - `cd engine && go run ./cmd/stark sync --from ../../stark-skills ../catalog`: regenerate catalog skills/commands + vendor snapshot from stark-skills (`--check` = drift gate).
 - `cd engine && go run ./cmd/stark validate ../catalog`: catalog validation.
@@ -26,6 +27,8 @@ Use `gofmt` and `go vet`; Go package names stay lowercase. TypeScript is strict 
 Go tests use `_test.go` files beside packages. Web tests use Vitest with `.test.ts` or `.test.tsx`. For catalog/schema edits, run validation, build drift, and bump checks. For Codex adapter changes, update `engine/internal/adapter/codex/testdata/*.golden` only with `go test ./internal/adapter/codex -update`, then rerun normal tests.
 
 ## Codex Agent Notes
+
+Skill behavior comes from stark-skills. Keep runtime-specific changes upstream and regenerate both plugin formats. When shared assets change, compare every complete `dist/claude/<bundle>/` tree with `origin/main` and bump each changed bundle; `check-bumps` alone does not cover the shared snapshot.
 
 Prefer editing `catalog/`, `engine/`, `server/`, or `web/src/` over generated outputs. Standalone Codex installs render to `.agents/skills/<name>/SKILL.md`; native marketplace packages render separately to `dist/codex-plugins/<bundle>/skills/<name>/SKILL.md`, with invocation policy in `agents/openai.yaml`. Commands, prompts, and agents become skills. Per-skill `references/`, `scripts/`, and `assets/` are vendored beside them. MCP fragments merge into `.codex/config.toml` for standalone installs; native plugin MCP requires plugin-root `.mcp.json`. Secret environment variables use Codex's `env_vars = ["ENV_KEY"]` forwarding contract rather than literal `${ENV_KEY}` values. Never commit local install outputs such as `.codex/`, `.stark/`, or arbitrary `.agents/` content; the generated `.agents/plugins/marketplace.json` is the sole exception.
 
