@@ -5,8 +5,6 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 ## [Unreleased]
 
 ### Changed
-<!-- idun:pr-merge pr=244 runId=244 -->
-- Renamed the `team-leader-agent` skill to `gru` in stark-ops and bumped the six other bundles whose shared vendored tool assets changed alongside the sync.
 <!-- stark-gh:pr-merge pr=228 runId=228 -->
 - Updated docs (AGENTS.md, CLAUDE.md, README.md, native-install-loop.md) to retire stark-gh examples and clarify no bundle is plugin-backed or gemini-targeted today.
 
