@@ -1,8 +1,8 @@
 ---
-name: team-minion-agent
+name: minion
 type: skill
 description: Act as a Minion assigned by Gru. Acknowledge intake, implement the authorized task, report evidence and blockers, and wait for integration ownership before merging.
-version: 0.14.0
+version: 0.16.0
 maturity: beta
 runtimes:
   - claude
@@ -12,7 +12,7 @@ overrides:
   codex:
     argument-hint: <Gru assignment packet>
     description: Act as a Minion assigned by Gru. Acknowledge intake, implement the authorized task, report evidence and blockers, and wait for integration ownership before merging.
-    name: team-minion-agent
+    name: minion
     runtimes:
       - codex
     body: |
@@ -121,7 +121,7 @@ overrides:
       Keep edits within the assignment's declared files and directories.
       Report any needed scope expansion to Gru before making those edits.
 ---
-Usage: team-minion-agent <Gru assignment packet>
+Usage: minion <Gru assignment packet>
 
 ## Help
 
