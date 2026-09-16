@@ -57,7 +57,10 @@ echo "→ stark-skills: $STARK_SKILLS"
 # A skill must be either a member of some bundle.yaml OR listed here — otherwise
 # the coverage gate below fails. This is what stops a NEW stark-skills skill from
 # being silently dropped by `stark sync` (which only pulls declared members).
-EXCLUDED_SKILLS=(stark-voice)
+# Empty today: `stark-voice` used to sit here while it was also a member of
+# stark-write, which made the entry dead config that would have masked a real
+# orphan the day it left that bundle.
+EXCLUDED_SKILLS=()
 
 # bump <file> <minor|patch> — handles both a bundle.yaml `version: X.Y.Z` line and
 # the bare-`X.Y.Z` root VERSION file. minor: X.(Y+1).0 · patch: X.Y.(Z+1).
@@ -107,12 +110,27 @@ fi
 # Kills the "new skill silently dropped" papercut: `stark sync` only pulls skills
 # already declared in a bundle.yaml, so a freshly-added stark-skills skill with no
 # membership vanishes without a trace. Fail loudly here instead.
-claimed="$(grep -rhE '^[[:space:]]*-[[:space:]]+stark-' "$REPO_ROOT"/catalog/*/bundle.yaml 2>/dev/null | sed -E 's/^[[:space:]]*-[[:space:]]+//' | sort -u)"
+#
+# Covers EVERY skill dir, not just `stark-*`. The fleet now renames skills out of
+# that prefix (`gru`, `minion`, `simple-gate`), and a prefix-scoped gate would have
+# left each of them silently droppable — the exact papercut this gate exists to
+# stop. That also means `claimed` can no longer be a bare `- stark-` grep, since an
+# unprefixed name would collide with the `tags:`/`runtimes:` list items; read the
+# `skills:` block only.
+claimed="$(awk '
+  FNR == 1 { inskills = 0 }
+  /^skills:[[:space:]]*$/ { inskills = 1; next }
+  inskills && /^[[:space:]]*-[[:space:]]+/ {
+    sub(/^[[:space:]]*-[[:space:]]+/, ""); sub(/[[:space:]]+$/, ""); print; next
+  }
+  inskills && /^[^[:space:]#]/ { inskills = 0 }
+' "$REPO_ROOT"/catalog/*/bundle.yaml 2>/dev/null | sort -u)"
 orphans=""
-for d in "$STARK_SKILLS"/skill/stark-*/; do
+for d in "$STARK_SKILLS"/skill/*/; do
   s="$(basename "$d")"
+  [ -f "$d/SKILL.md" ] || continue   # a dir with no SKILL.md (e.g. evals/) is not a skill
   printf '%s\n' "$claimed" | grep -qxF "$s" && continue
-  [[ " ${EXCLUDED_SKILLS[*]} " == *" $s "* ]] && continue
+  [[ " ${EXCLUDED_SKILLS[*]:-} " == *" $s "* ]] && continue
   orphans="$orphans $s"
 done
 if [ -n "$orphans" ]; then
