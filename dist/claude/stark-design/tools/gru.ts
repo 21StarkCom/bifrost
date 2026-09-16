@@ -58,8 +58,10 @@ No command publishes, changes authentication, or deletes worker/session worktree
 
 /** Explain why `verificationReady` refused, naming the command that actually repairs it.
  * `integrate` only accepts phase `review`, so it is the wrong instruction everywhere else;
- * a stopped worker needs `continue` (or a fresh `reserve`, if it never attached), an
- * in-flight one needs its own READY report first.
+ * a stopped worker needs `continue`, an in-flight one needs its own READY report
+ * first. NOT `reserve` for either: `readyReason` refuses every phase except
+ * `pending`, so prescribing it hands over a command that throws — the exact defect
+ * this function exists to remove. The `stopped` branch below says the same thing.
  *
  * No `stopping` case on purpose: `verify` refuses unless `run.mode === "running"` (see the
  * call site), and `stop()` is the only writer of phase `stopping` — it sets the whole run to
@@ -86,10 +88,12 @@ export function verifyBlocker(task: Assignment): string {
     // report ready names a step it already took. `integrate` is the one command that applies.
     case "review": return "task reported ready but holds a stale integration grant; integrate it at its current base, then verify";
     // Reachable only WITH a grant (the guard above took the ungranted case), so "cancelled
-    // before integration" would contradict its own precondition. `continue` is the repair
-    // when a worker attached; a replacement stopped while still `reserved` has none, and
-    // `continueWorker` refuses without an observed live idle worker.
-    case "stopped": return "task was cancelled holding an unsettled integration grant; continue it — or reserve a replacement if it never attached — then integrate at its current base";
+    // before integration" would contradict its own precondition. `continue` is the ONLY
+    // repair: it needs an observed live idle worker, which is exactly the recoverable case.
+    // Do NOT name `reserve` here — `readyReason` refuses every phase except `pending`, so
+    // suggesting it hands the operator a command that throws, which is the defect this
+    // function exists to remove.
+    case "stopped": return "task was cancelled holding an unsettled integration grant; continue it once its worker is observed live and idle, then integrate at its current base";
     default: return `task is ${task.phase}; its worker must report ready and receive integration before verification`;
   }
 }

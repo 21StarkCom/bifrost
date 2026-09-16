@@ -2,7 +2,7 @@
 name: gru
 type: skill
 description: Gru leads authorized Minion work from intake through verified completion. Use for objectives or existing tickets requiring worker dispatch, dependency coordination, bounded recovery, status, resume, or stop.
-version: 0.16.1
+version: 0.16.2
 maturity: beta
 runtimes:
   - claude
