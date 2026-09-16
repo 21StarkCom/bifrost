@@ -173,22 +173,26 @@ func Build(cat *model.Catalog, opts Options) (Output, error) {
 	// `check-bumps` can hold vendored plugin tools to the same immutability rule as
 	// artifacts — without them, a change confined to `vendor/plugins/<bundle>/tools/**`
 	// ships under an unchanged bundle version (see index.PluginAsset).
-	pluginDigests := map[string]string{}
+	// EVERY vendored non-artifact tree this build ships needs a digest row, because each is
+	// a way to ship changed bytes under an unchanged version: the artifact digests do not
+	// see them, so without a row `check-bumps` reports clean over content it never
+	// inspected (see index.PluginAsset / index.SharedAsset / index.CodexAsset).
+	assets := index.AssetDigests{Plugin: map[string]string{}, Codex: map[string]string{}}
 	for name, files := range pluginAssets {
-		pluginDigests[name] = digest.Files(files)
+		assets.Plugin[name] = digest.Files(files)
 	}
-	// The SHARED snapshot rides along too. It is vendored into EVERY bundle, so a single
-	// stark-skills edit to a top-level tool changes every bundle's shipped bytes while
-	// touching no artifact digest and no per-bundle plugin digest — the exact blind spot
-	// that let six bundles ship changed content under unchanged versions on 2026-09-16
-	// (see index.SharedAsset). One digest, recorded per bundle so `check-bumps` can force
-	// the bump on each. Note `vendored` is nil when AssetsSource is empty, which yields ""
-	// here rather than the empty-set digest, so a no-vendor build writes no rows at all.
-	sharedDigest := ""
+	for name, files := range codexAssets {
+		assets.Codex[name] = digest.Files(files)
+	}
+	// The shared snapshot is ONE digest, vendored into every bundle, so a single
+	// stark-skills edit to a top-level tool changes every bundle's shipped bytes — the
+	// exact blind spot that let six bundles ship changed content under unchanged versions
+	// on 2026-09-16. `vendored` is nil when AssetsSource is empty, which yields "" here
+	// rather than the empty-set digest, so a no-vendor build writes no rows at all.
 	if vendored != nil {
-		sharedDigest = digest.Files(vendored)
+		assets.Shared = digest.Files(vendored)
 	}
-	idx, details, err := index.Build(cat, pluginDigests, sharedDigest)
+	idx, details, err := index.Build(cat, assets)
 	if err != nil {
 		return Output{}, err
 	}

@@ -2,6 +2,7 @@ package build
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -22,6 +23,16 @@ func TestVendorAssetsDigestMatchesDigestDir(t *testing.T) {
 	mustWrite(t, filepath.Join(dir, "tools", "gru.ts"), "export const s = 1\n")
 	mustWrite(t, filepath.Join(dir, "tools", "lib", "deep.ts"), "export const d = 2\r\n")
 	mustWrite(t, filepath.Join(dir, "prompts", "claude", "agent.md"), "# agent\n")
+	// Entries a plausible future filter would treat differently. Plain regular files alone
+	// would keep this test green through exactly the divergence it claims to guard: if one
+	// side starts skipping dotfiles or node_modules, or starts FOLLOWING symlinks (neither
+	// walk does today — both skip non-regular entries and WalkDir does not follow), only a
+	// fixture containing them can notice.
+	mustWrite(t, filepath.Join(dir, ".hidden-config"), "dot\n")
+	mustWrite(t, filepath.Join(dir, "node_modules", "pkg", "index.js"), "module.exports = 1\n")
+	if err := os.Symlink(filepath.Join(dir, "config.json"), filepath.Join(dir, "tools", "link.json")); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
 
 	files, err := vendorAssets(dir)
 	if err != nil {
@@ -82,6 +93,44 @@ func TestBuildRecordsSharedAssetDigestForEveryBundle(t *testing.T) {
 	}
 }
 
+// TestBuildRecordsCodexAssetDigestPerOverlayBundle covers the third vendored tree. A Codex
+// overlay ships inside `dist/codex-plugins/<bundle>/`, carries no artifact digest, and is
+// NOT covered by the shared or plugin rows — so without its own row an overlay edit ships
+// changed bytes under an unchanged version, the same hole the shared snapshot had.
+func TestBuildRecordsCodexAssetDigestPerOverlayBundle(t *testing.T) {
+	cat, err := load.Load("../../../catalog")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cat.Bundles) == 0 {
+		t.Fatal("catalog has no bundles")
+	}
+	subject := cat.Bundles[0]
+
+	codexRoot := t.TempDir()
+	mustWrite(t, filepath.Join(codexRoot, subject.Name, "tools", "override.ts"), "export const c = 1\n")
+	want, err := digest.Dir(filepath.Join(codexRoot, subject.Name))
+	if err != nil {
+		t.Fatalf("digest.Dir: %v", err)
+	}
+
+	out, err := Build(cat, Options{CodexAssetsRoot: codexRoot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var idx index.Index
+	if err := json.Unmarshal(out.Files["index.json"], &idx); err != nil {
+		t.Fatalf("unmarshal index.json: %v", err)
+	}
+	if len(idx.CodexAssets) != 1 {
+		t.Fatalf("codexAssets rows = %d, want exactly 1 (only %s has an overlay)", len(idx.CodexAssets), subject.Name)
+	}
+	row := idx.CodexAssets[0]
+	if row.Bundle != subject.Name || row.Digest != want || row.Version != subject.Version {
+		t.Fatalf("codexAssets row = %+v, want {%s %s %s}", row, subject.Name, subject.Version, want)
+	}
+}
+
 // A build that vendors no snapshot must write no rows at all, rather than the empty-set
 // digest — otherwise every snapshot-less catalog would record a row that can never match
 // what check-bumps computes from an absent directory.
@@ -100,5 +149,8 @@ func TestBuildOmitsSharedAssetsWhenNothingIsVendored(t *testing.T) {
 	}
 	if len(idx.SharedAssets) != 0 {
 		t.Fatalf("expected no sharedAssets rows without a vendored snapshot, got %d", len(idx.SharedAssets))
+	}
+	if len(idx.CodexAssets) != 0 {
+		t.Fatalf("expected no codexAssets rows without an overlay root, got %d", len(idx.CodexAssets))
 	}
 }

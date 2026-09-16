@@ -42,6 +42,15 @@ var sharedAssetsBundles = []string{"stark-analyze", "stark-ops", "stark-plan"}
 // each bundle.yaml; `prevVersion` is the version the committed index recorded.
 func seedSharedAssetsRepo(t *testing.T, bundleVersion, prevVersion, prevDigest string) string {
 	t.Helper()
+	return seedAssetsRepo(t, bundleVersion, prevVersion, prevDigest, nil)
+}
+
+// seedAssetsRepo is the general form: `codexPrev` maps bundle -> the `codexAssets` digest
+// the committed index claims for that bundle's `vendor/runtime-overrides/codex/<bundle>`
+// overlay. Bundles in the map get an overlay file on disk AND a previous row; the rest get
+// neither, which is what lets a test assert that only the overlay-carrying bundle is flagged.
+func seedAssetsRepo(t *testing.T, bundleVersion, prevVersion, prevDigest string, codexPrev map[string]string) string {
+	t.Helper()
 	root := t.TempDir()
 	for _, b := range sharedAssetsBundles {
 		writeFile(t, filepath.Join(root, "catalog", b, "bundle.yaml"),
@@ -55,6 +64,7 @@ func seedSharedAssetsRepo(t *testing.T, bundleVersion, prevVersion, prevDigest s
 
 	artifacts := []map[string]any{}
 	shared := []map[string]any{}
+	codex := []map[string]any{}
 	for _, b := range sharedAssetsBundles {
 		artifacts = append(artifacts, map[string]any{
 			"name": "hello", "type": "command", "bundle": b,
@@ -63,12 +73,25 @@ func seedSharedAssetsRepo(t *testing.T, bundleVersion, prevVersion, prevDigest s
 		shared = append(shared, map[string]any{
 			"bundle": b, "version": prevVersion, "digest": prevDigest,
 		})
+		d, ok := codexPrev[b]
+		if !ok {
+			continue
+		}
+		writeFile(t, filepath.Join(root, "vendor", "runtime-overrides", "codex", b, "tools", "override.ts"),
+			"export const c = 1;\n")
+		codex = append(codex, map[string]any{
+			"bundle": b, "version": prevVersion, "digest": d,
+		})
 	}
-	b, err := json.Marshal(map[string]any{
+	idx := map[string]any{
 		"schemaVersion": 1,
 		"artifacts":     artifacts,
 		"sharedAssets":  shared,
-	})
+	}
+	if len(codex) > 0 {
+		idx["codexAssets"] = codex
+	}
+	b, err := json.Marshal(idx)
 	if err != nil {
 		t.Fatalf("marshal index: %v", err)
 	}
@@ -85,6 +108,22 @@ func seedSharedAssetsRepo(t *testing.T, bundleVersion, prevVersion, prevDigest s
 	git("add", ".")
 	git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", "seed")
 	return root
+}
+
+// currentSharedDigest is the digest the seeded `vendor/stark-skills` tree actually has, so a
+// test can make the shared rows accurate and isolate whichever other half it is exercising.
+// Computed over an identical probe tree rather than hardcoded, so a change to digest.Files'
+// framing does not silently turn these fixtures into permanent violations.
+func currentSharedDigest(t *testing.T) string {
+	t.Helper()
+	probe := t.TempDir()
+	writeFile(t, filepath.Join(probe, "vendor", "stark-skills", "tools", "gru.ts"),
+		"export const a = 1;\n")
+	d, err := digest.Dir(filepath.Join(probe, "vendor", "stark-skills"))
+	if err != nil {
+		t.Fatalf("digest.Dir: %v", err)
+	}
+	return d
 }
 
 // digestOfSharedHello recomputes one bundle's command digest so the ARTIFACT half of the
@@ -118,24 +157,42 @@ func captureCheckBumps(t *testing.T, catalogDir, repoRoot string) (int, string) 
 	if err != nil {
 		t.Fatalf("pipe: %v", err)
 	}
+	// Drain CONCURRENTLY. runCheckBumps writes synchronously, so reading only after it
+	// returns deadlocks the moment its output exceeds the OS pipe buffer (64KiB on
+	// darwin/linux) — reachable the first time this helper is pointed at a catalog with
+	// many violations, and it hangs with no error rather than failing.
+	type captured struct {
+		out string
+		err error
+	}
+	done := make(chan captured, 1)
+	go func() {
+		defer func() { _ = r.Close() }()
+		var sb strings.Builder
+		sc := bufio.NewScanner(r)
+		sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+		for sc.Scan() {
+			sb.WriteString(sc.Text())
+			sb.WriteString("\n")
+		}
+		done <- captured{out: sb.String(), err: sc.Err()}
+	}()
+
 	orig := os.Stdout
+	// Restore even if runCheckBumps panics: otherwise os.Stdout stays pointed at a closed
+	// pipe and every later test in this package loses its failure output.
+	defer func() { os.Stdout = orig }()
 	os.Stdout = w
 	code := runCheckBumps(catalogDir, repoRoot)
 	os.Stdout = orig
 	if closeErr := w.Close(); closeErr != nil {
 		t.Fatalf("close pipe: %v", closeErr)
 	}
-	var sb strings.Builder
-	sc := bufio.NewScanner(r)
-	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
-	for sc.Scan() {
-		sb.WriteString(sc.Text())
-		sb.WriteString("\n")
+	got := <-done
+	if got.err != nil {
+		t.Fatalf("read captured stdout: %v", got.err)
 	}
-	if scanErr := sc.Err(); scanErr != nil {
-		t.Fatalf("read captured stdout: %v", scanErr)
-	}
-	return code, sb.String()
+	return code, got.out
 }
 
 // THE REGRESSION TEST. The shared snapshot changed since the committed index and no bundle
@@ -169,14 +226,7 @@ func TestCheckBumpsPassesWhenSharedSnapshotChangeIsBumped(t *testing.T) {
 // Control: nothing changed. The committed digest matches the tree, so unchanged versions
 // are correct and must not be flagged.
 func TestCheckBumpsPassesWhenSharedSnapshotIsUnchanged(t *testing.T) {
-	probe := t.TempDir()
-	writeFile(t, filepath.Join(probe, "vendor", "stark-skills", "tools", "gru.ts"),
-		"export const a = 1;\n")
-	current, err := digest.Dir(filepath.Join(probe, "vendor", "stark-skills"))
-	if err != nil {
-		t.Fatalf("digest.Dir: %v", err)
-	}
-	root := seedSharedAssetsRepo(t, "0.5.45", "0.5.45", current)
+	root := seedSharedAssetsRepo(t, "0.5.45", "0.5.45", currentSharedDigest(t))
 	code, out := captureCheckBumps(t, filepath.Join(root, "catalog"), root)
 	if code != 0 {
 		t.Fatalf("want exit 0 when the shared snapshot is unchanged, got %d\n%s", code, out)
@@ -196,11 +246,14 @@ func publishShBundleRegex(t *testing.T) string {
 		t.Fatalf("read publish.sh: %v", err)
 	}
 	re := regexp.MustCompile(`(?m)^\s*\| sed -nE '(.*)' \| sort -u\)?\s*$`)
-	m := re.FindSubmatch(b)
-	if m == nil {
-		t.Fatalf("could not find publish.sh's bundle-extraction sed line; if the parser moved, update this test AND re-verify the line shape check-bumps prints")
+	// Require EXACTLY one match. Taking the first would silently test some other sed line
+	// if a second one is ever added above the bump loop — the test would keep passing while
+	// the parser it is supposed to pin went unexercised.
+	ms := re.FindAllSubmatch(b, -1)
+	if len(ms) != 1 {
+		t.Fatalf("want exactly 1 bundle-extraction sed line in publish.sh, found %d; if the parser moved or a second one was added, update this test AND re-verify the line shape check-bumps prints", len(ms))
 	}
-	return string(m[1])
+	return string(ms[0][1])
 }
 
 // END-TO-END PROOF that publish.sh's auto-bump loop still works against the NEW failure
@@ -231,8 +284,33 @@ func TestPublishShParserExtractsBundlesFromSharedAssetViolations(t *testing.T) {
 	}
 }
 
-// A previous index generated before `sharedAssets` existed must not break the gate: it
-// contributes no previous rows, so the first publish after rollout records them.
+// THE SECOND REGRESSION TEST. `vendor/runtime-overrides/codex/<bundle>` ships inside
+// `dist/codex-plugins/<bundle>/` and is covered by neither the artifact digests nor the
+// shared/plugin rows, so before `codexAssets` existed an overlay edit was the identical
+// un-bumped-content hole for Codex installs that the shared snapshot was for Claude ones.
+func TestCheckBumpsFailsWhenCodexOverlayChangedWithoutABump(t *testing.T) {
+	subject := sharedAssetsBundles[0]
+	// The SHARED rows must be accurate so only the Codex half can trip.
+	root := seedAssetsRepo(t, "0.5.45", "0.5.45", currentSharedDigest(t),
+		map[string]string{subject: "sha256:stale-codex-overlay"})
+	code, out := captureCheckBumps(t, filepath.Join(root, "catalog"), root)
+	if code != 1 {
+		t.Fatalf("want exit 1 when a Codex overlay changed un-bumped, got %d\n%s", code, out)
+	}
+	if !strings.Contains(out, subject+"/codex-assets/"+subject) {
+		t.Fatalf("violation output does not name the overlay bundle %s:\n%s", subject, out)
+	}
+	// Only the overlay bundle may be flagged — the overlay is per bundle, not shared, so
+	// blaming the others would force six pointless version bumps on every Codex edit.
+	for _, b := range sharedAssetsBundles[1:] {
+		if strings.Contains(out, b+"/codex-assets/") {
+			t.Fatalf("bundle %s has no overlay but was flagged:\n%s", b, out)
+		}
+	}
+}
+
+// A previous index generated before `sharedAssets` / `codexAssets` existed must not break
+// the gate: it contributes no previous rows, so the first publish after rollout records them.
 func TestLeanPrevToleratesAnIndexWithoutSharedAssets(t *testing.T) {
 	var lp leanPrev
 	old := `{"schemaVersion":1,"artifacts":[{"name":"x","type":"skill","bundle":"b","version":"0.1.0","digest":"sha256:aa"}]}`
@@ -242,22 +320,36 @@ func TestLeanPrevToleratesAnIndexWithoutSharedAssets(t *testing.T) {
 	if len(lp.SharedAssets) != 0 {
 		t.Fatalf("expected no shared assets, got %d", len(lp.SharedAssets))
 	}
+	if len(lp.CodexAssets) != 0 {
+		t.Fatalf("expected no codex assets, got %d", len(lp.CodexAssets))
+	}
 }
 
-// The shared-asset key must collide with neither an artifact key ("<bundle>/<type>/<name>")
-// nor the plugin-asset key, or one of the two rows silently loses its gate (the CC-5
-// bypass the artifact-key comment warns about).
+// Every vendored-asset key must collide with neither an artifact key
+// ("<bundle>/<type>/<name>") nor another asset key, or one of the colliding rows silently
+// loses its gate (the CC-5 bypass the artifact-key comment warns about).
 func TestSharedAssetKeyCannotCollide(t *testing.T) {
-	key := sharedAssetKey("stark-ops")
-	if key != "stark-ops/shared-assets/stark-ops" {
-		t.Fatalf("unexpected key shape: %s", key)
+	keys := map[string]string{
+		"shared": sharedAssetKey("stark-ops"),
+		"codex":  codexAssetKey("stark-ops"),
+		"plugin": pluginAssetKey("stark-ops"),
 	}
-	if key == pluginAssetKey("stark-ops") {
-		t.Fatalf("shared-asset key collides with the plugin-asset key: %s", key)
+	if keys["shared"] != "stark-ops/shared-assets/stark-ops" {
+		t.Fatalf("unexpected shared key shape: %s", keys["shared"])
 	}
-	for _, artifactType := range []string{"skill", "command", "agent", "mcp", "prompt"} {
-		if key == "stark-ops/"+artifactType+"/stark-ops" {
-			t.Fatalf("shared-asset key collides with artifact type %q", artifactType)
+	if keys["codex"] != "stark-ops/codex-assets/stark-ops" {
+		t.Fatalf("unexpected codex key shape: %s", keys["codex"])
+	}
+	seen := map[string]string{}
+	for kind, key := range keys {
+		if other, dup := seen[key]; dup {
+			t.Fatalf("%s key collides with the %s key: %s", kind, other, key)
+		}
+		seen[key] = kind
+		for _, artifactType := range []string{"skill", "command", "agent", "mcp", "prompt"} {
+			if key == "stark-ops/"+artifactType+"/stark-ops" {
+				t.Fatalf("%s key collides with artifact type %q", kind, artifactType)
+			}
 		}
 	}
 }

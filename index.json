@@ -739,5 +739,37 @@
       "version": "0.5.34",
       "digest": "sha256:7e7949b0c69e680bbce0a644fc14d52bb9e00c116dd15ebfc0e575606f1dece5"
     }
+  ],
+  "codexAssets": [
+    {
+      "bundle": "stark-analyze",
+      "version": "0.5.46",
+      "digest": "sha256:37b2557566809881688ecf09bb55371757819c95b6a7d815bf28c84d436b4710"
+    },
+    {
+      "bundle": "stark-constitution",
+      "version": "0.2.56",
+      "digest": "sha256:37b2557566809881688ecf09bb55371757819c95b6a7d815bf28c84d436b4710"
+    },
+    {
+      "bundle": "stark-implement",
+      "version": "0.4.50",
+      "digest": "sha256:cd95ab1649faee03cb9c62f0954073ddad9b5cf28048d8ace0f222f611f706d4"
+    },
+    {
+      "bundle": "stark-ops",
+      "version": "0.14.0",
+      "digest": "sha256:65e870b313d2b10f5b2caa074554a4420b7eea3bbed89251985f3e81bc604c1d"
+    },
+    {
+      "bundle": "stark-plan",
+      "version": "0.4.25",
+      "digest": "sha256:37b2557566809881688ecf09bb55371757819c95b6a7d815bf28c84d436b4710"
+    },
+    {
+      "bundle": "stark-write",
+      "version": "0.5.34",
+      "digest": "sha256:37b2557566809881688ecf09bb55371757819c95b6a7d815bf28c84d436b4710"
+    }
   ]
 }
