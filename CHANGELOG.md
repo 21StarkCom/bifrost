@@ -38,7 +38,10 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 ## [0.29.2] - 2026-09-16
 
 ### Changed
-- Refresh marketplace packages from [stark-skills@8bfa0d1](https://github.com/21StarkCom/stark-skills/commit/8bfa0d1049012d0e3f8ecd70e317bea07598577f).
+- Refresh marketplace packages from [stark-skills@8bfa0d1](https://github.com/21StarkCom/stark-skills/commit/8bfa0d1049012d0e3f8ecd70e317bea07598577f). All seven bundles patch-bumped: the shared `vendor/stark-skills/` snapshot changed, and `check-bumps` charges it to every bundle that vendors it (0.28.1). Beyond the refresh:
+  - `self_healer_lib.ts`'s header gate ladder no longer describes the order the code had BEFORE the `refresh_token` refusal moved behind the effective-mode downgrade, and no longer claims an authentication pattern "never spends a guard command" — in suggest mode it now does.
+  - Gru's `verifyBlocker` no longer names `reserve` as the repair for a `stopped` task, in either its message or its JSDoc. `readyReason` refuses every phase except `pending`, so prescribing it handed the operator a command that throws.
+  - `copilot_land --lead ""` no longer echoes a blank agent into the `--dry-run` plan.
 
 ## [0.29.1] - 2026-09-16
 
