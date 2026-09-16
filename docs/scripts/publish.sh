@@ -125,10 +125,22 @@ claimed="$(awk '
   }
   inskills && /^[^[:space:]#]/ { inskills = 0 }
 ' "$REPO_ROOT"/catalog/*/bundle.yaml 2>/dev/null | sort -u)"
-orphans=""
+# An empty parse is a SCRIPT bug (a `skills:` block shape the awk above stopped
+# matching), not an unpublished fleet. Without this the gate would report every
+# upstream skill as an orphan and bury the real cause in that list.
+[ -n "$claimed" ] || {
+  echo "ERROR: parsed no 'skills:' membership from $REPO_ROOT/catalog/*/bundle.yaml" >&2
+  echo "  → the coverage gate's awk parser, not the catalog, is what to fix." >&2
+  exit 1
+}
+orphans="" nonskill=""
 for d in "$STARK_SKILLS"/skill/*/; do
   s="$(basename "$d")"
-  [ -f "$d/SKILL.md" ] || continue   # a dir with no SKILL.md (e.g. evals/) is not a skill
+  # A dir with no SKILL.md (e.g. evals/) is not a skill. Record the skips instead
+  # of dropping them: this branch is fail-OPEN, so a real skill whose manifest is
+  # missing or misnamed vanishes from the gate exactly as silently as the drop the
+  # gate exists to catch.
+  if [ ! -f "$d/SKILL.md" ]; then nonskill="$nonskill $s"; continue; fi
   printf '%s\n' "$claimed" | grep -qxF "$s" && continue
   [[ " ${EXCLUDED_SKILLS[*]:-} " == *" $s "* ]] && continue
   orphans="$orphans $s"
@@ -141,6 +153,9 @@ if [ -n "$orphans" ]; then
   exit 1
 fi
 echo "→ coverage gate clean: every stark-skills skill is claimed or excluded"
+if [ -n "$nonskill" ]; then
+  echo "  (not checked, no SKILL.md:$nonskill)"
+fi
 
 # Root VERSION: the single bifrost deploy-level semver — bumped on every
 # publish, and bumped BEFORE the build because the codex-plugin manifests bake
