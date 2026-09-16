@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/21StarkCom/bifrost/engine/internal/index"
 	"github.com/21StarkCom/bifrost/engine/internal/marketplace"
 	"github.com/21StarkCom/bifrost/engine/internal/model"
 )
@@ -104,18 +106,39 @@ func TestCodexAssetLayersDoNotAffectClaude(t *testing.T) {
 		t.Fatal("Codex asset overlay won over the rendered skill")
 	}
 
-	// The additive Codex overlay path must leave every Claude/index-owned byte
-	// exactly as it was, including the legacy marketplace manifest and bundle
-	// digests used by check-bumps.
+	// The additive Codex overlay path must leave every Claude-owned byte exactly as it
+	// was, including the legacy marketplace manifest and the artifact digests used by
+	// check-bumps. index.json is the ONE deliberate exception, asserted separately below:
+	// the overlay ships bytes, so the version-bump gate has to see it.
 	for path, before := range base.Files {
 		if !strings.HasPrefix(path, "dist/claude/") &&
 			!strings.HasPrefix(path, "bundles/") &&
-			path != "index.json" && path != marketplace.ManifestRelPath {
+			path != marketplace.ManifestRelPath {
 			continue
 		}
 		if after := withCodex.Files[path]; string(after) != string(before) {
 			t.Fatalf("Codex overlay changed Claude output %s", path)
 		}
+	}
+
+	// index.json may differ ONLY by gaining this bundle's codexAssets row. Anything else
+	// moving would mean the overlay leaked into the Claude-facing registry.
+	var baseIdx, codexIdx index.Index
+	if err := json.Unmarshal(base.Files["index.json"], &baseIdx); err != nil {
+		t.Fatalf("unmarshal base index.json: %v", err)
+	}
+	if err := json.Unmarshal(withCodex.Files["index.json"], &codexIdx); err != nil {
+		t.Fatalf("unmarshal codex index.json: %v", err)
+	}
+	if len(baseIdx.CodexAssets) != 0 {
+		t.Fatalf("base build recorded codexAssets without an overlay root: %+v", baseIdx.CodexAssets)
+	}
+	if len(codexIdx.CodexAssets) != 1 || codexIdx.CodexAssets[0].Bundle != "demo" {
+		t.Fatalf("codexAssets = %+v, want exactly one row for demo", codexIdx.CodexAssets)
+	}
+	codexIdx.CodexAssets = nil
+	if !reflect.DeepEqual(baseIdx, codexIdx) {
+		t.Fatalf("Codex overlay changed index.json beyond its codexAssets row:\n base  %+v\n codex %+v", baseIdx, codexIdx)
 	}
 }
 

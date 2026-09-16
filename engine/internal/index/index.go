@@ -54,6 +54,52 @@ type PluginAsset struct {
 	Digest  string `json:"digest"`
 }
 
+// SharedAsset records the version-bump identity of the SHARED vendored snapshot
+// (`vendor/stark-skills/**` — stark-skills' immutable `tools/`, `prompts/`, `standards/`,
+// `scripts/`, `config.json`) as it ships inside ONE bundle. `stark build` vendors that one
+// snapshot into EVERY `dist/claude/<bundle>/`, so a single stark-skills edit to a top-level
+// tool changes every bundle's shipped bytes. The snapshot is not an artifact and is not
+// per-bundle, so before this row existed it participated in no gate: `check-bumps` digested
+// artifact sources plus `vendor/plugins/<bundle>` and never the shared snapshot, reported
+// "OK: no un-bumped source changes", and every bundle shipped modified content under an
+// unchanged version that consumers would never re-fetch. (Measured live 2026-09-16 on the
+// `/team-leader-agent` -> `/gru` rename: one bundle bumped, all seven dist trees changed.)
+//
+// The Digest is identical across rows by construction — one snapshot. The row is per bundle
+// because the VERSION it must force a bump of is per bundle.
+type SharedAsset struct {
+	Bundle  string `json:"bundle"`
+	Version string `json:"version"`
+	Digest  string `json:"digest"`
+}
+
+// CodexAsset records the version-bump identity of one bundle's SOURCE-OWNED CODEX OVERLAY
+// (`vendor/runtime-overrides/codex/<bundle>/**`). `stark build` layers it into the committed
+// `dist/codex-plugins/<bundle>/` package, so it ships to Codex installs exactly as the shared
+// snapshot and plugin assets ship to Claude installs — and, like them, it carries no
+// `digest.Source`, so without this row an edit confined to a Codex overlay changed no gated
+// digest and the package shipped modified content under an unchanged version.
+type CodexAsset struct {
+	Bundle  string `json:"bundle"`
+	Version string `json:"version"`
+	Digest  string `json:"digest"`
+}
+
+// AssetDigests carries the version-bump identities of every vendored, NON-ARTIFACT tree a
+// build ships. They are grouped rather than passed as three more positional parameters
+// because they grow together: each new vendored tree is another way to ship changed bytes
+// under an unchanged version, and each must gain a row here the day it starts shipping.
+type AssetDigests struct {
+	// Plugin maps bundle -> digest.Files over vendor/plugins/<bundle>. Bundles absent
+	// from the map get no row.
+	Plugin map[string]string
+	// Shared is the ONE digest.Files over vendor/stark-skills, vendored into every
+	// bundle. "" = the build vendored no snapshot, so no rows are written.
+	Shared string
+	// Codex maps bundle -> digest.Files over vendor/runtime-overrides/codex/<bundle>.
+	Codex map[string]string
+}
+
 // Index is the lean search index.
 type Index struct {
 	SchemaVersion int         `json:"schemaVersion"`
@@ -62,6 +108,10 @@ type Index struct {
 	// Omitted when no bundle has vendored plugin assets. Consumers ignore unknown
 	// fields (see package doc), so adding it does not break existing readers.
 	PluginAssets []PluginAsset `json:"pluginAssets,omitempty"`
+	// Omitted when the build vendored no shared snapshot. Same unknown-field tolerance.
+	SharedAssets []SharedAsset `json:"sharedAssets,omitempty"`
+	// Omitted when no bundle has a Codex overlay. Same unknown-field tolerance.
+	CodexAssets []CodexAsset `json:"codexAssets,omitempty"`
 }
 
 // BundleDetail is the full per-bundle detail file (CC-3 structured shape).
@@ -202,23 +252,39 @@ func adapterVersions() map[string]string {
 // Build returns the lean index and a map of bundle-name -> CC-3 detail. It errors
 // if any targeted runtime's render fails (a real engine fault — validation gates
 // unsupported types before this point).
-// pluginDigests maps bundle name -> `digest.Files` over that bundle's vendored plugin
-// assets. Pass nil when a caller has none to record (tests, catalogs with no plugin-backed
-// bundle); bundles absent from the map simply get no row.
-func Build(cat *model.Catalog, pluginDigests map[string]string) (Index, map[string]BundleDetail, error) {
+// assets carries the digests of the vendored non-artifact trees this build ships (see
+// AssetDigests). The zero value records no asset rows at all, which is what a caller with
+// nothing vendored (tests, a catalog with no snapshot) wants.
+func Build(cat *model.Catalog, assets AssetDigests) (Index, map[string]BundleDetail, error) {
 	idx := Index{
 		SchemaVersion: SchemaVersion,
 		GeneratedBy:   GeneratedBy{AdapterVersions: adapterVersions()},
 	}
 	for _, b := range cat.Bundles {
-		if d, ok := pluginDigests[b.Name]; ok {
+		if d, ok := assets.Plugin[b.Name]; ok {
 			idx.PluginAssets = append(idx.PluginAssets, PluginAsset{
+				Bundle: b.Name, Version: b.Version, Digest: d,
+			})
+		}
+		if assets.Shared != "" {
+			idx.SharedAssets = append(idx.SharedAssets, SharedAsset{
+				Bundle: b.Name, Version: b.Version, Digest: assets.Shared,
+			})
+		}
+		if d, ok := assets.Codex[b.Name]; ok {
+			idx.CodexAssets = append(idx.CodexAssets, CodexAsset{
 				Bundle: b.Name, Version: b.Version, Digest: d,
 			})
 		}
 	}
 	sort.Slice(idx.PluginAssets, func(i, j int) bool {
 		return idx.PluginAssets[i].Bundle < idx.PluginAssets[j].Bundle
+	})
+	sort.Slice(idx.SharedAssets, func(i, j int) bool {
+		return idx.SharedAssets[i].Bundle < idx.SharedAssets[j].Bundle
+	})
+	sort.Slice(idx.CodexAssets, func(i, j int) bool {
+		return idx.CodexAssets[i].Bundle < idx.CodexAssets[j].Bundle
 	})
 	details := map[string]BundleDetail{}
 	for _, b := range cat.Bundles {

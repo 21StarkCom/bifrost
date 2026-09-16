@@ -28,8 +28,7 @@ func runBuild(catalogDir, repoRoot, manifestPath, assetsSource string, check boo
 	// Default the vendor snapshot to <repoRoot>/vendor/stark-skills when present,
 	// so committed builds are self-contained without an explicit flag.
 	if assetsSource == "" {
-		def := filepath.Join(repoRoot, "vendor", "stark-skills")
-		if fi, statErr := os.Stat(def); statErr == nil && fi.IsDir() {
+		if def := defaultAssetsSource(repoRoot); dirExists(def) {
 			assetsSource = def
 		}
 	}
@@ -37,14 +36,14 @@ func runBuild(catalogDir, repoRoot, manifestPath, assetsSource string, check boo
 	// (written by `stark sync`); default to it when present so the committed
 	// build layers each bundle's own plugin tools/config without an explicit flag.
 	pluginAssetsRoot := ""
-	if def := filepath.Join(repoRoot, "vendor", "plugins"); dirExists(def) {
+	if def := defaultPluginAssetsRoot(repoRoot); dirExists(def) {
 		pluginAssetsRoot = def
 	}
 	// Source-owned Codex overlays are deliberately isolated from both shared and
 	// per-plugin Claude assets. The native Codex package build layers this root
 	// last without exposing it to dist/claude.
 	codexAssetsRoot := ""
-	if def := filepath.Join(repoRoot, "vendor", "runtime-overrides", "codex"); dirExists(def) {
+	if def := defaultCodexAssetsRoot(repoRoot); dirExists(def) {
 		codexAssetsRoot = def
 	}
 	codexPluginVersion, err := readCodexPluginVersion(repoRoot)
@@ -170,6 +169,27 @@ func (e *exitError) ExitCode() int { return e.code }
 func dirExists(path string) bool {
 	fi, err := os.Stat(path)
 	return err == nil && fi.IsDir()
+}
+
+// The three vendored non-artifact trees `stark build` ships. `check-bumps` digests the SAME
+// trees to hold them to the version-bump rule, so each path lives here once: a build reading
+// one directory while the gate digests another would report clean over content it never
+// inspected.
+//
+// defaultAssetsSource is the shared stark-skills snapshot, vendored into EVERY bundle.
+func defaultAssetsSource(repoRoot string) string {
+	return filepath.Join(repoRoot, "vendor", "stark-skills")
+}
+
+// defaultPluginAssetsRoot holds per-bundle plugin snapshots (<root>/<bundle>).
+func defaultPluginAssetsRoot(repoRoot string) string {
+	return filepath.Join(repoRoot, "vendor", "plugins")
+}
+
+// defaultCodexAssetsRoot holds per-bundle source-owned Codex overlays (<root>/<bundle>),
+// layered into the committed dist/codex-plugins/<bundle> packages.
+func defaultCodexAssetsRoot(repoRoot string) string {
+	return filepath.Join(repoRoot, "vendor", "runtime-overrides", "codex")
 }
 
 // readCodexPluginVersion returns the repository release version shared by all
