@@ -38,7 +38,8 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 ## [0.29.1] - 2026-09-16
 
 ### Changed
-- Refresh marketplace packages from [stark-skills@560092a](https://github.com/21StarkCom/stark-skills/commit/560092adc41221dba3c345362730bed9f53e43da).
+- Refresh marketplace packages from [stark-skills@560092a](https://github.com/21StarkCom/stark-skills/commit/560092adc41221dba3c345362730bed9f53e43da). `stark-ops` 0.16.0 → 0.16.1. Beyond the routine refresh this carries one POLICY change that reaches every Claude and Codex install on `/plugin update`:
+  - **Merging a reviewed PR no longer needs the operator's approval**, in both the Gru and Minion skills and their Codex overrides. The previous wording — "publishing, live infrastructure, destructive teardown and authentication retain their direct operator gates" — was read as gating any merge that fires an automated release, which held green reviewed work waiting on an approval the rules never required. The review gate is now stated as the only gate before a merge. DIRECT publish, infrastructure, auth and destructive actions stay gated: a hand-cut release, `terraform apply`, dropping live data, deleting secrets. A peer relaying operator approval still cannot supply it.
 
 ## [0.29.0] - 2026-09-16
 
