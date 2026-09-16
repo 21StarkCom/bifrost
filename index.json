@@ -702,5 +702,42 @@
       "version": "0.4.25",
       "digest": "sha256:00968d1cde917236a59e96ec8d661edda1e3bd23b60a0892c43c889ea7439719"
     }
+  ],
+  "sharedAssets": [
+    {
+      "bundle": "stark-analyze",
+      "version": "0.5.46",
+      "digest": "sha256:7e7949b0c69e680bbce0a644fc14d52bb9e00c116dd15ebfc0e575606f1dece5"
+    },
+    {
+      "bundle": "stark-constitution",
+      "version": "0.2.56",
+      "digest": "sha256:7e7949b0c69e680bbce0a644fc14d52bb9e00c116dd15ebfc0e575606f1dece5"
+    },
+    {
+      "bundle": "stark-design",
+      "version": "0.1.14",
+      "digest": "sha256:7e7949b0c69e680bbce0a644fc14d52bb9e00c116dd15ebfc0e575606f1dece5"
+    },
+    {
+      "bundle": "stark-implement",
+      "version": "0.4.50",
+      "digest": "sha256:7e7949b0c69e680bbce0a644fc14d52bb9e00c116dd15ebfc0e575606f1dece5"
+    },
+    {
+      "bundle": "stark-ops",
+      "version": "0.14.0",
+      "digest": "sha256:7e7949b0c69e680bbce0a644fc14d52bb9e00c116dd15ebfc0e575606f1dece5"
+    },
+    {
+      "bundle": "stark-plan",
+      "version": "0.4.25",
+      "digest": "sha256:7e7949b0c69e680bbce0a644fc14d52bb9e00c116dd15ebfc0e575606f1dece5"
+    },
+    {
+      "bundle": "stark-write",
+      "version": "0.5.34",
+      "digest": "sha256:7e7949b0c69e680bbce0a644fc14d52bb9e00c116dd15ebfc0e575606f1dece5"
+    }
   ]
 }

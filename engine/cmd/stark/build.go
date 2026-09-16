@@ -28,7 +28,7 @@ func runBuild(catalogDir, repoRoot, manifestPath, assetsSource string, check boo
 	// Default the vendor snapshot to <repoRoot>/vendor/stark-skills when present,
 	// so committed builds are self-contained without an explicit flag.
 	if assetsSource == "" {
-		def := filepath.Join(repoRoot, "vendor", "stark-skills")
+		def := defaultAssetsSource(repoRoot)
 		if fi, statErr := os.Stat(def); statErr == nil && fi.IsDir() {
 			assetsSource = def
 		}
@@ -170,6 +170,14 @@ func (e *exitError) ExitCode() int { return e.code }
 func dirExists(path string) bool {
 	fi, err := os.Stat(path)
 	return err == nil && fi.IsDir()
+}
+
+// defaultAssetsSource is the committed shared stark-skills snapshot that `stark build`
+// vendors into EVERY bundle. `check-bumps` digests the same tree to hold that snapshot to
+// the version-bump rule, so the path lives here once: a build reading one directory while
+// the gate digests another would report clean over content it never inspected.
+func defaultAssetsSource(repoRoot string) string {
+	return filepath.Join(repoRoot, "vendor", "stark-skills")
 }
 
 // readCodexPluginVersion returns the repository release version shared by all

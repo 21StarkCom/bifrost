@@ -54,6 +54,25 @@ type PluginAsset struct {
 	Digest  string `json:"digest"`
 }
 
+// SharedAsset records the version-bump identity of the SHARED vendored snapshot
+// (`vendor/stark-skills/**` — stark-skills' immutable `tools/`, `prompts/`, `standards/`,
+// `scripts/`, `config.json`) as it ships inside ONE bundle. `stark build` vendors that one
+// snapshot into EVERY `dist/claude/<bundle>/`, so a single stark-skills edit to a top-level
+// tool changes every bundle's shipped bytes. The snapshot is not an artifact and is not
+// per-bundle, so before this row existed it participated in no gate: `check-bumps` digested
+// artifact sources plus `vendor/plugins/<bundle>` and never the shared snapshot, reported
+// "OK: no un-bumped source changes", and every bundle shipped modified content under an
+// unchanged version that consumers would never re-fetch. (Measured live 2026-09-16 on the
+// `/team-leader-agent` -> `/gru` rename: one bundle bumped, all seven dist trees changed.)
+//
+// The Digest is identical across rows by construction — one snapshot. The row is per bundle
+// because the VERSION it must force a bump of is per bundle.
+type SharedAsset struct {
+	Bundle  string `json:"bundle"`
+	Version string `json:"version"`
+	Digest  string `json:"digest"`
+}
+
 // Index is the lean search index.
 type Index struct {
 	SchemaVersion int         `json:"schemaVersion"`
@@ -62,6 +81,8 @@ type Index struct {
 	// Omitted when no bundle has vendored plugin assets. Consumers ignore unknown
 	// fields (see package doc), so adding it does not break existing readers.
 	PluginAssets []PluginAsset `json:"pluginAssets,omitempty"`
+	// Omitted when the build vendored no shared snapshot. Same unknown-field tolerance.
+	SharedAssets []SharedAsset `json:"sharedAssets,omitempty"`
 }
 
 // BundleDetail is the full per-bundle detail file (CC-3 structured shape).
@@ -205,7 +226,10 @@ func adapterVersions() map[string]string {
 // pluginDigests maps bundle name -> `digest.Files` over that bundle's vendored plugin
 // assets. Pass nil when a caller has none to record (tests, catalogs with no plugin-backed
 // bundle); bundles absent from the map simply get no row.
-func Build(cat *model.Catalog, pluginDigests map[string]string) (Index, map[string]BundleDetail, error) {
+// sharedDigest is `digest.Files` over the one shared `vendor/stark-skills/` snapshot that is
+// vendored into EVERY bundle. It is a single value, recorded once per bundle (see
+// SharedAsset). Pass "" when the build vendored no snapshot; no rows are then written.
+func Build(cat *model.Catalog, pluginDigests map[string]string, sharedDigest string) (Index, map[string]BundleDetail, error) {
 	idx := Index{
 		SchemaVersion: SchemaVersion,
 		GeneratedBy:   GeneratedBy{AdapterVersions: adapterVersions()},
@@ -220,6 +244,16 @@ func Build(cat *model.Catalog, pluginDigests map[string]string) (Index, map[stri
 	sort.Slice(idx.PluginAssets, func(i, j int) bool {
 		return idx.PluginAssets[i].Bundle < idx.PluginAssets[j].Bundle
 	})
+	if sharedDigest != "" {
+		for _, b := range cat.Bundles {
+			idx.SharedAssets = append(idx.SharedAssets, SharedAsset{
+				Bundle: b.Name, Version: b.Version, Digest: sharedDigest,
+			})
+		}
+		sort.Slice(idx.SharedAssets, func(i, j int) bool {
+			return idx.SharedAssets[i].Bundle < idx.SharedAssets[j].Bundle
+		})
+	}
 	details := map[string]BundleDetail{}
 	for _, b := range cat.Bundles {
 		detailArtifacts := make([]DetailEntry, 0, len(b.Artifacts))

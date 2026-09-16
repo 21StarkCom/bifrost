@@ -177,7 +177,18 @@ func Build(cat *model.Catalog, opts Options) (Output, error) {
 	for name, files := range pluginAssets {
 		pluginDigests[name] = digest.Files(files)
 	}
-	idx, details, err := index.Build(cat, pluginDigests)
+	// The SHARED snapshot rides along too. It is vendored into EVERY bundle, so a single
+	// stark-skills edit to a top-level tool changes every bundle's shipped bytes while
+	// touching no artifact digest and no per-bundle plugin digest — the exact blind spot
+	// that let six bundles ship changed content under unchanged versions on 2026-09-16
+	// (see index.SharedAsset). One digest, recorded per bundle so `check-bumps` can force
+	// the bump on each. Note `vendored` is nil when AssetsSource is empty, which yields ""
+	// here rather than the empty-set digest, so a no-vendor build writes no rows at all.
+	sharedDigest := ""
+	if vendored != nil {
+		sharedDigest = digest.Files(vendored)
+	}
+	idx, details, err := index.Build(cat, pluginDigests, sharedDigest)
 	if err != nil {
 		return Output{}, err
 	}
