@@ -92,6 +92,28 @@ artifact's canonical-source digest changed without a `version` bump),
 
 ## 5. Branch protection — APPLY (manual admin step)
 
+> **Operational runbook: [`operations/branch-protection.md`](operations/branch-protection.md).**
+> That file carries the authoritative required-context list, the ruleset APPLY
+> command, and the verification steps. This section states the policy; read both.
+
+> **NOT FULLY APPLIED — measured 2026-09-16 (STARK-4989).** What is live on
+> `main` today: `required_linear_history: true`, `enforce_admins: true`,
+> `allow_force_pushes: false`, `allow_deletions: false`,
+> `required_conversation_resolution: true`. What is **not** live:
+> `required_status_checks` (absent entirely — so every merge is a vacuous pass),
+> `required_approving_review_count` (0, not 2), and `require_code_owner_reviews`
+> (false). The §4 trust model and the two-approval rule above describe the
+> intended posture, not the measured one. Closing the gap is an operator gate.
+
+> **Required status checks now belong in a RULESET, not in the classic
+> protection payload below.** Checking `branches/main/protection` alone is
+> misleading — it can look configured while no check is required. See
+> [`operations/branch-protection.md`](operations/branch-protection.md) §2–§3 for
+> the ruleset that mirrors `21StarkCom/stark-skills`' `Required CI on main`, and
+> the **five** (not four) contexts it must name — the list below omits
+> `server (static origin)`. The classic-protection command below remains the
+> source for the review / linear-history half only.
+
 > These commands MUTATE repo settings. Run them once as a repo admin AFTER the
 > required-status contexts have appeared at least once (push a PR so the job names
 > register). **Do not run as part of automated plan execution.** Replace the
@@ -116,6 +138,7 @@ gh api -X PUT repos/21StarkCom/bifrost/branches/main/protection \
       "engine (validate + drift + tests)",
       "secret scan (catalog)",
       "web build",
+      "server (static origin)",
       "actionlint"
     ]
   },
@@ -141,7 +164,9 @@ gh api repos/21StarkCom/bifrost/branches/main/protection | \
 ```
 
 Expected verify output: `linear: true`, `force: false`, `admins: true`,
-`codeowners: true`, `approvals: 2`, and the four required contexts listed.
+`codeowners: true`, `approvals: 2`, and the five required contexts listed.
+(If the contexts live in the ruleset instead — the current plan — `checks` reads
+`null` here and you verify them with `gh api repos/21StarkCom/bifrost/rulesets`.)
 
 > **Note on the `engine` required context:** the job name is
 > `engine (validate + drift + tests)` regardless of the added `check-bumps` /
