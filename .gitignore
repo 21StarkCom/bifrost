@@ -26,3 +26,6 @@ release-notes.md
 
 # compiled server binary (build artifact)
 /server/server
+
+# local git worktrees (idun gh pr-open does `git add -A`, which would commit these as gitlinks)
+/.worktrees/
