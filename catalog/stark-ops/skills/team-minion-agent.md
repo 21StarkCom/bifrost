@@ -2,7 +2,7 @@
 name: team-minion-agent
 type: skill
 description: Act as a Minion assigned by Gru. Acknowledge intake, implement the authorized task, report evidence and blockers, and wait for integration ownership before merging.
-version: 0.12.4
+version: 0.12.5
 maturity: beta
 runtimes:
   - claude
