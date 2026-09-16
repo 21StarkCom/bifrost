@@ -104,6 +104,13 @@ function nonempty(value: unknown): value is string {
 function stringList(value: unknown): value is string[] {
   return Array.isArray(value) && value.every(nonempty);
 }
+/** The single limits rule, shared by `init` and by a transfer that replaces them.
+ * `resume` promises limits are "revalidated like `init`"; two copies of the predicate
+ * would let a future tightening reach one path and quietly break that promise on the
+ * other, with no test to notice. */
+function requireLimits(value: unknown, message: string): asserts value is string[] {
+  requireValue(stringList(value) && value.length > 0, message);
+}
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -124,6 +131,22 @@ const reservationResources = (task: Assignment) => [`ticket:${task.spec.ticket}`
   ...task.spec.exclusiveResources.map(r => `exclusive:${r}`)];
 const fresh = (o?: Observation) => Boolean(o && Date.now() - Date.parse(o.observedAt) <= 60_000 && Date.parse(o.observedAt) <= Date.now() + 5_000);
 
+/** A retained merge is settleable only while no replacement owns the work, or while
+ * this task's own integration is live or frozen. `attach` is the ownership line:
+ * before it the replacement has implemented nothing (`pending` after `recover`,
+ * `reserved` after `reserve`), so settling the landed merge costs nothing. After it
+ * the replacement must report ready and receive its own grant — cancelling an intake
+ * or working replacement must not reopen the inherited one, because that worker stays
+ * resumable through `continueWorker`. `reserved` is load-bearing, not cosmetic: a
+ * launch that never produces a discoverable peer leaves the task unattachable, and
+ * with the attempt budget spent `recover` also refuses — without it, a merge that
+ * actually landed could never be settled and the engagement could never complete. */
+export function verificationReady(task: Assignment): task is Assignment & { integrationBase: string } {
+  return Boolean(task.integrationBase && !task.reconnect?.pending &&
+    (task.phase === "integrating" || task.phase === "pending" || task.phase === "reserved" ||
+      (task.phase === "stopped" && task.stoppedFrom === "integrating")));
+}
+
 /** Reject a malformed DAG or unspecified authority before creating any state. */
 export function parseEngagement(value: unknown): Engagement {
   requireValue(isRecord(value), "engagement must be an object");
@@ -132,7 +155,7 @@ export function parseEngagement(value: unknown): Engagement {
   for (const key of ["maxWorkers", "maxAttempts", "maxRecoveries"]) {
     requireValue(Number.isSafeInteger(value[key]) && Number(value[key]) >= (key === "maxRecoveries" ? 0 : 1), `${key} must be an explicit bounded integer`);
   }
-  requireValue(stringList(value.limits) && value.limits.length > 0, "explicit operating limits are required");
+  requireLimits(value.limits, "explicit operating limits are required");
   requireValue(Array.isArray(value.tasks) && value.tasks.length > 0, "tasks are required");
   const ids = new Set<string>();
   const tickets = new Set<string>();
@@ -353,14 +376,38 @@ export class GruStore {
       this.event(run, "reconciled", "observations refreshed; reservations retained");
     });
   }
-  resume(id: string, oldLeader: string, revision: number, newLeader: string): Run {
+  /** `limits` is frozen at `init`, but `packet` copies it into every brief verbatim while
+   * substituting only the leader header. Across a leadership transfer the two disagree: an
+   * entry naming the *previous* leader, its surface, or its workspace as "current" sends the
+   * worker to an identity that no longer exists, and a phase-scoped entry (an intake hold for
+   * an already-finished task) parks its successor indefinitely. Both read as authority, so a
+   * leader cannot ignore them and must not rewrite state to escape them. Replacing them is
+   * therefore allowed at exactly this boundary — leadership transfer is already the
+   * authority-changing operation, and it re-validates like `init` and is recorded as an event.
+   * Omitting `limits` keeps the existing array, so an ordinary resume is unchanged. */
+  resume(id: string, oldLeader: string, revision: number, newLeader: string, limits?: unknown): Run {
     return this.transaction(id, oldLeader, revision, run => {
       requireValue(nonempty(newLeader), "leader identity is required");
       requireValue(run.mode !== "complete", "engagement already complete");
+      let replaced: string[] | undefined;
+      if (limits !== undefined) {
+        // A same-session resume is a legal no-op transfer, so without this the sitting
+        // leader could rewrite the limits binding IT — the exact "rewrite state to escape
+        // a limit" the doc above forbids. Only an incoming leader may replace them, and
+        // `checkLeadershipTransfer` has already required the outgoing one to be not-live.
+        requireValue(newLeader !== run.config.leader,
+          "limits can only be replaced by an incoming leader; a leader cannot rewrite the limits binding itself");
+        requireLimits(limits, "replacement limits must be a non-empty list of strings");
+        replaced = run.config.limits;
+        run.config.limits = structuredClone(limits);
+      }
       run.config.leader = newLeader; run.epoch++; run.reconciled = false;
       if (run.mode === "stopped") run.mode = "running";
       for (const task of run.tasks) task.observation = undefined;
-      this.event(run, "resumed", `leader ${newLeader}; reconnect before dispatch`);
+      // Record BOTH arrays. An operator auditing `status` later must be able to see which
+      // authority line was dropped and what replaced it; "limits replaced" alone is unauditable.
+      this.event(run, "resumed", `leader ${newLeader}; reconnect before dispatch${replaced === undefined ? ""
+        : `; limits replaced from ${JSON.stringify(replaced)} to ${JSON.stringify(run.config.limits)}`}`);
     });
   }
   recover(id: string, leader: string, revision: number, taskId: string, token: string): Run {
@@ -430,8 +477,7 @@ export class GruStore {
   complete(id: string, leader: string, revision: number, taskId: string, token: string, evidence: CompletionEvidence): Run {
     return this.transaction(id, leader, revision, run => {
       const task = this.task(run, taskId, token);
-      requireValue(run.mode === "running" && run.reconciled && task.integrationBase &&
-        task.phase !== "done" && task.phase !== "stopping", "integration and independent verification required");
+      requireValue(run.mode === "running" && run.reconciled && verificationReady(task), "integration and independent verification required");
       requireValue(evidence.base === task.integrationBase, "integration base changed; rebase and reverify");
       for (const sha of [evidence.head, evidence.base, evidence.merge]) requireValue(/^[0-9a-f]{40,64}$/.test(sha), "invalid evidence revision");
       requireValue(nonempty(evidence.pr) && nonempty(evidence.review) && nonempty(evidence.verifiedAt), "PR, review, and verification evidence required");

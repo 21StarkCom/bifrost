@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-/** Gru's durable action boundary. The team-leader skill owns the agentic loop. */
+/** Gru's durable action boundary. The `gru` skill owns the agentic loop. */
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { GruStore, parseEngagement } from "./gru_lib.ts";
+import { GruStore, parseEngagement, verificationReady } from "./gru_lib.ts";
+import type { Assignment } from "./gru_lib.ts";
 import { canonicalRepository, checkLeadershipTransfer, discoverWorker, interruptWorker, observeWorkers, packet, receive, reconnectWorker, retireWorker, validateReconnect, verifyCompletion, workerFromPeer } from "./gru_runtime_lib.ts";
 import { isMainModule } from "./main_module_lib.ts";
 
@@ -19,7 +20,7 @@ Usage: node tools/gru.ts <command> [options]
   packet       --run ID --task ID
   attach       --run ID --revision N --task ID --token TOKEN --peer PEER_ID
   receive      --run ID --revision N --message HERMOD_MESSAGE_ID
-  resume       --run ID --revision N
+  resume       --run ID --revision N [--limits-file limits.json]
   continue     --run ID --revision N --task ID --token TOKEN
   reconnect    --run ID --revision N --task ID --token TOKEN
   reconnected  --run ID --revision N --task ID --token TOKEN
@@ -44,12 +45,30 @@ reconcile never equates missing discovery with death. Keep uncertain reservation
 stop freezes dispatch; use Hermod to interrupt workers and observe termination.
 verify reruns declared checks in a disposable detached worktree, on fetched main.
 It requires a merged PR, posted head-matching review, and Alfred completion.
-Replacement retains pending merge grants; verify can settle an earlier merge.
+Replacement retains pending merge grants. verify can settle an earlier merge
+until the replacement attaches, or after stop froze an in-flight integration,
+and never while a reconnect is unsettled. Once attached, the replacement must
+report ready and receive its own integration grant first; cancelling it mid-work
+leaves it resumable through continue, not verifiable.
 Each check is bounded by the task's checkTimeoutMs (default 30 minutes).
 Verification removes its disposable checkout and retains its logs.
 When every task is verified the engagement completes; session ownership remains.
 No command publishes, changes authentication, or deletes worker/session worktrees.
 `;
+
+/** Explain why `verificationReady` refused, naming the command that actually repairs it.
+ * `integrate` only accepts phase `review`, so it is the wrong instruction everywhere else;
+ * a stopped worker needs `continue`, an in-flight one needs its own READY report first. */
+export function verifyBlocker(task: Assignment): string {
+  if (task.reconnect?.pending) return "reconnect outcome is uncertain; observe it before verification";
+  if (!task.integrationBase) return `task is ${task.phase} with no integration grant; integrate after its READY report`;
+  switch (task.phase) {
+    case "done": return "task is already verified";
+    case "stopping": return "task is stopping; observe termination and record stopped first";
+    case "stopped": return "task was cancelled before integration; continue it, then integrate after its READY report";
+    default: return `task is ${task.phase}; its worker must report ready and receive integration before verification`;
+  }
+}
 
 export async function main(argv = process.argv.slice(2)): Promise<number> {
   // Only a leading `help` verb or a real `--help`/`-h` flag: a bare "help" scanned
@@ -59,12 +78,19 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
   try {
     const verb = argv[0];
     const { values } = parseArgs({ args: argv.slice(1), strict: true, options: Object.fromEntries(
-      ["file", "run", "revision", "task", "token", "peer", "message", "base", "pr", "review", "state", "leader"].map(key => [key, { type: "string" as const }])) });
+      ["file", "run", "revision", "task", "token", "peer", "message", "base", "pr", "review", "state", "leader", "limits-file"].map(key => [key, { type: "string" as const }])) });
     const flag = (name: string): string => {
       const value = values[name];
       if (typeof value !== "string" || !value) throw new Error(`--${name} is required`);
       return value;
     };
+    // parseArgs registers one option set for every verb, so a flag only `resume` reads is
+    // silently accepted everywhere else. An operator who puts --limits-file on `reconcile`
+    // would get exit 0 and believe the dead-leader limits were replaced while `packet` kept
+    // shipping the old text — the precise failure this flag exists to fix. Refuse instead.
+    if (verb !== "resume" && values["limits-file"] !== undefined) {
+      throw new Error(`--limits-file applies to resume, not ${verb}`);
+    }
     const integer = (name: string): number => {
       const value = flag(name);
       if (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value))) throw new Error(`--${name} must be an integer`);
@@ -124,8 +150,17 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
         emit(store.report(id, identity, revision, report.task, report.token, report.session, report.kind, report.message, flag("message"))); break;
       }
       case "resume": {
+        // --limits-file replaces the frozen limits array; omitted keeps it. Read as a file,
+        // not an inline string: limits are prose the operator authored, and shell quoting is
+        // exactly where an authority line gets silently truncated.
+        //
+        // Read BEFORE the transfer check. That check performs live Hermod discovery, so a
+        // mistyped path would otherwise surface only after a slow network round trip — and
+        // report a discovery failure instead of the typo that actually caused it.
+        const limits = values["limits-file"] === undefined ? undefined
+          : JSON.parse(fs.readFileSync(flag("limits-file"), "utf8"));
         await checkLeadershipTransfer(run.config.leader, identity);
-        emit(store.resume(id, run.config.leader, revision, identity)); break;
+        emit(store.resume(id, run.config.leader, revision, identity, limits)); break;
       }
       case "recover": emit(store.recover(id, identity, revision, flag("task"), flag("token"))); break;
       case "continue": emit(store.continueWorker(id, identity, revision, flag("task"), flag("token"))); break;
@@ -142,7 +177,9 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
         const assigned = task(flag("token"));
         // complete() will refuse these anyway; refuse before spending a full verification run.
         if (run.mode !== "running" || !run.reconciled) throw new Error("resume and reconcile before verification");
-        if (!assigned.integrationBase || ["done", "stopping"].includes(assigned.phase)) throw new Error(`task is ${assigned.phase}; integrate before verification`);
+        // Name the repair that actually applies. "integrate" only works from `review`,
+        // so offering it for a stopped or in-flight task hands over a command that refuses.
+        if (!verificationReady(assigned)) throw new Error(verifyBlocker(assigned));
         const evidenceRoot = path.join(path.dirname(statePath), "evidence", id);
         fs.mkdirSync(evidenceRoot, { recursive: true, mode: 0o700 });
         const evidenceDir = fs.mkdtempSync(path.join(evidenceRoot, "verification-"));
