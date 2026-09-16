@@ -5,6 +5,8 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 ## [Unreleased]
 
 ### Changed
+<!-- idun:pr-merge pr=245 runId=245 -->
+- Removed the duplicate `[Unreleased]` CHANGELOG bullet for the already-released v0.28.0 rename; the `[0.28.0]` entry is the sole record.
 <!-- stark-gh:pr-merge pr=228 runId=228 -->
 - Updated docs (AGENTS.md, CLAUDE.md, README.md, native-install-loop.md) to retire stark-gh examples and clarify no bundle is plugin-backed or gemini-targeted today.
 
