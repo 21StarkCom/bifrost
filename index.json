@@ -22,7 +22,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.47",
+      "version": "0.5.48",
       "runtimes": [
         "claude",
         "codex"
@@ -47,7 +47,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.47",
+      "version": "0.5.48",
       "runtimes": [
         "claude",
         "codex"
@@ -72,7 +72,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.47",
+      "version": "0.5.48",
       "runtimes": [
         "claude",
         "codex"
@@ -97,7 +97,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.47",
+      "version": "0.5.48",
       "runtimes": [
         "claude",
         "codex"
@@ -122,7 +122,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.47",
+      "version": "0.5.48",
       "runtimes": [
         "claude",
         "codex"
@@ -147,7 +147,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.47",
+      "version": "0.5.48",
       "runtimes": [
         "claude",
         "codex"
@@ -172,7 +172,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.47",
+      "version": "0.5.48",
       "runtimes": [
         "claude",
         "codex"
@@ -197,7 +197,7 @@
       ],
       "category": "setup",
       "maturity": "beta",
-      "version": "0.2.57",
+      "version": "0.2.58",
       "runtimes": [
         "claude",
         "codex"
@@ -222,7 +222,7 @@
       ],
       "category": "setup",
       "maturity": "beta",
-      "version": "0.2.57",
+      "version": "0.2.58",
       "runtimes": [
         "claude",
         "codex"
@@ -247,7 +247,7 @@
       ],
       "category": "setup",
       "maturity": "beta",
-      "version": "0.2.57",
+      "version": "0.2.58",
       "runtimes": [
         "claude",
         "codex"
@@ -272,7 +272,7 @@
       ],
       "category": "design",
       "maturity": "beta",
-      "version": "0.1.15",
+      "version": "0.1.16",
       "runtimes": [
         "claude"
       ],
@@ -293,7 +293,7 @@
       ],
       "category": "implementation",
       "maturity": "beta",
-      "version": "0.4.51",
+      "version": "0.4.52",
       "runtimes": [
         "claude",
         "codex"
@@ -318,7 +318,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.0",
+      "version": "0.16.1",
       "runtimes": [
         "claude",
         "codex"
@@ -327,7 +327,7 @@
         "claude": "native",
         "codex": "native"
       },
-      "digest": "sha256:fc95afe80cd5bd8a98571e1d60a8c0084a6b83620ff526ba69aac328aee7b60a"
+      "digest": "sha256:6446e8d962795074c2825c46bb3b8a642f749b6f3be7f2b5d97432233d284777"
     },
     {
       "name": "minion",
@@ -343,7 +343,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.0",
+      "version": "0.16.1",
       "runtimes": [
         "claude",
         "codex"
@@ -352,7 +352,7 @@
         "claude": "native",
         "codex": "native"
       },
-      "digest": "sha256:48823f8ad06c20a8d478f3adb62ca23cbb3c0b069ccdef2abc6d25a0fd455a8f"
+      "digest": "sha256:52e0b637b46e9ebffc27cd9115750a8e89dabb8e839ffe80fc856a67c5c7d7f3"
     },
     {
       "name": "stark-bury",
@@ -368,7 +368,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.0",
+      "version": "0.16.1",
       "runtimes": [
         "claude",
         "codex"
@@ -393,7 +393,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.0",
+      "version": "0.16.1",
       "runtimes": [
         "claude",
         "codex"
@@ -418,7 +418,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.0",
+      "version": "0.16.1",
       "runtimes": [
         "claude",
         "codex"
@@ -443,7 +443,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.0",
+      "version": "0.16.1",
       "runtimes": [
         "claude"
       ],
@@ -466,7 +466,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.0",
+      "version": "0.16.1",
       "runtimes": [
         "claude",
         "codex"
@@ -491,7 +491,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.0",
+      "version": "0.16.1",
       "runtimes": [
         "claude",
         "codex"
@@ -515,7 +515,7 @@
       ],
       "category": "planning",
       "maturity": "beta",
-      "version": "0.4.26",
+      "version": "0.4.27",
       "runtimes": [
         "claude",
         "codex"
@@ -539,7 +539,7 @@
       ],
       "category": "planning",
       "maturity": "beta",
-      "version": "0.4.26",
+      "version": "0.4.27",
       "runtimes": [
         "claude",
         "codex"
@@ -564,7 +564,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.35",
+      "version": "0.5.36",
       "runtimes": [
         "claude",
         "codex"
@@ -589,7 +589,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.35",
+      "version": "0.5.36",
       "runtimes": [
         "claude",
         "codex"
@@ -614,7 +614,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.35",
+      "version": "0.5.36",
       "runtimes": [
         "claude",
         "codex"
@@ -639,7 +639,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.35",
+      "version": "0.5.36",
       "runtimes": [
         "claude",
         "codex"
@@ -664,7 +664,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.35",
+      "version": "0.5.36",
       "runtimes": [
         "claude",
         "codex"
@@ -679,96 +679,96 @@
   "pluginAssets": [
     {
       "bundle": "stark-analyze",
-      "version": "0.5.47",
+      "version": "0.5.48",
       "digest": "sha256:42ee5266e52dc6166629b7e32f781f70d3fd1a3e140314404a4e6fd77f73c540"
     },
     {
       "bundle": "stark-design",
-      "version": "0.1.15",
+      "version": "0.1.16",
       "digest": "sha256:7b200484db2256c8e3edc1ee46dd680b894043f5b07ce03b6d8fe486feb2418a"
     },
     {
       "bundle": "stark-implement",
-      "version": "0.4.51",
+      "version": "0.4.52",
       "digest": "sha256:536627a388f6518c15374d29bd11640ee5d24501261aaae7474891883428956f"
     },
     {
       "bundle": "stark-ops",
-      "version": "0.16.0",
-      "digest": "sha256:4c99b0dc0d31180f38dd5b5df54a1f54d122ae5488d302fab6dc12bfc04f2a86"
+      "version": "0.16.1",
+      "digest": "sha256:33685f0310f7bac5fae56c16f52179ac50184f141793cb758619747416f34c6e"
     },
     {
       "bundle": "stark-plan",
-      "version": "0.4.26",
+      "version": "0.4.27",
       "digest": "sha256:00968d1cde917236a59e96ec8d661edda1e3bd23b60a0892c43c889ea7439719"
     }
   ],
   "sharedAssets": [
     {
       "bundle": "stark-analyze",
-      "version": "0.5.47",
-      "digest": "sha256:7a15cbdeb3f89ba32bc1dbbb62e7989bc546facc131606912fbf439ff703567b"
+      "version": "0.5.48",
+      "digest": "sha256:81359ebb1b8f434fed87887c570688a072a8ae6e60ede20cfdab5962977e0ae0"
     },
     {
       "bundle": "stark-constitution",
-      "version": "0.2.57",
-      "digest": "sha256:7a15cbdeb3f89ba32bc1dbbb62e7989bc546facc131606912fbf439ff703567b"
+      "version": "0.2.58",
+      "digest": "sha256:81359ebb1b8f434fed87887c570688a072a8ae6e60ede20cfdab5962977e0ae0"
     },
     {
       "bundle": "stark-design",
-      "version": "0.1.15",
-      "digest": "sha256:7a15cbdeb3f89ba32bc1dbbb62e7989bc546facc131606912fbf439ff703567b"
+      "version": "0.1.16",
+      "digest": "sha256:81359ebb1b8f434fed87887c570688a072a8ae6e60ede20cfdab5962977e0ae0"
     },
     {
       "bundle": "stark-implement",
-      "version": "0.4.51",
-      "digest": "sha256:7a15cbdeb3f89ba32bc1dbbb62e7989bc546facc131606912fbf439ff703567b"
+      "version": "0.4.52",
+      "digest": "sha256:81359ebb1b8f434fed87887c570688a072a8ae6e60ede20cfdab5962977e0ae0"
     },
     {
       "bundle": "stark-ops",
-      "version": "0.16.0",
-      "digest": "sha256:7a15cbdeb3f89ba32bc1dbbb62e7989bc546facc131606912fbf439ff703567b"
+      "version": "0.16.1",
+      "digest": "sha256:81359ebb1b8f434fed87887c570688a072a8ae6e60ede20cfdab5962977e0ae0"
     },
     {
       "bundle": "stark-plan",
-      "version": "0.4.26",
-      "digest": "sha256:7a15cbdeb3f89ba32bc1dbbb62e7989bc546facc131606912fbf439ff703567b"
+      "version": "0.4.27",
+      "digest": "sha256:81359ebb1b8f434fed87887c570688a072a8ae6e60ede20cfdab5962977e0ae0"
     },
     {
       "bundle": "stark-write",
-      "version": "0.5.35",
-      "digest": "sha256:7a15cbdeb3f89ba32bc1dbbb62e7989bc546facc131606912fbf439ff703567b"
+      "version": "0.5.36",
+      "digest": "sha256:81359ebb1b8f434fed87887c570688a072a8ae6e60ede20cfdab5962977e0ae0"
     }
   ],
   "codexAssets": [
     {
       "bundle": "stark-analyze",
-      "version": "0.5.47",
+      "version": "0.5.48",
       "digest": "sha256:06f0ac4c1bc9704916f37921363bfa0ff198ee529cb88c4eb3cc9ec79e5a8f3f"
     },
     {
       "bundle": "stark-constitution",
-      "version": "0.2.57",
+      "version": "0.2.58",
       "digest": "sha256:06f0ac4c1bc9704916f37921363bfa0ff198ee529cb88c4eb3cc9ec79e5a8f3f"
     },
     {
       "bundle": "stark-implement",
-      "version": "0.4.51",
+      "version": "0.4.52",
       "digest": "sha256:10aada064098dc43dd343764c7987fb9fbd13d80c125463d04fedaec8ae72ac0"
     },
     {
       "bundle": "stark-ops",
-      "version": "0.16.0",
+      "version": "0.16.1",
       "digest": "sha256:4b51d8cb6530ad08cbd3c00448518ce84f405d27ded3f638671f592d9f560c19"
     },
     {
       "bundle": "stark-plan",
-      "version": "0.4.26",
+      "version": "0.4.27",
       "digest": "sha256:06f0ac4c1bc9704916f37921363bfa0ff198ee529cb88c4eb3cc9ec79e5a8f3f"
     },
     {
       "bundle": "stark-write",
-      "version": "0.5.35",
+      "version": "0.5.36",
       "digest": "sha256:06f0ac4c1bc9704916f37921363bfa0ff198ee529cb88c4eb3cc9ec79e5a8f3f"
     }
   ]
