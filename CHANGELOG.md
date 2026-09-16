@@ -5,7 +5,6 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 ## [Unreleased]
 
 ### Changed
-- Renamed the `team-leader-agent` skill to `gru` in `stark-ops` membership, following the stark-skills rename (STARK-4968). `stark sync` is fail-closed on an unknown member, so this had to land or every `marketplace-sync` run would die at the import step — not just this skill's. `stark-ops` 0.12.4 → 0.14.0 and root `VERSION` 0.27.7 → 0.28.0 (remove + add are each a minor under `publish.sh`'s policy). Installed plugins keep serving `/team-leader-agent` until `/plugin update`; after it, only `/gru` resolves. `team-minion-agent` is unchanged, so the pair is deliberately asymmetric.
 <!-- stark-gh:pr-merge pr=228 runId=228 -->
 - Updated docs (AGENTS.md, CLAUDE.md, README.md, native-install-loop.md) to retire stark-gh examples and clarify no bundle is plugin-backed or gemini-targeted today.
 
@@ -30,6 +29,17 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 - Removed retired private-directory references from documentation and secret-file lint rules.
 <!-- stark-gh:pr-merge pr=196 runId=c1422f87-9818-4484-94b7-36bd3219bffb -->
 - Publish native Codex skills for `stark-bury`, `stark-handoff`, and `simple-gate`.
+
+## [0.28.0] - 2026-09-16
+
+### Changed
+- Renamed the `team-leader-agent` skill to `gru` in `stark-ops` membership, following the stark-skills rename (STARK-4968). `stark sync` is fail-closed on an unknown member, so this had to land or every `marketplace-sync` run would die at the import step — not just this skill's. `stark-ops` 0.12.4 → 0.14.0 and root `VERSION` 0.27.7 → 0.28.0 (remove + add are each a minor under `publish.sh`'s policy). Installed plugins keep serving `/team-leader-agent` until `/plugin update`; after it, only `/gru` resolves. `team-minion-agent` is unchanged, so the pair is deliberately asymmetric.
+- Refresh marketplace packages from [stark-skills@2a57ec6](https://github.com/21StarkCom/stark-skills/commit/2a57ec6). The sync is cumulative over `a835cff..2a57ec6`, so beyond the rename it also ships:
+  - `gru resume --limits-file <path>` — an INCOMING leader may replace operating limits that a leadership transfer left stale (`packet` copies `limits` verbatim, so an entry naming the previous leader or holding a finished phase outlives its author). Operator-authored only; a sitting leader is refused, the replacement is revalidated like `init`, both the old and new arrays are recorded on the `resumed` event, and the flag is rejected on every other verb rather than silently ignored.
+  - `gru verify` / `complete` / `verifyCompletion` now share one `verificationReady` predicate. An inherited merge grant is settleable only before a replacement attaches, or while this task's own integration is live or frozen — never during an unsettled reconnect or while an attached replacement holds the task. `verify` also names the command that actually repairs the refusal instead of always suggesting `integrate`.
+  - `copilot_land land --lead NAME` is documented as inert: accepted for caller compatibility, echoed only by `--dry-run`, and selecting nothing.
+  - `self_healer` refuses the `refresh_token` action up front (`status: "skipped"`, `reason: "operator_action_required"`) before any guard command, verify command, session budget, or circuit-breaker accounting. The vestigial `ExecutionOutcome.success` field is gone; `verify_passed` is the sole outcome signal and `max_per_session` now counts attempts.
+- Patch-bumped the other six bundles — `stark-analyze` 0.5.46, `stark-constitution` 0.2.56, `stark-design` 0.1.14, `stark-implement` 0.4.50, `stark-plan` 0.4.25, `stark-write` 0.5.34. The shared `vendor/stark-skills/` snapshot feeds every bundle's vendored `tools/`, so all seven dist trees changed, not just `stark-ops`'. `check-bumps` digests artifact sources plus `vendor/plugins/<bundle>` and never the shared snapshot, so it reports clean here — the six would otherwise have shipped changed content under an unchanged version, and `/plugin update` would have been a no-op for anyone already on them.
 
 ## [0.27.7] - 2026-09-15
 
