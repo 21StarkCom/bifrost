@@ -96,14 +96,28 @@ artifact's canonical-source digest changed without a `version` bump),
 > That file carries the authoritative required-context list, the ruleset APPLY
 > command, and the verification steps. This section states the policy; read both.
 
-> **NOT FULLY APPLIED — measured 2026-09-16 (STARK-4989).** What is live on
-> `main` today: `required_linear_history: true`, `enforce_admins: true`,
+> **MEASURED 2026-09-16, and this block is the authority — not the prose above
+> it (STARK-4989, STARK-4991).** Re-measure with the command in §5.3 before
+> trusting any of it; that command existed here before and was never run, which
+> is how the gap below survived.
+>
+> **Live and enforcing:** the `Required CI on main` ruleset (five contexts,
+> `enforcement: active`), `required_linear_history: true`, `enforce_admins: true`,
 > `allow_force_pushes: false`, `allow_deletions: false`,
-> `required_conversation_resolution: true`. What is **not** live:
-> `required_status_checks` (absent entirely — so every merge is a vacuous pass),
-> `required_approving_review_count` (0, not 2), and `require_code_owner_reviews`
-> (false). The §4 trust model and the two-approval rule above describe the
-> intended posture, not the measured one. Closing the gap is an operator gate.
+> `required_conversation_resolution: true`.
+>
+> **Deliberately NOT live:** `required_approving_review_count` is **0** and
+> `require_code_owner_reviews` is **false**. This is now a decision, not a gap.
+> bifrost has one human. A repo-wide 2-approval rule on a single-operator fleet
+> cannot be satisfied without a second account or an admin bypass, and a gate
+> that is bypassed on every PR stops being read as a gate anywhere. The control
+> that actually holds the high-trust paths is the mandatory
+> `/code-review xhigh --fix` gate plus the operator attestation
+> `marketplace-sync` requires before it will publish — both of which are
+> exercised per PR and neither of which a second rubber-stamp would strengthen.
+>
+> If bifrost ever gains a second maintainer, revisit: the §4 trust model's
+> reasoning holds, it just has no one to spend a second approval.
 
 > **Required status checks now belong in a RULESET, not in the classic
 > protection payload below.** Checking `branches/main/protection` alone is
@@ -119,13 +133,14 @@ artifact's canonical-source digest changed without a `version` bump),
 > register). **Do not run as part of automated plan execution.** Replace the
 > team slugs as needed.
 >
-> **Why `required_approving_review_count = 2`:** GitHub's review count is repo-wide —
-> there is no per-path count. A CODEOWNERS entry alone only forces "review from a Code
-> Owner"; it still merges on a **single** approval. The high-trust body/MCP paths
+> **Why the block below sets `required_approving_review_count = 2`, and why it is
+> NOT applied:** GitHub's review count is repo-wide — there is no per-path count. A
+> CODEOWNERS entry alone only forces "review from a Code Owner"; it still merges on a
+> **single** approval. So covering the high-trust body/MCP paths
 > (`catalog/**/skills/**`, `catalog/**/agents/**`, `catalog/**/commands/**`, `**/mcp/**`)
-> must clear **TWO** approvals = the CODEOWNERS reviewer requirement **plus**
-> `required_approving_review_count = 2`. We set the count to 2 repo-wide (the strictest
-> path governs); routine engine/config PRs simply also need a second approver.
+> would need the count at 2 repo-wide. On a one-human repo that is unsatisfiable
+> without an admin bypass per PR. Kept here as the recipe for the day a second
+> maintainer exists; see the measured block above for what is actually enforced.
 
 ```bash
 # Require the CI status checks + linear history + code-owner review + 2 approvals, no bypass.
