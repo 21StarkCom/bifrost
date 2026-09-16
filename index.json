@@ -305,6 +305,31 @@
       "digest": "sha256:ec419fd27b00d0048c8c3b5dc0eb3f0f39ec8669ebf89aabbd167d3e947780f3"
     },
     {
+      "name": "gru",
+      "type": "skill",
+      "bundle": "stark-ops",
+      "description": "Gru leads authorized Minion work from intake through verified completion. Use for objectives or existing tickets requiring worker dispatch, dependency coordination, bounded recovery, status, resume, or stop.",
+      "tags": [
+        "release",
+        "coordination",
+        "session",
+        "handover",
+        "git"
+      ],
+      "category": "ops",
+      "maturity": "beta",
+      "version": "0.14.0",
+      "runtimes": [
+        "claude",
+        "codex"
+      ],
+      "support": {
+        "claude": "native",
+        "codex": "native"
+      },
+      "digest": "sha256:2410cf5219b9cf53e26467f2a685dab328def78fb502f90aa40ac8c093e03850"
+    },
+    {
       "name": "stark-bury",
       "type": "skill",
       "bundle": "stark-ops",
@@ -318,7 +343,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.12.4",
+      "version": "0.14.0",
       "runtimes": [
         "claude",
         "codex"
@@ -343,7 +368,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.12.4",
+      "version": "0.14.0",
       "runtimes": [
         "claude",
         "codex"
@@ -368,7 +393,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.12.4",
+      "version": "0.14.0",
       "runtimes": [
         "claude",
         "codex"
@@ -393,7 +418,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.12.4",
+      "version": "0.14.0",
       "runtimes": [
         "claude"
       ],
@@ -416,7 +441,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.12.4",
+      "version": "0.14.0",
       "runtimes": [
         "claude",
         "codex"
@@ -441,7 +466,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.12.4",
+      "version": "0.14.0",
       "runtimes": [
         "claude",
         "codex"
@@ -451,31 +476,6 @@
         "codex": "native"
       },
       "digest": "sha256:1b7f72abba2214c861ace0ff60869a035eee3b0cb5b4db7ca8f90e964712c107"
-    },
-    {
-      "name": "team-leader-agent",
-      "type": "skill",
-      "bundle": "stark-ops",
-      "description": "Gru leads authorized Minion work from intake through verified completion. Use for objectives or existing tickets requiring worker dispatch, dependency coordination, bounded recovery, status, resume, or stop.",
-      "tags": [
-        "release",
-        "coordination",
-        "session",
-        "handover",
-        "git"
-      ],
-      "category": "ops",
-      "maturity": "beta",
-      "version": "0.12.4",
-      "runtimes": [
-        "claude",
-        "codex"
-      ],
-      "support": {
-        "claude": "native",
-        "codex": "native"
-      },
-      "digest": "sha256:066f30f533fdf947f0f9bea9d64b96618e1a030162f49ac7617a6beddedfd379"
     },
     {
       "name": "team-minion-agent",
@@ -491,7 +491,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.12.4",
+      "version": "0.14.0",
       "runtimes": [
         "claude",
         "codex"
@@ -694,8 +694,8 @@
     },
     {
       "bundle": "stark-ops",
-      "version": "0.12.4",
-      "digest": "sha256:1a9737708ab635fc200dc5c43562fba1910a7e1a6d6fcb49d79a978460bfb715"
+      "version": "0.14.0",
+      "digest": "sha256:4c99b0dc0d31180f38dd5b5df54a1f54d122ae5488d302fab6dc12bfc04f2a86"
     },
     {
       "bundle": "stark-plan",

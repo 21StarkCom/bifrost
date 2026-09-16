@@ -5,6 +5,7 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 ## [Unreleased]
 
 ### Changed
+- Renamed the `team-leader-agent` skill to `gru` in `stark-ops` membership, following the stark-skills rename (STARK-4968). `stark sync` is fail-closed on an unknown member, so this had to land or every `marketplace-sync` run would die at the import step — not just this skill's. `stark-ops` 0.12.4 → 0.14.0 and root `VERSION` 0.27.7 → 0.28.0 (remove + add are each a minor under `publish.sh`'s policy). Installed plugins keep serving `/team-leader-agent` until `/plugin update`; after it, only `/gru` resolves. `team-minion-agent` is unchanged, so the pair is deliberately asymmetric.
 <!-- stark-gh:pr-merge pr=228 runId=228 -->
 - Updated docs (AGENTS.md, CLAUDE.md, README.md, native-install-loop.md) to retire stark-gh examples and clarify no bundle is plugin-backed or gemini-targeted today.
 
