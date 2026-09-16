@@ -21,6 +21,7 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 - Unblocked native marketplace publication and packaged `stark-brain` as an Atlas MCP integration without restoring the retired `remember` skill.
 
 ### Added
+- Document the `main` required-status-checks contract (STARK-4989): new `docs/operations/branch-protection.md` names the five `ci.yml` contexts, carries the operator-only ruleset APPLY command, and records the draft-skip-guard trap; `SECURITY.md` §5 now states the measured gap between documented and live protection, and CLAUDE.md / AGENTS.md point at the contract.
 <!-- stark-gh:pr-merge pr=227 runId=227 -->
 - Publish `stark-memory` skill in the `stark-ops` bundle (0.10.4 → 0.11.0) for auditing and tidying Claude Code auto-memory files.
 <!-- stark-gh:pr-merge pr=207 runId=044dacbb-5bef-42dd-8e7d-16e9e1c14290 -->
