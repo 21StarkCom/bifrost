@@ -22,7 +22,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.46",
+      "version": "0.5.47",
       "runtimes": [
         "claude",
         "codex"
@@ -47,7 +47,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.46",
+      "version": "0.5.47",
       "runtimes": [
         "claude",
         "codex"
@@ -72,7 +72,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.46",
+      "version": "0.5.47",
       "runtimes": [
         "claude",
         "codex"
@@ -97,7 +97,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.46",
+      "version": "0.5.47",
       "runtimes": [
         "claude",
         "codex"
@@ -122,7 +122,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.46",
+      "version": "0.5.47",
       "runtimes": [
         "claude",
         "codex"
@@ -147,7 +147,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.46",
+      "version": "0.5.47",
       "runtimes": [
         "claude",
         "codex"
@@ -172,7 +172,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.46",
+      "version": "0.5.47",
       "runtimes": [
         "claude",
         "codex"
@@ -197,7 +197,7 @@
       ],
       "category": "setup",
       "maturity": "beta",
-      "version": "0.2.56",
+      "version": "0.2.57",
       "runtimes": [
         "claude",
         "codex"
@@ -222,7 +222,7 @@
       ],
       "category": "setup",
       "maturity": "beta",
-      "version": "0.2.56",
+      "version": "0.2.57",
       "runtimes": [
         "claude",
         "codex"
@@ -247,7 +247,7 @@
       ],
       "category": "setup",
       "maturity": "beta",
-      "version": "0.2.56",
+      "version": "0.2.57",
       "runtimes": [
         "claude",
         "codex"
@@ -272,7 +272,7 @@
       ],
       "category": "design",
       "maturity": "beta",
-      "version": "0.1.14",
+      "version": "0.1.15",
       "runtimes": [
         "claude"
       ],
@@ -293,7 +293,7 @@
       ],
       "category": "implementation",
       "maturity": "beta",
-      "version": "0.4.50",
+      "version": "0.4.51",
       "runtimes": [
         "claude",
         "codex"
@@ -318,7 +318,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.14.0",
+      "version": "0.16.0",
       "runtimes": [
         "claude",
         "codex"
@@ -327,7 +327,32 @@
         "claude": "native",
         "codex": "native"
       },
-      "digest": "sha256:2410cf5219b9cf53e26467f2a685dab328def78fb502f90aa40ac8c093e03850"
+      "digest": "sha256:fc95afe80cd5bd8a98571e1d60a8c0084a6b83620ff526ba69aac328aee7b60a"
+    },
+    {
+      "name": "minion",
+      "type": "skill",
+      "bundle": "stark-ops",
+      "description": "Act as a Minion assigned by Gru. Acknowledge intake, implement the authorized task, report evidence and blockers, and wait for integration ownership before merging.",
+      "tags": [
+        "release",
+        "coordination",
+        "session",
+        "handover",
+        "git"
+      ],
+      "category": "ops",
+      "maturity": "beta",
+      "version": "0.16.0",
+      "runtimes": [
+        "claude",
+        "codex"
+      ],
+      "support": {
+        "claude": "native",
+        "codex": "native"
+      },
+      "digest": "sha256:48823f8ad06c20a8d478f3adb62ca23cbb3c0b069ccdef2abc6d25a0fd455a8f"
     },
     {
       "name": "stark-bury",
@@ -343,7 +368,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.14.0",
+      "version": "0.16.0",
       "runtimes": [
         "claude",
         "codex"
@@ -368,7 +393,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.14.0",
+      "version": "0.16.0",
       "runtimes": [
         "claude",
         "codex"
@@ -393,7 +418,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.14.0",
+      "version": "0.16.0",
       "runtimes": [
         "claude",
         "codex"
@@ -418,7 +443,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.14.0",
+      "version": "0.16.0",
       "runtimes": [
         "claude"
       ],
@@ -441,7 +466,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.14.0",
+      "version": "0.16.0",
       "runtimes": [
         "claude",
         "codex"
@@ -466,7 +491,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.14.0",
+      "version": "0.16.0",
       "runtimes": [
         "claude",
         "codex"
@@ -476,31 +501,6 @@
         "codex": "native"
       },
       "digest": "sha256:1b7f72abba2214c861ace0ff60869a035eee3b0cb5b4db7ca8f90e964712c107"
-    },
-    {
-      "name": "team-minion-agent",
-      "type": "skill",
-      "bundle": "stark-ops",
-      "description": "Act as a Minion assigned by Gru. Acknowledge intake, implement the authorized task, report evidence and blockers, and wait for integration ownership before merging.",
-      "tags": [
-        "release",
-        "coordination",
-        "session",
-        "handover",
-        "git"
-      ],
-      "category": "ops",
-      "maturity": "beta",
-      "version": "0.14.0",
-      "runtimes": [
-        "claude",
-        "codex"
-      ],
-      "support": {
-        "claude": "native",
-        "codex": "native"
-      },
-      "digest": "sha256:0aaff1b3ddd781fb2e912ff590e7917f5d70b75988692565400aeccf6219f1b2"
     },
     {
       "name": "simple-gate",
@@ -515,7 +515,7 @@
       ],
       "category": "planning",
       "maturity": "beta",
-      "version": "0.4.25",
+      "version": "0.4.26",
       "runtimes": [
         "claude",
         "codex"
@@ -539,7 +539,7 @@
       ],
       "category": "planning",
       "maturity": "beta",
-      "version": "0.4.25",
+      "version": "0.4.26",
       "runtimes": [
         "claude",
         "codex"
@@ -564,7 +564,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.34",
+      "version": "0.5.35",
       "runtimes": [
         "claude",
         "codex"
@@ -589,7 +589,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.34",
+      "version": "0.5.35",
       "runtimes": [
         "claude",
         "codex"
@@ -614,7 +614,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.34",
+      "version": "0.5.35",
       "runtimes": [
         "claude",
         "codex"
@@ -639,7 +639,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.34",
+      "version": "0.5.35",
       "runtimes": [
         "claude",
         "codex"
@@ -664,7 +664,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.34",
+      "version": "0.5.35",
       "runtimes": [
         "claude",
         "codex"
@@ -679,97 +679,97 @@
   "pluginAssets": [
     {
       "bundle": "stark-analyze",
-      "version": "0.5.46",
+      "version": "0.5.47",
       "digest": "sha256:42ee5266e52dc6166629b7e32f781f70d3fd1a3e140314404a4e6fd77f73c540"
     },
     {
       "bundle": "stark-design",
-      "version": "0.1.14",
+      "version": "0.1.15",
       "digest": "sha256:7b200484db2256c8e3edc1ee46dd680b894043f5b07ce03b6d8fe486feb2418a"
     },
     {
       "bundle": "stark-implement",
-      "version": "0.4.50",
+      "version": "0.4.51",
       "digest": "sha256:536627a388f6518c15374d29bd11640ee5d24501261aaae7474891883428956f"
     },
     {
       "bundle": "stark-ops",
-      "version": "0.14.0",
+      "version": "0.16.0",
       "digest": "sha256:4c99b0dc0d31180f38dd5b5df54a1f54d122ae5488d302fab6dc12bfc04f2a86"
     },
     {
       "bundle": "stark-plan",
-      "version": "0.4.25",
+      "version": "0.4.26",
       "digest": "sha256:00968d1cde917236a59e96ec8d661edda1e3bd23b60a0892c43c889ea7439719"
     }
   ],
   "sharedAssets": [
     {
       "bundle": "stark-analyze",
-      "version": "0.5.46",
-      "digest": "sha256:7e7949b0c69e680bbce0a644fc14d52bb9e00c116dd15ebfc0e575606f1dece5"
+      "version": "0.5.47",
+      "digest": "sha256:7a15cbdeb3f89ba32bc1dbbb62e7989bc546facc131606912fbf439ff703567b"
     },
     {
       "bundle": "stark-constitution",
-      "version": "0.2.56",
-      "digest": "sha256:7e7949b0c69e680bbce0a644fc14d52bb9e00c116dd15ebfc0e575606f1dece5"
+      "version": "0.2.57",
+      "digest": "sha256:7a15cbdeb3f89ba32bc1dbbb62e7989bc546facc131606912fbf439ff703567b"
     },
     {
       "bundle": "stark-design",
-      "version": "0.1.14",
-      "digest": "sha256:7e7949b0c69e680bbce0a644fc14d52bb9e00c116dd15ebfc0e575606f1dece5"
+      "version": "0.1.15",
+      "digest": "sha256:7a15cbdeb3f89ba32bc1dbbb62e7989bc546facc131606912fbf439ff703567b"
     },
     {
       "bundle": "stark-implement",
-      "version": "0.4.50",
-      "digest": "sha256:7e7949b0c69e680bbce0a644fc14d52bb9e00c116dd15ebfc0e575606f1dece5"
+      "version": "0.4.51",
+      "digest": "sha256:7a15cbdeb3f89ba32bc1dbbb62e7989bc546facc131606912fbf439ff703567b"
     },
     {
       "bundle": "stark-ops",
-      "version": "0.14.0",
-      "digest": "sha256:7e7949b0c69e680bbce0a644fc14d52bb9e00c116dd15ebfc0e575606f1dece5"
+      "version": "0.16.0",
+      "digest": "sha256:7a15cbdeb3f89ba32bc1dbbb62e7989bc546facc131606912fbf439ff703567b"
     },
     {
       "bundle": "stark-plan",
-      "version": "0.4.25",
-      "digest": "sha256:7e7949b0c69e680bbce0a644fc14d52bb9e00c116dd15ebfc0e575606f1dece5"
+      "version": "0.4.26",
+      "digest": "sha256:7a15cbdeb3f89ba32bc1dbbb62e7989bc546facc131606912fbf439ff703567b"
     },
     {
       "bundle": "stark-write",
-      "version": "0.5.34",
-      "digest": "sha256:7e7949b0c69e680bbce0a644fc14d52bb9e00c116dd15ebfc0e575606f1dece5"
+      "version": "0.5.35",
+      "digest": "sha256:7a15cbdeb3f89ba32bc1dbbb62e7989bc546facc131606912fbf439ff703567b"
     }
   ],
   "codexAssets": [
     {
       "bundle": "stark-analyze",
-      "version": "0.5.46",
-      "digest": "sha256:37b2557566809881688ecf09bb55371757819c95b6a7d815bf28c84d436b4710"
+      "version": "0.5.47",
+      "digest": "sha256:06f0ac4c1bc9704916f37921363bfa0ff198ee529cb88c4eb3cc9ec79e5a8f3f"
     },
     {
       "bundle": "stark-constitution",
-      "version": "0.2.56",
-      "digest": "sha256:37b2557566809881688ecf09bb55371757819c95b6a7d815bf28c84d436b4710"
+      "version": "0.2.57",
+      "digest": "sha256:06f0ac4c1bc9704916f37921363bfa0ff198ee529cb88c4eb3cc9ec79e5a8f3f"
     },
     {
       "bundle": "stark-implement",
-      "version": "0.4.50",
-      "digest": "sha256:cd95ab1649faee03cb9c62f0954073ddad9b5cf28048d8ace0f222f611f706d4"
+      "version": "0.4.51",
+      "digest": "sha256:10aada064098dc43dd343764c7987fb9fbd13d80c125463d04fedaec8ae72ac0"
     },
     {
       "bundle": "stark-ops",
-      "version": "0.14.0",
-      "digest": "sha256:65e870b313d2b10f5b2caa074554a4420b7eea3bbed89251985f3e81bc604c1d"
+      "version": "0.16.0",
+      "digest": "sha256:4b51d8cb6530ad08cbd3c00448518ce84f405d27ded3f638671f592d9f560c19"
     },
     {
       "bundle": "stark-plan",
-      "version": "0.4.25",
-      "digest": "sha256:37b2557566809881688ecf09bb55371757819c95b6a7d815bf28c84d436b4710"
+      "version": "0.4.26",
+      "digest": "sha256:06f0ac4c1bc9704916f37921363bfa0ff198ee529cb88c4eb3cc9ec79e5a8f3f"
     },
     {
       "bundle": "stark-write",
-      "version": "0.5.34",
-      "digest": "sha256:37b2557566809881688ecf09bb55371757819c95b6a7d815bf28c84d436b4710"
+      "version": "0.5.35",
+      "digest": "sha256:06f0ac4c1bc9704916f37921363bfa0ff198ee529cb88c4eb3cc9ec79e5a8f3f"
     }
   ]
 }
