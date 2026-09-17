@@ -35,14 +35,30 @@ import (
 // reaches os.Stat. Same for the quote/paren that closes a markdown link target.
 var skillSupportRefRe = regexp.MustCompile(`(?:(?:\.\./)+[A-Za-z0-9_.-]+/)?(?:references|scripts|assets)/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*`)
 
-// skillSupportRefs returns every support reference in a rendered skill body,
-// trimmed of the sentence punctuation that follows a bare path in prose.
+// skillSupportRefs returns every support reference in a rendered skill body.
+//
+// The trim set is a single `.` on purpose. A match can only ever END in a
+// character the pattern's own class allows, and that class is `[A-Za-z0-9_.-]`
+// throughout — so `,`, `;`, `:` and `)` never entered the match and trimming
+// them was dead work that read like a guarantee. `.` alone is reachable, from a
+// path that closes a sentence: `references/hooks.md.`
 func skillSupportRefs(body string) []string {
 	refs := skillSupportRefRe.FindAllString(body, -1)
 	for i, ref := range refs {
-		refs[i] = strings.TrimRight(ref, ".,;:)")
+		refs[i] = strings.TrimRight(ref, ".")
 	}
 	return refs
+}
+
+// supportRefKind labels a reference for the dangling-reference message. A
+// reference that leaves the skill's own directory is a different diagnosis: the
+// reader must look in the SIBLING skill, not in this one. Getting this backwards
+// is the wrong turn STARK-5065 cost a publish window on, so it has its own test.
+func supportRefKind(ref string) string {
+	if strings.HasPrefix(ref, "../") {
+		return "cross-skill"
+	}
+	return "skill-local"
 }
 
 func splitSkillFrontmatter(t *testing.T, content string) (map[string]any, string) {
@@ -220,11 +236,7 @@ func TestEveryCommittedCodexSkillMeetsNativeContract(t *testing.T) {
 
 				for _, ref := range skillSupportRefs(body) {
 					if _, err := os.Stat(filepath.Join(filepath.Dir(skillPath), filepath.FromSlash(ref))); err != nil {
-						kind := "skill-local"
-						if strings.HasPrefix(ref, "../") {
-							kind = "cross-skill"
-						}
-						t.Errorf("dangling %s support reference %q", kind, ref)
+						t.Errorf("dangling %s support reference %q", supportRefKind(ref), ref)
 					}
 				}
 			})
@@ -263,6 +275,15 @@ func TestSkillSupportRefs(t *testing.T) {
 			name: "sibling link without an anchor",
 			body: "See [operations](../gru/references/operations.md) for the contract.",
 			want: []string{"../gru/references/operations.md"},
+		},
+		{
+			// The `+` on the `../` run, not just its presence. With `{1}` this
+			// yields `../gru/references/operations.md`, which RESOLVES in a real
+			// install — so a genuinely broken two-level path would pass the gate
+			// silently, the exact class the gate exists to catch.
+			name: "every level of the relative run is kept",
+			body: "[x](../../gru/references/operations.md)",
+			want: []string{"../../gru/references/operations.md"},
 		},
 		{
 			name: "skill-local link is unchanged",
@@ -350,8 +371,31 @@ func TestSkillSupportRefResolution(t *testing.T) {
 	if resolves("references/operations.md") {
 		t.Fatal("test tree is wrong: minion must not carry its own references/operations.md")
 	}
-	// A sibling reference whose target is genuinely absent must still fail.
-	if resolves("../gru/references/missing.md") {
-		t.Error("a genuinely dangling sibling reference resolved")
+	// A sibling reference whose target is genuinely absent must still fail, and the
+	// reference has to come from the EXTRACTOR: stating the literal here would make
+	// the assertion depend on os.Stat and the fixture alone, so no change to the
+	// pattern or the helper could ever break it.
+	missing := skillSupportRefs("[gone](../gru/references/missing.md)")
+	if len(missing) != 1 {
+		t.Fatalf("got %q, want one reference", missing)
+	}
+	if resolves(missing[0]) {
+		t.Errorf("a genuinely dangling sibling reference %q resolved", missing[0])
+	}
+}
+
+// TestSupportRefKind pins the diagnosis. A backwards label sends the reader
+// looking for the file inside the citing skill, which is where STARK-5065's
+// original message sent me.
+func TestSupportRefKind(t *testing.T) {
+	for ref, want := range map[string]string{
+		"../gru/references/operations.md":    "cross-skill",
+		"../../gru/references/operations.md": "cross-skill",
+		"references/stage1-dossier.md":       "skill-local",
+		"scripts/protect-paths.sh":           "skill-local",
+	} {
+		if got := supportRefKind(ref); got != want {
+			t.Errorf("supportRefKind(%q) = %q, want %q", ref, got, want)
+		}
 	}
 }
