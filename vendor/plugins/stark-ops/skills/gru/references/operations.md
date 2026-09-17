@@ -50,6 +50,7 @@ Provider selection is mandatory for every task.
 Use existing tickets; the tool does not create any.
 Dependencies reference tasks in the same engagement.
 Reject cycles and duplicate ticket or worktree ownership.
+Declare `worktree` where Hermod will place the task's provider; see [worktree placement](#worktree-placement).
 Files are relative paths or directories, without glob patterns.
 Use normalized paths without trailing slashes or dot components.
 The CLI derives repository identity from origin, across checkout aliases.
@@ -70,7 +71,7 @@ An obsolete leader or revision cannot overwrite current state.
 | `reconcile` | Hermod peer and session observations | Live, dead, or unknown observations |
 | `reserve` | Readiness, resources, available budget | Unique token; launch pending |
 | `packet` | Existing reservation | Complete worker brief |
-| `attach` | Exact live Hermod peer | Worker bound; awaiting intake |
+| `attach` | Exact live Hermod peer; git evidence if outside the declared worktree | Worker bound, adopted worktree audited; awaiting intake |
 | `receive` | Leader-acked Hermod message, delivery confirmed | Intake, progress, blocker, or claim |
 | `integrate` | Reviewed candidate and base SHA | Exclusive integration reservation |
 | `verify` | Merged PR, review, independent checks | Verified completion evidence |
@@ -84,6 +85,7 @@ An obsolete leader or revision cannot overwrite current state.
 | `interrupt` | Exact live worker identity | Hermod interrupt and observation |
 | `stopped` | Idle interrupted or terminal worker | Stopped assignment; ownership retained |
 | `retire` | Verified completed worker observed idle | Surface closed; worktree preserved |
+| `sweep` | Alfred ticket `done`/`Closed`; no live Hermod peer bound | Dry run, or with `--apply` ownership released and `swept` recorded |
 
 `reserved` never means started.
 `intake` never means acknowledged.
@@ -135,6 +137,72 @@ flag `receive` checks. Read the report before acking it. Acking a batch of inbou
 ids unread satisfies the gate on messages nobody inspected, which is the whole
 property the gate exists to provide. Acking records receipt; it does not answer.
 Hermod sender attribution is coordination evidence, not operator authority.
+
+## Worktree placement
+
+`hermod ticket <ticket> --agent <provider> --cwd <repo>` creates the worker's worktree;
+Gru does not choose it. Declare the path Hermod will actually use:
+
+| Provider | Worktree | Branch |
+|---|---|---|
+| `claude` | `<repo>/.claude/worktrees/<ticket>` (Claude Code's `--worktree=<ticket>`) | `worktree-<ticket>` |
+| `codex` | `<main checkout>/.worktrees/<ticket>` | `<ticket>` |
+
+The Claude row was observed on 2026-09-17 with Hermod v0.17.4, launching from the
+primary checkout. The Codex row is Hermod v0.17.4's Codex launcher, which also reports
+`worktree` in `hermod ticket --json`. `hermod ticket --capabilities --json` says only
+`"worktree": "dedicated"`, and a Claude launch's `--json` omits the path, so neither
+can be derived at runtime today. Recheck this table when Hermod changes.
+`init` canonicalizes a not-yet-existing worktree through its parent directory and
+refuses when that parent is missing. A repository that has never hosted a Claude
+worktree has no `.claude/worktrees`, so create the parent before `init`; both
+launchers accept an existing, empty parent.
+
+A leader that declared the other layout used to strand its reservation: `attach`
+refused the mismatch, and the launched worker stayed live but unbound, so nothing
+could attach, interrupt, or recover it. `attach` now adopts the observed worktree
+when all of these hold, and otherwise still refuses:
+
+- the peer's cwd is the root of a linked git worktree, not a primary checkout or subdirectory,
+  confirmed from git's on-disk pointers (`<cwd>/.git` names `<common>/worktrees/<name>`, whose
+  `gitdir` names it back), so an inherited `GIT_DIR` cannot make a plain folder qualify;
+- its origin yields the task's repository identity, so a peer in another repository never binds;
+- its directory name or branch names the ticket as a whole segment (`STARK-50` never matches `STARK-501`);
+- no task in this or any other engagement declares that path, and no other assignment owns it
+  (a swept task released its path, so its leftover declaration does not count, as `reserve` already allows);
+- no takeover of this task fenced that path: a relaunch Claude re-attaches to the orphan's
+  checkout must not undo the fresh worktree the takeover required.
+
+`attach` also refuses the leader's own session as its worker. Launch state, provider,
+leader, fenced-identity and identity-ownership refusals all come before any git inspection,
+so an ineligible peer, including one already bound to another assignment, hears its real
+refusal rather than an adoption verdict.
+
+Adoption widens which paths bind, not which peers may. Attach only the peer identity your
+own `hermod ticket --json` launch returned for this reservation. A live session that
+merely sits in a ticket-named worktree, found by browsing peers, is not this launch.
+
+A Claude takeover replacement cannot get a fresh worktree through `hermod ticket`.
+Claude's `--worktree=<ticket>` reuses the orphan's `<repo>/.claude/worktrees/<ticket>`,
+and `attach` refuses a path a takeover fenced, so that launch would strand exactly as
+this section describes. Before reserving the replacement, confirm Hermod will create the
+takeover's declared worktree: for example, a Codex replacement lands in an absent
+`<main checkout>/.worktrees/<ticket>`. If no launch path yields it, escalate to the
+operator before spending the attempt.
+
+Adoption rewrites the task's `worktree` in its assignment and the engagement config,
+reserves the observed path, keeps the declared path reserved to the same task, and
+records a `worktree-adopted` event carrying the evidence: the worktree root, git dir and
+common dir `git rev-parse` reported, the origin's repository identity, the branch, and the
+new token. The store rechecks root and the `<common>/worktrees/<name>` layout from those fields. Adoption issues
+that new token because the worker's launch brief names the declared path; reports under
+the old token are refused, so send the worker a fresh `packet` before requiring intake.
+The Minion contract treats that later packet as superseding its launch brief. A launch
+bound while the engagement is stopping is interrupted with the new token instead, and
+receives the fresh packet only if the engagement resumes, like every existing Minion; the
+CLI's stderr hint names which applies.
+A refused mismatch names the observed path and the reason and leaves the launch
+reserved. Escalate it; never edit the engagement or database to release it.
 
 ## Verification and integration
 
@@ -287,6 +355,62 @@ attempt and supplies a fresh token. The packet includes the prior report so an
 existing PR is continued, not duplicated. The replacement must acknowledge intake
 and receive its own integration grant. Never resume a fenced old session.
 
+### Proof-based sweep of dead reservations
+
+A launch that never attaches, followed by `stop`, holds its ticket, worktree, and
+files with no command left to release them, even after the ticket is finished
+outside the store. `sweep [--run ID] [--apply]` releases a held task only when both hold:
+
+1. Alfred reports its ticket `done` or `Closed`. An open ticket is never released,
+   even when no worker ever attached. Alfred refuses work verbs outside a git checkout
+   and binds ClickUp or Jira from the checkout's org, so a task's own repository can
+   read its ClickUp `STARK-n` handle as missing. Sweep tries the swept tasks'
+   repositories, every other repository the store records (so `--run` on a Jira-bound
+   engagement still has one), then the caller's directory, until one yields validated
+   evidence for that ticket, and reads the rest there. If none does, every context's
+   error is reported.
+2. No live Hermod peer is bound to it. A bound worker must be observed terminal under
+   `reconcile`'s rules; `unknown` stays held. Either way, discovery must find no live
+   or uncertain peer inside any worktree the task owns: an unattached launch may be
+   there. A release deletes every `tree:` row, so every one is checked: the reserved
+   worktree, one an earlier `takeover` retired, and a declared one `attach` kept when
+   it adopted Hermod's actual worktree.
+   Hermod places a launch at its own path, not necessarily the declared one (see
+   [worktree placement](#worktree-placement)), and a launch that never attached owns no
+   `tree:` row there, so a live or uncertain peer in any directory naming the ticket as a
+   whole segment is held as a possible launch too.
+   Occupancy reads every provider and ACP peer, so both that unscoped view and the
+   task's own namespace must report complete. A same-provider peer whose working
+   directory Hermod cannot resolve, including an empty or relative one, counts as an
+   occupant. A saved session in
+   `hermod sessions --all` whose pid probes alive (`alive: true`) counts as an occupant
+   too, even when the peer view does not list it, as takeover's absence checks already
+   read both sources; a gone or unprobed session does not.
+
+A task holding an integration grant also stays held, because `verify` settles that
+merge after the worker closes its ticket. `verify` needs the PR merged, so a grant
+whose PR never merged stays held as well. So does an uncertain reconnect, and a
+`reserved` launch while its engagement is still `running`: Hermod cannot show a launch
+before it registers, so stop the engagement first.
+Elapsed time is never evidence. Verified `done` tasks keep their ownership by design.
+
+Without `--apply` it prints each held task as `release` or `held` with its reason,
+opening the store read-only: no directory, permission, journal-mode, or schema change
+(SQLite still creates the store's `-wal`/`-shm` sidecars when absent, with the store's permissions).
+Neither mode creates a store that does not exist; it reports no engagements.
+`--apply` gathers all Alfred and Hermod evidence before writing; any failure exits
+non-zero with nothing released. Each engagement is then written in one store
+transaction, fenced on the engagement and exact revision the evidence was read at
+and on one-minute freshness. No leader identity is needed, because the leader may be gone.
+Each release records a `swept` event stating it was a proof-based sweep, not a leader
+action, with the invoking session, leader of record, proof, and released resources.
+A swept task owns no resources, files, or capacity, cannot be verified, and leaves
+dependents blocked. A run with every task verified or swept becomes terminal `swept`,
+whether a sweep or a later `verify` settles its last task, which `resume` and `stop`
+refuse; a stopping run with no active task becomes `stopped`.
+Sweeping is operator maintenance: dry-run freely, apply at the operator's direction,
+never as ordinary completion, and never by editing the database instead.
+
 ### Normal bounded recovery
 
 First reconnect the recorded worker through Hermod's supported resume path.
@@ -346,7 +470,8 @@ Canceled assignments must not restart from old messages.
 `stop` freezes dispatch before contacting workers.
 If a reserved launch appears late, attach its exact peer while stopping.
 This binds its identity for interruption without restarting dispatch.
-An unidentified launch remains reserved until its outcome is known.
+An unidentified launch remains reserved until its outcome is known, or until a
+[proof-based sweep](#proof-based-sweep-of-dead-reservations) releases it.
 `interrupt` sends Hermod's escape control to the verified worker.
 Observe idle or terminal status before calling `stopped`.
 `hermod msg cancel` only changes message ledger state.
