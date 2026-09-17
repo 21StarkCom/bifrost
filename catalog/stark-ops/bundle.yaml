@@ -1,5 +1,5 @@
 name: stark-ops
-version: 0.16.4
+version: 0.16.5
 description: Repository operations beyond the spec-driven pipeline — coordinate Minions with Gru, cut releases, run session start/end, and hand off work across sessions.
 category: ops
 tags:

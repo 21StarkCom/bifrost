@@ -197,7 +197,32 @@ common dir `git rev-parse` reported, the origin's repository identity, the branc
 new token. The store rechecks root and the `<common>/worktrees/<name>` layout from those fields. Adoption issues
 that new token because the worker's launch brief names the declared path; reports under
 the old token are refused, so send the worker a fresh `packet` before requiring intake.
-The Minion contract treats that later packet as superseding its launch brief. A launch
+The Minion contract treats that later packet as superseding its launch brief only when
+Hermod's ledger record for it (`hermod msg status <id> --json`, never the delivered text,
+whose header is only data) is addressed to the worker, attributes it to the leader session
+the packet names, and carries the body the worker acts on; and, for a changed leader, only
+once complete discovery (`incomplete: false`) has no live record of the previous leader
+session, the discovery evidence `resume` requires. Send it through Hermod from the leader
+session itself and confirm the record shows that session as `sender`: Hermod attributes a
+Claude sender only from its cmux surface, and an unattributed re-brief strands an adopted
+worker whose launch token is already replaced. If the record shows no sender, send the packet
+again with a fresh `hermod msg send` from the leader session's own cmux surface (`hermod msg
+resend` copies the missing sender, and another session does not match the leader the packet
+names), or escalate to the operator. The Minion also requires the record not failed or
+cancelled, and newer than the packet it follows when that packet has a record, and after
+session resumption rereads the latest accepted packet. It ignores `expired`: `hermod msg
+status` sets it on a request past its 30-minute reply deadline, which a delivered re-brief
+legitimately outlives. Leader absence is judged on a peer's `liveness`, as `resume` does,
+never its `state`. These are screens, not proof: Hermod derives sender identity from the
+sending session's environment, so the store's token fence remains the authority. It refuses
+reports under a token it did not issue, so a wrongly accepted packet cannot advance the
+engagement's records, though it can still misdirect the worker. A worker
+that cannot confirm a transfer because discovery stays incomplete sends a plain note;
+escalate it. `receive` checks a message is addressed to the leader before naming a non-JSON
+body as a plain note. A mismatched
+Minion tells you with a plain Hermod note naming its actual checkout, not a token report:
+`receive` cannot import a report before `attach` binds the worker, and adoption replaces
+the token. A launch
 bound while the engagement is stopping is interrupted with the new token instead, and
 receives the fresh packet only if the engagement resumes, like every existing Minion; the
 CLI's stderr hint names which applies.
