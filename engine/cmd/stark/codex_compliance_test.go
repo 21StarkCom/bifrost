@@ -15,7 +15,35 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var skillSupportRefRe = regexp.MustCompile(`(?:references|scripts|assets)/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*`)
+// A support reference as the body WRITES it, including a relative prefix that
+// leaves the skill's own directory. The optional `(?:\.\./)+<segment>/` head is
+// load-bearing: skills in one bundle install side by side under `skills/`, so
+// `../gru/references/operations.md` is a correct citation of a sibling's support
+// file. Without it the pattern matched only the `references/…` tail, which then
+// resolved against the CITING skill's directory and reported a dangling path
+// nobody wrote — `stark-ops/minion` failed exactly that way and blocked
+// publication (STARK-5065). RE2 returns the leftmost match, so where the prefix
+// applies the longer form wins.
+//
+// The `../` run is REQUIRED before that segment, not optional. A bare
+// `<segment>/scripts/…` head would swallow whatever token precedes a skill-local
+// path — `$SKILL_DIR/scripts/gha-cost-breakdown.sh` in a shell snippet became
+// `SKILL_DIR/scripts/…` and failed a script that is present, trading one false
+// dangling report for another (measured against `stark-gha-cost`).
+//
+// `#` is deliberately outside the class, so a `#anchor` ends the match and never
+// reaches os.Stat. Same for the quote/paren that closes a markdown link target.
+var skillSupportRefRe = regexp.MustCompile(`(?:(?:\.\./)+[A-Za-z0-9_.-]+/)?(?:references|scripts|assets)/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*`)
+
+// skillSupportRefs returns every support reference in a rendered skill body,
+// trimmed of the sentence punctuation that follows a bare path in prose.
+func skillSupportRefs(body string) []string {
+	refs := skillSupportRefRe.FindAllString(body, -1)
+	for i, ref := range refs {
+		refs[i] = strings.TrimRight(ref, ".,;:)")
+	}
+	return refs
+}
 
 func splitSkillFrontmatter(t *testing.T, content string) (map[string]any, string) {
 	t.Helper()
@@ -190,10 +218,13 @@ func TestEveryCommittedCodexSkillMeetsNativeContract(t *testing.T) {
 					}
 				}
 
-				for _, ref := range skillSupportRefRe.FindAllString(body, -1) {
-					ref = strings.TrimRight(ref, ".,;:)")
+				for _, ref := range skillSupportRefs(body) {
 					if _, err := os.Stat(filepath.Join(filepath.Dir(skillPath), filepath.FromSlash(ref))); err != nil {
-						t.Errorf("dangling skill-local support reference %q", ref)
+						kind := "skill-local"
+						if strings.HasPrefix(ref, "../") {
+							kind = "cross-skill"
+						}
+						t.Errorf("dangling %s support reference %q", kind, ref)
 					}
 				}
 			})
@@ -209,5 +240,118 @@ func TestEveryCommittedCodexSkillMeetsNativeContract(t *testing.T) {
 		if !expected[name] {
 			t.Errorf("installed unexpected Codex skill %q", name)
 		}
+	}
+}
+
+// TestSkillSupportRefs pins the extraction half of the support-reference check.
+// The sibling cases are the ones that blocked publication: a bundle installs its
+// skills side by side, so a citation that leaves the skill's own directory is
+// correct, and the check must resolve it AS WRITTEN rather than against the
+// citing skill (STARK-5065).
+func TestSkillSupportRefs(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		want []string
+	}{
+		{
+			name: "sibling link keeps its prefix and drops the anchor",
+			body: "Contract: [the check](../gru/references/operations.md#deterministic-re-brief-check).",
+			want: []string{"../gru/references/operations.md"},
+		},
+		{
+			name: "sibling link without an anchor",
+			body: "See [operations](../gru/references/operations.md) for the contract.",
+			want: []string{"../gru/references/operations.md"},
+		},
+		{
+			name: "skill-local link is unchanged",
+			body: "Read [the dossier](references/stage1-dossier.md) first.",
+			want: []string{"references/stage1-dossier.md"},
+		},
+		{
+			name: "bare local path in prose, trailing sentence punctuation trimmed",
+			body: "Run scripts/protect-paths.sh, then read references/hooks.md.",
+			want: []string{"scripts/protect-paths.sh", "references/hooks.md"},
+		},
+		{
+			name: "a preceding word is not swallowed as a path segment",
+			body: "the references/operations.md file",
+			want: []string{"references/operations.md"},
+		},
+		{
+			name: "assets and nested paths",
+			body: "[icon](../gru/assets/img/icon.png)",
+			want: []string{"../gru/assets/img/icon.png"},
+		},
+		{
+			// A shell variable is not a path segment. Widening the head to any
+			// segment made this read as `SKILL_DIR/scripts/…` and fail a script
+			// that ships with the skill.
+			name: "a shell variable before a skill-local path is not part of it",
+			body: `bash "$SKILL_DIR/scripts/gha-cost-breakdown.sh" --json`,
+			want: []string{"scripts/gha-cost-breakdown.sh"},
+		},
+		{
+			// The Codex bundle-asset retarget emits this shape. It resolved
+			// skill-locally before and must keep doing so; validating a bundle
+			// asset root is out of this check's reach either way.
+			name: "a bundle asset root keeps its old skill-local reading",
+			body: "${STARK_PLUGIN_ROOT:-x}/../../stark/stark-ops/scripts/helper.sh",
+			want: []string{"scripts/helper.sh"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := skillSupportRefs(tc.body)
+			if len(got) != len(tc.want) {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Errorf("ref %d = %q, want %q", i, got[i], tc.want[i])
+				}
+			}
+		})
+	}
+}
+
+// TestSkillSupportRefResolution pins the resolution half against a real tree
+// shaped like an install: two skills of one bundle side by side under skills/.
+func TestSkillSupportRefResolution(t *testing.T) {
+	root := t.TempDir()
+	gruRefs := filepath.Join(root, "skills", "gru", "references")
+	if err := os.MkdirAll(gruRefs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(gruRefs, "operations.md"), []byte("contract\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	minion := filepath.Join(root, "skills", "minion")
+	if err := os.MkdirAll(minion, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	skillDir := minion
+
+	resolves := func(ref string) bool {
+		_, err := os.Stat(filepath.Join(skillDir, filepath.FromSlash(ref)))
+		return err == nil
+	}
+
+	body := "Contract: [the check](../gru/references/operations.md#deterministic-re-brief-check)."
+	refs := skillSupportRefs(body)
+	if len(refs) != 1 {
+		t.Fatalf("got %q, want one reference", refs)
+	}
+	if !resolves(refs[0]) {
+		t.Errorf("sibling reference %q did not resolve; a correct citation must not fail the check", refs[0])
+	}
+	// The tail alone is what the unprefixed pattern used to yield, and it resolves
+	// against the CITING skill — the false dangling report this test exists to stop.
+	if resolves("references/operations.md") {
+		t.Fatal("test tree is wrong: minion must not carry its own references/operations.md")
+	}
+	// A sibling reference whose target is genuinely absent must still fail.
+	if resolves("../gru/references/missing.md") {
+		t.Error("a genuinely dangling sibling reference resolved")
 	}
 }
