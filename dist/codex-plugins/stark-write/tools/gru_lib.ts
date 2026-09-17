@@ -175,7 +175,6 @@ export interface SweepRecord {
   worker?: Worker;
   evidence: SweepTaskEvidence & { observedAt: string; peers: SweepPeer[] };
   released: string[];
-  files: string[];
 }
 export interface Assignment {
   spec: TaskSpec;
@@ -471,7 +470,9 @@ export class GruStore {
   private ownedElsewhere(run: Run, task: Assignment, resources: string[]): string | null {
     for (const resource of resources) {
       const owner = this.db.prepare("SELECT run,task FROM owners WHERE resource=?").get(resource) as { run: string; task: string } | undefined;
-      if (owner && (owner.run !== run.config.id || owner.task !== task.spec.id)) return `resource already owned: ${resource}`;
+      // Name the holder: with overlap no longer gating dispatch, merge-lock contention is routine,
+      // and 'wait for a live peer' versus 'a dead engagement still holds it' read identically without it.
+      if (owner && (owner.run !== run.config.id || owner.task !== task.spec.id)) return `resource already owned: ${resource} (${owner.run}/${owner.task})`;
     }
     return null;
   }
@@ -863,7 +864,7 @@ export class GruStore {
           revision, epoch: run.epoch, verdict, ...(task.stoppedFrom ? { stoppedFrom: task.stoppedFrom } : {}),
           ...(task.worker ? { worker: structuredClone(task.worker) } : {}),
           evidence: { ...structuredClone(evidence.tasks[task.spec.id]), observedAt: evidence.observedAt, peers: structuredClone(evidence.peers) },
-          released: this.owned(id, task.spec.id), files: [...task.spec.files] };
+          released: this.owned(id, task.spec.id) };
         this.db.prepare("DELETE FROM owners WHERE run=? AND task=?").run(id, task.spec.id);
         // The record keeps the worker for audit; the task drops it, so no capacity rule or
         // later reconcile keeps observing a released identity.
