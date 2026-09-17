@@ -112,7 +112,7 @@ fi
 # membership vanishes without a trace. Fail loudly here instead.
 #
 # Covers EVERY skill dir, not just `stark-*`. The fleet now renames skills out of
-# that prefix (`gru`, `minion`, `simple-gate`), and a prefix-scoped gate would have
+# that prefix (`gru`, `minion`), and a prefix-scoped gate would have
 # left each of them silently droppable — the exact papercut this gate exists to
 # stop. That also means `claimed` can no longer be a bare `- stark-` grep, since an
 # unprefixed name would collide with the `tags:`/`runtimes:` list items; read the

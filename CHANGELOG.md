@@ -4,6 +4,9 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 
 ## [Unreleased]
 
+### Removed
+- `stark-plan` no longer ships the `simple-gate` skill (STARK-5016, stark-skills PR #974). Skill removal is a MINOR bump: `stark-plan` 0.4.28 → 0.5.0, root 0.29.2 → 0.30.0. Installed copies keep serving it until `/plugin update stark-plan@bifrost`.
+
 ### Changed
 <!-- idun:pr-merge pr=246 runId=246 -->
 - Documented bifrost `main`'s required-status-checks contract (currently none) and the operator commands to apply it, in `docs/operations/branch-protection.md`.
