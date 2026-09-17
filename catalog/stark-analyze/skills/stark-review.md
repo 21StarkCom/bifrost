@@ -2,7 +2,7 @@
 name: stark-review
 type: skill
 description: Single-agent PR review. Uses triage-selected PR review domains by default, or one forced agent via `--agent`.
-version: 0.5.52
+version: 0.5.53
 maturity: beta
 runtimes:
   - claude

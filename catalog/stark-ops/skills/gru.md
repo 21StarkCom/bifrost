@@ -2,7 +2,7 @@
 name: gru
 type: skill
 description: Gru leads authorized Minion work from intake through verified completion. Use for objectives or existing tickets requiring worker dispatch, dependency coordination, bounded recovery, status, resume, or stop.
-version: 0.16.5
+version: 0.16.6
 maturity: beta
 runtimes:
   - claude
@@ -84,7 +84,8 @@ overrides:
       Read repository instructions, ticket descriptions, and every ticket comment.
       Check dependencies against the accepted spec and current repository state.
       Derive exact done-whens, verification commands, and completion milestones.
-      Identify overlapping files, fixed ports, databases, and release files.
+      Identify fixed ports, databases, and release files as exclusive or integration resources.
+      Overlapping files do not block dispatch; they reconcile at rebase under the merge lock.
       Capture these facts and authorized limits in the engagement input.
       Declare each `worktree` where Hermod places that provider's worker: Claude at
       `<repo>/.claude/worktrees/<ticket>`, Codex at `<main checkout>/.worktrees/<ticket>`
@@ -283,7 +284,8 @@ Use `--state` only for an explicitly separate engagement store.
 Read repository instructions, ticket descriptions, and every ticket comment.
 Check dependencies against the accepted spec and current repository state.
 Derive exact done-whens, verification commands, and completion milestones.
-Identify overlapping files, fixed ports, databases, and release files.
+Identify fixed ports, databases, and release files as exclusive or integration resources.
+Overlapping files do not block dispatch; they reconcile at rebase under the merge lock.
 Capture these facts and authorized limits in the engagement input.
 Declare each `worktree` where Hermod places that provider's worker: Claude at
 `<repo>/.claude/worktrees/<ticket>`, Codex at `<main checkout>/.worktrees/<ticket>`

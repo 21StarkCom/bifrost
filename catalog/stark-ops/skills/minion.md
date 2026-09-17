@@ -2,7 +2,7 @@
 name: minion
 type: skill
 description: Act as a Minion assigned by Gru. Acknowledge intake, implement the authorized task, report evidence and blockers, and wait for integration ownership before merging.
-version: 0.16.5
+version: 0.16.6
 maturity: beta
 runtimes:
   - claude
