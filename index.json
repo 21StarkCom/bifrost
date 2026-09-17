@@ -503,30 +503,6 @@
       "digest": "sha256:1b7f72abba2214c861ace0ff60869a035eee3b0cb5b4db7ca8f90e964712c107"
     },
     {
-      "name": "simple-gate",
-      "type": "skill",
-      "bundle": "stark-plan",
-      "description": "Use when running the stark-author human gate (Phase 5), or any spec/plan sign-off checklist, and the operator wants the checks walked interactively in dead-simple, non-technical, ELI5 language with multiple-choice questions plus free text. Triggers include \"walk me through the gate simply\", \"explain the gate like I'm five\", \"gate in plain English\", \"I don't get the checklist\", \"make the review easy\".",
-      "tags": [
-        "planning",
-        "plan",
-        "tasks",
-        "issues"
-      ],
-      "category": "planning",
-      "maturity": "beta",
-      "version": "0.4.28",
-      "runtimes": [
-        "claude",
-        "codex"
-      ],
-      "support": {
-        "claude": "native",
-        "codex": "native"
-      },
-      "digest": "sha256:b980b1b07c68be34e09bb494e36e440ed6e15f8145dffa65734b18e07ddbcd36"
-    },
-    {
       "name": "stark-author",
       "type": "skill",
       "bundle": "stark-plan",
@@ -539,7 +515,7 @@
       ],
       "category": "planning",
       "maturity": "beta",
-      "version": "0.4.28",
+      "version": "0.5.0",
       "runtimes": [
         "claude",
         "codex"
@@ -548,7 +524,7 @@
         "claude": "native",
         "codex": "native"
       },
-      "digest": "sha256:e26893aa9eaa72673d78e5d3e61b380eae231fb82fb17a315eaf44b5b02bac71"
+      "digest": "sha256:c6882b6e2411f5bc84a4d1c18a766f3488bdd2446d4085440450fee781bfe66e"
     },
     {
       "name": "stark-blog-sharpen",
@@ -699,7 +675,7 @@
     },
     {
       "bundle": "stark-plan",
-      "version": "0.4.28",
+      "version": "0.5.0",
       "digest": "sha256:00968d1cde917236a59e96ec8d661edda1e3bd23b60a0892c43c889ea7439719"
     }
   ],
@@ -731,7 +707,7 @@
     },
     {
       "bundle": "stark-plan",
-      "version": "0.4.28",
+      "version": "0.5.0",
       "digest": "sha256:7c2252389bc3bfcc51108ee11f2b5f04f1ff3f8f6ff3331983918eb86d2cbc6a"
     },
     {
@@ -763,7 +739,7 @@
     },
     {
       "bundle": "stark-plan",
-      "version": "0.4.28",
+      "version": "0.5.0",
       "digest": "sha256:b3ba6ca5bba105e0282a3505e66a55465a7dcb4ffca7caecd4af83b696b4a097"
     },
     {

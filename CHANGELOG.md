@@ -35,6 +35,11 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 <!-- stark-gh:pr-merge pr=196 runId=c1422f87-9818-4484-94b7-36bd3219bffb -->
 - Publish native Codex skills for `stark-bury`, `stark-handoff`, and `simple-gate`.
 
+## [0.30.0] - 2026-09-17
+
+### Removed
+- `stark-plan` no longer ships the `simple-gate` skill (STARK-5016, stark-skills PR #974). Skill removal is a MINOR bump: `stark-plan` 0.4.28 → 0.5.0, root 0.29.2 → 0.30.0. Installed copies keep serving it until `/plugin update stark-plan@bifrost`. Regenerated from `stark-skills#974`'s head (`b583950`, unmerged at publish) because `stark sync` fails closed on a member that no longer exists upstream, so this side had to land first. Until #974 merges, `stark sync --check` against stark-skills `main` drifts on `catalog/stark-plan/skills/stark-author.md` (main still offers the removed skill), and any other stark-skills push would auto-sync that text back — land #974 immediately behind this release.
+
 ## [0.29.2] - 2026-09-16
 
 ### Changed
