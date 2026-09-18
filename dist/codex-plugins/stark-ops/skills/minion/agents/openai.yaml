@@ -1,5 +1,5 @@
 interface:
   display_name: "Minion"
-  short_description: "Act as a Minion assigned by Gru. Acknowledge intake, implement"
+  short_description: "Act as a Minion launched by Gru: own one ticket, carry it"
 policy:
   allow_implicit_invocation: true
