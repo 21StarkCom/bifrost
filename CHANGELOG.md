@@ -4,6 +4,10 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 
 ## [Unreleased]
 
+### Added
+<!-- idun:pr-merge pr=265 runId=265 sha=f4475de5 -->
+- Refiled 13 already-shipped `[Unreleased]` CHANGELOG bullets under the version headings that actually shipped them, creating 10 missing sections.
+
 ### Fixed
 - Preserve complete rooted and parent-relative support references in the Codex native-contract check (STARK-5068), including `${VAR}/skills/<name>/…`, the standalone adapter's `../../skills/<name>/…` path, and `../references/…`. Resolve variable roots against the install under test and report the full dangling path even when the citing skill carries a same-named file. The root grammar covers every spelling the Codex targets actually emit — the standalone `${STARK_PLUGIN_ROOT:-$HOME/…}`, the native plugin's required-root `${STARK_PLUGIN_ROOT:?resolve…}` (the only form `dist/codex-plugins/` carries), the overlay's nested `${STARK_ASSET_ROOT:-${STARK_PLUGIN_ROOT:?…}}`, and the preamble's own `${SKILL_DIR}` — from one shared pattern, so the extractor and the resolver cannot disagree about where a root ends. `cross-skill` vs `skill-local` is now decided by where the reference RESOLVES rather than by its leading characters, and the install root comes from `codex.AssetsRoot` instead of a second spelling of `.agents/stark/<bundle>`. Both committed plugin corpora retain identical extraction; bundle-only roots such as `standards/` remain in the separate bundle-asset check.
 
