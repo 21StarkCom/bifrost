@@ -22,7 +22,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.57",
+      "version": "0.5.58",
       "runtimes": [
         "claude",
         "codex"
@@ -47,7 +47,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.57",
+      "version": "0.5.58",
       "runtimes": [
         "claude",
         "codex"
@@ -72,7 +72,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.57",
+      "version": "0.5.58",
       "runtimes": [
         "claude",
         "codex"
@@ -97,7 +97,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.57",
+      "version": "0.5.58",
       "runtimes": [
         "claude",
         "codex"
@@ -122,7 +122,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.57",
+      "version": "0.5.58",
       "runtimes": [
         "claude",
         "codex"
@@ -147,7 +147,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.57",
+      "version": "0.5.58",
       "runtimes": [
         "claude",
         "codex"
@@ -172,7 +172,7 @@
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.57",
+      "version": "0.5.58",
       "runtimes": [
         "claude",
         "codex"
@@ -197,7 +197,7 @@
       ],
       "category": "setup",
       "maturity": "beta",
-      "version": "0.2.67",
+      "version": "0.2.68",
       "runtimes": [
         "claude",
         "codex"
@@ -222,7 +222,7 @@
       ],
       "category": "setup",
       "maturity": "beta",
-      "version": "0.2.67",
+      "version": "0.2.68",
       "runtimes": [
         "claude",
         "codex"
@@ -247,7 +247,7 @@
       ],
       "category": "setup",
       "maturity": "beta",
-      "version": "0.2.67",
+      "version": "0.2.68",
       "runtimes": [
         "claude",
         "codex"
@@ -272,7 +272,7 @@
       ],
       "category": "design",
       "maturity": "beta",
-      "version": "0.1.25",
+      "version": "0.1.26",
       "runtimes": [
         "claude"
       ],
@@ -293,7 +293,7 @@
       ],
       "category": "implementation",
       "maturity": "beta",
-      "version": "0.4.61",
+      "version": "0.4.62",
       "runtimes": [
         "claude",
         "codex"
@@ -308,7 +308,7 @@
       "name": "gru",
       "type": "skill",
       "bundle": "stark-ops",
-      "description": "Gru leads authorized Minion work from intake through verified completion. Use for objectives or existing tickets requiring worker dispatch, dependency coordination, bounded recovery, status, resume, or stop.",
+      "description": "Gru drives an epic or a list of tickets to done with one Minion per ticket. Use when the operator hands over several tickets to be worked in parallel and carried through merge and closure.",
       "tags": [
         "release",
         "coordination",
@@ -318,7 +318,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.10",
+      "version": "0.16.11",
       "runtimes": [
         "claude",
         "codex"
@@ -327,13 +327,13 @@
         "claude": "native",
         "codex": "native"
       },
-      "digest": "sha256:e9ee99878689ad5bd96434beee9dd309d16acc352fa123f0196e3f503d38ea46"
+      "digest": "sha256:9ad820afca21cc40fb72b9517597e2c277f2774c04764096431a39a0ccdcb146"
     },
     {
       "name": "minion",
       "type": "skill",
       "bundle": "stark-ops",
-      "description": "Act as a Minion assigned by Gru. Acknowledge intake, implement the authorized task, report evidence and blockers, and wait for integration ownership before merging.",
+      "description": "Act as a Minion launched by Gru: own one ticket, carry it through the repo's ticket → PR → review → merge → close spine, and report the outcome to Gru over Hermod.",
       "tags": [
         "release",
         "coordination",
@@ -343,7 +343,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.10",
+      "version": "0.16.11",
       "runtimes": [
         "claude",
         "codex"
@@ -352,7 +352,7 @@
         "claude": "native",
         "codex": "native"
       },
-      "digest": "sha256:a6d796dc86a7b7e18e5f3a55f95786818a67c10cbf1429be2001659ff5abe693"
+      "digest": "sha256:c6da42866dc623dfc7b7e63be6ca8ed2f92a7f0bdc172a522882498e56656a2d"
     },
     {
       "name": "stark-bury",
@@ -368,7 +368,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.10",
+      "version": "0.16.11",
       "runtimes": [
         "claude",
         "codex"
@@ -393,7 +393,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.10",
+      "version": "0.16.11",
       "runtimes": [
         "claude",
         "codex"
@@ -418,7 +418,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.10",
+      "version": "0.16.11",
       "runtimes": [
         "claude",
         "codex"
@@ -443,7 +443,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.10",
+      "version": "0.16.11",
       "runtimes": [
         "claude"
       ],
@@ -466,7 +466,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.10",
+      "version": "0.16.11",
       "runtimes": [
         "claude",
         "codex"
@@ -491,7 +491,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.10",
+      "version": "0.16.11",
       "runtimes": [
         "claude",
         "codex"
@@ -515,7 +515,7 @@
       ],
       "category": "planning",
       "maturity": "beta",
-      "version": "0.5.8",
+      "version": "0.5.9",
       "runtimes": [
         "claude",
         "codex"
@@ -540,7 +540,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.45",
+      "version": "0.5.46",
       "runtimes": [
         "claude",
         "codex"
@@ -565,7 +565,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.45",
+      "version": "0.5.46",
       "runtimes": [
         "claude",
         "codex"
@@ -590,7 +590,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.45",
+      "version": "0.5.46",
       "runtimes": [
         "claude",
         "codex"
@@ -615,7 +615,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.45",
+      "version": "0.5.46",
       "runtimes": [
         "claude",
         "codex"
@@ -640,7 +640,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.45",
+      "version": "0.5.46",
       "runtimes": [
         "claude",
         "codex"
@@ -655,96 +655,96 @@
   "pluginAssets": [
     {
       "bundle": "stark-analyze",
-      "version": "0.5.57",
+      "version": "0.5.58",
       "digest": "sha256:42ee5266e52dc6166629b7e32f781f70d3fd1a3e140314404a4e6fd77f73c540"
     },
     {
       "bundle": "stark-design",
-      "version": "0.1.25",
+      "version": "0.1.26",
       "digest": "sha256:7b200484db2256c8e3edc1ee46dd680b894043f5b07ce03b6d8fe486feb2418a"
     },
     {
       "bundle": "stark-implement",
-      "version": "0.4.61",
+      "version": "0.4.62",
       "digest": "sha256:536627a388f6518c15374d29bd11640ee5d24501261aaae7474891883428956f"
     },
     {
       "bundle": "stark-ops",
-      "version": "0.16.10",
-      "digest": "sha256:bf1ae047e5ffb4a7847f1bae77349a2c9727858c655a54b7fa212163bd4bab06"
+      "version": "0.16.11",
+      "digest": "sha256:3b33185154c3d60efd0a5d0a2515466e235353eaf8ab50223e0b56dce68af165"
     },
     {
       "bundle": "stark-plan",
-      "version": "0.5.8",
+      "version": "0.5.9",
       "digest": "sha256:00968d1cde917236a59e96ec8d661edda1e3bd23b60a0892c43c889ea7439719"
     }
   ],
   "sharedAssets": [
     {
       "bundle": "stark-analyze",
-      "version": "0.5.57",
-      "digest": "sha256:55a5280a7b284bde18a2cb42c704ab8f990098290d3b1d271167f1f630ba6705"
+      "version": "0.5.58",
+      "digest": "sha256:0d57267d1bcf11621c2afdc608fbd0f80d2e8ea6a2c21e98da68790d66b0b653"
     },
     {
       "bundle": "stark-constitution",
-      "version": "0.2.67",
-      "digest": "sha256:55a5280a7b284bde18a2cb42c704ab8f990098290d3b1d271167f1f630ba6705"
+      "version": "0.2.68",
+      "digest": "sha256:0d57267d1bcf11621c2afdc608fbd0f80d2e8ea6a2c21e98da68790d66b0b653"
     },
     {
       "bundle": "stark-design",
-      "version": "0.1.25",
-      "digest": "sha256:55a5280a7b284bde18a2cb42c704ab8f990098290d3b1d271167f1f630ba6705"
+      "version": "0.1.26",
+      "digest": "sha256:0d57267d1bcf11621c2afdc608fbd0f80d2e8ea6a2c21e98da68790d66b0b653"
     },
     {
       "bundle": "stark-implement",
-      "version": "0.4.61",
-      "digest": "sha256:55a5280a7b284bde18a2cb42c704ab8f990098290d3b1d271167f1f630ba6705"
+      "version": "0.4.62",
+      "digest": "sha256:0d57267d1bcf11621c2afdc608fbd0f80d2e8ea6a2c21e98da68790d66b0b653"
     },
     {
       "bundle": "stark-ops",
-      "version": "0.16.10",
-      "digest": "sha256:55a5280a7b284bde18a2cb42c704ab8f990098290d3b1d271167f1f630ba6705"
+      "version": "0.16.11",
+      "digest": "sha256:0d57267d1bcf11621c2afdc608fbd0f80d2e8ea6a2c21e98da68790d66b0b653"
     },
     {
       "bundle": "stark-plan",
-      "version": "0.5.8",
-      "digest": "sha256:55a5280a7b284bde18a2cb42c704ab8f990098290d3b1d271167f1f630ba6705"
+      "version": "0.5.9",
+      "digest": "sha256:0d57267d1bcf11621c2afdc608fbd0f80d2e8ea6a2c21e98da68790d66b0b653"
     },
     {
       "bundle": "stark-write",
-      "version": "0.5.45",
-      "digest": "sha256:55a5280a7b284bde18a2cb42c704ab8f990098290d3b1d271167f1f630ba6705"
+      "version": "0.5.46",
+      "digest": "sha256:0d57267d1bcf11621c2afdc608fbd0f80d2e8ea6a2c21e98da68790d66b0b653"
     }
   ],
   "codexAssets": [
     {
       "bundle": "stark-analyze",
-      "version": "0.5.57",
+      "version": "0.5.58",
       "digest": "sha256:b3ba6ca5bba105e0282a3505e66a55465a7dcb4ffca7caecd4af83b696b4a097"
     },
     {
       "bundle": "stark-constitution",
-      "version": "0.2.67",
+      "version": "0.2.68",
       "digest": "sha256:b3ba6ca5bba105e0282a3505e66a55465a7dcb4ffca7caecd4af83b696b4a097"
     },
     {
       "bundle": "stark-implement",
-      "version": "0.4.61",
+      "version": "0.4.62",
       "digest": "sha256:240455d2d41b2b8e3844dd96610d23a1695a1bd66feb789a24521e2995208021"
     },
     {
       "bundle": "stark-ops",
-      "version": "0.16.10",
+      "version": "0.16.11",
       "digest": "sha256:866600fd8e6810d743fb8b4dc719e7782bcfabc4122336fb0606eebc94cf5fc9"
     },
     {
       "bundle": "stark-plan",
-      "version": "0.5.8",
+      "version": "0.5.9",
       "digest": "sha256:b3ba6ca5bba105e0282a3505e66a55465a7dcb4ffca7caecd4af83b696b4a097"
     },
     {
       "bundle": "stark-write",
-      "version": "0.5.45",
+      "version": "0.5.46",
       "digest": "sha256:b3ba6ca5bba105e0282a3505e66a55465a7dcb4ffca7caecd4af83b696b4a097"
     }
   ]

@@ -1,5 +1,5 @@
 interface:
   display_name: "Gru"
-  short_description: "Gru leads authorized Minion work from intake through verified"
+  short_description: "Gru drives an epic or a list of tickets to done with one Minion"
 policy:
   allow_implicit_invocation: true
