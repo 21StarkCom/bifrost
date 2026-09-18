@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -15,25 +17,20 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// A support reference as the body WRITES it, including a relative prefix that
-// leaves the skill's own directory. The optional `(?:\.\./)+<segment>/` head is
-// load-bearing: skills in one bundle install side by side under `skills/`, so
-// `../gru/references/operations.md` is a correct citation of a sibling's support
-// file. Without it the pattern matched only the `references/…` tail, which then
-// resolved against the CITING skill's directory and reported a dangling path
-// nobody wrote — `stark-ops/minion` failed exactly that way and blocked
-// publication (STARK-5065). RE2 returns the leftmost match, so where the prefix
-// applies the longer form wins.
+// Keep a relative or braced-variable root AND every intervening segment. Zero
+// segments covers ../references/x.md; multiple segments covers the adapter's
+// ${STARK_PLUGIN_ROOT:-...}/../../skills/gru/references/x.md (STARK-5068).
+// Requiring ../ or ${...} before arbitrary segments avoids swallowing SKILL_DIR
+// in the existing bare $SKILL_DIR/scripts/x.sh spelling (STARK-5065).
+// Anchors and closing quotes/parens are outside the path character class.
 //
-// The `../` run is REQUIRED before that segment, not optional. A bare
-// `<segment>/scripts/…` head would swallow whatever token precedes a skill-local
-// path — `$SKILL_DIR/scripts/gha-cost-breakdown.sh` in a shell snippet became
-// `SKILL_DIR/scripts/…` and failed a script that is present, trading one false
-// dangling report for another (measured against `stark-gha-cost`).
-//
-// `#` is deliberately outside the class, so a `#anchor` ends the match and never
-// reaches os.Stat. Same for the quote/paren that closes a markdown link target.
-var skillSupportRefRe = regexp.MustCompile(`(?:(?:\.\./)+[A-Za-z0-9_.-]+/)?(?:references|scripts|assets)/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*`)
+// This check covers per-skill support roots, not all bundle assets. In particular
+// standards/, tools/ and prompts/ stay with the bundle-asset contract in
+// codex_assets_test.go (currently exercised for stark-plan and stark-ops).
+// Broadening that inventory is separate from fixing support-path resolution.
+var skillSupportRefRe = regexp.MustCompile(`(?:(?:\$\{[A-Za-z_][A-Za-z0-9_]*(?::-[^{}]*)?\}/|(?:\.\./)+)(?:[A-Za-z0-9_.-]+/)*)?(?:references|scripts|assets)/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*`)
+
+var supportRootRe = regexp.MustCompile(`^\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-[^{}]*)?\}/`)
 
 // skillSupportRefs returns every support reference in a rendered skill body.
 //
@@ -55,10 +52,29 @@ func skillSupportRefs(body string) []string {
 // reader must look in the SIBLING skill, not in this one. Getting this backwards
 // is the wrong turn STARK-5065 cost a publish window on, so it has its own test.
 func supportRefKind(ref string) string {
-	if strings.HasPrefix(ref, "../") {
+	if strings.HasPrefix(ref, "../") || strings.HasPrefix(ref, "${") {
 		return "cross-skill"
 	}
 	return "skill-local"
+}
+
+// Resolve only roots supplied by the install under test, never the operator's
+// environment or the shell fallback. An unknown variable cannot silently pass
+// by resolving its tail against a same-named file in the citing skill.
+func checkSupportRef(skillDir string, roots map[string]string, ref string) error {
+	base, rel := skillDir, ref
+	if match := supportRootRe.FindStringSubmatch(ref); match != nil {
+		var ok bool
+		base, ok = roots[match[1]]
+		if !ok {
+			return fmt.Errorf("unresolved support reference %q: unknown root %s", ref, match[1])
+		}
+		rel = ref[len(match[0]):]
+	}
+	if _, err := os.Stat(filepath.Join(base, filepath.FromSlash(rel))); err != nil {
+		return fmt.Errorf("dangling %s support reference %q: %w", supportRefKind(ref), ref, err)
+	}
+	return nil
 }
 
 func splitSkillFrontmatter(t *testing.T, content string) (map[string]any, string) {
@@ -166,6 +182,10 @@ func TestEveryCommittedCodexSkillMeetsNativeContract(t *testing.T) {
 	seen := map[string]bool{}
 	for _, bundle := range bundles {
 		dest := liveCodexInstall(t, bundle)
+		roots := map[string]string{
+			"STARK_PLUGIN_ROOT": filepath.Join(dest, ".agents", "stark", bundle),
+			"STARK_ASSET_ROOT":  filepath.Join(dest, ".agents", "stark", bundle),
+		}
 		paths, err := filepath.Glob(filepath.Join(dest, ".agents", "skills", "*", "SKILL.md"))
 		if err != nil {
 			t.Fatal(err)
@@ -235,8 +255,8 @@ func TestEveryCommittedCodexSkillMeetsNativeContract(t *testing.T) {
 				}
 
 				for _, ref := range skillSupportRefs(body) {
-					if _, err := os.Stat(filepath.Join(filepath.Dir(skillPath), filepath.FromSlash(ref))); err != nil {
-						t.Errorf("dangling %s support reference %q", supportRefKind(ref), ref)
+					if err := checkSupportRef(filepath.Dir(skillPath), roots, ref); err != nil {
+						t.Error(err)
 					}
 				}
 			})
@@ -314,12 +334,34 @@ func TestSkillSupportRefs(t *testing.T) {
 			want: []string{"scripts/gha-cost-breakdown.sh"},
 		},
 		{
-			// The Codex bundle-asset retarget emits this shape. It resolved
-			// skill-locally before and must keep doing so; validating a bundle
-			// asset root is out of this check's reach either way.
-			name: "a bundle asset root keeps its old skill-local reading",
+			name: "a rooted script keeps its full spelling too",
 			body: "${STARK_PLUGIN_ROOT:-x}/../../stark/stark-ops/scripts/helper.sh",
-			want: []string{"scripts/helper.sh"},
+			want: []string{"${STARK_PLUGIN_ROOT:-x}/../../stark/stark-ops/scripts/helper.sh"},
+		},
+		{
+			name: "variable rooted per-skill link",
+			body: "[x](${VAR}/skills/gru/references/operations.md#check)",
+			want: []string{"${VAR}/skills/gru/references/operations.md"},
+		},
+		{
+			name: "standalone adapter rooted per-skill link",
+			body: "[x](${STARK_PLUGIN_ROOT:-$HOME/.agents/stark/stark-ops}/../../skills/gru/references/operations.md)",
+			want: []string{"${STARK_PLUGIN_ROOT:-$HOME/.agents/stark/stark-ops}/../../skills/gru/references/operations.md"},
+		},
+		{
+			name: "parent support directory",
+			body: "[x](../references/operations.md)",
+			want: []string{"../references/operations.md"},
+		},
+		{
+			name: "grandparent support directory",
+			body: "[x](../../references/operations.md)",
+			want: []string{"../../references/operations.md"},
+		},
+		{
+			name: "relative skills directory with multiple segments",
+			body: "[x](../../skills/gru/references/operations.md)",
+			want: []string{"../../skills/gru/references/operations.md"},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -354,8 +396,7 @@ func TestSkillSupportRefResolution(t *testing.T) {
 	skillDir := minion
 
 	resolves := func(ref string) bool {
-		_, err := os.Stat(filepath.Join(skillDir, filepath.FromSlash(ref)))
-		return err == nil
+		return checkSupportRef(skillDir, nil, ref) == nil
 	}
 
 	body := "Contract: [the check](../gru/references/operations.md#deterministic-re-brief-check)."
@@ -389,6 +430,9 @@ func TestSkillSupportRefResolution(t *testing.T) {
 // original message sent me.
 func TestSupportRefKind(t *testing.T) {
 	for ref, want := range map[string]string{
+		"${VAR}/skills/gru/references/x.md":  "cross-skill",
+		"../references/operations.md":        "cross-skill",
+		"../../references/operations.md":     "cross-skill",
 		"../gru/references/operations.md":    "cross-skill",
 		"../../gru/references/operations.md": "cross-skill",
 		"references/stage1-dossier.md":       "skill-local",
@@ -397,5 +441,142 @@ func TestSupportRefKind(t *testing.T) {
 		if got := supportRefKind(ref); got != want {
 			t.Errorf("supportRefKind(%q) = %q, want %q", ref, got, want)
 		}
+	}
+}
+
+// Exercise the same extraction, resolution and diagnostic path as the native
+// contract. A local decoy makes prefix loss produce a false green, rather than
+// an unrelated missing-file error that could accidentally satisfy the test.
+func TestSupportRefResolutionAsWritten(t *testing.T) {
+	for _, ref := range []string{
+		"${VAR}/skills/gru/references/operations.md",
+		"${STARK_PLUGIN_ROOT:-$HOME/.agents/stark/stark-ops}/../../skills/gru/references/operations.md",
+		"../references/operations.md",
+		"../../references/operations.md",
+		"../../skills/gru/references/operations.md",
+	} {
+		t.Run(ref, func(t *testing.T) {
+			root := t.TempDir()
+			skillDir := filepath.Join(root, "skills", "minion")
+			roots := map[string]string{
+				"VAR":               root,
+				"STARK_PLUGIN_ROOT": filepath.Join(root, "stark", "stark-ops"),
+			}
+			write := func(path string) {
+				t.Helper()
+				if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, []byte("contract\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			write(filepath.Join(skillDir, "references", "operations.md"))
+			refs := skillSupportRefs("[contract](" + ref + "#check).")
+			if !slices.Equal(refs, []string{ref}) {
+				t.Fatalf("extracted %q, want full path %q", refs, ref)
+			}
+			err := checkSupportRef(skillDir, roots, refs[0])
+			want := fmt.Sprintf("dangling cross-skill support reference %q:", ref)
+			if err == nil || !strings.HasPrefix(err.Error(), want) {
+				t.Fatalf("with only a local decoy: got %v, want %s", err, want)
+			}
+			// Expected targets are fixture data, not computed by the resolver.
+			target := filepath.Join(root, "skills", "gru", "references", "operations.md")
+			switch ref {
+			case "../references/operations.md":
+				target = filepath.Join(root, "skills", "references", "operations.md")
+			case "../../references/operations.md":
+				target = filepath.Join(root, "references", "operations.md")
+			}
+			write(target)
+			if err := checkSupportRef(skillDir, roots, refs[0]); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestSupportRefUnknownRoot(t *testing.T) {
+	ref := "${UNBOUND}/skills/gru/references/operations.md"
+	refs := skillSupportRefs(ref)
+	if !slices.Equal(refs, []string{ref}) {
+		t.Fatalf("got %q, want %q", refs, ref)
+	}
+	err := checkSupportRef(t.TempDir(), nil, refs[0])
+	want := fmt.Sprintf("unresolved support reference %q: unknown root UNBOUND", ref)
+	if err == nil || err.Error() != want {
+		t.Fatalf("got %v, want %s", err, want)
+	}
+}
+
+func TestInstalledRootedSkillSupportRef(t *testing.T) {
+	dest := liveCodexInstall(t, "stark-ops")
+	skillDir := filepath.Join(dest, ".agents", "skills", "minion")
+	roots := map[string]string{"STARK_PLUGIN_ROOT": filepath.Join(dest, ".agents", "stark", "stark-ops")}
+	ref := "${STARK_PLUGIN_ROOT:-$HOME/.agents/stark/stark-ops}/../../skills/gru/references/operations.md"
+	refs := skillSupportRefs("[contract](" + ref + "#deterministic-re-brief-check)")
+	if !slices.Equal(refs, []string{ref}) {
+		t.Fatalf("got %q, want %q", refs, ref)
+	}
+	if err := checkSupportRef(skillDir, roots, refs[0]); err != nil {
+		t.Fatal(err)
+	}
+	// Delete only the installed temporary copy: the gate must now name the full
+	// rooted reference, including the shell fallback, rather than its bare tail.
+	if err := os.Remove(filepath.Join(dest, ".agents", "skills", "gru", "references", "operations.md")); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkSupportRef(skillDir, roots, refs[0]); err == nil || !strings.Contains(err.Error(), fmt.Sprintf("%q", ref)) {
+		t.Fatalf("missing installed contract: got %v, want full reference %q", err, ref)
+	}
+	t.Log("installed Gru contract resolved; removing it produced the full-path dangling-reference diagnostic")
+}
+
+// Compare against the STARK-5065 extractor over BOTH committed plugin formats.
+// Keep this measurement reproducible without an ad-hoc script. Differences are
+// logged for review, not rejected: future bodies may use the newly fixed forms.
+// Every extracted reference must still resolve in the shipped tree.
+func TestCommittedSkillSupportRefCorpus(t *testing.T) {
+	old := regexp.MustCompile(`(?:(?:\.\./)+[A-Za-z0-9_.-]+/)?(?:references|scripts|assets)/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*`)
+	for _, runtime := range []string{"claude", "codex-plugins"} {
+		t.Run(runtime, func(t *testing.T) {
+			paths, err := filepath.Glob(filepath.Join(repoRoot(t), "dist", runtime, "*", "skills", "*", "SKILL.md"))
+			if err != nil || len(paths) == 0 {
+				t.Fatalf("no rendered skills: %v", err)
+			}
+			refs, skills, differences := 0, 0, 0
+			for _, path := range paths {
+				data, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, body := splitSkillFrontmatter(t, string(data))
+				before := old.FindAllString(body, -1)
+				for i := range before {
+					before[i] = strings.TrimRight(before[i], ".")
+				}
+				after := skillSupportRefs(body)
+				if !slices.Equal(before, after) {
+					differences++
+					t.Logf("%s: old=%q new=%q", path, before, after)
+				}
+				if len(after) > 0 {
+					skills++
+				}
+				refs += len(after)
+				root := filepath.Dir(filepath.Dir(filepath.Dir(path)))
+				roots := map[string]string{"CLAUDE_PLUGIN_ROOT": root, "STARK_PLUGIN_ROOT": root, "STARK_ASSET_ROOT": root}
+				for _, ref := range after {
+					if err := checkSupportRef(filepath.Dir(path), roots, ref); err != nil {
+						t.Errorf("%s: %v", path, err)
+					}
+				}
+			}
+			if refs == 0 {
+				t.Fatal("support-reference corpus is empty")
+			}
+			t.Logf("files=%d refs=%d skills=%d old!=new=%d", len(paths), refs, skills, differences)
+		})
 	}
 }
