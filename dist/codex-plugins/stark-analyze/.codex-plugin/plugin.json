@@ -1,7 +1,7 @@
 {
   "name": "stark-analyze",
-  "version": "0.30.8",
-  "description": "Contract-bounded spec authoring, multi-domain review, and adversarial red-team of specs, designs, execution plans, and PRs, multi-agent Terraform/Terragrunt (IaC) review, application-logging authoring/review guidance, plus review-prompt improvement from assessment feedback. Maps to spec-kit's specify + analyze phases.",
+  "version": "0.31.0",
+  "description": "Zero-context fresh-eyes review of specs and briefs, multi-agent Terraform/Terragrunt (IaC) review, repository refactor planning, and application-logging authoring/review guidance. Maps to spec-kit's analyze phase.",
   "author": {
     "name": "21 Stark AI",
     "email": "engineering@21stark.com",
@@ -11,7 +11,6 @@
   "repository": "https://github.com/21StarkCom/bifrost",
   "keywords": [
     "review",
-    "red-team",
     "quality",
     "analyze",
     "logging"
@@ -19,8 +18,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Stark Analyze",
-    "shortDescription": "Contract-bounded spec authoring, multi-domain review, and adversarial red-team of specs,",
-    "longDescription": "Contract-bounded spec authoring, multi-domain review, and adversarial red-team of specs, designs, execution plans, and PRs, multi-agent Terraform/Terragrunt (IaC) review, application-logging authoring/review guidance, plus review-prompt improvement from assessment feedback. Maps to spec-kit's specify + analyze phases.",
+    "shortDescription": "Zero-context fresh-eyes review of specs and briefs, multi-agent Terraform/Terragrunt (IaC)",
+    "longDescription": "Zero-context fresh-eyes review of specs and briefs, multi-agent Terraform/Terragrunt (IaC) review, repository refactor planning, and application-logging authoring/review guidance. Maps to spec-kit's analyze phase.",
     "developerName": "21 Stark AI",
     "category": "Review",
     "capabilities": [

@@ -10,7 +10,7 @@ The repo is also a native marketplace for both hosts. Claude Code reads `.claude
 | --- | --- |
 | `stark-constitution` | Project setup & session priming (spec-kit `constitution` phase). |
 | `stark-plan` | Plan-time guidance (spec-kit `plan` phase). |
-| `stark-analyze` | Multi-domain review + adversarial red-team of designs/plans/PRs. |
+| `stark-analyze` | Fresh-eyes doc review, multi-agent Terraform/Terragrunt (IaC) review, refactor planning, logging guidance (spec-kit `analyze` phase). |
 | `stark-implement` | Implementation-time guidance (spec-kit `implement` phase). |
 | `stark-ops` | Ops/runtime utilities. |
 | `stark-design` | Design-token architecture — three-tier tokens, OKLCH scales, DTCG/Style Dictionary, theming, WCAG gates. |

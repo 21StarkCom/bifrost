@@ -637,12 +637,58 @@ func TestSupportRefUnknownRoot(t *testing.T) {
 	}
 }
 
+// installedSiblingSupportFile picks, deterministically, one support file
+// (`references/`, `scripts/`, `assets/`) that a standalone Codex install of the
+// bundle wrote under a skill OTHER than `citing`. It returns the owning skill's
+// name and the file's path relative to that skill's directory.
+//
+// The anchor is discovered rather than named so the gate follows the corpus: it
+// was pinned to `gru/references/operations.md` until STARK-6091 turned Gru into a
+// protocol with no reference files, and the next two publishes went red on a
+// path nobody shipped any more (bifrost#267, #268). An empty pick is a hard
+// failure, not a skip — a rooted reference that can never resolve is exactly the
+// false green this test exists to catch.
+func installedSiblingSupportFile(t *testing.T, dest, citing string) (skill, rel string) {
+	t.Helper()
+	skillsRoot := filepath.Join(dest, ".agents", "skills")
+	var found []string
+	err := filepath.WalkDir(skillsRoot, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		r, err := filepath.Rel(skillsRoot, path)
+		if err != nil {
+			return err
+		}
+		parts := strings.Split(filepath.ToSlash(r), "/")
+		if len(parts) < 3 || parts[0] == citing {
+			return nil
+		}
+		switch parts[1] {
+		case "references", "scripts", "assets":
+			found = append(found, filepath.ToSlash(r))
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(found) == 0 {
+		t.Fatalf("no sibling support file installed under %s — nothing for a cross-skill reference to resolve against", skillsRoot)
+	}
+	sort.Strings(found)
+	skill, rel, _ = strings.Cut(found[0], "/")
+	return skill, rel
+}
+
 func TestInstalledRootedSkillSupportRef(t *testing.T) {
 	dest := liveCodexInstall(t, "stark-ops")
-	skillDir := filepath.Join(dest, ".agents", "skills", "minion")
+	const citing = "minion"
+	skillDir := filepath.Join(dest, ".agents", "skills", citing)
 	roots := map[string]string{"STARK_PLUGIN_ROOT": filepath.Join(dest, filepath.FromSlash(codex.AssetsRoot("stark-ops")))}
-	ref := "${STARK_PLUGIN_ROOT:-$HOME/.agents/stark/stark-ops}/../../skills/gru/references/operations.md"
-	refs := skillSupportRefs("[contract](" + ref + "#deterministic-re-brief-check)")
+	sibling, rel := installedSiblingSupportFile(t, dest, citing)
+	ref := "${STARK_PLUGIN_ROOT:-$HOME/.agents/stark/stark-ops}/../../skills/" + sibling + "/" + rel
+	refs := skillSupportRefs("[contract](" + ref + "#check)")
 	if !slices.Equal(refs, []string{ref}) {
 		t.Fatalf("got %q, want %q", refs, ref)
 	}
@@ -651,13 +697,13 @@ func TestInstalledRootedSkillSupportRef(t *testing.T) {
 	}
 	// Delete only the installed temporary copy: the gate must now name the full
 	// rooted reference, including the shell fallback, rather than its bare tail.
-	if err := os.Remove(filepath.Join(dest, ".agents", "skills", "gru", "references", "operations.md")); err != nil {
+	if err := os.Remove(filepath.Join(dest, ".agents", "skills", sibling, filepath.FromSlash(rel))); err != nil {
 		t.Fatal(err)
 	}
 	if err := checkSupportRef(skillDir, roots, refs[0]); err == nil || !strings.Contains(err.Error(), fmt.Sprintf("%q", ref)) {
 		t.Fatalf("missing installed contract: got %v, want full reference %q", err, ref)
 	}
-	t.Log("installed Gru contract resolved; removing it produced the full-path dangling-reference diagnostic")
+	t.Logf("installed %s/%s resolved from %s; removing it produced the full-path dangling-reference diagnostic", sibling, rel, citing)
 }
 
 // Compare against the STARK-5065 extractor over BOTH committed plugin formats.

@@ -10,7 +10,7 @@ TOOLS="${STARK_REVIEW_TOOLS:-${STARK_PLUGIN_ROOT:?resolve from the loaded SKILL.
 node "$TOOLS/preflight.ts" --workflow <skill-slug> --json
 ```
 
-The skill provides its own `<skill-slug>` (e.g. `stark-review`, `stark-terraform-review`).
+The skill provides its own `<skill-slug>` (e.g. `stark-terraform-review`, `stark-refactor-plan`).
 
 ## Result handling
 

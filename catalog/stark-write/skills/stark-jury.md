@@ -2,7 +2,7 @@
 name: stark-jury
 type: skill
 description: Run one of the four post skills (stark-voice, stark-story-edit, stark-blog-sharpen, stark-story-judge) across a three-model panel and reconcile the results. Use when the ask is "run this through the panel / best of three / compare the models on this post / which model edits this best / jury this draft / second and third opinion on this edit". Dispatches the skill plus the document to claude, codex and gemini in parallel, verifies every candidate against the skill's own iron rules, then THIS session merges anchored (rewrite skills) or writes the calibration report (story-judge). Never edits the four skills, never publishes.
-version: 0.5.45
+version: 0.5.46
 maturity: beta
 runtimes:
   - claude
@@ -53,7 +53,7 @@ overrides:
         scorecard.
       - Calibrating a skill itself: does the method survive three different vendors?
       - **Not** for: a quick single-model pass (invoke the skill directly), Slack
-        messages, code or spec review (`stark-review`, `stark-fresh-eyes`), or
+        messages, code or spec review (`/code-review`, `stark-fresh-eyes`), or
         anything that publishes. The jury writes to a run dir and stops.
 
       ## The method
@@ -278,7 +278,7 @@ them either.
   scorecard.
 - Calibrating a skill itself: does the method survive three different vendors?
 - **Not** for: a quick single-model pass (invoke the skill directly), Slack
-  messages, code or spec review (`stark-review`, `stark-fresh-eyes`), or
+  messages, code or spec review (`/code-review`, `stark-fresh-eyes`), or
   anything that publishes. The jury writes to a run dir and stops.
 
 ## The method

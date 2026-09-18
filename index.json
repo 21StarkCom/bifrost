@@ -15,14 +15,13 @@
       "description": "One-shot zero-context review of a prompt, research brief, spec, or doc before it ships: a single read-only subagent re-verifies every checkable claim by a DIFFERENT method and reports defects only. Findings return to the author once — no second round, no loops. Use for fresh eyes, review prompt, check brief.",
       "tags": [
         "review",
-        "red-team",
         "quality",
         "analyze",
         "logging"
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.57",
+      "version": "0.6.0",
       "runtimes": [
         "claude",
         "codex"
@@ -40,14 +39,13 @@
       "description": "Use when adding, changing, or reviewing application logging — instrumenting a service/CLI/connector, choosing log levels (DEBUG→FATAL), writing structured logs, or judging whether log lines in a diff are actually useful. Symptoms: fmt.Sprintf/printf into a message, everything at INFO, log-and-return, no correlation id, secrets in logs, per-item spam in loops, logs nobody can grep.",
       "tags": [
         "review",
-        "red-team",
         "quality",
         "analyze",
         "logging"
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.57",
+      "version": "0.6.0",
       "runtimes": [
         "claude",
         "codex"
@@ -65,14 +63,13 @@
       "description": "Plan a codebase refactor without touching code. Inspect a repository and produce two artifacts — REFACTOR_PLAN.md and REFACTOR_BACKLOG.json — an evidence-based, phased, file-by-file restructuring plan another agent can execute. Use whenever the user wants to refactor, restructure, reorganize, modularize, clean up, de-duplicate, untangle, find dead code, or assess the architecture of a codebase, or asks for a refactor plan / backlog / roadmap — even if they don't say \"plan\" explicitly. Planning only: never modifies, moves, renames, or deletes source.",
       "tags": [
         "review",
-        "red-team",
         "quality",
         "analyze",
         "logging"
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.57",
+      "version": "0.6.0",
       "runtimes": [
         "claude",
         "codex"
@@ -84,70 +81,19 @@
       "digest": "sha256:fbfd381256fb7730e0c6ff625d9b625d66c41c6d35b1f70642c76ff064b27b8e"
     },
     {
-      "name": "stark-review-improvement",
-      "type": "skill",
-      "bundle": "stark-analyze",
-      "description": "Improve review prompts based on Prompt Improvement Assessment from completed reviews. Use for fix review prompts.",
-      "tags": [
-        "review",
-        "red-team",
-        "quality",
-        "analyze",
-        "logging"
-      ],
-      "category": "review",
-      "maturity": "beta",
-      "version": "0.5.57",
-      "runtimes": [
-        "claude",
-        "codex"
-      ],
-      "support": {
-        "claude": "native",
-        "codex": "native"
-      },
-      "digest": "sha256:5b9dcdc103a3bf73fc32fd1e3d48df7d3d8d1860a7ef22686b31fba48b11abc2"
-    },
-    {
-      "name": "stark-review",
-      "type": "skill",
-      "bundle": "stark-analyze",
-      "description": "Single-agent PR review. Uses triage-selected PR review domains by default, or one forced agent via `--agent`.",
-      "tags": [
-        "review",
-        "red-team",
-        "quality",
-        "analyze",
-        "logging"
-      ],
-      "category": "review",
-      "maturity": "beta",
-      "version": "0.5.57",
-      "runtimes": [
-        "claude",
-        "codex"
-      ],
-      "support": {
-        "claude": "native",
-        "codex": "native"
-      },
-      "digest": "sha256:245fc7012c7e7001d4bd7043b2252e238904b7aaa84f977c0062913b6eb43738"
-    },
-    {
       "name": "stark-terraform-review",
       "type": "skill",
       "bundle": "stark-analyze",
       "description": "Multi-agent code review of Terraform / OpenTofu (HCL) — modules, root configs, .tf/.tfvars/.tftest.hcl — for security, correctness, state safety, module-contract quality, and testing gaps. Runs the review across one or more configurable LLMs (claude/codex/gemini), each as its own subagent, then merges + cross-validates findings. Use whenever the user wants to review, audit, or sanity-check Terraform/OpenTofu code, asks \"is this .tf safe/correct/idiomatic\", or points at a module/directory and wants findings. Review-only. For Terragrunt orchestration use stark-terragrunt-review.",
       "tags": [
         "review",
-        "red-team",
         "quality",
         "analyze",
         "logging"
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.57",
+      "version": "0.6.0",
       "runtimes": [
         "claude",
         "codex"
@@ -165,14 +111,13 @@
       "description": "Multi-agent code review of Terragrunt orchestration — terragrunt.hcl, root.hcl, terragrunt.stack.hcl, units, includes, dependency/generate/remote_state blocks, the DRY values pattern, multi-account/multi-env live repos — for dependency correctness, state isolation, mock-output safety, and HCL pitfalls. Runs across one or more configurable LLMs (claude/codex/gemini), each as its own subagent, then merges + cross-validates findings. Use whenever the user wants to review, audit, or sanity-check a Terragrunt repo/catalog/live tree, or asks about dependency ordering / mock outputs / state keys / include hierarchy. Review-only; defers resource/module HCL to stark-terraform-review.",
       "tags": [
         "review",
-        "red-team",
         "quality",
         "analyze",
         "logging"
       ],
       "category": "review",
       "maturity": "beta",
-      "version": "0.5.57",
+      "version": "0.6.0",
       "runtimes": [
         "claude",
         "codex"
@@ -197,7 +142,7 @@
       ],
       "category": "setup",
       "maturity": "beta",
-      "version": "0.2.67",
+      "version": "0.2.68",
       "runtimes": [
         "claude",
         "codex"
@@ -222,7 +167,7 @@
       ],
       "category": "setup",
       "maturity": "beta",
-      "version": "0.2.67",
+      "version": "0.2.68",
       "runtimes": [
         "claude",
         "codex"
@@ -247,7 +192,7 @@
       ],
       "category": "setup",
       "maturity": "beta",
-      "version": "0.2.67",
+      "version": "0.2.68",
       "runtimes": [
         "claude",
         "codex"
@@ -272,7 +217,7 @@
       ],
       "category": "design",
       "maturity": "beta",
-      "version": "0.1.25",
+      "version": "0.1.26",
       "runtimes": [
         "claude"
       ],
@@ -293,7 +238,7 @@
       ],
       "category": "implementation",
       "maturity": "beta",
-      "version": "0.4.61",
+      "version": "0.4.62",
       "runtimes": [
         "claude",
         "codex"
@@ -308,7 +253,7 @@
       "name": "gru",
       "type": "skill",
       "bundle": "stark-ops",
-      "description": "Gru leads authorized Minion work from intake through verified completion. Use for objectives or existing tickets requiring worker dispatch, dependency coordination, bounded recovery, status, resume, or stop.",
+      "description": "Gru drives an epic or a list of tickets to done with one Minion per ticket. Use when the operator hands over several tickets to be worked in parallel and carried through merge and closure.",
       "tags": [
         "release",
         "coordination",
@@ -318,7 +263,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.10",
+      "version": "0.16.11",
       "runtimes": [
         "claude",
         "codex"
@@ -327,13 +272,13 @@
         "claude": "native",
         "codex": "native"
       },
-      "digest": "sha256:e9ee99878689ad5bd96434beee9dd309d16acc352fa123f0196e3f503d38ea46"
+      "digest": "sha256:9ad820afca21cc40fb72b9517597e2c277f2774c04764096431a39a0ccdcb146"
     },
     {
       "name": "minion",
       "type": "skill",
       "bundle": "stark-ops",
-      "description": "Act as a Minion assigned by Gru. Acknowledge intake, implement the authorized task, report evidence and blockers, and wait for integration ownership before merging.",
+      "description": "Act as a Minion launched by Gru: own one ticket, carry it through the repo's ticket → PR → review → merge → close spine, and report the outcome to Gru over Hermod.",
       "tags": [
         "release",
         "coordination",
@@ -343,7 +288,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.10",
+      "version": "0.16.11",
       "runtimes": [
         "claude",
         "codex"
@@ -352,7 +297,7 @@
         "claude": "native",
         "codex": "native"
       },
-      "digest": "sha256:a6d796dc86a7b7e18e5f3a55f95786818a67c10cbf1429be2001659ff5abe693"
+      "digest": "sha256:c6da42866dc623dfc7b7e63be6ca8ed2f92a7f0bdc172a522882498e56656a2d"
     },
     {
       "name": "stark-bury",
@@ -368,7 +313,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.10",
+      "version": "0.16.11",
       "runtimes": [
         "claude",
         "codex"
@@ -393,7 +338,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.10",
+      "version": "0.16.11",
       "runtimes": [
         "claude",
         "codex"
@@ -418,7 +363,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.10",
+      "version": "0.16.11",
       "runtimes": [
         "claude",
         "codex"
@@ -443,7 +388,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.10",
+      "version": "0.16.11",
       "runtimes": [
         "claude"
       ],
@@ -466,7 +411,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.10",
+      "version": "0.16.11",
       "runtimes": [
         "claude",
         "codex"
@@ -491,7 +436,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.10",
+      "version": "0.16.11",
       "runtimes": [
         "claude",
         "codex"
@@ -515,7 +460,7 @@
       ],
       "category": "planning",
       "maturity": "beta",
-      "version": "0.5.8",
+      "version": "0.5.9",
       "runtimes": [
         "claude",
         "codex"
@@ -540,7 +485,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.45",
+      "version": "0.5.46",
       "runtimes": [
         "claude",
         "codex"
@@ -565,7 +510,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.45",
+      "version": "0.5.46",
       "runtimes": [
         "claude",
         "codex"
@@ -574,7 +519,7 @@
         "claude": "native",
         "codex": "native"
       },
-      "digest": "sha256:85e57c2bb07951a1c9334ce73df499fd89ea3d0dddbaec3f3ac07a8441e9c6a4"
+      "digest": "sha256:67bb7fa2ac0fc8e990a523f715405678c1075c3a3dc9068d0db00ddf59315761"
     },
     {
       "name": "stark-story-edit",
@@ -590,7 +535,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.45",
+      "version": "0.5.46",
       "runtimes": [
         "claude",
         "codex"
@@ -615,7 +560,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.45",
+      "version": "0.5.46",
       "runtimes": [
         "claude",
         "codex"
@@ -640,7 +585,7 @@
       ],
       "category": "writing",
       "maturity": "beta",
-      "version": "0.5.45",
+      "version": "0.5.46",
       "runtimes": [
         "claude",
         "codex"
@@ -655,97 +600,97 @@
   "pluginAssets": [
     {
       "bundle": "stark-analyze",
-      "version": "0.5.57",
+      "version": "0.6.0",
       "digest": "sha256:42ee5266e52dc6166629b7e32f781f70d3fd1a3e140314404a4e6fd77f73c540"
     },
     {
       "bundle": "stark-design",
-      "version": "0.1.25",
+      "version": "0.1.26",
       "digest": "sha256:7b200484db2256c8e3edc1ee46dd680b894043f5b07ce03b6d8fe486feb2418a"
     },
     {
       "bundle": "stark-implement",
-      "version": "0.4.61",
+      "version": "0.4.62",
       "digest": "sha256:536627a388f6518c15374d29bd11640ee5d24501261aaae7474891883428956f"
     },
     {
       "bundle": "stark-ops",
-      "version": "0.16.10",
-      "digest": "sha256:bf1ae047e5ffb4a7847f1bae77349a2c9727858c655a54b7fa212163bd4bab06"
+      "version": "0.16.11",
+      "digest": "sha256:3b33185154c3d60efd0a5d0a2515466e235353eaf8ab50223e0b56dce68af165"
     },
     {
       "bundle": "stark-plan",
-      "version": "0.5.8",
+      "version": "0.5.9",
       "digest": "sha256:00968d1cde917236a59e96ec8d661edda1e3bd23b60a0892c43c889ea7439719"
     }
   ],
   "sharedAssets": [
     {
       "bundle": "stark-analyze",
-      "version": "0.5.57",
-      "digest": "sha256:55a5280a7b284bde18a2cb42c704ab8f990098290d3b1d271167f1f630ba6705"
+      "version": "0.6.0",
+      "digest": "sha256:037ed8cd1e8670abae73fd095205c4b77a4cc96c096f45ca7cb5f71bdcdb6ef3"
     },
     {
       "bundle": "stark-constitution",
-      "version": "0.2.67",
-      "digest": "sha256:55a5280a7b284bde18a2cb42c704ab8f990098290d3b1d271167f1f630ba6705"
+      "version": "0.2.68",
+      "digest": "sha256:037ed8cd1e8670abae73fd095205c4b77a4cc96c096f45ca7cb5f71bdcdb6ef3"
     },
     {
       "bundle": "stark-design",
-      "version": "0.1.25",
-      "digest": "sha256:55a5280a7b284bde18a2cb42c704ab8f990098290d3b1d271167f1f630ba6705"
+      "version": "0.1.26",
+      "digest": "sha256:037ed8cd1e8670abae73fd095205c4b77a4cc96c096f45ca7cb5f71bdcdb6ef3"
     },
     {
       "bundle": "stark-implement",
-      "version": "0.4.61",
-      "digest": "sha256:55a5280a7b284bde18a2cb42c704ab8f990098290d3b1d271167f1f630ba6705"
+      "version": "0.4.62",
+      "digest": "sha256:037ed8cd1e8670abae73fd095205c4b77a4cc96c096f45ca7cb5f71bdcdb6ef3"
     },
     {
       "bundle": "stark-ops",
-      "version": "0.16.10",
-      "digest": "sha256:55a5280a7b284bde18a2cb42c704ab8f990098290d3b1d271167f1f630ba6705"
+      "version": "0.16.11",
+      "digest": "sha256:037ed8cd1e8670abae73fd095205c4b77a4cc96c096f45ca7cb5f71bdcdb6ef3"
     },
     {
       "bundle": "stark-plan",
-      "version": "0.5.8",
-      "digest": "sha256:55a5280a7b284bde18a2cb42c704ab8f990098290d3b1d271167f1f630ba6705"
+      "version": "0.5.9",
+      "digest": "sha256:037ed8cd1e8670abae73fd095205c4b77a4cc96c096f45ca7cb5f71bdcdb6ef3"
     },
     {
       "bundle": "stark-write",
-      "version": "0.5.45",
-      "digest": "sha256:55a5280a7b284bde18a2cb42c704ab8f990098290d3b1d271167f1f630ba6705"
+      "version": "0.5.46",
+      "digest": "sha256:037ed8cd1e8670abae73fd095205c4b77a4cc96c096f45ca7cb5f71bdcdb6ef3"
     }
   ],
   "codexAssets": [
     {
       "bundle": "stark-analyze",
-      "version": "0.5.57",
-      "digest": "sha256:b3ba6ca5bba105e0282a3505e66a55465a7dcb4ffca7caecd4af83b696b4a097"
+      "version": "0.6.0",
+      "digest": "sha256:3a556e0c381f14a97038815abe10a9ab6cbf18659764ab217d721abd5aff35bc"
     },
     {
       "bundle": "stark-constitution",
-      "version": "0.2.67",
-      "digest": "sha256:b3ba6ca5bba105e0282a3505e66a55465a7dcb4ffca7caecd4af83b696b4a097"
+      "version": "0.2.68",
+      "digest": "sha256:3a556e0c381f14a97038815abe10a9ab6cbf18659764ab217d721abd5aff35bc"
     },
     {
       "bundle": "stark-implement",
-      "version": "0.4.61",
-      "digest": "sha256:240455d2d41b2b8e3844dd96610d23a1695a1bd66feb789a24521e2995208021"
+      "version": "0.4.62",
+      "digest": "sha256:5ba26ca0cabb81b359b632c243b8df85d9d5807eb47c1b936feade31fb5d1ac3"
     },
     {
       "bundle": "stark-ops",
-      "version": "0.16.10",
-      "digest": "sha256:866600fd8e6810d743fb8b4dc719e7782bcfabc4122336fb0606eebc94cf5fc9"
+      "version": "0.16.11",
+      "digest": "sha256:37b07c760aeffd7fb9a797fcdf330c2e8ab430aa00db45c522c1397889e5e77d"
     },
     {
       "bundle": "stark-plan",
-      "version": "0.5.8",
-      "digest": "sha256:b3ba6ca5bba105e0282a3505e66a55465a7dcb4ffca7caecd4af83b696b4a097"
+      "version": "0.5.9",
+      "digest": "sha256:3a556e0c381f14a97038815abe10a9ab6cbf18659764ab217d721abd5aff35bc"
     },
     {
       "bundle": "stark-write",
-      "version": "0.5.45",
-      "digest": "sha256:b3ba6ca5bba105e0282a3505e66a55465a7dcb4ffca7caecd4af83b696b4a097"
+      "version": "0.5.46",
+      "digest": "sha256:3a556e0c381f14a97038815abe10a9ab6cbf18659764ab217d721abd5aff35bc"
     }
   ]
 }
