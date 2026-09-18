@@ -14,13 +14,20 @@ export function assertAbsentWorktree(value: string): void {
 
 export type Provider = "claude" | "codex";
 export type Phase = "pending" | "reserved" | "intake" | "working" | "blocked" |
-  "review" | "integrating" | "done" | "stopping" | "stopped" | "swept";
+  "review" | "integrating" | "done" | "stopping" | "stopped" | "swept" | "released-unverified";
 export interface TaskSpec {
   id: string;
   ticket: string;
   objective: string;
   repo: string;
   repositoryKey?: string;
+  /** The branch this task's PR targets, resolved at `init` from origin's default when the
+   * engagement does not name one. Declared rather than retyped per grant: `integrate`
+   * defaults its base branch to this, `packet` names it to the worker in the FIRST brief,
+   * and `verify` refuses a PR that merged into anything else. Four review passes named the
+   * per-invocation `--base-ref` flag as the root of that terminal mismatch — the worker
+   * opened its PR long before the flag was ever typed. */
+  baseRef?: string;
   worktree: string;
   provider: Provider;
   model?: string;
@@ -71,6 +78,31 @@ export interface CompletionEvidence {
   verifiedAt: string;
   ticketState: string;
 }
+/** Written by the operator, never synthesized by the worker or inferred from a ticket. */
+export interface SettlementRequest {
+  run: string;
+  task: string;
+  token: string;
+  revision: number;
+  pr: string;
+  noReview: true;
+  reason: string;
+  operatorRequest: string;
+  /** Explicit operator-supplied preparation, never inferred from the repository. */
+  setup?: string[][];
+}
+export interface SettlementEvidence extends Omit<CompletionEvidence, "review" | "verifiedAt"> {
+  checkedAt: string;
+  reviewCount: 0;
+  baseTip: string;
+  setup: CompletionEvidence["checks"];
+}
+export interface SettlementRecord {
+  request: SettlementRequest;
+  evidence: SettlementEvidence;
+  invokedBy: string;
+  released: string[];
+}
 /** An operator attestation, not independently authenticated proof of human identity. */
 export interface TakeoverRequest {
   run: string;
@@ -108,6 +140,29 @@ export interface WorktreeAdoption {
 }
 export const ADOPTION_CHECKS = ["observed path is a worktree root", "linked worktree, not a primary checkout",
   "same repository identity", "directory or branch names the ticket"];
+/** Git facts behind an integration grant's base, gathered against the task's own repository.
+ * The store validates the SHA's shape; only this evidence can say the SHA is a commit that
+ * repository holds and is the tip the base branch actually has right now. */
+export interface BaseEvidence {
+  observedAt: string;
+  /** `canonicalRepository` of the task's repo, so a foreign checkout's tip cannot stand in. */
+  repositoryKey: string;
+  /** The base branch the tip was read from, without the `refs/heads/` prefix. */
+  ref: string;
+  /** `origin/<ref>` as this observation fetched it. */
+  tip: string;
+  /** The SHA the leader supplied, resolved to a commit in that repository. */
+  base: string;
+  checks: string[];
+}
+/** Every fact `observeBase` establishes, each pushed onto the evidence AS it is established —
+ * never as one unconditional array. `observeBase` throws on failure rather than omitting an
+ * entry, so a wholesale `[...BASE_CHECKS]` made `completeChecks` true by construction: a gate
+ * that reads like an attestation of the guarantee while attesting nothing, and one a future
+ * refactor could empty without any test noticing. The tip comparison is deliberately absent —
+ * that is data the store judges (`evidence.tip === base`), not a fact the observation asserts. */
+export const BASE_CHECKS = ["task repository identity confirmed", "checkout can answer ancestry after the merge",
+  "base branch fetched from origin", "base resolves to a commit in the task repository"];
 /** The ticket as a whole name segment, so STARK-50 never matches STARK-501 or a longer word. */
 export function namesTicket(ticket: string, ...names: (string | undefined)[]): boolean {
   const literal = ticket.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -188,9 +243,13 @@ export interface Assignment {
   acknowledged?: string;
   report?: { kind: string; message: string; at: string };
   integrationBase?: string;
+  /** The git evidence `integrate` accepted for `integrationBase`; retained for audit, and read
+   * by `verifyCompletion` so the PR's own base branch must be the one the tip was read from. */
+  baseEvidence?: BaseEvidence;
   stoppedFrom?: Phase;
   reconnect?: { id: string; startedAt: string; phase: Phase; pending: boolean };
   evidence?: CompletionEvidence;
+  settlement?: SettlementRecord;
   takeovers?: TakeoverRecord[];
   swept?: SweepRecord;
 }
@@ -220,7 +279,7 @@ export interface Run {
   config: Engagement;
   revision: number;
   epoch: number;
-  mode: "running" | "stopping" | "stopped" | "complete" | "swept";
+  mode: "running" | "stopping" | "stopped" | "complete" | "swept" | "released-unverified";
   reconciled: boolean;
   received: string[];
   transfers?: LeadershipTransfer[];
@@ -250,6 +309,27 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function isProvider(value: unknown): value is Provider {
   return value === "codex" || value === "claude";
 }
+export function parseSettlement(value: unknown): SettlementRequest {
+  requireValue(isRecord(value), "settlement request must be an object");
+  const keys = ["run", "task", "token", "revision", "pr", "noReview", "reason", "operatorRequest", "setup"];
+  requireValue(Object.keys(value).every(k => keys.includes(k)), "unknown settlement request field");
+  for (const key of ["run", "task", "token", "pr", "reason", "operatorRequest"]) requireValue(nonempty(value[key]), `settlement ${key} is required`);
+  requireValue(Number.isSafeInteger(value.revision) && Number(value.revision) >= 0, "settlement revision is required");
+  requireValue(/^https:\/\/github\.com\/[^/?#]+\/[^/?#]+\/pull\/[1-9]\d*$/.test(value.pr as string), "settlement requires a GitHub PR URL");
+  requireValue(value.noReview === true, "settlement must explicitly state noReview: true");
+  requireValue(value.setup === undefined || (Array.isArray(value.setup) && value.setup.every(argv => stringList(argv) && argv.length > 0)),
+    "settlement setup must contain explicit command argument arrays");
+  return structuredClone(value) as unknown as SettlementRequest;
+}
+/** A release can finish an engagement, but can never enter its verified count. */
+export function completionSummary(run: Run) {
+  return {
+    verified: run.tasks.filter(t => t.phase === "done").map(t => t.spec.id),
+    releasedUnverified: run.tasks.filter(t => t.settlement).map(t => ({ task: t.spec.id,
+      state: "released-unverified", reason: t.settlement!.request.reason, pr: t.settlement!.request.pr })),
+    swept: run.tasks.filter(t => t.swept).map(t => t.spec.id),
+  };
+}
 export function parseTakeover(value: unknown): TakeoverRequest {
   requireValue(isRecord(value), "takeover request must be an object");
   const keys = ["run", "task", "token", "revision", "operatorRequest", "provider", "worktree", "model", "effort", "limits"];
@@ -262,21 +342,33 @@ export function parseTakeover(value: unknown): TakeoverRequest {
   if (value.limits !== undefined) requireLimits(value.limits, "takeover limits must be a non-empty list of strings");
   return structuredClone(value) as unknown as TakeoverRequest;
 }
-const active = (t: Assignment) => !["pending", "done", "stopped", "swept"].includes(t.phase);
+const active = (t: Assignment) => !["pending", "done", "stopped", "swept", "released-unverified"].includes(t.phase);
 // Completed workers release slots with fresh idle/dead or confirmed-retirement
 // evidence. Unconfirmed or still-busy workers count toward the concurrency limit.
 const occupiesSlot = (t: Assignment) => active(t) || Boolean(t.worker &&
   !(fresh(t.observation) && (t.observation?.liveness === "dead" ||
-    (t.phase === "done" && (t.observation?.retired ||
+    (["done", "released-unverified"].includes(t.phase) && (t.observation?.retired ||
       (t.observation?.liveness === "live" && t.observation.activity === "idle"))))));
+/** The ownership key for a task's repository. The `?? t.repo` fallback is for a record
+ * written before `init` resolved origin identity; `observeBase` cannot use it, because it
+ * compares against `canonicalRepository` (always `owner/repo`) and a filesystem path can
+ * never match — so a grant would refuse forever with no in-band repair. `integrationRepositoryKey`
+ * is the comparison-safe reading: absent means "unknown, accept what the checkout reports". */
 export const repositoryKey = (t: TaskSpec) => t.repositoryKey ?? t.repo;
+/** `repositoryKey` for the one caller that compares it against a canonical origin identity. */
+export const integrationRepositoryKey = (t: TaskSpec) => t.repositoryKey;
 /** Evidence is complete only when it names exactly the required checks. */
 const completeChecks = (checks: string[], required: readonly string[]) =>
   checks.length === required.length && required.every(c => checks.includes(c));
 const reservationResources = (task: Assignment) => [`ticket:${task.spec.ticket}`, `tree:${path.resolve(task.spec.worktree)}`,
   ...task.spec.exclusiveResources.map(r => `exclusive:${r}`)];
 const workerResources = (worker: Worker) => [`worker:${worker.id}`, `session:${worker.provider}:${worker.session}`, `surface:${worker.surface}`];
-export const fresh = (o?: Pick<Observation, "observedAt">) => Boolean(o && Date.now() - Date.parse(o.observedAt) <= 60_000 && Date.parse(o.observedAt) <= Date.now() + 5_000);
+/** How old an observation may be before the store refuses it. Exported because the gatherers
+ * have to fit inside it: a git or Hermod round trip left on the 300 s default command timeout
+ * can return evidence this predicate then calls stale, and "observe it again" only re-runs the
+ * same slow command. */
+export const OBSERVATION_FRESHNESS_MS = 60_000;
+export const fresh = (o?: Pick<Observation, "observedAt">) => Boolean(o && Date.now() - Date.parse(o.observedAt) <= OBSERVATION_FRESHNESS_MS && Date.parse(o.observedAt) <= Date.now() + 5_000);
 
 /** A retained merge is settleable only while no replacement owns the work, or while
  * this task's own integration is live or frozen. `attach` is the ownership line:
@@ -293,6 +385,19 @@ export function verificationReady(task: Assignment): task is Assignment & { inte
     (task.phase === "integrating" || task.phase === "pending" || task.phase === "reserved" ||
       (task.phase === "stopped" && task.stoppedFrom === "integrating")));
 }
+/** The one precondition `integrate` applies, shared with the CLI's pre-fetch refusal the way
+ * `verificationReady` is shared with `verify`'s. Hand-copying it is the drift that matters:
+ * the copy exists so a grant the store was always going to refuse never spends a network
+ * round trip or writes objects into the leader's checkout, and a copy that says something
+ * narrower silently restores that cost, while a copy that says something wider refuses a
+ * grant the store would have taken. */
+export const integrationReady = (run: Run, task: Assignment): boolean =>
+  run.mode === "running" && run.reconciled && task.phase === "review";
+/** A git object name as every Gru surface spells it. One predicate, because `observeBase` and
+ * `GruStore.integrate` have to agree exactly: a shape the observation accepts and the store
+ * refuses costs a pointless fetch, and the reverse admits a base nothing ever looked at. */
+export const isRevision = (value: unknown): value is string =>
+  typeof value === "string" && /^[0-9a-f]{40,64}$/.test(value);
 
 /** Alfred's completion states: the one predicate `complete` and `sweep` both apply. */
 export const ticketClosed = (state: string) => state === "done" || state === "Closed";
@@ -301,7 +406,7 @@ export const ticketClosed = (state: string) => state === "done" || state === "Cl
  * `reserve` writes the first owner rows and spends the first attempt. `done` stays out on
  * purpose — completion retains ticket, worktree, and saved-session ownership by design. */
 export function sweepCandidates(run: Run): Assignment[] {
-  return run.tasks.filter(t => t.phase !== "done" && t.phase !== "swept" && (t.phase !== "pending" || t.attempts > 0));
+  return run.tasks.filter(t => t.phase !== "done" && t.phase !== "swept" && !t.swept && (t.phase !== "pending" || t.attempts > 0));
 }
 
 /** The release rule. Alfred must report the ticket closed AND no live Hermod peer may be
@@ -324,7 +429,7 @@ export function sweepVerdicts(run: Run, evidence: SweepEvidence, owned: (taskId:
     // A worker closes its ticket at merge, before Gru verifies, and `verify` settles a
     // retained merge. Releasing that grant would strand the verification and its dependents.
     // `verify` needs a merged PR, so a grant whose PR never merged stays held here too.
-    if (task.integrationBase) return verdict("held", `holds an integration grant at ${task.integrationBase}; settle it with verify once its PR merges`);
+    if (task.integrationBase && !task.settlement) return verdict("held", `holds an integration grant at ${task.integrationBase}; settle it with verify once its PR merges, or operator-authorized settle if no review exists`);
     if (task.reconnect?.pending) return verdict("held", "reconnect outcome is uncertain; old process death does not settle startup");
     // `reserve` records intent, not startup. A running engagement's leader may still be
     // launching into this reservation, and Hermod cannot show a launch before it registers.
@@ -377,6 +482,7 @@ export function parseEngagement(value: unknown): Engagement {
     requireValue(/^STARK-\d+$/.test(t.ticket as string), "task must reference an existing STARK ticket");
     requireValue(isProvider(t.provider), "provider must be explicitly claude or codex");
     requireValue(t.repositoryKey === undefined || nonempty(t.repositoryKey), "invalid repository identity");
+    requireValue(t.baseRef === undefined || (nonempty(t.baseRef) && !/[\s~^:?*\[\\]/.test(t.baseRef as string) && !(t.baseRef as string).startsWith("-")), "baseRef must be a plain branch name");
     for (const key of ["model", "effort"]) requireValue(t[key] === undefined || nonempty(t[key]), `${key} must be nonempty when selected`);
     requireValue(path.isAbsolute(t.repo as string) && path.isAbsolute(t.worktree as string), "repo and worktree must be absolute paths");
     requireValue(path.resolve(t.repo as string) !== path.resolve(t.worktree as string), "worker needs an isolated worktree");
@@ -418,6 +524,56 @@ function attachRefusal(run: Run, task: Assignment, worker: Worker): string | nul
   if (worker.session === run.config.leader) return "the leader cannot attach as its own worker";
   if (task.takeovers?.some(t => t.evidence.worker.id === worker.id ||
     t.evidence.worker.session === worker.session || t.evidence.worker.surface === worker.surface)) return "fenced worker cannot reattach after takeover";
+  return null;
+}
+
+/** Why `evidence` cannot authorize a grant of `base` for `task`, or null. Pure: the observation
+ * gathers git facts, this decides.
+ *
+ * The tip comparison is the whole guarantee, and it is sufficient. `verify` only requires the
+ * base in the merged head's ancestry, so a base that predates another task's merge lets a diff
+ * built without those changes squash cleanly whenever git sees no textual conflict; requiring
+ * the freshly fetched tip closes exactly that window.
+ *
+ * There is deliberately no second "does the base contain every merge this engagement verified"
+ * floor. One shipped briefly and was removed (STARK-5222). Whenever the tip check passes the
+ * floor is already implied — a base that IS `origin/<ref>` contains everything merged onto that
+ * branch — so the two can only differ when the tip itself is not what origin's branch really
+ * holds, or when the floor is simply wrong about what to require.
+ *
+ * It IS wrong in three reachable cases, each producing a refusal with no in-band repair, since
+ * a grant cannot be retaken once the task is `integrating`: a reverted or force-pushed merge is
+ * gone from the branch for good; a task verified before `baseEvidence` existed has no branch to
+ * attribute its merge to, so counting it (the fail-closed reading) refuses every later grant in
+ * that repository forever; and a shallow clone cannot answer ancestry at all. It also cost the
+ * grant path one `merge-base` subprocess per verified merge, discarded unread on the commonest
+ * refusal, a stale tip.
+ *
+ * What removing it GIVES UP, stated plainly rather than argued away: an origin that serves a
+ * tip its branch has moved past — a lagging mirror, or a replica behind a rewrite — passes the
+ * tip check, and the floor would have caught the missing merge. That is accepted here because
+ * this fleet fetches GitHub directly, not through a mirror, and an unrepairable refusal in
+ * three real cases is the worse trade against one that needs a lying origin. Revisit if Gru
+ * ever grants against a replicated remote. */
+function baseRefusal(task: Assignment, base: string, evidence: BaseEvidence): string | null {
+  if (!completeChecks(evidence.checks, BASE_CHECKS)) return "incomplete integration base evidence";
+  if (!fresh(evidence)) return "integration base evidence is stale; fetch the base branch again";
+  // `integrationRepositoryKey`, NOT `repositoryKey`: this is the second of the two comparisons
+  // against a canonical origin identity, and the `?? t.repo` fallback can never equal an
+  // `owner/repo`. Fixing only `observeBase` moved the permanent refusal here rather than
+  // removing it — a record written before `init` resolved origin identity observed fine and
+  // was then refused by the store with "observed in owner/repo, not /abs/path", forever, with
+  // no in-band repair since a grant cannot be retaken. Absent means unknown: judge the rest.
+  const expected = integrationRepositoryKey(task.spec);
+  if (expected !== undefined && evidence.repositoryKey !== expected) return `integration base observed in ${evidence.repositoryKey}, not ${expected}`;
+  if (evidence.base !== base) return "integration base evidence does not cover the supplied SHA";
+  if (!nonempty(evidence.ref)) return "integration base evidence names no base branch";
+  // Name `--base-ref` here, not just the tip. A task whose PR targets a branch other than the
+  // one this evidence was read from hits exactly this refusal, and "grant at the tip" alone
+  // reads as an instruction to grant at THAT branch's tip — which `verify` then refuses against
+  // the PR's real base, terminally, since a grant cannot be retaken once the task is
+  // `integrating`. The refusal has to offer the repair that is actually available.
+  if (evidence.tip !== base) return `integration base ${base} is not the current ${evidence.ref} tip ${evidence.tip}; fetch again and grant at the tip, or pass --base-ref BRANCH if this task's PR targets another branch`;
   return null;
 }
 
@@ -607,7 +763,7 @@ export class GruStore {
     // its lingering declaration must not refuse the same path to adoption alone.
     const declaredBy = [run, ...this.others(run.config.id)].flatMap(r => r.tasks)
       // Stored worktrees are canonical already; compare them as `tree:` ownership keys do, off the filesystem.
-      .find(t => t !== task && t.phase !== "swept" && path.resolve(t.spec.worktree) === observed);
+      .find(t => t !== task && t.phase !== "swept" && !t.swept && path.resolve(t.spec.worktree) === observed);
     requireValue(!declaredBy, `worker worktree mismatch: ${observed} is declared by ${declaredBy?.spec.ticket}`);
     this.own(run, task, [`tree:${observed}`]);
     this.respec(run, task, { ...task.spec, worktree: observed });
@@ -682,6 +838,7 @@ export class GruStore {
       requireValue(nonempty(newLeader), "leader identity is required");
       requireValue(run.mode !== "complete", "engagement already complete");
       requireValue(run.mode !== "swept", "engagement was swept; it is terminal");
+      requireValue(run.mode !== "released-unverified", "engagement is released-unverified; it is terminal");
       let replaced: string[] | undefined;
       if (limits !== undefined) {
         // A same-session resume is a legal no-op transfer, so without this the sitting
@@ -700,10 +857,11 @@ export class GruStore {
         // Apply the exact window the worker's receipt check applies, against the timestamp this
         // record will actually carry: `fresh` tolerates an observation up to 5s in the FUTURE and
         // is evaluated before `at` is stamped, so at the boundary the store can persist a receipt
-        // its only reader ("observed ≤ transferred ≤ observed + 60s") must refuse forever.
+        // its only reader ("observed ≤ transferred ≤ observed + OBSERVATION_FRESHNESS_MS") must
+        // refuse forever. Both sides read the constant, so the window cannot drift apart again.
         const at = new Date();
         const observed = Date.parse(discovery.observedAt);
-        requireValue(observed <= at.getTime() && at.getTime() - observed <= 60_000, "leadership discovery stale");
+        requireValue(observed <= at.getTime() && at.getTime() - observed <= OBSERVATION_FRESHNESS_MS, "leadership discovery stale");
         (run.transfers ??= []).push({ previous: oldLeader, current: newLeader, epoch: run.epoch + 1,
           at: at.toISOString(), discovery: structuredClone(discovery) });
       }
@@ -811,14 +969,18 @@ export class GruStore {
       this.event(run, "continued", "existing worker and token retained; send continuation through Hermod", taskId);
     });
   }
-  integrate(id: string, leader: string, revision: number, taskId: string, token: string, base: string): Run {
+  integrate(id: string, leader: string, revision: number, taskId: string, token: string, base: string, evidence: BaseEvidence): Run {
     return this.transaction(id, leader, revision, run => {
       const task = this.task(run, taskId, token);
-      requireValue(run.mode === "running" && run.reconciled && task.phase === "review", "task is not ready for integration");
-      requireValue(/^[0-9a-f]{40,64}$/.test(base), "integration requires an observed base SHA");
+      requireValue(integrationReady(run, task), "task is not ready for integration");
+      requireValue(isRevision(base), "integration requires an observed base SHA");
+      // The shape check above admits a foreign-repository SHA, a typo, and an hour-stale tip
+      // alike; only the observation can tell them from the tip this repository has right now.
+      const refusal = baseRefusal(task, base, evidence);
+      requireValue(refusal === null, refusal!);
       // Repository-wide serialization also covers undeclared release-file seams.
       this.own(run, task, [`merge:${repositoryKey(task.spec)}`, ...task.spec.mergeResources.map(r => `merge-resource:${r}`)]);
-      task.integrationBase = base; task.phase = "integrating";
+      task.integrationBase = base; task.baseEvidence = structuredClone(evidence); task.phase = "integrating";
       this.event(run, "integration", base, taskId);
     });
   }
@@ -827,7 +989,7 @@ export class GruStore {
       const task = this.task(run, taskId, token);
       requireValue(run.mode === "running" && run.reconciled && verificationReady(task), "integration and independent verification required");
       requireValue(evidence.base === task.integrationBase, "integration base changed; rebase and reverify");
-      for (const sha of [evidence.head, evidence.base, evidence.merge]) requireValue(/^[0-9a-f]{40,64}$/.test(sha), "invalid evidence revision");
+      for (const sha of [evidence.head, evidence.base, evidence.merge]) requireValue(isRevision(sha), "invalid evidence revision");
       requireValue(nonempty(evidence.pr) && nonempty(evidence.review) && nonempty(evidence.verifiedAt), "PR, review, and verification evidence required");
       requireValue(ticketClosed(evidence.ticketState), "repository completion milestone not recorded in Alfred");
       requireValue(evidence.checks.length === task.spec.checks.length, "missing completion checks");
@@ -845,6 +1007,34 @@ export class GruStore {
       this.settle(run);
     });
   }
+  settleWithoutReview(id: string, leader: string, revision: number, taskId: string, token: string,
+    input: unknown, evidence: SettlementEvidence): Run {
+    const request = parseSettlement(input);
+    return this.transaction(id, leader, revision, run => {
+      const task = this.task(run, taskId, token);
+      requireValue(request.run === id && request.task === taskId && request.token === token && request.revision === revision,
+        "settlement request does not match the current assignment revision");
+      requireValue(run.mode === "running" && run.reconciled && verificationReady(task), "integration and independent verification required");
+      requireValue(evidence.base === task.integrationBase, "integration base changed; rebase and reverify");
+      for (const sha of [evidence.head, evidence.base, evidence.merge, evidence.baseTip]) requireValue(isRevision(sha), "invalid evidence revision");
+      requireValue(evidence.pr.toLowerCase() === request.pr.toLowerCase(), "settlement PR does not match operator request");
+      requireValue(evidence.reviewCount === 0 && !("review" in evidence) && !("verifiedAt" in evidence), "settlement requires absence of posted reviews");
+      requireValue(fresh({ observedAt: evidence.checkedAt }), "settlement evidence is stale; rerun checks");
+      const setup = request.setup ?? [];
+      requireValue(evidence.setup.length === setup.length, "missing or extra settlement setup evidence");
+      setup.forEach((argv, i) => requireValue(JSON.stringify(evidence.setup[i].argv) === JSON.stringify(argv) && evidence.setup[i].exitCode === 0 && nonempty(evidence.setup[i].log), "setup failed, changed, or missing output"));
+      requireValue(ticketClosed(evidence.ticketState), "repository completion milestone not recorded in Alfred");
+      requireValue(evidence.checks.length === task.spec.checks.length, "missing completion checks");
+      task.spec.checks.forEach((argv, i) => requireValue(JSON.stringify(evidence.checks[i].argv) === JSON.stringify(argv) && evidence.checks[i].exitCode === 0 && nonempty(evidence.checks[i].log), "check failed, changed, or missing output"));
+      const released = this.owned(id, taskId).filter(r => r.startsWith("merge:") || r.startsWith("merge-resource:"));
+      requireValue(released.includes(`merge:${repositoryKey(task.spec)}`) && task.spec.mergeResources.every(r => released.includes(`merge-resource:${r}`)), "integration ownership missing");
+      task.settlement = { request, evidence: structuredClone(evidence), invokedBy: leader, released };
+      task.phase = "released-unverified"; task.stoppedFrom = undefined;
+      this.db.prepare("DELETE FROM owners WHERE run=? AND task=? AND (resource LIKE 'merge:%' OR resource LIKE 'merge-resource:%')").run(id, taskId);
+      this.event(run, "settled-without-review", JSON.stringify(task.settlement), taskId);
+      this.settle(run);
+    });
+  }
   retire(id: string, leader: string, revision: number, taskId: string, token: string, surface: string): Run {
     return this.transaction(id, leader, revision, run => {
       const task = this.task(run, taskId, token);
@@ -858,6 +1048,7 @@ export class GruStore {
     return this.transaction(id, leader, revision, run => {
       requireValue(run.mode !== "complete", "engagement already complete");
       requireValue(run.mode !== "swept", "engagement was swept; it is terminal");
+      requireValue(run.mode !== "released-unverified", "engagement is released-unverified; it is terminal");
       run.mode = "stopping";
       for (const task of run.tasks.filter(active)) {
         if (task.phase !== "stopping") task.stoppedFrom = task.phase;
@@ -903,7 +1094,7 @@ export class GruStore {
         this.db.prepare("DELETE FROM owners WHERE run=? AND task=?").run(id, task.spec.id);
         // The record keeps the worker for audit; the task drops it, so no capacity rule or
         // later reconcile keeps observing a released identity.
-        task.phase = "swept"; task.stoppedFrom = undefined; task.worker = undefined; task.observation = undefined; task.swept = record;
+        task.phase = task.settlement ? "released-unverified" : "swept"; task.stoppedFrom = undefined; task.worker = undefined; task.observation = undefined; task.swept = record;
         this.event(run, "swept", JSON.stringify(record), task.spec.id);
       }
       if (!this.settle(run) && run.mode === "stopping" && !run.tasks.some(active)) run.mode = "stopped";
@@ -916,7 +1107,12 @@ export class GruStore {
    * verified: `sweep` then has no candidate left, so it never runs again to settle the mode. */
   private settle(run: Run): boolean {
     if (run.tasks.every(t => t.phase === "done")) { run.mode = "complete"; return true; }
-    if (!run.tasks.every(t => t.phase === "done" || t.phase === "swept")) return false;
+    if (!run.tasks.every(t => ["done", "swept", "released-unverified"].includes(t.phase))) return false;
+    if (run.tasks.some(t => t.settlement)) {
+      run.mode = "released-unverified";
+      this.event(run, "released-unverified", JSON.stringify(completionSummary(run)));
+      return true;
+    }
     run.mode = "swept";
     this.event(run, "swept", `every task verified or released; engagement terminal (${SWEEP_AUTHORITY})`);
     return true;

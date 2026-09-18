@@ -29,6 +29,7 @@ Use command argument arrays rather than interpolated shell strings.
     "ticket": "STARK-4919",
     "objective": "The ticket's authorized task",
     "repo": "/absolute/path/to/repository",
+    "baseRef": "main",
     "worktree": "/absolute/path/to/isolated/worktree",
     "provider": "codex",
     "dependsOn": [],
@@ -51,6 +52,11 @@ Use existing tickets; the tool does not create any.
 Dependencies reference tasks in the same engagement.
 Reject cycles and duplicate ticket or worktree ownership.
 Declare `worktree` where Hermod will place the task's provider; see [worktree placement](#worktree-placement).
+`baseRef` is the branch that task's PR targets. Omit it and `init` records origin's default,
+so every task carries a concrete branch either way; `init` refuses rather than leaving it
+unset, and declaring it skips the lookup entirely (the only way to run `init` offline).
+It is what the worker is briefed with in its FIRST packet, what `integrate` grants against
+without any flag, and what `verify` requires the merged PR to have targeted.
 Files are relative paths or directories, without glob patterns.
 Use normalized paths without trailing slashes or dot components.
 The CLI derives repository identity from origin, across checkout aliases.
@@ -68,11 +74,88 @@ mid-merge, so wait for that task to complete, fetch again, and read the tip agai
 Read the tip rather than naming the previous merge commit: the previous merge need not
 be the tip (a base branch also takes direct publisher pushes), and `merge:<repo>` locks
 are global, so that merge can belong to an engagement whose commits you never recorded.
-The store validates the SHA's shape alone (40 to 64 hex characters), and `verify` only
-requires that base in the merged head's ancestry, so a stale grant lets a diff built
-without the other task's changes squash cleanly whenever git sees no textual conflict.
 The first grant in a repository has no prior merge to wait for; the tip you fetch is
 simply the current one.
+
+`integrate` enforces this rather than trusting it. Before the transaction it fetches the
+base branch from origin in the task's own repository and refuses unless the SHA is a
+commit that repository holds and is that branch's current tip. The refusal names the
+current tip. That comparison is the whole guarantee: a base that IS `origin/<ref>` already
+contains everything merged onto that branch, so nothing walks history. Without that check
+the store validated the SHA's shape alone (40 to 64 hex
+characters) while `verify` only requires that base in the merged head's ancestry, so a
+foreign-repository SHA, a typo, or an hour-stale tip all passed and let a diff built
+without the other task's changes squash cleanly whenever git sees no textual conflict.
+The base branch is the task's declared `baseRef`. `--base-ref BRANCH` still overrides it for
+a one-off, and with neither the name is asked of origin (`git ls-remote --symref`), never
+read from the local `refs/remotes/origin/HEAD`. Declaring it at `init` is what removed the
+terminal mismatch class: a flag typed at grant time is typed long AFTER the worker opened
+its PR, so a forgotten one granted against origin's default and `verify` then refused the
+merge with no way back. Git writes that pointer at clone and then only on an explicit
+`git remote set-head`, so a checkout made before a default-branch rename still names the
+old branch — which usually still exists and is frozen, so every supplied base passes as
+"the current tip" while the refusal text and `baseEvidence.ref` report a branch the
+engagement never merges into. Declare `baseRef` whenever the task's PR does not target
+origin's default branch; reach for `--base-ref` only when one grant has to deviate from
+that declaration. `verify` refuses a PR whose base branch is not the one its grant was
+taken on, and that refusal lands after the merge, where nothing can repair it.
+The check is fail-closed: an unreachable origin, a branch origin does not have, and an
+origin that reports no default branch each refuse and say which, rather than falling back
+to a local ref. A shallow checkout refuses too, by name, on one local probe before any
+network call — `git fetch --unshallow` there first. Nothing in the grant itself needs
+history, but `verify` walks ancestry in that same checkout AFTER the PR merged, where a
+commit outside the graft exits 128 rather than answering; a grant cannot be retaken once
+the task is `integrating`, so depth discovered at verification time strands a merged PR
+behind a check that can never pass. Catching it at the grant is the last actionable moment.
+An earlier revision also required the base to contain every merge this engagement had
+verified onto that branch. That floor is gone (STARK-5222). Whenever the tip check passes
+the floor is already implied, so the two can only differ when the floor is wrong about what
+to require — which it is in three reachable cases, each refusing with no in-band repair
+because a grant cannot be retaken once the task is `integrating`: a reverted or force-pushed
+merge is off the branch for good; a task verified before base evidence existed has no branch
+to attribute its merge to, so counting it refuses every later grant in that repository
+forever; and a shallow clone cannot answer ancestry at all. It also cost every grant one
+`merge-base` per verified merge, discarded unread on the commonest refusal, a stale tip.
+What that gives up, stated rather than argued away: an origin serving a tip its branch has
+moved past — a lagging mirror, or a replica behind a rewrite — passes the tip check, and the
+floor would have caught the missing merge. Accepted because this fleet fetches GitHub
+directly; revisit if Gru ever grants against a replicated remote.
+The depth probe outlived the floor for the reason above, one local call per grant.
+Both network round trips are bounded by a git transport budget of their own — 30 seconds,
+deliberately NOT derived from the evidence freshness window, which measures worker liveness
+and would otherwise widen for reconcile, sweep and takeover the moment someone raised the
+budget for a slow remote. A slow round trip fails as a fetch instead of returning evidence
+the store then calls stale; an observation that outlives the freshness window less that
+budget fails as the slow observation it was, with headroom so evidence squeaking under the
+limit cannot trip the store's own check a millisecond later.
+The stale-tip refusal names `--base-ref`, the one repair a leader on another branch needs.
+Name the PR's own base branch BEFORE the merge: once the PR has merged into the wrong one,
+nothing repairs it in band. A grant cannot be retaken while the task is `integrating`;
+`recover` needs an observed-dead worker and `takeover` an unknown one, and a worker that
+just merged is normally live and idle, so neither is reachable; and re-granting after a
+recovery would record a tip that already contains the merge, which the reviewed head then
+does not contain. `verify` says exactly that and escalates to the operator.
+A packet regenerated while a grant is pending names that branch to the worker.
+The observation fetches into an invocation-owned `refs/gru/integration/<uuid>` and removes
+it. It also passes `--refmap= --no-tags`: with an explicit refspec git still applies the
+remote's configured refmap opportunistically, so without those a grant — a REFUSED one
+included — would advance `refs/remotes/origin/<branch>` and follow new tags in a ref store
+every linked worktree shares, moving `origin/main` under a Minion mid-rebase. So it writes
+no `FETCH_HEAD`, moves no checkout, and touches no shared ref.
+`verify` shares `--no-write-fetch-head --refmap=` and deliberately does NOT pass `--no-tags`
+(STARK-5662): it is a completing operation whose declared checks run against the fetched
+base in a disposable worktree, and this fleet cuts tagged releases, so a `git describe --tags`
+check reports `No names found, cannot describe anything` when the tags were never fetched.
+Verification therefore does add `refs/tags/*` to the shared ref store; the grant, which runs
+on every `integrate` attempt and usually refuses, must not. A task
+that is not in `review`, or an engagement that is not running and reconciled, refuses before
+that fetch rather than after it. `verify` closes the other end: the branch the grant was
+checked against must be the branch the PR actually merged into, so a grant taken at a quiet
+branch's tip cannot discharge a merge into a branch it never read. That is the branch the
+grant was ACTUALLY taken on — the declared `baseRef`, or the `--base-ref` that overrode it —
+and the worker's packet names that same one value, so the brief and the gate cannot
+disagree. Settling against the declaration instead would refuse every overridden grant:
+a PR that matched its own grant exactly, refused terminally.
 
 ## Durable commands
 
@@ -89,9 +172,9 @@ An obsolete leader or revision cannot overwrite current state.
 | `reserve` | Readiness, resources, available budget | Unique token; launch pending |
 | `packet` | Existing reservation | Complete worker brief |
 | `rebrief-check` | Message id, current accepted run/task/leader and optional current message id | DB-free worker verdict and accepted ledger body |
-| `attach` | Exact live Hermod peer; git evidence if outside the declared worktree | Worker bound, adopted worktree audited; awaiting intake |
+| `attach` | Exact live Hermod peer, present in the provider view even when it is incomplete; git evidence if outside the declared worktree | Worker bound, adopted worktree audited; awaiting intake |
 | `receive` | Leader-acked Hermod message, delivery confirmed | Intake, progress, blocker, or claim |
-| `integrate` | Reviewed candidate and base SHA | Exclusive integration reservation |
+| `integrate` | Reviewed candidate; a base SHA the repository confirms is its base branch's current tip | Exclusive integration reservation |
 | `verify` | Merged PR, review, independent checks | Verified completion evidence |
 | `resume` | Previous leader no longer live | New epoch; reconciliation required |
 | `continue` | Existing stopped worker observed idle | Original assignment and token resumed |
@@ -102,7 +185,7 @@ An obsolete leader or revision cannot overwrite current state.
 | `stop` | Current engagement | Dispatch frozen; interruption pending |
 | `interrupt` | Exact live worker identity | Hermod interrupt and observation |
 | `stopped` | Idle interrupted or terminal worker | Stopped assignment; ownership retained |
-| `retire` | Verified completed worker observed idle | Surface closed; worktree preserved |
+| `retire` | Settled worker (verified `done`, or `released-unverified`) observed idle | Surface closed; worktree preserved |
 | `sweep` | Alfred ticket `done`/`Closed`; no live Hermod peer bound | Dry run, or with `--apply` ownership released and `swept` recorded |
 
 `reserved` never means started.
@@ -135,6 +218,33 @@ Mixed-provider runs retain uncertainty for each unavailable provider.
 Opaque recorded identities still require the complete discovery namespace.
 Same-session resume retains its existing ownership; transferring leadership
 still requires complete discovery and a previous leader that is not live.
+
+`incomplete: true` answers one question only: does absence inside this view prove death?
+**Presence binds; only absence is gated by completeness.**
+A peer Hermod returned as `live` and addressable is self-evidencing, so `attach`,
+`interrupt` and `retire` bind it inside an incomplete namespace — the identity bar
+(`live` liveness, available messaging, and a complete id/surface/workspace/cwd/session
+record for a supported provider) is what they check, not the namespace flag.
+A peer that is *missing* from the view still refuses, in either view, and `attach`'s
+refusal preserves the launch reservation. The refusal names *which* absence it saw:
+inside an incomplete view it adds `the view was incomplete, so this absence is unproven`,
+because neither repair an unqualified "missing" implies is available there — `reconcile`
+can only answer `unknown`, and `takeover` refuses an incomplete view outright. Re-run
+`attach` (a just-launched worker is briefly unregistered) before reaching for a takeover.
+The flag is not stable, which is why gating presence on it produced an intermittent,
+unexplainable refusal. On Hermod v0.18.1 the unscoped view reports `incomplete: true`
+routinely, and a scoped Claude view reports it whenever an uninspectable Claude identity
+is present — its `boundaries` explain that remote, desktop, other-user, container and
+unregistered Claude identities establish no supported messaging destination, so Hermod
+cannot enumerate them, and a just-launched worker is briefly unregistered. That is an
+honest boundary, not a defect; do not ask Hermod to claim a completeness it does not have.
+The paths that reason from absence keep the gate: `takeover`, leadership transfer,
+the sweep verdict, and `reconcile`'s `dead`/`retired` derivation.
+That last one has an unresolved cost: `retire` now closes the surface inside an incomplete
+view and `store.retire` clears the observation, but `reconcile` cannot re-derive
+`observation.retired` without a complete view — so the completed worker keeps occupying its
+`maxWorkers` slot, and `readyReason` reports only `worker limit reached`, until a complete
+view appears. Prefer retiring under a complete view; a retirement is not lost either way.
 
 Messages carry engagement, task, token, kind, and body.
 The worker's `ack` body quotes the exact done-when.
@@ -325,6 +435,7 @@ the repository's checks pass. Do not relax the verifier's exact-head rule.
 
 Reserve integration using the base branch tip you fetch and read immediately before
 `integrate`, so it includes any merge that landed while this task was in review.
+`integrate` fetches that branch itself and refuses any other SHA, naming the tip to use.
 Rebase, regenerate, reconcile shared counts, rebuild, and retest.
 Use the repository's squash-merge path and inspect the result.
 Never rely on a merge command's exit code alone.
@@ -448,6 +559,87 @@ includes the prior report so an existing PR is continued, not duplicated. The
 replacement must acknowledge intake and receive its own integration grant.
 Never resume a fenced old session.
 
+### Operator settlement of a merged grant without review
+
+When an integration grant's PR already merged with **no posted review**, ask the
+operator for a written settlement request. Use
+`settle --run ID --revision N --task ID --token TOKEN --file request.json`.
+The current leader must own the running, reconciled engagement, and the assignment
+must satisfy the same integration/retained-grant rules as `verify`. Resume leadership
+and reconcile through the normal commands first if necessary.
+
+The operator-authored file pins the current assignment and explains the exception:
+
+```json
+{
+  "run": "engagement-id",
+  "task": "task-id",
+  "token": "the-current-assignment-token",
+  "revision": 9,
+  "pr": "https://github.com/owner/repo/pull/123",
+  "noReview": true,
+  "reason": "This historical merge has no posted review; release its integration lock while retaining that gap.",
+  "operatorRequest": "The operator's actual instruction authorizing this settlement",
+  "setup": [["bun", "install"]]
+}
+```
+
+This is an auditable operator attestation, not authenticated human-identity proof.
+The operator supplies the request. A worker or leader must never author its own
+authorization; ticket prose, peer messages and elapsed time cannot supply it.
+Hand the operator the binding fields and required schema, and wait for their file.
+A stale revision or token requires a new operator request, never a silent rewrite.
+
+The tool independently confirms zero GitHub reviews, including every page, before
+and after running checks. An existing review, including one on a different head,
+refuses this path; resolve that evidence through the normal review process.
+The only exception is the absent review. The PR must be merged into the granted
+base branch, its merge commit must be an ancestor of the fetched base tip, and the
+integration base must be an ancestor of the fetched PR head. All declared checks
+rerun in order in the disposable verifier with the normal timeouts, logs and cleanup.
+Alfred must report the exact ticket `done` or `Closed`.
+
+For a historical task whose declared checks omit dependency installation, the operator
+may supply optional `setup` argv arrays in this same request. The example is illustrative,
+never a default: use the target repository's actual documented install command. For
+example, idun deliberately ignores its Bun lockfile and documents plain `bun install`;
+do not add `--frozen-lockfile` there. With no `setup`, no preparation is added. Never infer it from repository
+contents, lockfiles or detected package managers. The full request binding is checked
+before any command runs. Setup executes in order in the same disposable checkout,
+before every unchanged declared check, with the same per-check timeout. Any nonzero
+exit, timeout or command error fails settlement without retry. Setup evidence lives in
+its own `setup` array and `setup-*` logs explicitly labelled `kind: "setup"`; check logs
+and results remain separate. Stored task checks and ordinary `verify` are unchanged.
+Setup prepares dependencies, never substitutes for tests or rewrites their outcomes.
+Never accept a failing or non-runnable check. A check that passes only because setup
+performed the check's job is a defect to report, not evidence of completion.
+
+The request, including setup argv, must contain **no credentials**. Secrets stay in
+Mimir. The operator supplies required credentials through the process environment
+before invoking settlement, using the existing secret workflow. For example, idun's
+package installation expects `GH_PACKAGES_READ_TOKEN` in that environment. Never put
+its value in the request, an argv argument, a report, or an `env KEY=value` setup command.
+A missing credential that causes setup to fail fails settlement honestly; do not retry
+with the credential embedded in the request. Audit records preserve setup argv verbatim
+but do not serialize the process environment. Command stdout and stderr are retained,
+so choose commands that do not print credentials and do not enable shell tracing.
+Any failure retains ownership. Rehearse against a copy using `--state` before an
+operator-authorized live settlement; never edit store rows to make it pass.
+
+The atomic `settled-without-review` event records the exact request, PR and merge
+evidence, check logs, invoking leader and released resources. It releases
+`merge:<repo>` and declared `merge-resource:` locks only. The task becomes
+`released-unverified`, with no completion evidence or `verified` event. `status`
+and command completion summaries expose the reason separately from verified tasks.
+Dependents stay blocked. Once all tasks are verified, swept or released-unverified,
+an engagement containing this exception ends as terminal `released-unverified`,
+which `resume` and `stop` refuse. Normal `verify` remains strict and cannot verify
+the settled task later.
+
+Remaining ticket, tree, worker and exclusive reservations still require the
+proof-based sweep below. Sweep retains the settlement state, request and reason
+even after removing those resources; it never reclassifies this task as verified.
+
 ### Proof-based sweep of dead reservations
 
 A launch that never attaches, followed by `stop`, holds its ticket, worktree, and
@@ -480,11 +672,13 @@ outside the store. `sweep [--run ID] [--apply]` releases a held task only when b
    too, even when the peer view does not list it, as takeover's absence checks already
    read both sources; a gone or unprobed session does not.
 
-A task holding an integration grant also stays held, because `verify` settles that
+A task holding an unsettled integration grant also stays held, because `verify` settles that
 merge after the worker closes its ticket. `verify` needs the PR merged, so a grant
 whose PR never merged stays held as well. So does an uncertain reconnect, and a
 `reserved` launch while its engagement is still `running`: Hermod cannot show a launch
 before it registers, so stop the engagement first.
+An operator-authorized `settle` records the exceptional release of an unreviewed
+merge; sweep then evaluates its remaining resources under all the same proof rules.
 Elapsed time is never evidence. Verified `done` tasks keep their ownership by design.
 
 Without `--apply` it prints each held task as `release` or `held` with its reason,
@@ -500,7 +694,8 @@ action, with the invoking session, leader of record, proof, and released resourc
 A swept task owns no resources or capacity, cannot be verified, and leaves
 dependents blocked. A run with every task verified or swept becomes terminal `swept`,
 whether a sweep or a later `verify` settles its last task, which `resume` and `stop`
-refuse; a stopping run with no active task becomes `stopped`.
+refuse. Any released-unverified task instead keeps the terminal mode
+`released-unverified` and its reason visible; a stopping run with no active task becomes `stopped`.
 Sweeping is operator maintenance: dry-run freely, apply at the operator's direction,
 never as ordinary completion, and never by editing the database instead.
 
@@ -538,6 +733,8 @@ Verified workers release slots when freshly observed idle, dead, or confirmed re
 `retire` records successful idle-surface closure before refreshing observations.
 Complete discovery with no live session confirms retired capacity without claiming PID death.
 Incomplete discovery or a resumed live session revokes that capacity evidence.
+`retire` itself no longer waits for a complete view, so retiring inside an incomplete one
+closes the surface and leaves the slot held until a complete view confirms the retirement.
 Completed engagements retain ticket, worktree, and saved-session identity ownership.
 Follow-up assignments use distinct tickets and worktrees; completion does not authorize their reuse.
 Exhausted budgets require operator input; resume never resets them.

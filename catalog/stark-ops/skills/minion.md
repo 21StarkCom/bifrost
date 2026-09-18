@@ -2,7 +2,7 @@
 name: minion
 type: skill
 description: Act as a Minion assigned by Gru. Acknowledge intake, implement the authorized task, report evidence and blockers, and wait for integration ownership before merging.
-version: 0.16.8
+version: 0.16.9
 maturity: beta
 runtimes:
   - claude
@@ -138,6 +138,8 @@ overrides:
       Never invent passing output or claim unavailable live verification.
       Missing vendor access is a blocker, not a passing result.
 
+      If your packet names a base branch, open your PR against it and merge into that branch only.
+      Gru cannot verify a merge into any other one, and that refusal comes after the merge.
       Wait for Gru's assignment-specific integration grant before merging.
       The grant identifies your token and the base SHA Gru observed for it.
       After another merge, fetch and rebase onto the base branch's current tip, not the
@@ -292,6 +294,8 @@ changed files, exact test commands, and actual output.
 Never invent passing output or claim unavailable live verification.
 Missing vendor access is a blocker, not a passing result.
 
+If your packet names a base branch, open your PR against it and merge into that branch only.
+Gru cannot verify a merge into any other one, and that refusal comes after the merge.
 Wait for Gru's assignment-specific integration grant before merging.
 The grant identifies your token and the base SHA Gru observed for it.
 After another merge, fetch and rebase onto the base branch's current tip, not the
