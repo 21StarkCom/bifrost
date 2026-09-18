@@ -13,7 +13,7 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 - Refresh marketplace packages from [stark-skills@4f2c161](https://github.com/21StarkCom/stark-skills/commit/4f2c1612cad852f25bce5f508403cccb6c9a6ed7).
 
 ### Fixed
-- **A skill citing a sibling skill's support file no longer fails the Codex native contract (STARK-5065).** `skillSupportRefRe` in `engine/cmd/stark/codex_compliance_test.go` was unanchored, so in `../gru/references/operations.md#deterministic-re-brief-check` it matched only the `references/operations.md` tail — the `../gru/` prefix dropped, the scan stopping at `#` because neither character is in its class. Line 196 then resolved that fragment against the CITING skill's directory and reported `dangling skill-local support reference` for a path nobody wrote. Skills of one bundle install side by side under `skills/`, so the citation was correct: at the blocked sync head `3dc9afeb`, `skills/gru/references/operations.md` (38291 bytes) sits beside `skills/minion/SKILL.md`. The reference is now matched as written and resolved from the skill directory, and a dangling one that leaves the skill is reported as `cross-skill` rather than `skill-local`. A `../` run was REQUIRED before the sibling segment as this landed: admitting a bare segment head instead traded one false report for another, reading `$SKILL_DIR/scripts/gha-cost-breakdown.sh` as `SKILL_DIR/scripts/…` and failing a script `stark-gha-cost` actually ships (measured). **That head requirement was superseded by STARK-5068 (#262)**, which admits a braced `${VAR}/` root as a second head spelling; a bare segment head is still rejected, for the reason measured here. Extraction is now a `skillSupportRefs` helper with its own table test plus a resolution test over a real two-skill tree; the fix is mutation-checked three ways (original regex, over-wide head, missing punctuation trim). **Impact:** `marketplace-sync` had a valid operator attestation on bifrost#260's exact head and four of five checks green, un-drafted the PR, then aborted on this test — stark-skills#989 (STARK-5046) merged to `main` but never published, leaving every install on the old `/minion`.
+- **A skill citing a sibling skill's support file no longer fails the Codex native contract (STARK-5065).** `skillSupportRefRe` in `engine/cmd/stark/codex_compliance_test.go` was unanchored, so in `../gru/references/operations.md#deterministic-re-brief-check` it matched only the `references/operations.md` tail — the `../gru/` prefix dropped, the scan stopping at `#` because neither character is in its class. Line 196 then resolved that fragment against the CITING skill's directory and reported `dangling skill-local support reference` for a path nobody wrote. Skills of one bundle install side by side under `skills/`, so the citation was correct: at the blocked sync head `3dc9afeb`, `skills/gru/references/operations.md` (38291 bytes) sits beside `skills/minion/SKILL.md`. The reference is now matched as written and resolved from the skill directory, and a dangling one that leaves the skill is reported as `cross-skill` rather than `skill-local`. A `../` run was REQUIRED before the sibling segment as this landed: admitting a bare segment head instead traded one false report for another, reading `$SKILL_DIR/scripts/gha-cost-breakdown.sh` as `SKILL_DIR/scripts/…` and failing a script `stark-gha-cost` actually ships (measured). **That head requirement was superseded after this release by STARK-5068 (#262, unreleased)**, which admits a braced `${VAR}/` root as a second head spelling; a bare segment head is still rejected, for the reason measured here. Extraction is now a `skillSupportRefs` helper with its own table test plus a resolution test over a real two-skill tree; the fix is mutation-checked three ways (original regex, over-wide head, missing punctuation trim). **Impact:** `marketplace-sync` had a valid operator attestation on bifrost#260's exact head and four of five checks green, un-drafted the PR, then aborted on this test — stark-skills#989 (STARK-5046) merged to `main` but never published, leaving every install on the old `/minion`.
 
 ## [0.30.5] - 2026-09-17
 
@@ -168,7 +168,7 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 ## [0.23.0] - 2026-08-31
 
 ### Removed
-- Unpublish the `stark-brain` bundle (the Atlas `brain` MCP server), reversing its still-unreleased addition. Its only consumer was this plugin; the Atlas engine keeps vault reach over its CLI. Root `VERSION` minor-bumped for the membership change.
+- Unpublish the `stark-brain` bundle (the Atlas `brain` MCP server), reversing its earlier addition. Its only consumer was this plugin; the Atlas engine keeps vault reach over its CLI. Root `VERSION` minor-bumped for the membership change.
 
 ## [0.20.2] - 2026-08-29
 
@@ -190,7 +190,7 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 
 ## [0.19.1] - 2026-08-24
 
-### Removed
+### Changed
 <!-- stark-gh:pr-merge pr=198 runId=12ade727-0eb7-46d7-b653-09bafa778a6a -->
 - Removed retired private-directory references from documentation and secret-file lint rules.
 
