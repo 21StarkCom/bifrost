@@ -4,43 +4,20 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 
 ## [Unreleased]
 
-### Changed
-<!-- idun:pr-merge pr=246 runId=246 -->
-- Documented bifrost `main`'s required-status-checks contract (currently none) and the operator commands to apply it, in `docs/operations/branch-protection.md`.
-<!-- idun:pr-merge pr=245 runId=245 -->
-- Removed the duplicate `[Unreleased]` CHANGELOG bullet for the already-released v0.28.0 rename; the `[0.28.0]` entry is the sole record.
-<!-- stark-gh:pr-merge pr=228 runId=228 -->
-- Updated docs (AGENTS.md, CLAUDE.md, README.md, native-install-loop.md) to retire stark-gh examples and clarify no bundle is plugin-backed or gemini-targeted today.
-
-### Removed
-- Retired `stark-gh-user` from `stark-ops`; the human-only GitHub PAT swap now belongs to `idun user` / `idun user gh` (STARK-2215). `stark-ops` and root `VERSION` minor-bumped for the membership change.
-- Unpublish the `stark-brain` bundle (the Atlas `brain` MCP server), reversing its still-unreleased addition. Its only consumer was this plugin; the Atlas engine keeps vault reach over its CLI. Root `VERSION` minor-bumped for the membership change.
+### Added
+<!-- idun:pr-merge pr=265 runId=265 sha=f4475de5 -->
+- Refiled 13 already-shipped `[Unreleased]` CHANGELOG bullets under the version headings that actually shipped them, creating 10 missing sections.
 
 ### Fixed
 - Preserve complete rooted and parent-relative support references in the Codex native-contract check (STARK-5068), including `${VAR}/skills/<name>/…`, the standalone adapter's `../../skills/<name>/…` path, and `../references/…`. Resolve variable roots against the install under test and report the full dangling path even when the citing skill carries a same-named file. The root grammar covers every spelling the Codex targets actually emit — the standalone `${STARK_PLUGIN_ROOT:-$HOME/…}`, the native plugin's required-root `${STARK_PLUGIN_ROOT:?resolve…}` (the only form `dist/codex-plugins/` carries), the overlay's nested `${STARK_ASSET_ROOT:-${STARK_PLUGIN_ROOT:?…}}`, and the preamble's own `${SKILL_DIR}` — from one shared pattern, so the extractor and the resolver cannot disagree about where a root ends. `cross-skill` vs `skill-local` is now decided by where the reference RESOLVES rather than by its leading characters, and the install root comes from `codex.AssetsRoot` instead of a second spelling of `.agents/stark/<bundle>`. Both committed plugin corpora retain identical extraction; bundle-only roots such as `standards/` remain in the separate bundle-asset check.
-- **A skill citing a sibling skill's support file no longer fails the Codex native contract (STARK-5065).** `skillSupportRefRe` in `engine/cmd/stark/codex_compliance_test.go` was unanchored, so in `../gru/references/operations.md#deterministic-re-brief-check` it matched only the `references/operations.md` tail — the `../gru/` prefix dropped, the scan stopping at `#` because neither character is in its class. Line 196 then resolved that fragment against the CITING skill's directory and reported `dangling skill-local support reference` for a path nobody wrote. Skills of one bundle install side by side under `skills/`, so the citation was correct: at the blocked sync head `3dc9afeb`, `skills/gru/references/operations.md` (38291 bytes) sits beside `skills/minion/SKILL.md`. The reference is now matched as written and resolved from the skill directory, and a dangling one that leaves the skill is reported as `cross-skill` rather than `skill-local`. A `../` run was REQUIRED before the sibling segment as this landed: admitting a bare segment head instead traded one false report for another, reading `$SKILL_DIR/scripts/gha-cost-breakdown.sh` as `SKILL_DIR/scripts/…` and failing a script `stark-gha-cost` actually ships (measured). **That head requirement was superseded by STARK-5068 (#262)**, which admits a braced `${VAR}/` root as a second head spelling; a bare segment head is still rejected, for the reason measured here. Extraction is now a `skillSupportRefs` helper with its own table test plus a resolution test over a real two-skill tree; the fix is mutation-checked three ways (original regex, over-wide head, missing punctuation trim). **Impact:** `marketplace-sync` had a valid operator attestation on bifrost#260's exact head and four of five checks green, un-drafted the PR, then aborted on this test — stark-skills#989 (STARK-5046) merged to `main` but never published, leaving every install on the old `/minion`.
-<!-- stark-gh:pr-merge pr=202 runId=49d6b13d-c855-4c7b-ad66-1579d33260b7 -->
-- Scope entropy exemptions to lockfile content while retaining credential detection and full-strength scanning for commit and PR prose.
-<!-- stark-gh:pr-merge pr=197 runId=c5d7811a-fcfa-4dfe-b61b-dd6ff2336977 -->
-- Unblocked native marketplace publication and packaged `stark-brain` as an Atlas MCP integration without restoring the retired `remember` skill.
-
-### Added
-- Document the `main` required-status-checks contract (STARK-4989): new `docs/operations/branch-protection.md` names the five `ci.yml` contexts, carries the operator-only ruleset APPLY command, and records the draft-skip-guard trap; `SECURITY.md` §5 now states the measured gap between documented and live protection, and CLAUDE.md / AGENTS.md point at the contract.
-<!-- stark-gh:pr-merge pr=227 runId=227 -->
-- Publish `stark-memory` skill in the `stark-ops` bundle (0.10.4 → 0.11.0) for auditing and tidying Claude Code auto-memory files.
-<!-- stark-gh:pr-merge pr=207 runId=044dacbb-5bef-42dd-8e7d-16e9e1c14290 -->
-- Add the beta `stark-design` bundle with reusable design-token architecture, theming, accessibility, distribution, and versioning guidance.
-<!-- stark-gh:pr-merge pr=205 runId=abe5b9b1-1c62-43bc-85af-205fd049fd75 -->
-- Retired `stark-cc-user` from `stark-ops`; Claude Code account switching now belongs to Idun CC.
-<!-- stark-gh:pr-merge pr=198 runId=12ade727-0eb7-46d7-b653-09bafa778a6a -->
-- Removed retired private-directory references from documentation and secret-file lint rules.
-<!-- stark-gh:pr-merge pr=196 runId=c1422f87-9818-4484-94b7-36bd3219bffb -->
-- Publish native Codex skills for `stark-bury`, `stark-handoff`, and `simple-gate`.
 
 ## [0.30.6] - 2026-09-17
 
 ### Changed
 - Refresh marketplace packages from [stark-skills@4f2c161](https://github.com/21StarkCom/stark-skills/commit/4f2c1612cad852f25bce5f508403cccb6c9a6ed7).
+
+### Fixed
+- **A skill citing a sibling skill's support file no longer fails the Codex native contract (STARK-5065).** `skillSupportRefRe` in `engine/cmd/stark/codex_compliance_test.go` was unanchored, so in `../gru/references/operations.md#deterministic-re-brief-check` it matched only the `references/operations.md` tail — the `../gru/` prefix dropped, the scan stopping at `#` because neither character is in its class. Line 196 then resolved that fragment against the CITING skill's directory and reported `dangling skill-local support reference` for a path nobody wrote. Skills of one bundle install side by side under `skills/`, so the citation was correct: at the blocked sync head `3dc9afeb`, `skills/gru/references/operations.md` (38291 bytes) sits beside `skills/minion/SKILL.md`. The reference is now matched as written and resolved from the skill directory, and a dangling one that leaves the skill is reported as `cross-skill` rather than `skill-local`. A `../` run was REQUIRED before the sibling segment as this landed: admitting a bare segment head instead traded one false report for another, reading `$SKILL_DIR/scripts/gha-cost-breakdown.sh` as `SKILL_DIR/scripts/…` and failing a script `stark-gha-cost` actually ships (measured). **That head requirement was superseded after this release by STARK-5068 (#262, unreleased)**, which admits a braced `${VAR}/` root as a second head spelling; a bare segment head is still rejected, for the reason measured here. Extraction is now a `skillSupportRefs` helper with its own table test plus a resolution test over a real two-skill tree; the fix is mutation-checked three ways (original regex, over-wide head, missing punctuation trim). **Impact:** `marketplace-sync` had a valid operator attestation on bifrost#260's exact head and four of five checks green, un-drafted the PR, then aborted on this test — stark-skills#989 (STARK-5046) merged to `main` but never published, leaving every install on the old `/minion`.
 
 ## [0.30.5] - 2026-09-17
 
@@ -99,7 +76,15 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 
 ### Fixed
 - `publish.sh`'s coverage gate no longer ignores skills outside the `stark-` prefix. Both halves of it were prefix-scoped — it iterated `$STARK_SKILLS/skill/stark-*/` and built `claimed` from a `grep -E '^\s*-\s+stark-'` — so `gru`, `simple-gate` and now `minion` were never checked at all. Dropping any of them from a `bundle.yaml` printed `coverage gate clean` while `stark sync` silently stopped pulling the skill and it vanished from the marketplace with no error, which is the exact papercut the gate was added to stop. It now walks every `skill/*/` carrying a `SKILL.md` (so non-skill dirs like `evals/` stay excluded) and reads membership from each `bundle.yaml`'s `skills:` block with awk rather than grepping `- stark-` lines, since an unprefixed name would otherwise collide with the `tags:` and `runtimes:` list items. Also removed the stale `EXCLUDED_SKILLS=(stark-voice)`: stark-voice IS published, as a member of `catalog/stark-write/bundle.yaml`, so the entry was dead config ready to mask a real orphan the day it left that bundle. Verified by running the rewritten gate against the real catalog and a real stark-skills checkout — 27 claimed including `gru`, `minion` and `simple-gate`, zero orphans. bifrost CI never runs `publish.sh`, so no gate would have caught this (STARK-4987).
+
 ## [0.28.1] - 2026-09-16
+
+### Added
+- Document the `main` required-status-checks contract (STARK-4989): new `docs/operations/branch-protection.md` names the five `ci.yml` contexts, carries the operator-only ruleset APPLY command, and records the draft-skip-guard trap; `SECURITY.md` §5 now states the measured gap between documented and live protection, and CLAUDE.md / AGENTS.md point at the contract.
+
+### Changed
+<!-- idun:pr-merge pr=245 runId=245 -->
+- Removed the duplicate `[Unreleased]` CHANGELOG bullet for the already-released v0.28.0 rename; the `[0.28.0]` entry is the sole record.
 
 ### Fixed
 - `check-bumps` now digests the shared `vendor/stark-skills/` snapshot per bundle (`index.json` gains a `sharedAssets` row per bundle, mirroring `pluginAssets`), so a stark-skills change to a top-level tool fails the gate naming every bundle instead of reporting `OK: no un-bumped source changes`. `stark build` vendors that one snapshot into EVERY `dist/claude/<bundle>/`, so previously a single shared-asset edit shipped seven changed dist trees under six unchanged versions — two different byte trees claiming one version, and `/plugin update` a silent no-op for anyone already on it. Measured live on PR #244; a code review caught it, the gate did not. Violation lines keep the `  - <bundle>/…` shape `docs/scripts/publish.sh` parses to auto patch-bump, pinned by a test that runs the real script's real parser over real gate output. Indexes published before this field carry no rows and simply skip the gate for one publish (STARK-4986).
@@ -166,6 +151,64 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 
 ### Not covered
 - Gru's live Codex leader/Minions evaluation remains incomplete pending Hermod STARK-4911. This release does not claim live native parity.
+
+## [0.26.1] - 2026-09-05
+
+### Changed
+<!-- stark-gh:pr-merge pr=228 runId=228 -->
+- Updated docs (AGENTS.md, CLAUDE.md, README.md, native-install-loop.md) to retire stark-gh examples and clarify no bundle is plugin-backed or gemini-targeted today.
+
+## [0.26.0] - 2026-09-03
+
+### Added
+<!-- stark-gh:pr-merge pr=227 runId=227 -->
+- Publish `stark-memory` skill in the `stark-ops` bundle (0.10.4 → 0.11.0) for auditing and tidying Claude Code auto-memory files.
+
+## [0.25.0] - 2026-09-02
+
+### Removed
+- Retired `stark-gh-user` from `stark-ops`; the human-only GitHub PAT swap now belongs to `idun user` / `idun user gh` (STARK-2215). `stark-ops` and root `VERSION` minor-bumped for the membership change.
+
+## [0.23.0] - 2026-08-31
+
+### Removed
+- Unpublish the `stark-brain` bundle (the Atlas `brain` MCP server), reversing its earlier addition. Its only consumer was this plugin; the Atlas engine keeps vault reach over its CLI. Root `VERSION` minor-bumped for the membership change.
+
+## [0.20.2] - 2026-08-29
+
+### Added
+<!-- stark-gh:pr-merge pr=207 runId=044dacbb-5bef-42dd-8e7d-16e9e1c14290 -->
+- Add the beta `stark-design` bundle with reusable design-token architecture, theming, accessibility, distribution, and versioning guidance.
+
+## [0.20.0] - 2026-08-28
+
+### Removed
+<!-- stark-gh:pr-merge pr=205 runId=abe5b9b1-1c62-43bc-85af-205fd049fd75 -->
+- Retired `stark-cc-user` from `stark-ops`; Claude Code account switching now belongs to Idun CC.
+
+## [0.19.3] - 2026-08-27
+
+### Fixed
+<!-- stark-gh:pr-merge pr=202 runId=49d6b13d-c855-4c7b-ad66-1579d33260b7 -->
+- Scope entropy exemptions to lockfile content while retaining credential detection and full-strength scanning for commit and PR prose.
+
+## [0.19.1] - 2026-08-24
+
+### Changed
+<!-- stark-gh:pr-merge pr=198 runId=12ade727-0eb7-46d7-b653-09bafa778a6a -->
+- Removed retired private-directory references from documentation and secret-file lint rules.
+
+## [0.19.0] - 2026-08-24
+
+### Fixed
+<!-- stark-gh:pr-merge pr=197 runId=c5d7811a-fcfa-4dfe-b61b-dd6ff2336977 -->
+- Unblocked native marketplace publication and packaged `stark-brain` as an Atlas MCP integration without restoring the retired `remember` skill.
+
+## [0.18.9] - 2026-08-24
+
+### Added
+<!-- stark-gh:pr-merge pr=196 runId=c1422f87-9818-4484-94b7-36bd3219bffb -->
+- Publish native Codex skills for `stark-bury`, `stark-handoff`, and `simple-gate`.
 
 ## [0.15.2] — 2026-08-05
 
