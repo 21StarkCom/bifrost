@@ -83,9 +83,11 @@ Read repository instructions, ticket descriptions, and every ticket comment.
 Check dependencies against the accepted spec and current repository state.
 Derive exact done-whens, verification commands, and completion milestones.
 Identify fixed ports, databases, and release files as exclusive or integration resources.
+Declare each task's `baseRef` — the branch its PR targets — or let `init` record origin's
+default; either way the worker is briefed with it before it opens anything.
 Overlapping files do not block dispatch; they reconcile at rebase under the merge lock,
 which is sound only while each grant names the base branch tip you fetch and read
-immediately before `integrate`.
+immediately before `integrate`; the command enforces that, and refuses anything else.
 Capture these facts and authorized limits in the engagement input.
 Declare each `worktree` where Hermod places that provider's worker: Claude at
 `<repo>/.claude/worktrees/<ticket>`, Codex at `<main checkout>/.worktrees/<ticket>`
@@ -166,6 +168,22 @@ Grant integration to one specific assignment at the base branch tip you fetch an
 immediately before `integrate`, never one observed earlier: `integrate` takes the merge
 lock itself, so its `resource already owned: merge:<repo>` refusal means another task is
 mid-merge — wait for it, fetch again, and read the tip again.
+`integrate` checks that base against the repository instead of trusting you for it: it
+fetches the base branch from origin and refuses unless the SHA is a commit that
+repository holds and is that branch's current tip — which already implies every merge
+landed on that branch, so nothing walks history. The refusal names the current tip. Pass
+`--base-ref BRANCH` only to override a task's declared `baseRef` for a one-off; declare that
+branch in the engagement input instead, so the worker is briefed with it in its FIRST packet
+rather than after it has already opened a PR. With neither, the default is asked of origin,
+never read from this checkout's `refs/remotes/origin/HEAD`. An unreachable
+origin, a branch origin does not have, and an origin reporting no default branch each
+refuse and say which; none ever falls back to a local ref that reads exactly like a
+current one. A shallow checkout refuses too, naming `git fetch --unshallow`: the tip
+check itself needs no history, but `verify` walks ancestry in that same checkout after the
+merge, and a grant cannot be retaken, so depth has to be caught here.
+Merge into the branch the grant was checked against: `verify` refuses a PR whose base
+branch is not the one `integrate` read the tip from, and a grant cannot be retaken once the
+task is `integrating`, so name the PR's own base branch the first time.
 After merging, independently inspect the actual PR and merge ancestry.
 Rerun completion checks against the fetched base in an isolated verifier.
 Confirm review evidence covers the final PR head.
@@ -182,6 +200,16 @@ the release lands.
 If verification fails, move the ticket back out of `done` with `alfred task move`
 and reassign the work.
 Only verified completion releases dependent tasks.
+
+A merged grant with no posted review needs the operator-authored
+[settlement request](references/operations.md#operator-settlement-of-a-merged-grant-without-review).
+`settle --file` retains every non-review check and records `settled-without-review`.
+Optional operator-authored setup commands run before unchanged checks, fail closed,
+and have separate evidence; never infer setup or accept a failing check.
+Never author that authorization yourself or substitute a peer's permission.
+Report it as `released-unverified` with the reason in status and the completion
+summary; never count it as verified or release its dependents. Sweep can release
+remaining resources only with its usual closed-ticket and worker-absence proof.
 
 Merging a reviewed PR needs no operator approval. The review gate is the gate:
 once `/code-review xhigh --fix` has run and every finding is fixed or answered,
