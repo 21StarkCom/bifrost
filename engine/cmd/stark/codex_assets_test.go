@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/21StarkCom/bifrost/engine/internal/build"
 	"github.com/21StarkCom/bifrost/engine/internal/indexio"
 	"github.com/21StarkCom/bifrost/engine/internal/install"
 	"github.com/21StarkCom/bifrost/engine/internal/installplan"
@@ -148,14 +150,33 @@ if (!fs.existsSync(assetToolsDir())) { console.error('tools/ missing at ' + asse
 // override that once let stark-gh's own config.json win is covered at the build
 // level by TestPluginAssetsOverrideSharedSnapshot; stark-gh, the last genuinely
 // plugin-backed bundle, was retired in STARK-2211.
+//
+// The installed file is compared byte-for-byte with the committed source it must
+// come from — the source-owned Codex overlay when the bundle carries one, else
+// the shared snapshot — rather than probed for a config key. A key sentinel is a
+// coupling to stark-skills' config schema: this test used `"domain_agents"` until
+// STARK-6098 buried the section that owned it, and the gate went red on a publish
+// that shipped exactly the right file.
 func TestCodexPluginConfigDoesNotClobberShared(t *testing.T) {
+	root := repoRoot(t)
 	opsDest := liveCodexInstall(t, "stark-ops")
 	opsCfg, err := os.ReadFile(filepath.Join(opsDest, ".agents/stark/stark-ops/config.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(opsCfg), `"draft"`) || !strings.Contains(string(opsCfg), `"domain_agents"`) {
-		t.Fatalf("stark-ops must get the SHARED config.json: %s", opsCfg)
+	if strings.Contains(string(opsCfg), `"draft"`) {
+		t.Fatalf("stark-ops config.json carries stark-gh's {draft} override: %s", opsCfg)
+	}
+	source := filepath.Join(root, "vendor", "runtime-overrides", "codex", "stark-ops", "config.json")
+	if _, err := os.Stat(source); err != nil {
+		source = filepath.Join(root, "vendor", "stark-skills", "config.json")
+	}
+	want, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(opsCfg, build.ToLF(want)) {
+		t.Fatalf("stark-ops must get the SHARED config.json (%s); installed:\n%s", source, opsCfg)
 	}
 }
 

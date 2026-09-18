@@ -4,6 +4,17 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-09-19
+
+### Changed
+- Refresh marketplace packages from [stark-skills@2a35a6e](https://github.com/21StarkCom/stark-skills/commit/2a35a6e0821a9da22b7abc3945187fd53644c1a5) — the head of [stark-skills#1002](https://github.com/21StarkCom/stark-skills/pull/1002), landed here first because `stark sync` treats a bundle member with no source as a hard error. It also carries the two commits `main` had not published yet: STARK-6091 (Gru is a protocol over alfred + Hermod; `gru/references/` is gone) and STARK-5637.
+
+### Removed
+- **`stark-review`** and **`stark-review-improvement`** from the **stark-analyze** bundle (`0.5.57 → 0.6.0`, STARK-6099). Both were buried upstream (STARK-6098; nastrond grave `graves/stark-skills/stark-review`). The vendored snapshot drops `stark_review*.ts`, the review worktree tools, the per-agent review prompt corpus and the triage prompts from every dist tree, and keeps the two survivor libraries `finding_lib.ts` + `review_post_lib.ts`. The bundle description no longer claims spec authoring, red-teaming, or review-prompt improvement, and the `red-team` tag is gone.
+
+### Fixed
+- **Two engine tests no longer pin stark-skills internals, so an upstream deletion cannot redden a correct publish.** `TestCodexPluginConfigDoesNotClobberShared` probed the installed `config.json` for the `"domain_agents"` key, which STARK-6098 removed with the review config; it now compares the installed file byte-for-byte with the committed source it must come from (the bundle's Codex overlay, else the shared snapshot). `TestInstalledRootedSkillSupportRef` was anchored to `gru/references/operations.md`, which STARK-6091 deleted — that alone kept the auto-sync bifrost#267 red; it now discovers a sibling support file from the installed tree and fails loudly if there is none. Both are mutation-checked (wrong source file; a resolver that never reports dangling).
+
 ## [0.30.8] - 2026-09-18
 
 ### Changed
