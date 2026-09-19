@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,20 +23,27 @@ import (
 // `marketplace-sync.yml`; every case it had is below, plus the ones the
 // `pull_request_review` event shape adds.
 
-var reviewFilterRe = regexp.MustCompile(`(?s)review_filter='(.*?)'\n`)
+var reviewFilterRe = regexp.MustCompile(`(?s)review_filter='(.*?)'\r?\n`)
 
-func publishWorkflowFilter(t *testing.T) string {
+const publishWorkflowPath = ".github/workflows/publish-sync-pr.yml"
+
+func publishWorkflow(t *testing.T) string {
 	t.Helper()
-	path := filepath.Join(repoRoot(t), ".github", "workflows", "publish-sync-pr.yml")
+	path := filepath.Join(repoRoot(t), filepath.FromSlash(publishWorkflowPath))
 	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
 	}
-	m := reviewFilterRe.FindSubmatch(b)
-	if m == nil {
-		t.Fatalf("no review_filter in %s — exercise the actual publisher predicate, not a copy", path)
+	return string(b)
+}
+
+func publishWorkflowFilter(t *testing.T) string {
+	t.Helper()
+	m := reviewFilterRe.FindStringSubmatch(publishWorkflow(t))
+	if m == nil || strings.TrimSpace(m[1]) == "" {
+		t.Fatalf("no review_filter in %s — exercise the actual publisher predicate, not a copy", publishWorkflowPath)
 	}
-	return string(m[1])
+	return m[1]
 }
 
 const attestedHead = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -65,22 +74,52 @@ func with(r review, over review) review {
 	return out
 }
 
-// accepted runs the real predicate over `pages` exactly as the workflow does:
-// `gh api --paginate --slurp` yields an array of pages, each an array of reviews.
-func accepted(t *testing.T, filter string, pages [][]review, want bool) {
+// requireJQ skips locally but FAILS in CI. The point of this suite is to be the
+// gate on the publisher's only authorization check; a gate that quietly reports
+// green because its tool is missing is the same "passes by finding nothing to
+// measure" shape the workflow's own check-count loop exists to avoid. jq ships
+// in the ubuntu-latest runner image, so requiring it there costs nothing.
+func requireJQ(t *testing.T) {
 	t.Helper()
 	if _, err := exec.LookPath("jq"); err != nil {
+		if os.Getenv("GITHUB_ACTIONS") != "" || os.Getenv("CI") != "" {
+			t.Fatalf("jq is required to exercise the publisher predicate: %v", err)
+		}
 		t.Skip("jq not installed")
 	}
+}
+
+// accepted runs the real predicate over `pages` exactly as the workflow does:
+// `gh api --paginate --slurp` yields an array of pages, each an array of reviews.
+//
+// Only jq exit 0 (true) and exit 1 (false/null under -e) are verdicts. A compile
+// error (3) or a runtime error (5) is a BROKEN predicate, and reading either as
+// "rejected" would let a real regression ship green: dropping the `// ""` null
+// guard makes jq abort on a null body, which every negative case would then
+// happily accept as a rejection.
+func accepted(t *testing.T, filter string, pages [][]review, want bool) {
+	t.Helper()
+	requireJQ(t)
 	in, err := json.Marshal(pages)
 	if err != nil {
 		t.Fatal(err)
 	}
 	cmd := exec.Command("jq", "-e", "--arg", "head", attestedHead, filter)
-	cmd.Stdin = strings.NewReader(string(in))
-	out, err := cmd.CombinedOutput()
-	got := err == nil
-	if got != want {
+	cmd.Stdin = bytes.NewReader(in)
+	out, runErr := cmd.CombinedOutput()
+	code := 0
+	var exitErr *exec.ExitError
+	switch {
+	case runErr == nil:
+	case errors.As(runErr, &exitErr):
+		code = exitErr.ExitCode()
+	default:
+		t.Fatalf("run jq: %v\noutput: %s", runErr, out)
+	}
+	if code != 0 && code != 1 {
+		t.Fatalf("jq exited %d — the predicate itself is broken, not a verdict\ninput: %s\noutput: %s", code, in, out)
+	}
+	if got := code == 0; got != want {
 		t.Fatalf("predicate returned %v, want %v\ninput: %s\noutput: %s", got, want, in, out)
 	}
 }
@@ -88,9 +127,17 @@ func accepted(t *testing.T, filter string, pages [][]review, want bool) {
 func TestPublisherRequiresCompletedReviewOnCurrentHead(t *testing.T) {
 	f := publishWorkflowFilter(t)
 
-	accepted(t, f, [][]review{{completedReview()}}, true)
-	accepted(t, f, [][]review{{with(completedReview(), review{"state": "APPROVED"})}}, true)
-	accepted(t, f, [][]review{{}}, false)
+	// Subtests, not bare calls: `accepted` fatals, so a bare first assertion that
+	// regressed would hide every case below it.
+	t.Run("a completed attestation on the head", func(t *testing.T) {
+		accepted(t, f, [][]review{{completedReview()}}, true)
+	})
+	t.Run("APPROVED attests exactly as COMMENTED does", func(t *testing.T) {
+		accepted(t, f, [][]review{{with(completedReview(), review{"state": "APPROVED"})}}, true)
+	})
+	t.Run("no reviews at all", func(t *testing.T) {
+		accepted(t, f, [][]review{{}}, false)
+	})
 
 	for name, change := range map[string]review{
 		"a bot review is not the operator's":  {"user": map[string]any{"login": "stark-meridian-ci[bot]"}},
@@ -160,42 +207,71 @@ func TestPublisherHonorsTheLatestOperatorVerdictAcrossPages(t *testing.T) {
 	accepted(t, f, [][]review{{with(completedReview(), review{"id": 2, "state": "DISMISSED"})}, {completedReview()}}, false)
 }
 
-// The three env/flag facts below are load-bearing enough that the review of
-// STARK-6208 caught each one as a defect that would have stopped publication
-// entirely. They are cheap to assert and expensive to rediscover.
+// The facts below are load-bearing enough that the review of STARK-6208 caught
+// several of them as defects that would have stopped publication entirely — or,
+// worse, let it happen unauthorized. They are cheap to assert and expensive to
+// rediscover.
+//
+// Each needle is the GUARD, not a word that merely appears near it: asserting
+// `isCrossRepository` alone passes while the `[ "$cross" != false ]` test that
+// reads it is deleted, because the identifier survives in the `gh pr view
+// --json` field list. Pin both halves — the field must be fetched AND compared.
 func TestPublishWorkflowKeepsItsLoadBearingInvocationDetails(t *testing.T) {
-	path := filepath.Join(repoRoot(t), ".github", "workflows", "publish-sync-pr.yml")
-	b, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wf := string(b)
+	wf := publishWorkflow(t)
 
 	for _, c := range []struct{ needle, why string }{
 		{"GH_REPO:", "the job never checks out; gh resolves the repo from git remotes, not GITHUB_REPOSITORY"},
-		{"--match-head-commit", "the merge must be bound to the attested head"},
-		{"isCrossRepository", "pull_request_review fires for fork PRs and headRefName carries no owner"},
+		{"isCrossRepository", "the fork guard needs the field fetched, or $cross is empty"},
+		{`[ "$cross" != false ]`, "pull_request_review fires for fork PRs and headRefName carries no owner"},
+		{`[ "$ref" != "auto/marketplace-sync" ]`, "workflow_dispatch skips the event-shape `if:`, so any PR could be published"},
+		{`''|*[!0-9]*)`, "$PR is workflow_dispatch free text interpolated into gh api URL paths"},
 		{"gh workflow run sign-manifest.yml", "a GITHUB_TOKEN push starts no push run, so signing must be dispatched"},
+		// Without this the predicate above can be swapped for `jq -e "true"` —
+		// an attestation gate that accepts every review — and every assertion in
+		// this file still passes, because they only exercise the string the
+		// workflow happens to assign, not the one it happens to run.
+		{`jq -e --arg head "$1" "$review_filter"`, "the extracted predicate must be the predicate the job actually runs"},
 	} {
 		if !strings.Contains(wf, c.needle) {
 			t.Errorf("publish-sync-pr.yml lost %q — %s", c.needle, c.why)
 		}
 	}
 
-	// Every `gh pr checks` call must be --required. An unfiltered watch includes
-	// THIS job's own check run (a pull_request_review run attaches its check to
-	// the PR head just like a pull_request run does), so it waits on itself until
-	// the job timeout and publication can never happen.
-	// Comment lines are skipped: the block above this rule in the workflow
-	// explains it by naming `gh pr checks`, and flagging prose would make the
-	// only fix "stop documenting it".
-	for _, line := range strings.Split(wf, "\n") {
+	// A flag on the invocation is not pinnable by a bare `strings.Contains` over
+	// the file: the header comment block names `--match-head-commit`, so deleting
+	// it from the merge leaves the word behind and a whole-file needle green.
+	// Assert it on every non-comment line that runs the command instead.
+	//
+	// `--required` on `gh pr checks`: an unfiltered watch includes THIS job's own
+	// check run (a pull_request_review run attaches its check to the PR head just
+	// like a pull_request run does), so it waits on itself until the job timeout
+	// and publication can never happen.
+	requireFlag(t, wf, "gh pr checks", "--required",
+		"an unfiltered watch waits on this job's own check run and can never converge")
+	requireFlag(t, wf, "gh pr merge", "--match-head-commit",
+		"the merge must be bound to the attested head, not to whatever the branch holds now")
+}
+
+// requireFlag asserts that every invocation of `cmd` in the workflow carries
+// `flag`. Comment lines are skipped — the workflow documents both of these rules
+// by naming the command, and flagging prose would make the only fix "stop
+// documenting it". Backslash continuations are folded first, so a call split
+// across lines is judged whole rather than reported missing a flag that sits on
+// the next line.
+func requireFlag(t *testing.T, wf, cmd, flag, why string) {
+	t.Helper()
+	seen := false
+	for _, line := range strings.Split(strings.ReplaceAll(wf, "\\\n", " "), "\n") {
 		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "#") {
+		if strings.HasPrefix(trimmed, "#") || !strings.Contains(trimmed, cmd) {
 			continue
 		}
-		if strings.Contains(trimmed, "gh pr checks") && !strings.Contains(trimmed, "--required") {
-			t.Errorf("`gh pr checks` without --required would wait on this job's own check run:\n  %s", trimmed)
+		seen = true
+		if !strings.Contains(trimmed, flag) {
+			t.Errorf("`%s` without %s — %s:\n  %s", cmd, flag, why, trimmed)
 		}
+	}
+	if !seen {
+		t.Errorf("publish-sync-pr.yml no longer runs `%s` at all", cmd)
 	}
 }
