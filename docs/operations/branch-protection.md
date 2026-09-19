@@ -75,6 +75,22 @@ What the caller is for, then: it makes bifrost visible in the fleet-wide sweep
 repo that answers nothing, and it is the pre-existing green run that enrolment would
 need if STARK-7599 ever gives the tier a PR-shaped write path.
 
+**Known gap — the push-to-`main` run does not fire on the auto-published merge.**
+`publish-sync-pr.yml` squash-merges `auto/marketplace-sync` with `GITHUB_TOKEN`, and
+GitHub's anti-loop guard starts **no** workflow run for a push made with that token —
+the same guard `publish-sync-pr.yml` already works around by dispatching
+`sign-manifest` explicitly after the merge. `secret-scan.yml` gets no such rescue:
+the fleet render carries no `workflow_dispatch` trigger, so it cannot be dispatched,
+and adding one here would break the byte-identity 21stark's `check` block reads.
+The consequence is
+concrete: on every `main` SHA produced by the sync publisher — the commonest way a
+commit reaches `main` in this repo — `commits/main/check-runs` carries neither
+`secret-scan / secret-scan` nor `ci`. Operator-merged PRs (`idun gh pr-merge`, a user
+token) do fire both. Tracked as **STARK-7717**, which recommends fixing it by merging
+under a non-`GITHUB_TOKEN` identity — one change here that restores BOTH workflows and
+lets the `sign-manifest` dispatch workaround be deleted, rather than a three-repo
+`workflow_dispatch` chain through the fleet template.
+
 ## 2. Enforcement lives in a RULESET, not classic branch protection
 
 Checking `branches/main/protection` **alone is misleading** — it can return a
@@ -182,10 +198,12 @@ There is no repair once it happens on a given sha: re-running replays the
 original payload so it skips again, and a `workflow_dispatch` run **does not join
 the PR's status rollup**. Only a new commit clears it.
 
-Neither `ci.yml` nor `secret-scan.yml` carries a draft guard today, and `ci.yml`'s
-`pull_request` trigger uses the default event types (`opened`, `synchronize`, `reopened`) — so CI runs on draft
-PRs, and `gh pr ready` does not fire a fresh run that `cancel-in-progress: true`
-could cancel out from under the head sha. Keep it that way.
+Neither `ci.yml` nor `secret-scan.yml` carries a draft guard today, and **both**
+`pull_request` triggers use the default event types (`opened`, `synchronize`,
+`reopened`) — so both run on draft PRs, and `gh pr ready` does not fire a fresh run
+that `cancel-in-progress` could cancel out from under the head sha. That second half
+matters for `secret-scan.yml` too: it cancels in progress on PR events
+(`cancel-in-progress: ${{ github.event_name == 'pull_request' }}`). Keep it that way.
 
 The same reasoning bars a `paths:` filter on `ci.yml`: a filtered-out workflow
 never reports at all, and a required context that never reports blocks the merge

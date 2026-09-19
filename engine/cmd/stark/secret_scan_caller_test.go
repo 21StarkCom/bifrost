@@ -45,10 +45,18 @@ func TestSecretScanCallerProducesTheFleetContext(t *testing.T) {
 	if !strings.Contains(body, "\njobs:\n  secret-scan:\n") {
 		t.Errorf("%s: the single job must be keyed `secret-scan` — the left half of the `secret-scan / secret-scan` context", secretScanCallerPath)
 	}
-	// Any `name:` under jobs: would replace the left half. The top-level `name: secret-scan`
-	// is the workflow name and is not part of the context.
-	jobs := body[strings.Index(body, "\njobs:\n"):]
-	if regexp.MustCompile(`(?m)^\s+name:`).MatchString(jobs) {
+	// Report the missing block rather than slicing on -1: the check above is an Errorf,
+	// so a file with no `jobs:` at all reaches this line and a bare index would panic.
+	at := strings.Index(body, "\njobs:\n")
+	if at < 0 {
+		t.Fatalf("%s: no top-level `jobs:` block — there is no calling job to name", secretScanCallerPath)
+	}
+	// A job's own `name:` would replace the left half. It sits at FOUR spaces, one level
+	// under the `  secret-scan:` key; anchor there rather than on any indented `name:`, so
+	// a `with:` input called `name` (six spaces) is not misread as a job rename. The
+	// top-level `name: secret-scan` is the workflow name and is not part of the context.
+	jobs := body[at:]
+	if regexp.MustCompile(`(?m)^ {4}name:`).MatchString(jobs) {
 		t.Errorf("%s: the calling job must stay unnamed; a `name:` under jobs: renames the left half of the context", secretScanCallerPath)
 	}
 }
@@ -61,18 +69,21 @@ func TestSecretScanCallerProducesTheFleetContext(t *testing.T) {
 func TestSecretScanCallerPinsAFullCommitSHA(t *testing.T) {
 	body := readSecretScanCaller(t)
 
-	uses := regexp.MustCompile(`(?m)^\s+uses:\s*(\S+)\s*$`).FindStringSubmatch(body)
+	// The trailing `(?:#.*)?` is not decoration: the fleet's other pins are written
+	// `uses: actions/checkout@<sha> # v4`, so the day a pin bump adopts that house style
+	// here a `$`-anchored pattern matches nothing and this test fails claiming the file
+	// calls no reusable workflow at all — a false accusation about the wrong thing.
+	uses := regexp.MustCompile(`(?m)^\s+uses:\s*(\S+)\s*(?:#.*)?$`).FindStringSubmatch(body)
 	if uses == nil {
 		t.Fatalf("%s: no `uses:` line — this file's whole job is to call the fleet's reusable workflow", secretScanCallerPath)
 	}
-	ref, _, ok := strings.Cut(uses[1], "@")
+	workflow, sha, ok := strings.Cut(uses[1], "@")
 	if !ok {
 		t.Fatalf("%s: `uses: %s` carries no ref at all", secretScanCallerPath, uses[1])
 	}
-	if ref != "21StarkCom/.github/.github/workflows/secret-scan.yml" {
-		t.Errorf("%s: calls %q, want the fleet's reusable workflow 21StarkCom/.github/.github/workflows/secret-scan.yml", secretScanCallerPath, ref)
+	if workflow != "21StarkCom/.github/.github/workflows/secret-scan.yml" {
+		t.Errorf("%s: calls %q, want the fleet's reusable workflow 21StarkCom/.github/.github/workflows/secret-scan.yml", secretScanCallerPath, workflow)
 	}
-	sha := uses[1][strings.Index(uses[1], "@")+1:]
 	if !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(sha) {
 		t.Errorf("%s: pinned to %q — must be a full 40-hex commit SHA, never a tag or a branch", secretScanCallerPath, sha)
 	}
@@ -98,8 +109,15 @@ func TestSecretScanSelftestRuleIsCarriedOrOverridden(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Spelling the id somewhere in the .toml is NOT proof the rule fires — a commented-out
+	// rule, or one whose regex or entropy floor drifted, satisfies this grep and still turns
+	// the fleet check red. That half is proved for real, against the gitleaks binary and
+	// this exact probe shape, by TestGitleaksConfigContract; this test is only the
+	// rule-or-override bookkeeping between the two files.
 	carriesRule := strings.Contains(string(cfg), `id = "`+fleetSelftestRuleID+`"`)
-	overrides := strings.Contains(body, "selftest_rule_id:")
+	// Anchored to a YAML key, not a substring: the render carries explanatory comments
+	// directly above the override, and a comment that names the input is not an override.
+	overrides := regexp.MustCompile(`(?m)^\s+selftest_rule_id:`).MatchString(body)
 
 	if !carriesRule && !overrides {
 		t.Errorf("`.gitleaks.toml` no longer defines the %q rule and %s passes no `selftest_rule_id` override: "+
@@ -136,9 +154,12 @@ func TestSecretScanCallerHasNoSkipGuard(t *testing.T) {
 
 func readSecretScanCaller(t *testing.T) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(repoRoot(t), secretScanCallerPath))
+	b, err := os.ReadFile(filepath.Join(repoRoot(t), filepath.FromSlash(secretScanCallerPath)))
 	if err != nil {
 		t.Fatalf("%s: %v (it is a hand-maintained copy of 21stark's render — see CLAUDE.md)", secretScanCallerPath, err)
 	}
-	return string(b)
+	// Normalize once, here: every assertion below is a `\n`-anchored literal or regex, so a
+	// CRLF checkout would fail all four at once with four unrelated-looking messages about
+	// a file whose bytes are fine. `publish_sync_pr_test.go` normalizes for the same reason.
+	return strings.ReplaceAll(string(b), "\r\n", "\n")
 }
