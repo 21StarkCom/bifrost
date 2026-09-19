@@ -37,16 +37,19 @@ func seedCoverageRepo(t *testing.T, claimed []string, skills map[string]bool) (r
 	if err != nil {
 		t.Fatalf("read the real coverage-gate.sh: %v", err)
 	}
-	// publish.sh invokes this as an EXECUTABLE (`docs/scripts/coverage-gate.sh "$SK"`),
-	// a dependency the inline code it replaced never had. The fixture copy is written
-	// 0o755 and run through `bash`, so neither would notice the committed file losing
-	// its exec bit — publish.sh would just die on "Permission denied" at publish time.
+	// THREE callers invoke this as an EXECUTABLE (`docs/scripts/coverage-gate.sh "$SK"`),
+	// a dependency the inline code it replaced never had: publish.sh here, plus
+	// stark-skills' marketplace-sync.yml and tests.yml, which both run it BY PATH out of
+	// a checkout of this repo's default branch (STARK-6468). The fixture copy is written
+	// 0o755 and run through `bash`, so none of them would notice the committed file
+	// losing its exec bit — publish.sh would die on "Permission denied" at publish time
+	// and both stark-skills workflows would go red, stopping marketplace publication.
 	fi, err := os.Stat(src)
 	if err != nil {
 		t.Fatalf("stat coverage-gate.sh: %v", err)
 	}
 	if fi.Mode().Perm()&0o111 == 0 {
-		t.Fatalf("docs/scripts/coverage-gate.sh is not executable (mode %v); publish.sh runs it directly", fi.Mode().Perm())
+		t.Fatalf("docs/scripts/coverage-gate.sh is not executable (mode %v); publish.sh and stark-skills' marketplace-sync.yml + tests.yml all run it directly", fi.Mode().Perm())
 	}
 	dst := filepath.Join(repoRoot, "docs", "scripts")
 	if err := os.MkdirAll(dst, 0o755); err != nil {
@@ -267,6 +270,6 @@ func TestPublishShDelegatesToTheCoverageGateScript(t *testing.T) {
 		t.Fatal("publish.sh no longer calls docs/scripts/coverage-gate.sh (a comment mentioning it does not count)")
 	}
 	if strings.Contains(s, "EXCLUDED_SKILLS=(") {
-		t.Fatal("EXCLUDED_SKILLS is back in publish.sh; it belongs with the gate, or the two callers can disagree about what is deliberately unpublished")
+		t.Fatal("EXCLUDED_SKILLS is back in publish.sh; it belongs with the gate, or the three callers can disagree about what is deliberately unpublished")
 	}
 }
