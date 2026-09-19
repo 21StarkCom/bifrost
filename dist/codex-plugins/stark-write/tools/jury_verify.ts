@@ -102,6 +102,9 @@ export const JUDGE_VERDICTS: readonly string[] = [
 // Text helpers
 // ---------------------------------------------------------------------------
 
+/** A fence marker line: ``` or ~~~, 3+ markers, at most 3 leading spaces. */
+export const FENCE_RE = /^\s{0,3}(`{3,}|~{3,})/;
+
 /**
  * Blank out fenced code blocks (``` or ~~~, 3+ markers, closed by the same
  * char at >= the opening length). Lines are replaced rather than deleted so
@@ -112,7 +115,7 @@ export function stripCodeFences(text: string): string {
   const out: string[] = [];
   let open: { char: string; len: number } | null = null;
   for (const line of text.split("\n")) {
-    const m = /^\s{0,3}(`{3,}|~{3,})/.exec(line);
+    const m = FENCE_RE.exec(line);
     if (open === null) {
       if (m) {
         open = { char: m[1][0], len: m[1].length };

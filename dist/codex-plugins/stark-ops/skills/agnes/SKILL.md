@@ -2,7 +2,7 @@
 name: agnes
 description: 'Run one ticket solo and unattended, with no Gru: carry it end to end through the repo''s ticket → PR → review → merge → close spine, confirm the merge and the close yourself, comment the evidence on the ticket, and tear your own tab down.'
 ---
-Usage: agnes <STARK-n>
+Usage: agnes <STARK-n> | [STARK-n] --new-tab [--repo <name>] [--agent claude|codex]
 
 ## Codex plugin asset root
 
@@ -26,10 +26,13 @@ You are a Minion with no Gru. The operator launched one tab on one ticket and
 walked away:
 
 ```
-hermod ticket STARK-n --repo <repo> --agent claude|codex --prompt-file <brief>
+hermod ticket STARK-n --repo <repo> --agent claude|codex --agnes
 ```
 
-where the brief is just `$agnes STARK-n` (`/agnes` on Claude Code). Hermod
+`--agnes` makes the first message just `$agnes STARK-n` (`/agnes` on Claude
+Code). It needs hermod v0.20.0 or later (STARK-6974); on v0.19.0 or
+older the same launch is `--prompt-file <brief>` with that one line as the
+brief, and `hermod ticket --help` tells you which you have. Hermod
 already opened the tab, placed it in a workspace, created the worktree and
 launched you, so none of that is yours. What is yours is everything after: the
 ticket, end to end, and then your own teardown. Nobody is watching, nobody
@@ -37,7 +40,79 @@ sequences you, and nobody checks your work but you.
 
 ## Arguments
 
-- `STARK-n` — the one ticket you own. Required. No other arguments.
+- `STARK-n` — the one ticket you own. Required, except with `--new-tab`.
+- `--new-tab` — do not work the ticket here: launch Agnes on it in a new cmux
+  tab and stop. See [New tab](#new-tab). Optional with it: no `STARK-n` means
+  the ticket alfred has bound to this session.
+- `--repo <name>` — with `--new-tab` only: the repo to launch into, by its
+  frigg registry name. Default: the repo the ticket names, else the repo you
+  are standing in.
+- `--agent claude|codex` — with `--new-tab` only: the agent that runs her.
+  Default codex.
+
+## New tab
+
+**If the current request contains `--new-tab`, you are the launcher, not
+Agnes.** Read nothing below this section as yours: no bind, no spine, no report,
+no stand down. Launch her and stop.
+
+1. Name the ticket, then pick the repo. With no `STARK-n`, read the one alfred
+   has bound to this session — the `ticket` field of `alfred repo info --json`,
+   the same read hermod makes when the id is omitted — and stop and ask when it
+   has none. Pass the id on the launch line either way; you need it for the
+   next check, and an explicit id launches the same on every hermod. With
+   `--repo <name>`, pass it through. Without it, **read the ticket first**
+   (`alfred task show STARK-n`): a ticket that belongs to another repo than the
+   one you are standing in is launched with `--repo <that repo>`, never into
+   this one — hermod would exit 0 and Agnes would work it, unattended, in the
+   wrong codebase. A ticket that names no repo is this one's, the default the
+   Arguments state. Only when the ticket is this repo's, find the **main
+   checkout** of the repo you are in — the first `worktree` line of
+   `git worktree list --porcelain`, not `git rev-parse --show-toplevel`, which
+   names your own worktree when you are inside one — and pass it as `--cwd`.
+   Run that as its own command and paste the path in literally: on Claude, a
+   worktree session's guard refuses a `hermod` line carrying a variable
+   ([measured](../../standards/worker-spine.md#title-your-tab)), and a `$(...)`
+   was [measured](../../standards/stand-down.md#four-rules-about-when) refused on
+   its quoted form only — too fine a line to rest a launch on, and the literal
+   works on either runtime.
+   **The ticket's id must be free in that repo**: no `worktree` line of that
+   list (with `--repo`, of `git -C <path> worktree list --porcelain`, `<path>`
+   from `frigg repos get <name> --json`) may end in `/<the ticket id>`. One that
+   does is somebody's already — yours, when this session was itself launched on
+   the ticket, which is the likely case if you let the id default to your bound
+   ticket. Codex refuses the path; Claude would attach Agnes to it behind a
+   normal-looking ack, and her stand-down would then remove the worktree you
+   are standing in. Stop and say so.
+2. Launch, once:
+
+   ```
+   hermod ticket STARK-n --agnes (--repo <name> | --cwd <main checkout>) --agent <agent> --json
+   ```
+
+   **Always pass `--agent`** — hermod's own default is claude, so leaving it off
+   would not launch your runtime. `--repo` and `--cwd` are mutually exclusive.
+   Leave the tab focused; the operator asked to see it.
+
+   `--agnes` is newer than hermod v0.19.0, and so is hermod reading the bound
+   ticket itself, which is why step 1 passes the id. Check
+   `hermod ticket --help` first: if it lists no `--agnes`, the launch is the
+   same line with `--prompt-file <brief>` in place of `--agnes`, where `<brief>`
+   is a file holding the one hand-off line from step 3, written with the sigil
+   of the `--agent` you pass, not of your own runtime. That is the same launch
+   on an older hermod, not a workaround.
+3. Print the ack's `surface`, `workspace`, `name` and `prompt`, and stop. The
+   `prompt` must read `$agnes STARK-n` (`/agnes STARK-n` for `--agent claude`) —
+   that line is the whole hand-off.
+
+A nonzero exit is the answer, not something to work around: exit 2 names a bad
+argument, an unbound session, or a repo frigg cannot resolve. A failed start
+looks different per `--agent`, and either leaves the tab and worktree standing
+for inspection: Codex prints `{error, code, stage}` with no ack fields at all;
+Claude exits 1 with a complete, normal-looking ack whose only tell is
+`verified:false`, so check that field and the exit code before you call the
+hand-off done. Report what it printed. Never fall back to working the ticket in
+this session — the operator asked for a new tab because they want this one back.
 
 ## First: are you the right skill?
 
@@ -56,8 +131,9 @@ Run [the worker spine](../../standards/worker-spine.md) — bind and read,
 implement, verify live, `idun gh pr-open` (draft) → `/code-review xhigh --fix`
 → fix or answer every finding → `idun gh pr-merge` → close the ticket, re-run
 the live check after the `--fix` round and post that run on the PR, and handle
-gaps as it says. Three things are yours on top of it, and each of them exists
-because there is no leader:
+gaps as it says. Your tab title, which its step 1 sets, is `AGNES (<n>)`. Three
+things are yours on top of it, and each of them exists because there is no
+leader:
 
 - **Nobody sequences your merge.** Gru holds one `idun gh pr-merge` per repo at
   a time; two Agneses in one repo have no such referee. So a refusal is yours
