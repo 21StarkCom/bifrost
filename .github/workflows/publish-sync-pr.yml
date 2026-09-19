@@ -1,0 +1,159 @@
+# Publish the marketplace sync PR when the operator's review attestation lands.
+#
+# This is the second half of stark-skills' `marketplace-sync`. That workflow
+# regenerates this repo and pushes `auto/marketplace-sync`; it does NOT merge.
+# Publication is gated on an operator attestation that can arrive minutes or
+# days later, so it is driven by the `pull_request_review` event rather than by
+# a runner holding a clock open.
+#
+# STARK-6208: the previous design waited up to 20 minutes inside the sync run.
+# Four consecutive runs expired that window, and the two after them were killed
+# at 6 and 9 minutes by `cancel-in-progress` when the next stark-skills merge
+# landed — so the window could never close at this repo's real merge cadence.
+#
+# The gate itself is UNCHANGED and is re-verified here: same author, same
+# marker, same exact-head binding, same pre-merge recheck, same
+# `--match-head-commit`. CI alone still never authorizes publication.
+name: publish-sync-pr
+
+on:
+  pull_request_review:
+    types: [submitted]
+  # Manual re-drive for an attestation that was already submitted (e.g. this
+  # workflow was red for an unrelated reason when the review came in).
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "Sync PR number to publish"
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+  statuses: read
+
+# Never cancel a publication in flight: unlike a regeneration, it is not
+# superseded by a newer one. Serialize per PR instead.
+concurrency:
+  group: publish-sync-pr-${{ github.event.pull_request.number || github.event.inputs.pr }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # Cheap event-shape guard. The real authorization is the attestation check
+    # in the step below, which re-reads the reviews from the API rather than
+    # trusting the event payload: `github.event.review.body` is the submitted
+    # body, but a later CHANGES_REQUESTED or DISMISSED review on the same head
+    # must still win, and only the API shows that.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.head.ref == 'auto/marketplace-sync' &&
+       github.event.review.user.login == 'aryeh-stark')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Verify the attestation, then merge on green CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number || github.event.inputs.pr }}
+        run: |
+          set -euo pipefail
+
+          # Identical to the filter this replaces. The latest submitted review
+          # by the operator on the EXACT head must be COMMENTED or APPROVED and
+          # carry the completion marker on its own first line. Pages are slurped
+          # together so an older matching page cannot hide a later
+          # CHANGES_REQUESTED or DISMISSED review on the same head. The body is
+          # CRLF-normalized first: GitHub returns web-UI-authored review bodies
+          # with \r\n, so matching the raw text would reject the attestation an
+          # operator actually types.
+          # shellcheck disable=SC2016
+          review_filter='[.[][] | select(.user.login == "aryeh-stark" and .commit_id == $head and .submitted_at != null)]
+            | sort_by(.submitted_at, .id) | last
+            | . != null and (.state == "COMMENTED" or .state == "APPROVED")
+              and (((.body // "") | gsub("\r\n"; "\n")) | startswith("<!-- stark-code-review:complete -->\n") and contains("/code-review xhigh --fix"))'
+
+          # Exit 2 = could not read the reviews at all. A transport blip must not
+          # read as "the operator withdrew the attestation" on the pre-merge recheck.
+          completed_review() {
+            local reviews
+            reviews="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/$PR/reviews")" || return 2
+            printf '%s' "$reviews" | jq -e --arg head "$1" "$review_filter" >/dev/null
+          }
+
+          head="$(gh pr view "$PR" --json headRefOid --jq '.headRefOid')"
+
+          # On workflow_dispatch the event-shape guard above did not run, so the
+          # branch is checked here. Publishing an arbitrary PR through this path
+          # would bypass the review gate entirely.
+          ref="$(gh pr view "$PR" --json headRefName --jq '.headRefName')"
+          if [ "$ref" != "auto/marketplace-sync" ]; then
+            echo "PR #${PR} is on '$ref', not the sync branch; refusing to publish" >&2
+            exit 1
+          fi
+
+          rc=0
+          completed_review "$head" || rc=$?
+          if [ "$rc" -eq 2 ]; then
+            echo "could not read the PR's reviews; publication withheld" >&2
+            exit 1
+          elif [ "$rc" -ne 0 ]; then
+            # Not an error: most review submissions are not attestations. Exit
+            # green so the PR's checks are not polluted with a red run for an
+            # ordinary comment.
+            echo "no completed operator attestation on $head; nothing to publish"
+            exit 0
+          fi
+          echo "attestation verified on $head"
+
+          is_draft="$(gh pr view "$PR" --json isDraft --jq '.isDraft')"
+          if [ "$is_draft" = true ]; then
+            gh pr ready "$PR"
+          fi
+
+          # Wait for a check run to EXIST — a positive assertion on the count,
+          # not on an exit code — because "zero checks" and "all checks green"
+          # are the two states `--watch` cannot tell apart, and merging on the
+          # first would be a gate that passes by finding nothing to measure.
+          count=0
+          for _ in $(seq 1 30); do
+            count="$(gh pr checks "$PR" --json name --jq 'length' 2>/dev/null || echo 0)"
+            [ "$count" -gt 0 ] && break
+            sleep 10
+          done
+          if [ "$count" -eq 0 ]; then
+            echo "no check runs registered for PR #${PR} after 5 minutes — refusing to merge unverified" >&2
+            exit 1
+          fi
+          echo "watching $count check run(s) on PR #${PR}"
+          gh pr checks "$PR" --watch --fail-fast
+
+          # `identical` is not mergeable — main already contains this head, so
+          # `gh pr merge` would fail anyway. Name it here instead of later.
+          base_status="$(gh api "repos/${GITHUB_REPOSITORY}/compare/main...$head" --jq '.status')"
+          if [ "$base_status" != ahead ]; then
+            echo "reviewed head is '$base_status' vs main, not ahead; merge withheld" >&2
+            exit 1
+          fi
+
+          # The head must not have moved, and the attestation must still stand,
+          # after however long CI took. The sync branch is shared and
+          # force-updated, so this is a live race, not a theoretical one.
+          now="$(gh pr view "$PR" --json headRefOid --jq '.headRefOid')"
+          if [ "$now" != "$head" ]; then
+            echo "head moved $head -> $now while waiting for CI; merge withheld" >&2
+            exit 1
+          fi
+          recheck=0
+          completed_review "$head" || recheck=$?
+          if [ "$recheck" -eq 2 ]; then
+            echo "could not re-read the PR's reviews before merging; merge withheld" >&2
+            exit 1
+          elif [ "$recheck" -ne 0 ]; then
+            echo "completed head review changed while waiting for CI; merge withheld" >&2
+            exit 1
+          fi
+
+          gh pr merge "$PR" --squash --match-head-commit "$head"
+          echo "published: PR #${PR} merged at $head"
