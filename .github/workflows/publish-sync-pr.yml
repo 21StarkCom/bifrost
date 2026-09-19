@@ -98,26 +98,41 @@ jobs:
           # the attestation" on the pre-merge recheck — and, just as important,
           # a BROKEN PREDICATE must not read as "nobody attested".
           #
-          # `jq -e` exits 1 for a false/null result but 3 for a compile error and
-          # 5 for a runtime error, and those are not verdicts. Returning jq's
-          # status raw folded 3 and 5 into the caller's "not attested" branch,
-          # which exits GREEN — so a typo in the predicate, or a payload shape it
-          # cannot handle (a `null` body with no `// ""` guard aborts with 5),
-          # would have stopped publication forever with every run green and no
-          # alarm anywhere. That is precisely the silent-stall STARK-6208 was
-          # filed to end; it must fail closed and loud instead.
+          # ONLY jq's 0 and 1 are verdicts. `jq -e` exits 1 for a false/null
+          # RESULT, but 2 for a usage/system error, 3 for a compile error, 4 for
+          # "no valid result was ever produced" (what an empty `gh` stdout
+          # yields) and 5 for a runtime error — plus 127 if jq is not installed
+          # at all. Returning jq's status raw folded every one of those into the
+          # caller's "not attested" branch, which exits GREEN — so a typo in the
+          # predicate, or a payload shape it cannot handle (a `null` body with no
+          # `// ""` guard aborts with 5), would have stopped publication forever
+          # with every run green and no alarm anywhere. That is precisely the
+          # silent-stall STARK-6208 was filed to end; it must fail closed and
+          # loud instead.
+          #
+          # Both "could not tell" paths announce themselves here, so the callers
+          # below can stay generic and the log still names which one happened.
           completed_review() {
             local reviews status=0
-            reviews="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/$PR/reviews")" || return 2
+            reviews="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/$PR/reviews")" || {
+              echo "could not read the PR's reviews from the API — this is not a verdict" >&2
+              return 2
+            }
             # `|| status=$?` rather than a bare pipeline followed by `status=$?`:
             # under `set -e` the latter only survives because every caller invokes
             # this function on the left of `||`, which suppresses errexit through
             # the whole body. That is true today and silently stops being true the
             # first time someone calls it plainly.
+            #
+            # `pipefail` makes $status the PIPELINE's status, which is jq's for
+            # every case that matters but can also be a signal death (127 for a
+            # missing jq, 130/143 on cancellation), so the message does not
+            # attribute it to jq. jq's own diagnostic, when there is one, is on
+            # stderr immediately above.
             printf '%s' "$reviews" | jq -e --arg head "$1" "$review_filter" >/dev/null || status=$?
             case "$status" in
               0|1) return "$status" ;;
-              *) echo "the attestation predicate itself failed (jq exit $status) — this is not a verdict" >&2
+              *) echo "could not evaluate the attestation predicate (exit $status) — this is not a verdict" >&2
                  return 2 ;;
             esac
           }
@@ -141,6 +156,16 @@ jobs:
             echo "PR #${PR} is on '$ref' (cross-repository: $cross), not this repo's sync branch; refusing to publish" >&2
             exit 1
           fi
+
+          # The same shape guard $PR gets above, and for the same reason: `jq -r`
+          # prints the literal string "null" for a missing field and exits 0, so a
+          # malformed snapshot would hand `completed_review` a head no review can
+          # ever match. That is not "nobody attested" — it is the green silent
+          # stall this workflow exists to end, and every downstream guard
+          # (`--match-head-commit`, `compare`) would be bound to garbage too.
+          case "$head" in
+            ''|*[!0-9a-f]*) echo "PR #${PR} reported an unusable head '$head'; refusing to publish" >&2; exit 1 ;;
+          esac
 
           rc=0
           completed_review "$head" || rc=$?
@@ -175,9 +200,18 @@ jobs:
           # not on an exit code — because "zero checks" and "all checks green"
           # are the two states `--watch` cannot tell apart, and merging on the
           # first would be a gate that passes by finding nothing to measure.
+          #
+          # Same "not a verdict" rule as the attestation above: `gh pr checks`
+          # documents exit 8 for PENDING checks, which is the normal state here,
+          # so its status says nothing about whether the runs exist — only the
+          # count does. The old `|| echo 0` appended a second line to a perfectly
+          # good count in exactly that case, and `[ "5\n0" -gt 0 ]` is an
+          # integer-expression error that never breaks the loop.
           count=0
           for _ in $(seq 1 30); do
-            count="$(gh pr checks "$PR" --required --json name --jq 'length' 2>/dev/null || echo 0)"
+            count="$(gh pr checks "$PR" --required --json name --jq 'length' 2>/dev/null || true)"
+            count="${count%%$'\n'*}"
+            case "$count" in ''|*[!0-9]*) count=0 ;; esac
             [ "$count" -gt 0 ] && break
             sleep 10
           done

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -207,6 +208,145 @@ func TestPublisherHonorsTheLatestOperatorVerdictAcrossPages(t *testing.T) {
 	accepted(t, f, [][]review{{with(completedReview(), review{"id": 2, "state": "DISMISSED"})}, {completedReview()}}, false)
 }
 
+// publishWorkflowFunc lifts a shell function out of the workflow's `run:` block
+// and dedents it, so what runs below is the function the job actually ships. The
+// filter above is extracted for the same reason: a restated copy pins the copy.
+func publishWorkflowFunc(t *testing.T, name string) string {
+	t.Helper()
+	lines := strings.Split(publishWorkflow(t), "\n")
+	for i, l := range lines {
+		if strings.TrimSpace(l) != name+"() {" {
+			continue
+		}
+		indent := l[:len(l)-len(strings.TrimLeft(l, " "))]
+		for j := i + 1; j < len(lines); j++ {
+			// The closing brace at the definition's own indent, so a nested
+			// block's `}` cannot end the extraction early.
+			if lines[j] != indent+"}" {
+				continue
+			}
+			out := make([]string, 0, j-i+1)
+			for _, b := range lines[i : j+1] {
+				out = append(out, strings.TrimPrefix(b, indent))
+			}
+			return strings.Join(out, "\n")
+		}
+		t.Fatalf("%s: %s() has no closing brace at its own indent", publishWorkflowPath, name)
+	}
+	t.Fatalf("%s no longer defines %s() — the publisher's only authorization check", publishWorkflowPath, name)
+	return ""
+}
+
+func writeStub(t *testing.T, path, body string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte("#!/usr/bin/env bash\n"+body), 0o755); err != nil {
+		t.Fatalf("write stub %s: %v", path, err)
+	}
+}
+
+// runCompletedReview runs the workflow's real completed_review() against stubbed
+// `gh` and `jq` whose exit codes the case chooses, and reports the function's own
+// status plus its stderr. Exit codes are the entire contract under test, so they
+// are the only thing stubbed — the predicate's semantics are covered above,
+// against real jq.
+func runCompletedReview(t *testing.T, ghExit, jqExit int) (int, string) {
+	t.Helper()
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skipf("bash not installed: %v", err)
+	}
+	dir := t.TempDir()
+	writeStub(t, filepath.Join(dir, "gh"), fmt.Sprintf("printf '%%s' '[[]]'\nexit %d\n", ghExit))
+	// The jq stub DRAINS stdin exactly as jq does. Without that `printf` dies of
+	// SIGPIPE and `pipefail` hands the function a status jq never returned — the
+	// stub would be testing the harness, not the workflow.
+	writeStub(t, filepath.Join(dir, "jq"), fmt.Sprintf("cat >/dev/null\nexit %d\n", jqExit))
+
+	script := strings.Join([]string{
+		"set -euo pipefail",
+		`review_filter='.'`,
+		publishWorkflowFunc(t, "completed_review"),
+		"rc=0",
+		"completed_review " + attestedHead + " || rc=$?",
+		`exit "$rc"`,
+	}, "\n")
+
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Env = append(os.Environ(),
+		"PATH="+dir+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"GITHUB_REPOSITORY=21StarkCom/bifrost",
+		"PR=1",
+	)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	cmd.Stdout = nil
+
+	runErr := cmd.Run()
+	var exitErr *exec.ExitError
+	switch {
+	case runErr == nil:
+		return 0, stderr.String()
+	case errors.As(runErr, &exitErr):
+		return exitErr.ExitCode(), stderr.String()
+	default:
+		t.Fatalf("run completed_review: %v\nstderr: %s", runErr, stderr.String())
+		return -1, ""
+	}
+}
+
+// THE regression test for the defect the suite above exposed. Only jq's 0 and 1
+// are verdicts; every other status is the predicate failing to produce one. The
+// caller reads any non-2 status as "not attested" and exits GREEN on purpose, so
+// returning jq's status raw made a typo in the predicate — or a payload shape it
+// cannot handle — indistinguishable from "nobody attested": publication stops
+// forever, every run green, no alarm anywhere. That is the silent stall
+// STARK-6208 was filed to end, and the 20-minute window it replaced at least
+// went red.
+//
+// It is pinned on the REAL function because the mapping is three lines of shell:
+// a refactor back to `return "$status"` leaves every other test in this file
+// green while the gate quietly stops being a gate.
+func TestPublisherFailsClosedWhenThePredicateReturnsNoVerdict(t *testing.T) {
+	for _, c := range []struct {
+		name           string
+		ghExit, jqExit int
+		want           int
+		wantStderr     string
+	}{
+		// The verdicts. These must NOT become red: an ordinary review comment is
+		// "not attested", and reddening the sync PR for one is the behaviour the
+		// green path exists to avoid.
+		{"attested", 0, 0, 0, ""},
+		{"not attested is a verdict", 0, 1, 1, ""},
+
+		// Everything else is "could not tell" and must withhold publication.
+		{"jq usage or system error", 0, 2, 2, "could not evaluate the attestation predicate"},
+		{"jq compile error", 0, 3, 2, "could not evaluate the attestation predicate"},
+		{"jq produced no result at all", 0, 4, 2, "could not evaluate the attestation predicate"},
+		{"jq runtime error", 0, 5, 2, "could not evaluate the attestation predicate"},
+		{"jq missing from the runner", 0, 127, 2, "could not evaluate the attestation predicate"},
+		{"the reviews API is unreadable", 1, 0, 2, "could not read the PR's reviews"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			got, stderr := runCompletedReview(t, c.ghExit, c.jqExit)
+			if got != c.want {
+				t.Fatalf("completed_review returned %d, want %d (gh exit %d, jq exit %d)\nstderr: %s",
+					got, c.want, c.ghExit, c.jqExit, stderr)
+			}
+			// A verdict says nothing on stderr; a non-verdict must name itself,
+			// because the callers' message covers both causes and cannot.
+			if c.wantStderr == "" {
+				if strings.TrimSpace(stderr) != "" {
+					t.Fatalf("a verdict must not announce a failure; got stderr: %s", stderr)
+				}
+				return
+			}
+			if !strings.Contains(stderr, c.wantStderr) {
+				t.Fatalf("stderr does not name the cause; want %q, got: %s", c.wantStderr, stderr)
+			}
+		})
+	}
+}
+
 // The facts below are load-bearing enough that the review of STARK-6208 caught
 // several of them as defects that would have stopped publication entirely — or,
 // worse, let it happen unauthorized. They are cheap to assert and expensive to
@@ -225,6 +365,7 @@ func TestPublishWorkflowKeepsItsLoadBearingInvocationDetails(t *testing.T) {
 		{`[ "$cross" != false ]`, "pull_request_review fires for fork PRs and headRefName carries no owner"},
 		{`[ "$ref" != "auto/marketplace-sync" ]`, "workflow_dispatch skips the event-shape `if:`, so any PR could be published"},
 		{`''|*[!0-9]*)`, "$PR is workflow_dispatch free text interpolated into gh api URL paths"},
+		{`''|*[!0-9a-f]*)`, `jq -r prints the string "null" for a missing field and exits 0, so an unusable head would match no review and exit GREEN`},
 		{"gh workflow run sign-manifest.yml", "a GITHUB_TOKEN push starts no push run, so signing must be dispatched"},
 		// Without this the predicate above can be swapped for `jq -e "true"` —
 		// an attestation gate that accepts every review — and every assertion in
