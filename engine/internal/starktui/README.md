@@ -1,7 +1,7 @@
 # `internal/starktui` — vendored snapshot of the fleet help renderer
 
 A committed copy of two packages from **`21StarkCom/stark-tui`**, pinned at tag
-**`go/v0.3.3`** (commit `521ad44e9eb97600e5443ed5fa75530928143ddf`):
+**`go/v0.3.3`** (commit `521ad44e`):
 
 | here | upstream |
 |---|---|
