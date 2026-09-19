@@ -43,11 +43,13 @@ the workflow file:
 gh pr checks <PR#> --repo 21StarkCom/bifrost --json name,state
 ```
 
-### The sixth check that reports and is NOT required
+### The sixth check that reports and is not required *today*
 
 `.github/workflows/secret-scan.yml` is the second `pull_request` workflow in this
 repo (it also fires on push to `main`). It produces **`secret-scan / secret-scan`**,
-and that context is **deliberately absent from the table above**.
+and that context is **absent from the table above** — which is this repo's state
+right now, not a verdict it has reached. Read the next paragraph before quoting
+this one.
 
 It is the fleet's uniform secret scan — a thin caller, pinned by SHA, for the one
 reusable workflow in `21StarkCom/.github`. Terraform in `21StarkCom/21stark`
@@ -57,7 +59,19 @@ because `main` here carries `enforce_admins = true` plus required PR reviews, so
 provider's direct commit is rejected even for an admin token (STARK-7490). The file
 arrived by PR instead, byte-identical to the render.
 
-**Do not add `secret-scan / secret-scan` to the ruleset in §3 by hand.** Note the last three words: whether the context *should* be required here is **not** settled by this file. STARK-7635 owns that decision for both hand-PR'd repos and intends to enrol them via an explicit enforced-anyway set in 21stark, so ADR-0005's "rollout implies enrolment" covers the whole non-archived fleet; STARK-7490 met its stated precondition. What this section rules out is doing it *from here*, for two reasons:
+**Do not add `secret-scan / secret-scan` to the ruleset in §3 by hand.** Note the
+last two words: whether the context *should* be required here is **not** settled
+by this file, and nothing here argues it should not be. **STARK-7635** owns that
+decision for both hand-PR'd repos (bifrost and `.github`) and is open at the time
+of writing — its title is "Require the secret-scan check on the two hand-PR'd
+repos", the route under consideration is an explicit enforced-anyway set in
+21stark (`local.secret_scan_enforced` is derived from the rollout and cannot
+reach an excluded repo), and a competing design for `.github` is on the ticket.
+STARK-7490 has already met that ticket's stated precondition — caller landed,
+green `secret-scan / secret-scan` observed on bifrost's `main` — so if it enrols
+both repos, ADR-0005's "rollout implies enrolment" would cover the whole
+non-archived fleet rather than only its Terraform-written part. What this section
+rules out is doing it *from here*, for two reasons:
 
 1. **It would be an unowned rule.** Every other repo's requirement is Terraform
    state in 21stark. A hand-made one here is invisible to that tier's audit
@@ -65,21 +79,37 @@ arrived by PR instead, byte-identical to the render.
    next fleet pin bump — which **renames the right half of the context** if the
    reusable workflow's job name ever changes — would silently orphan it, blocking
    every merge here on "Expected — waiting for status".
-2. **It closes no coverage gap here**, so there is no urgency to front-run
-   STARK-7635. `secret scan (catalog)` is already required and blocking, and the
-   two scans do not dominate each other: the in-repo job is **wider** (whole
-   working tree *plus* the PR commit range, against the fleet caller's incoming
-   commits only) but **weaker in assurance** — no checksum on the binary it
-   downloads, no scanner self-test, and outside `local.secret_scan_pin`, so a
-   fleet gitleaks bump never reaches it. The fleet caller is the narrower and
-   better-assured of the two, and the only one that produces a context 21stark's
-   rulesets can name. The argument for requiring it is fleet consistency, which
-   is exactly what STARK-7635 is for.
+2. **Nothing here is unscanned while STARK-7635 decides**, so there is no urgency
+   to front-run it. `secret scan (catalog)` is already required and blocking, and
+   neither scan dominates the other — see the table below.
+
+| | scope | assurance |
+| --- | --- | --- |
+| `secret scan (catalog)` (in-repo) | **wider** — whole working tree *plus* the PR commit range | **weaker** — no checksum on the binary it downloads, the `secrets` job self-tests nothing, and it sits outside `local.secret_scan_pin`, so a fleet gitleaks bump never reaches it |
+| `secret-scan / secret-scan` (fleet caller) | narrower — incoming commits only | **stronger** — pinned binary + published checksum, and it refuses a clean scan until it has watched the scanner fire |
+
+So requiring the fleet caller *would* close an assurance gap; what it would not do
+is leave anything unscanned in the meantime. Two caveats on that table. The in-repo
+config is **not** untested — `engine/cmd/stark/gitleaks_config_test.go` runs the
+same pinned binary over the same `.gitleaks.toml` and fails if the
+`google-oauth-client-secret` rule stops firing, inside the required `engine`
+context (STARK-7490); it is the `secrets` *job* that carries no self-test of its
+own. And the fleet caller is the context *every ruleset in that tier names* — not
+the only one a ruleset could name, since a context is a free string. The argument
+for requiring it is fleet consistency plus that assurance delta, which is exactly
+what STARK-7635 is for.
 
 What the caller is for, then: it makes bifrost visible in the fleet-wide sweep
 (`gh api repos/21StarkCom/<repo>/commits/main/check-runs`) instead of being the one
-repo that answers nothing, and it is the pre-existing green run that enrolment would
-need if STARK-7599 ever gives the tier a PR-shaped write path.
+repo that answers nothing, and it is the pre-existing green run ADR-0005 requires
+before any repo is enrolled. Enrolment itself needs no new write path into this
+repo — a ruleset is an API write the tier already makes — so it is **not** gated
+on STARK-7599, whose subject is the opposite direction: how Terraform updates an
+*enrolled* repo's caller once the ruleset rejects its direct commit (that ticket
+evaluated and rejected a PR-shaped route; ADR-0007's writer App is what it
+shipped). What enrolling here does cost is a caller nobody can afford to delete
+or rename: with the fleet tier's rulesets carrying no bypass actors, either
+mistake blocks every merge with no self-service recovery.
 
 **Known gap — the push-to-`main` run does not fire on the auto-published merge.**
 `publish-sync-pr.yml` squash-merges `auto/marketplace-sync` with `GITHUB_TOKEN`, and
