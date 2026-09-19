@@ -1,0 +1,9 @@
+[1m[35musage:[39m[22m frigg ga4 <verb> [flags]
+
+Read-only Google Analytics 4 operator CLI over the tyr/ga4 cap surface.
+
+[1m[35mCommands:[39m[22m
+  [36mget[39m[32m-account[39m    Get one GA4 account by id ([32m--account[39m accounts/<id>)
+  [36mlist[39m[32m-accounts[39m  List every GA4 account the service account can read
+
+Exit: 0 ok, 2 usage, 3 config/creds, 8 disabled (kill switch), 1 other.

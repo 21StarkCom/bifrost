@@ -18,6 +18,12 @@ catalog/standards/** linguist-generated=true
 catalog/*/skills/** linguist-generated=true
 catalog/*/commands/** linguist-generated=true
 vendor/** linguist-generated=true
+# The vendored snapshot of stark-tui's go/help + go/colors (STARK-6770). Generated in
+# the same sense as vendor/**: a `cp -R` from a stark-tui checkout, whose only local edit
+# is the import path, so a finding here is fixed UPSTREAM and an inline thread on it
+# could never be resolved by editing this repo. Refresh recipe + pinned upstream tag:
+# engine/internal/starktui/README.md. Pinned by engine/cmd/stark/gitattributes_test.go.
+engine/internal/starktui/** linguist-generated=true
 index.json linguist-generated=true
 bundles/** linguist-generated=true
 .claude-plugin/** linguist-generated=true
