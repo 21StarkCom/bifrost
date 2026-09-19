@@ -1,0 +1,39 @@
+frigg — 21Stark IT-ops headless CLI
+
+Usage: frigg <command> [args]
+       frigg help <group>
+
+usage: frigg ga4 <verb> [flags]
+
+Commands:
+  ga4          read-only Google Analytics 4  (45)
+  gitlab       GitLab reads and gated writes  (55)
+  cockpit      launch the full-screen TUI  (TUI)
+  version      print the version  (creds-free)
+  group-delete  Dissolve a group AND DELETE its items  (DELETE)
+  sql          read-only SQL escape hatch  (may return PII)
+  assign-role  grant a custom role  (gate: WRITES)
+  add-member   add someone to a group  (required)
+  write-out    write the raw result to FILE  (0600)
+  list-empty   a catalog with nothing in it  (0)
+  offboarding-audit  cross-vendor read-only audit
+  get-account  Get one GA4 account by id (--account accounts/<id>)
+  run-report   run a Data API report (the request carries the property, so a
+               long trailing note like this one is content, not a tag)
+
+Options:
+  --json       emit the typed projection
+  -o FILE      write the raw result to FILE (0600)
+  --confirm    execute the write
+
+Notes:
+  • Write posture: every write is dry-run by default; pass --confirm.
+  › Reads are free; a kill switch is honored for reads too.
+  ! Secret-bearing output REQUIRES -o and never touches stdout.
+
+Examples:
+  frigg ga4 list-accounts --json
+  frigg invoke notion.get_page --arg page_id="abc" -o out.json
+  frigg search 'deactivate user'
+
+Exit: 0 ok, 2 usage, 3 config/creds, 15 write_disabled.

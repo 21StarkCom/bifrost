@@ -5,6 +5,8 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 ## [Unreleased]
 
 ### Added
+<!-- idun:pr-merge pr=291 runId=291 sha=dfc329da -->
+- `stark`'s help output now renders in the shared 21Stark fleet look (colorized title, usage, headings, commands, and flags) via a pinned stark-tui snapshot.
 - **bifrost runs the fleet secret scan (STARK-7490).** `.github/workflows/secret-scan.yml` is the fleet's thin caller for the one reusable gitleaks workflow in `21StarkCom/.github`, pinned by commit SHA, producing the `secret-scan / secret-scan` check on every PR and on every push to `main` that starts a workflow run at all — note the auto-published sync merge, made with `GITHUB_TOKEN`, starts none, so those `main` SHAs carry no check run (`docs/operations/branch-protection.md` §1 records the gap). It is **byte-identical** to what `21StarkCom/21stark`'s `repos/templates/secret-scan-caller.yml.tftpl` renders (verified against the template render and three live repos' copies) but it arrived by PR, not by apply: `main` here carries `enforce_admins = true` plus required PR reviews, which reject the Terraform provider's direct commit even for an admin token, so bifrost sits in that tier's `local.secret_scan_excluded`. `.gitleaks.toml` gains the fleet's `google-oauth-client-secret` rule verbatim, which is what lets the caller run the default self-test with no per-repo `selftest_rule_id` override — the rule is now load-bearing, and removing it turns the check red on a tree with no secrets in it. `engine/cmd/stark/secret_scan_caller_test.go` pins the context halves, the SHA pin, that rule-or-override invariant, and the absence of a skip guard, because nothing else in this repo's CI can see the other half of the contract.
 
 ### Fixed

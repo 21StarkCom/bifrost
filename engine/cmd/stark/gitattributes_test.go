@@ -62,6 +62,53 @@ func TestGitattributesMarksEveryGeneratedCatalogTree(t *testing.T) {
 	}
 }
 
+// TestGitattributesMarksTheVendoredStarkTuiSnapshot extends the same cross-repo contract
+// to engine/internal/starktui — a `cp -R` of stark-tui's go/help + go/colors, whose only
+// local edit is the import path.
+//
+// It matters for the same reason the catalog rows do, and one more: a finding raised on
+// this tree is fixed in stark-tui, so an inline thread on it cannot be resolved by any
+// edit made HERE, and `main` enforces `required_conversation_resolution`. Unmarked, a
+// review of a snapshot refresh — which touches ~2k lines at once — can wedge the PR on
+// threads that have no in-repo fix.
+//
+// It walks the REAL tree against the REAL .gitattributes: a row that stops covering a
+// file (a new upstream subdirectory, a renamed snapshot root) is the failure mode, and a
+// fixture would not see it.
+func TestGitattributesMarksTheVendoredStarkTuiSnapshot(t *testing.T) {
+	root := repoRoot(t)
+	globs := generatedGlobs(t, filepath.Join(root, ".gitattributes"))
+
+	const want = "engine/internal/starktui/**"
+	if !globs[want] {
+		t.Errorf("`.gitattributes` no longer declares %q linguist-generated=true", want)
+	}
+
+	dir := filepath.Join(root, "engine", "internal", "starktui")
+	checked := 0
+	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		checked++
+		if !matchAnyGlob(rel, globs) {
+			t.Errorf("%s is not marked linguist-generated — it is vendored, not authored here", rel)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if checked == 0 {
+		t.Fatal("walked no snapshot files — the check proved nothing")
+	}
+}
+
 // generatedGlobs reads `.gitattributes` the way findings_review_post.ts's
 // parseGeneratedGlobs does: comments and `[attr]` macros skipped, a row taken only when
 // its attribute list carries `linguist-generated` Set (bare or `=true`), so
