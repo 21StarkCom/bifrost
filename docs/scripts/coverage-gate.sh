@@ -26,13 +26,18 @@ set -euo pipefail
 # which is the same bug one level up.
 #
 # Usage:  docs/scripts/coverage-gate.sh <stark-skills-checkout>
-# Exit:   0 = every skill claimed or excluded · 1 = orphans (or a parser bug)
+# Exit:   0 = every skill claimed or excluded
+#         1 = orphans found, OR the gate could not run (missing/empty stark-skills
+#             checkout, no readable catalog, a membership parse that came back
+#             empty). Every non-zero path names itself on stderr with an `ERROR:`
+#             prefix — the one thing this script must never do is exit 0, or exit
+#             silently, over a tree it did not actually read.
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 STARK_SKILLS="${1:-${STARK_SKILLS:-$REPO_ROOT/../stark-skills}}"
 [ -d "$STARK_SKILLS/skill" ] || {
-  echo "coverage-gate: stark-skills not found at $STARK_SKILLS" >&2
+  echo "ERROR: coverage-gate: stark-skills not found at $STARK_SKILLS" >&2
   echo "  → pass the checkout as \$1, or set STARK_SKILLS." >&2
   exit 1
 }
@@ -49,6 +54,23 @@ STARK_SKILLS="${1:-${STARK_SKILLS:-$REPO_ROOT/../stark-skills}}"
 # orphan the day it left that bundle.
 EXCLUDED_SKILLS=()
 
+# Collect the manifests BEFORE parsing them. Passing the bare glob to awk meant an
+# unmatched `catalog/*/bundle.yaml` (a wrong $REPO_ROOT, a sparse checkout, a
+# renamed dir) handed awk a literal path it could not open: `2>/dev/null` ate the
+# only diagnostic, `set -e -o pipefail` aborted on awk's status, and the script
+# died at exit 2 having printed NOTHING — with the explanatory guard below
+# unreachable in the very case it was written for.
+bundle_manifests=()
+for f in "$REPO_ROOT"/catalog/*/bundle.yaml; do
+  [ -f "$f" ] && bundle_manifests+=("$f")
+done
+[ "${#bundle_manifests[@]}" -gt 0 ] || {
+  echo "ERROR: coverage-gate found no catalog/*/bundle.yaml under $REPO_ROOT" >&2
+  echo "  → membership is read from a bifrost checkout, located relative to this" >&2
+  echo "    script; \$REPO_ROOT resolved to $REPO_ROOT, which has no catalog/." >&2
+  exit 1
+}
+
 # Covers EVERY skill dir, not just `stark-*`. The fleet renames skills out of
 # that prefix (`gru`, `minion`, `agnes`), and a prefix-scoped gate would have left
 # each of them silently droppable — the exact papercut this gate exists to stop.
@@ -62,26 +84,47 @@ claimed="$(awk '
     sub(/^[[:space:]]*-[[:space:]]+/, ""); sub(/[[:space:]]+$/, ""); print; next
   }
   inskills && /^[^[:space:]#]/ { inskills = 0 }
-' "$REPO_ROOT"/catalog/*/bundle.yaml 2>/dev/null | sort -u)"
+' "${bundle_manifests[@]}" | sort -u)"
 
 # An empty parse is a SCRIPT bug (a `skills:` block shape the awk above stopped
 # matching), not an unpublished fleet. Without this the gate would report every
 # upstream skill as an orphan and bury the real cause in that list.
 [ -n "$claimed" ] || {
-  echo "coverage-gate: parsed no 'skills:' membership from $REPO_ROOT/catalog/*/bundle.yaml" >&2
+  echo "ERROR: coverage-gate parsed no 'skills:' membership from $REPO_ROOT/catalog/*/bundle.yaml" >&2
   echo "  → the coverage gate's awk parser, not the catalog, is what to fix." >&2
+  exit 1
+}
+# One newline-delimited haystack, matched with bash's own pattern test. The
+# per-skill `printf | grep` this replaces forked two processes per upstream skill
+# to re-scan a list that never changes inside the loop.
+claimed_nl=$'\n'"$claimed"$'\n'
+
+# Same reason as the catalog glob above: an unmatched `skill/*/` leaves the literal
+# pattern in `$d`, which carries no SKILL.md, so it fell through the fail-OPEN skip
+# and the gate reported `coverage gate clean … (not checked, no SKILL.md: *)` and
+# exited 0 over a tree it had read nothing from. The `-d "$STARK_SKILLS/skill"`
+# check at the top catches a MISSING checkout; this catches an empty or
+# restructured one, which is the same false green by another route.
+skill_dirs=()
+for d in "$STARK_SKILLS"/skill/*/; do
+  [ -d "$d" ] && skill_dirs+=("$d")
+done
+[ "${#skill_dirs[@]}" -gt 0 ] || {
+  echo "ERROR: coverage-gate found no skill dirs under $STARK_SKILLS/skill" >&2
+  echo "  → a clean report over a tree with nothing in it is indistinguishable" >&2
+  echo "    from success; check the checkout path, or that skills still live in skill/." >&2
   exit 1
 }
 
 orphans="" nonskill=""
-for d in "$STARK_SKILLS"/skill/*/; do
+for d in "${skill_dirs[@]}"; do
   s="$(basename "$d")"
   # A dir with no SKILL.md (e.g. evals/) is not a skill. Record the skips instead
   # of dropping them: this branch is fail-OPEN, so a real skill whose manifest is
   # missing or misnamed vanishes from the gate exactly as silently as the drop the
   # gate exists to catch.
   if [ ! -f "$d/SKILL.md" ]; then nonskill="$nonskill $s"; continue; fi
-  printf '%s\n' "$claimed" | grep -qxF "$s" && continue
+  [[ "$claimed_nl" == *$'\n'"$s"$'\n'* ]] && continue
   [[ " ${EXCLUDED_SKILLS[*]:-} " == *" $s "* ]] && continue
   orphans="$orphans $s"
 done

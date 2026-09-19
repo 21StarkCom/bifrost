@@ -4,6 +4,13 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 
 ## [Unreleased]
 
+### Changed
+- **The coverage gate is its own script, `docs/scripts/coverage-gate.sh` (STARK-6468).** It lived inline in `publish.sh`, which is the MANUAL regen path. The path that actually publishes is stark-skills' `marketplace-sync.yml`, which regenerates bifrost and opens the sync PR on ~every release and never invokes `publish.sh` — its gate list (`validate`, `sync --check`, `build --check`, `check-bumps`) is entirely internal-consistency checks between bifrost's own catalog and dist, none of which looks back at the stark-skills tree to ask whether every skill is claimed. So the automated path had no coverage gate at all, which is how `agnes` shipped un-membered at v0.31.2 (STARK-6249) with every gate green. `publish.sh` now delegates; `EXCLUDED_SKILLS` moved with the gate so the two callers cannot disagree about what is deliberately unpublished. Wiring `marketplace-sync.yml` to call it is part 2, a stark-skills PR — **until that lands the automated path is still ungated.** Pinned by `engine/cmd/stark/coverage_gate_test.go`, which runs the real script (including the exact v0.31.2 orphan state) rather than a copy of its logic.
+
+### Fixed
+- **The coverage gate no longer reports `clean` over a tree it read nothing from.** An unmatched `skill/*/` glob (an empty or restructured stark-skills checkout) left the literal pattern in the loop variable, which carries no `SKILL.md`, so it fell through the fail-OPEN "not a skill" skip and the gate printed `coverage gate clean … (not checked, no SKILL.md: *)` and exited 0. The existing `-d "$STARK_SKILLS/skill"` check only catches a *missing* checkout; a false green here is indistinguishable from success, which is the one thing a gate must never do.
+- **An unreadable catalog now names itself instead of aborting silently.** The membership parse passed the bare `catalog/*/bundle.yaml` glob to awk, so an unmatched glob (wrong `$REPO_ROOT`, sparse checkout, renamed dir) handed awk a literal path it could not open: `2>/dev/null` ate the only diagnostic and `set -e -o pipefail` killed the script at **exit 2 having printed nothing**, with the "blame the parser, not the catalog" guard written for exactly this case unreachable. The manifests are collected and counted before parsing, every non-zero exit now carries an `ERROR:` prefix, and the script's documented exit contract covers the could-not-run paths.
+
 ## [0.32.0] - 2026-09-19
 
 ### Added

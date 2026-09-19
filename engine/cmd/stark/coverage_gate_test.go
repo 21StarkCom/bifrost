@@ -37,6 +37,17 @@ func seedCoverageRepo(t *testing.T, claimed []string, skills map[string]bool) (r
 	if err != nil {
 		t.Fatalf("read the real coverage-gate.sh: %v", err)
 	}
+	// publish.sh invokes this as an EXECUTABLE (`docs/scripts/coverage-gate.sh "$SK"`),
+	// a dependency the inline code it replaced never had. The fixture copy is written
+	// 0o755 and run through `bash`, so neither would notice the committed file losing
+	// its exec bit — publish.sh would just die on "Permission denied" at publish time.
+	fi, err := os.Stat(src)
+	if err != nil {
+		t.Fatalf("stat coverage-gate.sh: %v", err)
+	}
+	if fi.Mode().Perm()&0o111 == 0 {
+		t.Fatalf("docs/scripts/coverage-gate.sh is not executable (mode %v); publish.sh runs it directly", fi.Mode().Perm())
+	}
 	dst := filepath.Join(repoRoot, "docs", "scripts")
 	if err := os.MkdirAll(dst, 0o755); err != nil {
 		t.Fatal(err)
@@ -77,6 +88,15 @@ func seedCoverageRepo(t *testing.T, claimed []string, skills map[string]bool) (r
 
 func runCoverageGate(t *testing.T, repoRoot, starkSkills string) (int, string) {
 	t.Helper()
+	// Same contract as requireJQ in publish_sync_pr_test.go: hard-fail on CI, where the
+	// runner image ships bash and a skip would be this gate "passing by finding nothing
+	// to measure"; skip on a machine that genuinely has no bash.
+	if _, err := exec.LookPath("bash"); err != nil {
+		if os.Getenv("GITHUB_ACTIONS") != "" || os.Getenv("CI") != "" {
+			t.Fatalf("bash is required to exercise the coverage gate: %v", err)
+		}
+		t.Skipf("bash not installed: %v", err)
+	}
 	cmd := exec.Command("bash", filepath.Join(repoRoot, "docs", "scripts", "coverage-gate.sh"), starkSkills)
 	out, err := cmd.CombinedOutput()
 	code := 0
@@ -181,6 +201,45 @@ func TestCoverageGateRefusesAMissingStarkSkillsCheckout(t *testing.T) {
 	}
 }
 
+// A stark-skills checkout whose `skill/` dir exists but holds nothing is the OTHER false
+// green: the unmatched `skill/*/` glob leaves the literal pattern in `$d`, which carries
+// no SKILL.md, so it fell through the fail-open skip and the gate said "clean" over a tree
+// it had read nothing from. Same class as the missing-checkout case above, different route.
+func TestCoverageGateRefusesAnEmptyUpstreamSkillTree(t *testing.T) {
+	repoRoot, sk := seedCoverageRepo(t, []string{"gru"}, nil)
+	if err := os.MkdirAll(filepath.Join(sk, "skill"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	code, out := runCoverageGate(t, repoRoot, sk)
+	if code != 1 {
+		t.Fatalf("want exit 1 for an empty skill tree, got %d\n%s", code, out)
+	}
+	if strings.Contains(out, "coverage gate clean") {
+		t.Fatalf("a tree with no skills in it must never report clean:\n%s", out)
+	}
+}
+
+// A catalog the gate cannot read must SAY so. Before the manifests were collected up
+// front, an unmatched `catalog/*/bundle.yaml` handed awk a literal path it could not open:
+// `2>/dev/null` ate the diagnostic and `set -e -o pipefail` killed the script at exit 2
+// with no output at all — an unexplained failure whose most likely "fix" is deleting the
+// gate call, and the parser guard that was written for exactly this was never reached.
+func TestCoverageGateNamesAnUnreadableCatalog(t *testing.T) {
+	repoRoot, sk := seedCoverageRepo(t, []string{"gru"}, map[string]bool{"gru": true})
+	if err := os.RemoveAll(filepath.Join(repoRoot, "catalog")); err != nil {
+		t.Fatal(err)
+	}
+
+	code, out := runCoverageGate(t, repoRoot, sk)
+	if code != 1 {
+		t.Fatalf("want exit 1 (not a bare shell abort) for an unreadable catalog, got %d\n%s", code, out)
+	}
+	if !strings.Contains(out, "catalog") {
+		t.Fatalf("the failure must name the catalog it could not read, not exit silently:\n%s", out)
+	}
+}
+
 // publish.sh must CALL the script rather than carry its own copy. Two implementations of
 // one gate is the drift this extraction exists to remove, and it would re-open the exact
 // split that let the sync path publish without a coverage check.
@@ -190,8 +249,22 @@ func TestPublishShDelegatesToTheCoverageGateScript(t *testing.T) {
 		t.Fatalf("read publish.sh: %v", err)
 	}
 	s := string(b)
-	if !strings.Contains(s, "docs/scripts/coverage-gate.sh") {
-		t.Fatal("publish.sh no longer calls docs/scripts/coverage-gate.sh")
+	// An INVOCATION, not a mention: publish.sh's own comment block explains the
+	// extraction, so a bare `strings.Contains` would stay green over a re-inlined gate
+	// whose comment still named the script — the mutation this test exists to catch.
+	invoked := false
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.Contains(line, "docs/scripts/coverage-gate.sh") {
+			invoked = true
+			break
+		}
+	}
+	if !invoked {
+		t.Fatal("publish.sh no longer calls docs/scripts/coverage-gate.sh (a comment mentioning it does not count)")
 	}
 	if strings.Contains(s, "EXCLUDED_SKILLS=(") {
 		t.Fatal("EXCLUDED_SKILLS is back in publish.sh; it belongs with the gate, or the two callers can disagree about what is deliberately unpublished")
