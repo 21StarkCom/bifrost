@@ -4,6 +4,11 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 
 ## [Unreleased]
 
+## [0.32.3] - 2026-09-19
+
+### Changed
+- Refresh marketplace packages from [stark-skills@729f0c0](https://github.com/21StarkCom/stark-skills/commit/729f0c0860e75a3ac1cd8dd57948ae4a65cf719a).
+
 ## [0.32.2] - 2026-09-19
 
 ### Changed
