@@ -3,6 +3,22 @@ schema/** text eol=lf
 *.go text eol=lf
 dist/** linguist-generated=true
 catalog/standards/** linguist-generated=true
+# The catalog's artifact trees are written by `stark sync` from a stark-skills
+# checkout and are never hand-edited (the drift gate rejects it, and the next sync
+# overwrites it). Marking them keeps two things honest: `findings_review_post.ts`
+# resolves this list per run and routes findings on these paths to the review BODY
+# instead of an inline thread — an inline one cannot be resolved by fixing the file,
+# and `main` enforces required_conversation_resolution, so on the shared
+# auto/marketplace-sync branch those threads block a publish (34 of them did, on
+# bifrost#264) — and the curated files a sync reviewer SHOULD read stop being buried.
+# CODEOWNERS is unaffected: it still requires its reviewers on these paths, exactly as
+# it already does for the equally-generated dist/claude/**.
+# Deliberately NOT here: catalog/*/bundle.yaml and catalog/*/mcp/**, which are curated —
+# and NOT catalog/*/agents/**, which sync does not generate either (runSync manages only
+# skills/ and commands/). No agents/ dir exists today; marking one in advance would hide
+# curated content the day somebody adds it.
+catalog/*/skills/** linguist-generated=true
+catalog/*/commands/** linguist-generated=true
 vendor/** linguist-generated=true
 index.json linguist-generated=true
 bundles/** linguist-generated=true
