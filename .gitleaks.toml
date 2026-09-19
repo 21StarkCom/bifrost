@@ -3,6 +3,13 @@
 # the catalog legitimately references secrets BY NAME via {secretRef: <key>} and
 # never holds values, so secretRef keys must NOT trip the scanner, while any real
 # inline credential ANYWHERE in the repo must fail CI (spec §7.4).
+#
+# TWO scanners read this file, and they scan different things. `ci.yml`'s
+# `secret scan (catalog)` job — a REQUIRED context on `main` — runs it over the whole
+# working tree plus the PR commit range. `.github/workflows/secret-scan.yml`, the
+# fleet's caller, runs it over the incoming commits only and is not required here.
+# A rule added below tightens both; a rule removed loosens both, and may also break
+# the fleet caller's self-test (see the google-oauth-client-secret rule).
 
 title = "stark-marketplace gitleaks"
 
@@ -27,6 +34,32 @@ regexes = [
   # `ownerToken: perShaLockContent.ownerToken` copies an in-memory field; the
   # detector captures only the object identifier as its "secret".
   '''^perShaLockContent$''',
+]
+
+# ── Google OAuth client secrets (`GOCSPX-` prefix). The stock ruleset catches
+#    these only inside a `key = value` assignment; this rule also fires on a bare
+#    token pasted into prose, a log, a URL or JSON — which is the shape a leak
+#    takes in a catalog of skill bodies and docs.
+#
+#    DO NOT REMOVE OR RENAME THIS RULE. The fleet secret scan's self-test asserts
+#    this exact rule id fires (`.github/workflows/secret-scan.yml`), and fails the
+#    check when it does not. It is the fleet's rule, verbatim from the seed in
+#    21StarkCom/21stark; keeping it identical is what lets bifrost run the fleet's
+#    default caller with no per-repo override.
+[[rules]]
+id = "google-oauth-client-secret"
+description = "Google OAuth client secret (GOCSPX- prefix)"
+regex = '''GOCSPX-[A-Za-z0-9_\-]{28}'''
+keywords = ["gocspx-"]
+entropy = 2.0
+
+# Documentation placeholders of the form GOCSPX-xxxx... are not credentials.
+# Scoped to the match itself, so it suppresses the placeholder wherever it is
+# written rather than blessing a path.
+[rules.allowlist]
+regexTarget = "match"
+regexes = [
+  '''GOCSPX-x{28}''',
 ]
 
 [allowlist]

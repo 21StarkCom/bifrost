@@ -14,6 +14,11 @@ permissions:
 # not when GitHub flips the default. (Reversible: drop this env to revert.)
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  # ONE pin for the whole workflow. Two jobs install this binary now — `secrets`
+  # runs it as the gate, `engine` needs it on PATH for TestGitleaksConfigContract —
+  # and a per-job copy is how the gate and the test that asserts on the gate's
+  # config end up scanning with different rulesets.
+  GITLEAKS_VERSION: 8.30.1
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -32,6 +37,20 @@ jobs:
         with:
           go-version-file: engine/go.mod   # pinned toolchain (spec §7.6)
           cache: true
+      # TestGitleaksConfigContract shells to this binary to prove `.gitleaks.toml`
+      # actually fires — including the `google-oauth-client-secret` probe the fleet
+      # caller's self-test asserts on (STARK-7490). It t.Skip'd when the binary was
+      # absent and NOTHING installed it in this job, so it had never once run in CI
+      # while its own comment said it did: a rule whose regex drifted left every gate
+      # here green and turned `secret-scan / secret-scan` red. The test now fails
+      # instead of skipping when CI is set, so this step going missing is loud.
+      - name: install gitleaks (pinned CLI, for the Go config-contract test)
+        working-directory: ${{ runner.temp }}
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o gitleaks.tar.gz
+          tar -xzf gitleaks.tar.gz gitleaks
+          sudo install gitleaks /usr/local/bin/gitleaks
+          gitleaks version
       - name: gofmt (blocks unformatted Go)
         run: |
           out=$(gofmt -l .)
@@ -58,10 +77,9 @@ jobs:
   secrets:
     name: secret scan (catalog)
     runs-on: ubuntu-latest
-    env:
-      # gitleaks-action@v2 requires a paid license for GitHub orgs; the CLI is free
-      # (MIT). Pin + run the binary directly so the gate stays fail-closed and licence-free.
-      GITLEAKS_VERSION: 8.30.1
+    # gitleaks-action@v2 requires a paid license for GitHub orgs; the CLI is free
+    # (MIT). Pin + run the binary directly so the gate stays fail-closed and
+    # licence-free. The pin is workflow-level (see `env:` at the top).
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:

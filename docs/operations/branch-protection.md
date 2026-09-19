@@ -13,10 +13,9 @@ admin commands that put it there. Read [`SECURITY.md`](../SECURITY.md) §5 for
 
 ## 1. The contract — five required contexts
 
-`.github/workflows/ci.yml` is the **only** `pull_request` workflow in this repo.
-It defines exactly five jobs, and every PR to `main` gets all five. These are the
-required contexts, spelled exactly as GitHub reports them in the PR status
-rollup:
+`.github/workflows/ci.yml` defines exactly five jobs, and every PR to `main` gets
+all five. These are the required contexts, spelled exactly as GitHub reports them
+in the PR status rollup:
 
 | Required context                   | ci.yml job | Gates |
 | ---------------------------------- | ---------- | ----- |
@@ -43,6 +42,54 @@ the workflow file:
 ```bash
 gh pr checks <PR#> --repo 21StarkCom/bifrost --json name,state
 ```
+
+### The sixth check that reports and is NOT required
+
+`.github/workflows/secret-scan.yml` is the second `pull_request` workflow in this
+repo (it also fires on push to `main`). It produces **`secret-scan / secret-scan`**,
+and that context is **deliberately absent from the table above**.
+
+It is the fleet's uniform secret scan — a thin caller, pinned by SHA, for the one
+reusable workflow in `21StarkCom/.github`. Terraform in `21StarkCom/21stark`
+(`repos/secret_scan.tf`) writes that caller into 63 repos and puts a
+`require-secret-scan` ruleset on each; **bifrost is in `local.secret_scan_excluded`**
+because `main` here carries `enforce_admins = true` plus required PR reviews, so the
+provider's direct commit is rejected even for an admin token (STARK-7490). The file
+arrived by PR instead, byte-identical to the render.
+
+**Do not add `secret-scan / secret-scan` to the ruleset in §3.** Two reasons:
+
+1. **It would be an unowned rule.** Every other repo's requirement is Terraform
+   state in 21stark. A hand-made one here is invisible to that tier's audit
+   (`repos/README.md`, "Require the `secret-scan / secret-scan` check"), and the
+   next fleet pin bump — which **renames the right half of the context** if the
+   reusable workflow's job name ever changes — would silently orphan it, blocking
+   every merge here on "Expected — waiting for status".
+2. **It buys nothing this repo does not already have.** `secret scan (catalog)`
+   is required, blocking, and *stricter*: it scans the whole working tree **and**
+   the PR commit range, against the fleet caller's incoming commits only. The
+   fleet check is the fleet's uniform reporting surface, not bifrost's gate.
+
+What the caller is for, then: it makes bifrost visible in the fleet-wide sweep
+(`gh api repos/21StarkCom/<repo>/commits/main/check-runs`) instead of being the one
+repo that answers nothing, and it is the pre-existing green run that enrolment would
+need if STARK-7599 ever gives the tier a PR-shaped write path.
+
+**Known gap — the push-to-`main` run does not fire on the auto-published merge.**
+`publish-sync-pr.yml` squash-merges `auto/marketplace-sync` with `GITHUB_TOKEN`, and
+GitHub's anti-loop guard starts **no** workflow run for a push made with that token —
+the same guard `publish-sync-pr.yml` already works around by dispatching
+`sign-manifest` explicitly after the merge. `secret-scan.yml` gets no such rescue:
+the fleet render carries no `workflow_dispatch` trigger, so it cannot be dispatched,
+and adding one here would break the byte-identity 21stark's `check` block reads.
+The consequence is
+concrete: on every `main` SHA produced by the sync publisher — the commonest way a
+commit reaches `main` in this repo — `commits/main/check-runs` carries neither
+`secret-scan / secret-scan` nor `ci`. Operator-merged PRs (`idun gh pr-merge`, a user
+token) do fire both. Tracked as **STARK-7717**, which recommends fixing it by merging
+under a non-`GITHUB_TOKEN` identity — one change here that restores BOTH workflows and
+lets the `sign-manifest` dispatch workaround be deleted, rather than a three-repo
+`workflow_dispatch` chain through the fleet template.
 
 ## 2. Enforcement lives in a RULESET, not classic branch protection
 
@@ -151,14 +198,19 @@ There is no repair once it happens on a given sha: re-running replays the
 original payload so it skips again, and a `workflow_dispatch` run **does not join
 the PR's status rollup**. Only a new commit clears it.
 
-`ci.yml` carries **no** draft guard today, and its `pull_request` trigger uses the
-default event types (`opened`, `synchronize`, `reopened`) — so CI runs on draft
-PRs, and `gh pr ready` does not fire a fresh run that `cancel-in-progress: true`
-could cancel out from under the head sha. Keep it that way.
+Neither `ci.yml` nor `secret-scan.yml` carries a draft guard today, and **both**
+`pull_request` triggers use the default event types (`opened`, `synchronize`,
+`reopened`) — so both run on draft PRs, and `gh pr ready` does not fire a fresh run
+that `cancel-in-progress` could cancel out from under the head sha. That second half
+matters for `secret-scan.yml` too: it cancels in progress on PR events
+(`cancel-in-progress: ${{ github.event_name == 'pull_request' }}`). Keep it that way.
 
 The same reasoning bars a `paths:` filter on `ci.yml`: a filtered-out workflow
 never reports at all, and a required context that never reports blocks the merge
-box forever.
+box forever. `secret-scan.yml` has neither guard nor filter and must keep it that
+way even though its check is unrequired here — the same bytes are a required check
+on 63 other repos, and `engine/cmd/stark/secret_scan_caller_test.go` fails if this
+copy drifts.
 
 `idun gh pr-merge --allow-skipped-checks` opts back in, and should not be needed
 here.
