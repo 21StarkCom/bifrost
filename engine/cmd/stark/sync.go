@@ -2,8 +2,10 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -26,6 +28,34 @@ import (
 // Pipeline: `stark sync --from <stark-skills>` then `stark build` (which vendors
 // the snapshot into dist/ and is itself drift-gated).
 func runSync(from, catalogDir, repoRoot string, check bool) int {
+	// Say WHICH tree this regen is about to copy from, before copying from it.
+	//
+	// sync regenerates every bundle's catalog and the shared vendor snapshot from
+	// whatever checkout it is pointed at, so a source that is behind silently REGRESSES
+	// the snapshot for every bundle: merged upstream work is reverted in the catalog and
+	// the operator meets it as an unexplained pile in `git status`, or as a drift-gate
+	// failure naming files they never touched. Hit twice on 2026-09-19 (STARK-6249's
+	// rebuild, and STARK-6357 against a sibling checkout sitting at ccb955b while its
+	// origin/main was 4b69ee2) — the second time by the person who had written the
+	// hazard note about it hours earlier, which is the argument for putting it here
+	// rather than in prose: a warning that must be recalled at the wrong moment is not
+	// a control.
+	//
+	// Deliberately a STATEMENT, not a staleness check. "Behind origin/main" would fire on
+	// the documented happy path — the skill-membership ordering recipe (STARK-6468)
+	// instructs generating membership with `sync --from` an UNMERGED branch — and a gate
+	// that cries wolf on the official workflow is ignored within a week. Printing the
+	// sha is always true and has no false-alarm mode.
+	//
+	// The path is printed ABSOLUTE: the documented invocation is `--from ../../stark-skills`,
+	// and a relative path names no particular sibling checkout — which is the exact
+	// ambiguity this line exists to remove.
+	sourcePath := from
+	if abs, absErr := filepath.Abs(from); absErr == nil {
+		sourcePath = abs
+	}
+	fmt.Printf("source: %s\n        %s\n", sourcePath, sourceRevision(from))
+
 	cat, err := load.Load(catalogDir)
 	if err != nil {
 		fmt.Println("load error:", err)
@@ -198,7 +228,7 @@ func runSync(from, catalogDir, repoRoot string, check bool) int {
 			return 1
 		}
 	}
-	fmt.Printf("synced %d files (catalog + vendor) from %s\n", len(expected), from)
+	fmt.Printf("synced %d files (catalog + vendor) from %s\n", len(expected), sourcePath)
 	fmt.Println("next: `stark build` to regenerate dist/, then commit")
 	return 0
 }
@@ -292,4 +322,111 @@ func newSyncCmd() *cobra.Command {
 	cmd.Flags().StringVar(&from, "from", "", "path to a stark-skills checkout (source of truth)")
 	cmd.Flags().BoolVar(&check, "check", false, "verify committed catalog+vendor match a fresh sync (CI drift gate)")
 	return cmd
+}
+
+// sourceRevision describes the stark-skills checkout `sync` is regenerating from:
+// short sha, commit date, subject — and, when the tree carries uncommitted or untracked
+// changes, a loud marker saying so. The marker is not decoration: `sync` copies files off
+// DISK, never out of the commit, so on a dirty source the sha alone is confidently wrong
+// about the bytes being vendored — the operator checks it against origin/main, sees a
+// match, and ships local edits into every bundle. That is the same false comfort this
+// whole line exists to end, one level in.
+//
+// DIAGNOSTICS ONLY; it never fails the run — a source that is an export rather than a
+// clone, or a machine without git, must still sync. Those cases say so explicitly, and
+// name git's OWN reason rather than a bare "it failed": a silently empty diagnostic is
+// its own small false comfort, and so is one that cannot be acted on.
+func sourceRevision(from string) string {
+	if _, err := os.Stat(filepath.Join(from, ".git")); err != nil {
+		return "(not a git checkout — cannot report a source revision)"
+	}
+	// --no-show-signature: with log.showSignature=true in the operator's config, a signed
+	// commit — which stark-skills' HEAD usually is, since every GitHub squash-merge is
+	// signed — makes `git log` prepend its gpg verification lines to STDOUT, and the
+	// one-line statement arrives as a four-line gpg dump with the revision buried last.
+	out, err := gitCommand(from, "log", "-1", "--no-show-signature", "--format=%h %cs %s").Output()
+	if err != nil {
+		return "(cannot report a source revision: " + gitFailure(err) + ")"
+	}
+	line := strings.TrimSpace(string(out))
+	if line == "" {
+		return "(cannot report a source revision: git log printed nothing)"
+	}
+	return line + sourceDirtyMarker(from)
+}
+
+// sourceDirtyMarker flags a source working tree that differs from the commit
+// sourceRevision just named — including UNTRACKED files, which `sync` vendors as
+// happily as tracked ones (a new tools/*.ts dropped in by hand is exactly that case).
+func sourceDirtyMarker(from string) string {
+	// --no-optional-locks so reporting on a checkout never takes its index lock or
+	// rewrites its index behind the operator's back; this is a read-only diagnostic.
+	out, err := gitCommand(from, "--no-optional-locks", "status", "--porcelain").Output()
+	if err != nil {
+		return " (could not check for uncommitted changes: " + gitFailure(err) + ")"
+	}
+	if len(bytes.TrimSpace(out)) == 0 {
+		return ""
+	}
+	return " + UNCOMMITTED CHANGES — sync copies the working tree, not this commit"
+}
+
+// gitCommand runs git against `dir` with git's repository-binding environment variables
+// stripped — the exact set `git rev-parse --local-env-vars` prints.
+//
+// Load-bearing: git hooks, `git rebase --exec` and `git submodule foreach` all EXPORT
+// GIT_DIR (absolute, in a linked worktree — which is how this fleet works), and an
+// inherited GIT_DIR WINS over `-C dir`. Unscrubbed, `stark sync` run under any of them
+// reports the enclosing repo's HEAD as the source revision: a diagnostic that is
+// confidently wrong, which is worse than none at all.
+func gitCommand(dir string, args ...string) *exec.Cmd {
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	env := os.Environ()
+	kept := make([]string, 0, len(env))
+	for _, kv := range env {
+		name, _, _ := strings.Cut(kv, "=")
+		if gitRepoEnvVars[name] {
+			continue
+		}
+		kept = append(kept, kv)
+	}
+	cmd.Env = kept
+	return cmd
+}
+
+// gitRepoEnvVars is `git rev-parse --local-env-vars` (git 2.55): every variable that
+// binds a git invocation to one specific repository.
+var gitRepoEnvVars = map[string]bool{
+	"GIT_ALTERNATE_OBJECT_DIRECTORIES": true,
+	"GIT_CONFIG":                       true,
+	"GIT_CONFIG_PARAMETERS":            true,
+	"GIT_CONFIG_COUNT":                 true,
+	"GIT_OBJECT_DIRECTORY":             true,
+	"GIT_DIR":                          true,
+	"GIT_WORK_TREE":                    true,
+	"GIT_IMPLICIT_WORK_TREE":           true,
+	"GIT_GRAFT_FILE":                   true,
+	"GIT_INDEX_FILE":                   true,
+	"GIT_NO_REPLACE_OBJECTS":           true,
+	"GIT_REPLACE_REF_BASE":             true,
+	"GIT_PREFIX":                       true,
+	"GIT_SHALLOW_FILE":                 true,
+	"GIT_COMMON_DIR":                   true,
+}
+
+// gitFailure names WHY a git invocation failed, preferring git's own first stderr line
+// ("does not have any commits yet", "detected dubious ownership") over the exit status.
+// The whole value of this feature is telling the operator what is going on; "it failed"
+// sends them to reproduce by hand what git already explained.
+func gitFailure(err error) string {
+	if errors.Is(err, exec.ErrNotFound) {
+		return "git not found on PATH"
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		if first, _, _ := strings.Cut(strings.TrimSpace(string(exitErr.Stderr)), "\n"); first != "" {
+			return first
+		}
+	}
+	return err.Error()
 }
