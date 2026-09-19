@@ -14,6 +14,19 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// ReservedCatalogDir is the one directory under catalog/ that is NOT a bundle:
+// the generated copy of stark-skills' standards/, emitted by `stark sync` so the
+// `../../standards/*.md` links in catalog/<bundle>/skills/*.md resolve when the
+// catalog is browsed on GitHub (STARK-6357). Those links are correct under dist/**,
+// where standards/ sits beside skills/, and were dead in the flattened catalog.
+//
+// It is skipped BY NAME, deliberately. The obvious alternative — skip any directory
+// with no bundle.yaml — is fail-open: a real bundle whose manifest goes missing or
+// gets misnamed would silently vanish from every build, validate and drift check
+// while they all reported clean. That is the same silent-drop failure STARK-6249 was.
+// An unknown directory here must still be a hard error.
+const ReservedCatalogDir = "standards"
+
 // Load walks catalogDir in sorted order and returns the parsed Catalog.
 // Pure: no clock/network/env. Bytes are normalized to LF on read.
 func Load(catalogDir string) (*model.Catalog, error) {
@@ -21,9 +34,18 @@ func Load(catalogDir string) (*model.Catalog, error) {
 	if err != nil {
 		return nil, err
 	}
+	// The reserved name is exempt from being READ as a bundle, not from COLLIDING with
+	// one. A real bundle placed at catalog/standards/ would be invisible to every build,
+	// validate, lint and drift check, and `stark sync` — which owns that path as a
+	// managed root it wipes on every run — would delete it outright. Refuse it here so
+	// the collision is dealt with rather than discovered.
+	if _, statErr := os.Stat(filepath.Join(catalogDir, ReservedCatalogDir, "bundle.yaml")); statErr == nil {
+		return nil, fmt.Errorf("%s/bundle.yaml: %q is reserved for the generated standards copy (STARK-6357) — a bundle there is skipped by every gate and erased by the next `stark sync`; rename it",
+			ReservedCatalogDir, ReservedCatalogDir)
+	}
 	names := make([]string, 0, len(entries))
 	for _, e := range entries {
-		if e.IsDir() {
+		if e.IsDir() && e.Name() != ReservedCatalogDir {
 			names = append(names, e.Name())
 		}
 	}
