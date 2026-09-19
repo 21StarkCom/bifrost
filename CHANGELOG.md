@@ -4,11 +4,16 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 
 ## [Unreleased]
 
+## [0.31.1] - 2026-09-19
+
 ### Added
 <!-- idun:pr-merge pr=277 runId=277 sha=48fcd571 -->
 - Added a Go test suite that runs the publisher's attestation predicate through real jq, pinning every acceptance/rejection case and load-bearing merge invocation detail.
 - **The `auto/marketplace-sync` PR now publishes on the operator's attestation event instead of inside a 20-minute window (STARK-6208).** New `.github/workflows/publish-sync-pr.yml` fires on `pull_request_review: [submitted]` — not `pull_request`, so `ci` remains the only `pull_request` workflow and no required context is added — and merges once the attestation verifies. The gate itself is byte-for-byte the one it replaces: same author, same `<!-- stark-code-review:complete -->` marker alone on line 1, same `/code-review xhigh --fix` requirement, same exact-head binding, same CRLF normalization, same latest-submitted-review-wins, same pre-merge recheck, same `--match-head-commit`. A review that is not an attestation exits green having merged nothing. Publication had been failing for six consecutive runs: four expired the in-run window and two were killed at 6 and 9 minutes by `marketplace-sync`'s `cancel-in-progress` when the next stark-skills merge landed, stranding every regeneration since `e5d2441`. Three things the event shape forces that the polled design did not need: the job sets `GH_REPO` because it never checks out and `gh` resolves repositories from git remotes rather than `GITHUB_REPOSITORY`; it watches `gh pr checks --required` because a `pull_request_review` run attaches its own check run to the PR head and an unfiltered `--watch` would wait on itself until the job timeout; and it refuses a cross-repository head, since `pull_request_review` fires for fork PRs and `headRefName` carries no owner.
 - `sign-manifest` accepts `workflow_dispatch`, and `publish-sync-pr` dispatches it after merging. A squash push made with `GITHUB_TOKEN` starts no `push` workflow run under GitHub's anti-loop guard — the same guard `sign-manifest.yml` already names for tag pushes — so without this a published sync would land on `main` unsigned, untagged and unreleased. The old path only signed because the merge came from stark-skills' `stark-meridian-ci` App token. Idempotent per-SHA, and the OIDC cert subject is the workflow path @ ref on either trigger.
+
+### Changed
+- Refresh marketplace packages from [stark-skills@22e14a2](https://github.com/21StarkCom/stark-skills/commit/22e14a2af0e6d5016d306d6c6d8e83ed781fd1e0).
 
 ## [0.31.0] - 2026-09-19
 
