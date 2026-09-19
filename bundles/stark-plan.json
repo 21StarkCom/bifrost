@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "bundle": {
     "name": "stark-plan",
-    "version": "0.5.9",
+    "version": "0.5.10",
     "description": "Turn a design doc into a phased implementation plan, then decompose it into phased GitHub issues with story points and risk labels. Maps to spec-kit's plan + tasks phases.",
     "category": "planning",
     "tags": [
@@ -19,7 +19,7 @@
       "name": "stark-author",
       "type": "skill",
       "description": "Stage 1 — spec+plan authoring in one session, the operator decides: tier check, time-boxed recon, plain-language interview (only what only they know), one self-contained doc, one zero-context advisory pass, plain-language sign-off, commit-pinned handoff. No LLM review loops. Use for author, spec, plan a change.",
-      "version": "0.5.9",
+      "version": "0.5.10",
       "runtimes": [
         "claude",
         "codex"
