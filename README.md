@@ -66,7 +66,9 @@ go run ./cmd/stark check-bumps ../catalog                              # bump bu
 go test ./... -count=1
 ```
 
-To publish a skill change: edit it in **stark-skills**, bump the affected bundle's `version` in its `bundle.yaml` here, then run the loop. CI does this automatically — a push to stark-skills `main` regenerates and opens a PR here (`.github/workflows/marketplace-sync.yml` in stark-skills). This repo's `.github/workflows/ci.yml` then gates the PR: `validate → build --check → check-bumps → lint → tests → gitleaks`. All blocking except `lint`.
+To publish a skill change: edit it in **stark-skills**, bump the affected bundle's `version` in its `bundle.yaml` here, then run the loop. CI does this automatically — a push to stark-skills `main` regenerates and opens a PR here (`.github/workflows/marketplace-sync.yml` in stark-skills). This repo's `.github/workflows/ci.yml` then gates the PR: `gofmt → vet → tests → validate → build --check → check-bumps → lint --strict → allowlist --check → gitleaks → actionlint`. All blocking.
+
+Adding a **new** skill is different, and the order is load-bearing: stark-skills' `tests.yml` and `marketplace-sync.yml` both run this repo's `docs/scripts/coverage-gate.sh` out of a checkout of bifrost's default branch, so a skill that reaches stark-skills `main` with no `bundle.yaml` membership here stops marketplace publication outright. Land the membership here first (generated from the unmerged stark-skills branch — `stark sync` hard-errors on a declared member with no source), then merge the upstream skill immediately after; the reverse order, and the gap between the two, are both red. See `CLAUDE.md` → "Coverage gate".
 
 Web SPA (`web/`):
 

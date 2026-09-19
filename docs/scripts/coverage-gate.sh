@@ -21,9 +21,20 @@ set -euo pipefail
 # the published `standards/worker-spine.md` named `/agnes` while the skill itself
 # was in no bundle, no catalog copy and neither dist tree.
 #
-# Both paths now call THIS file. Do not reimplement the check in a workflow: two
+# Every path now calls THIS file. Do not reimplement the check in a workflow: two
 # copies of a gate is how it ends up enforced in one place and not the other,
 # which is the same bug one level up.
+#
+# THREE CALLERS, and two of them live in ANOTHER REPO (STARK-6468 part 2):
+#   1. bifrost   docs/scripts/publish.sh                  (before its VERSION bump)
+#   2. stark-skills .github/workflows/marketplace-sync.yml (before the regen)
+#   3. stark-skills .github/workflows/tests.yml            (every pull_request)
+# Callers 2 and 3 invoke this file BY PATH out of a checkout of bifrost's DEFAULT
+# BRANCH. This path and this file's exec bit are therefore a cross-repo contract:
+# moving, renaming or un-chmod-ing it reddens stark-skills CI and stops marketplace
+# publication. Both callers check `-x` first and emit a named ::error:: instead of
+# dying at 126/127, but they still fail. Change them in the same window, or not at
+# all. engine/cmd/stark/coverage_gate_test.go pins the path + exec bit from here.
 #
 # Usage:  docs/scripts/coverage-gate.sh <stark-skills-checkout>
 # Exit:   0 = every skill claimed or excluded

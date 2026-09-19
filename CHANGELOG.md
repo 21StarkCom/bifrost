@@ -4,6 +4,9 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 
 ## [Unreleased]
 
+### Changed
+- **The coverage gate now runs on the paths that publish, not just the manual one (STARK-6468 part 2).** stark-skills' `marketplace-sync.yml` runs `docs/scripts/coverage-gate.sh` before its regen — the hole that let `agnes` ship un-membered at 0.31.2 — and its `tests.yml` runs the same script on every `pull_request`, so an unclaimed skill goes red on the PR that adds it rather than halting publication from `main`. Both callers check the script is executable first and emit a named annotation on a cross-repo contract break, rather than dying at exit 126/127 as an apparently broken workflow. The reciprocal obligation is on this repo: that path and its exec bit are now a cross-repo contract, so `docs/scripts/coverage-gate.sh` cannot be moved, renamed or un-`chmod +x`'d without editing both stark-skills workflows in the same window.
+
 ## [0.32.1] - 2026-09-19
 
 ### Changed
