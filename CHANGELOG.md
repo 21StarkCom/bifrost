@@ -4,6 +4,10 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 
 ## [Unreleased]
 
+### Fixed
+- **`publish-sync-pr` fails closed when the attestation predicate itself is broken (STARK-6208).** `completed_review` returned jq's exit status raw and the callers read every non-`2` status as "not attested", which exits **green** on purpose so an ordinary review comment doesn't redden the sync PR. But `jq -e` exits `1` only for a false/null *result*: `2` is a usage/system error, `3` a compile error, `4` "no valid result was ever produced" (what an empty `gh` stdout yields), `5` a runtime error, and `127` means jq is not installed. A typo in the predicate — or a payload shape it can't handle, such as the `body: null` GitHub really sends, which aborts with `5` the moment the `// ""` guard is dropped — was therefore indistinguishable from "nobody attested": publication would have stopped forever, every run green, no alarm anywhere. That is the same silent stall the 20-minute window was replaced to end, except the window at least went red. The check now has **three** outcomes, never two — `0` attested, `1` not attested, `2` could-not-tell — and both could-not-tell causes (an unreadable reviews API, a predicate that returns no verdict) name themselves on stderr and take the existing fail-closed path. Pinned by `TestPublisherFailsClosedWhenThePredicateReturnsNoVerdict`, which runs the workflow's real `completed_review` against stubbed `gh`/`jq` exit codes.
+- The same conflation is gone from two neighbouring guards in that job. `head` is now shape-checked like `$PR` already was, because `jq -r` prints the literal string `null` for a missing field and exits `0` — a malformed `gh pr view` snapshot would have matched no review and exited green with "nothing to publish". And the required-check-count loop no longer folds `gh pr checks`' documented exit `8` ("checks pending" — the normal state there) into the count via `|| echo 0`, which appended a second line to a perfectly good number and made `[ "$count" -gt 0 ]` an integer-expression error that never broke the loop.
+
 ## [0.31.1] - 2026-09-19
 
 ### Added
