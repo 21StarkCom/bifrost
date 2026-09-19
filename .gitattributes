@@ -3,17 +3,18 @@ schema/** text eol=lf
 *.go text eol=lf
 dist/** linguist-generated=true
 catalog/standards/** linguist-generated=true
-# The catalog's artifact trees: `stark sync` writes them from a stark-skills checkout,
-# and the next sync overwrites a hand-edit (no bifrost gate catches one — CI runs
-# validate / build --check / check-bumps; `sync --check` runs only in stark-skills'
-# marketplace-sync, immediately after it regenerates). Marking them collapses them in a
-# sync PR's diff, and stark-skills' `findings_review_post.ts` reads these rows at the PR
-# head and reports findings on these paths in the review BODY rather than an inline
-# thread that `required_conversation_resolution` turns into a publish blocker.
-# Deliberately NOT here: catalog/*/bundle.yaml, catalog/*/mcp/** and catalog/*/agents/**
-# — all curated (`runSync` manages only skills/ and commands/). See CLAUDE.md's Layout
-# entry for what these rows do NOT do: they neither weaken a CODEOWNERS gate nor, on
-# their own, decide routing (stark-skills adds `catalog/**` for this repo).
+# The catalog's artifact trees: `stark sync` writes them from a stark-skills checkout and
+# the next sync overwrites a hand-edit. No in-repo gate names one AS a hand-edit —
+# `build --check` and `check-bumps` both fail on it, like any other content change; only
+# `sync --check` (stark-skills' marketplace-sync runs it, right after regenerating)
+# compares the catalog back to its source. Marking them collapses them in a sync PR's diff.
+# Deliberately NOT here: catalog/*/bundle.yaml, catalog/*/mcp/** and catalog/*/agents/** —
+# curated (`runSync` manages only skills/ and commands/); note stark-skills' own
+# `generated_paths` add-list (`catalog/**`) demotes those anyway until narrowed THERE
+# — STARK-7536 / stark-skills#1029 does exactly that, and lands after this PR.
+# What these rows do and do NOT do: CLAUDE.md's `catalog/<bundle>/` Layout entry.
+# Pinned by engine/cmd/stark/gitattributes_test.go (cross-repo contract, no CI step reads
+# this file otherwise).
 catalog/*/skills/** linguist-generated=true
 catalog/*/commands/** linguist-generated=true
 vendor/** linguist-generated=true
