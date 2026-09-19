@@ -2,7 +2,7 @@
 name: stark-release
 type: skill
 description: 'Cut a release: changelog review (auto-generating from git log if [Unreleased] is empty), version bump, git tag, GitHub Release. Use for release, tag, bump version.'
-version: 0.17.0
+version: 0.17.1
 maturity: beta
 runtimes:
   - claude
