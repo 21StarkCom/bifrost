@@ -2,7 +2,7 @@
 name: gru
 description: Gru drives an epic or a list of tickets to done with one Minion per ticket. Use when the operator hands over several tickets to be worked in parallel and carried through merge and closure.
 ---
-Usage: gru start <STARK-epic | --tickets STARK-n,...> [--max-workers N] [--agent claude|codex]
+Usage: gru start <STARK-epic | --tickets STARK-n,...> [--max-workers N] [--agent claude|codex] [--new-tab [--repo <name>]]
 
 ## Codex plugin asset root
 
@@ -33,13 +33,108 @@ worktree. The ticket board is the only state; Hermod is the only worker registry
 - `start --tickets STARK-n,...`: work exactly these tickets.
 - `--max-workers N`: Minions alive at once (default 3).
 - `--agent claude|codex`: which agent each Minion runs on (default codex).
+- `--new-tab`: do not run Gru here: launch it in a new cmux tab and stop. See
+  [New tab](#new-tab).
+- `--repo <name>`: with `--new-tab` only: the repo to launch Gru into, by its
+  frigg registry name. Default: the repo you are standing in.
 
 Rerunning `start` with the same input resumes: done tickets are skipped, tickets
 with a live Minion are left alone, the rest are launched. To stop, the operator
 tells you to stop; there is no other verb.
 
+## New tab
+
+**If the current request contains `--new-tab`, you are the launcher, not Gru.**
+Read nothing below this section as yours: no expand, no launches, no waiting, and no
+tab title — the Gru you launch titles its own tab. Launch it and stop.
+
+Gru launches through `hermod ticket` like every other persona, so it gets a
+launch id, and with it a worktree and a tab named after that id: the epic's, or
+— given `--tickets` — `GRU-<n>`, `<n>` being the **first** ticket's number
+(`GRU-1234`). **Never the id of a ticket Gru will work.** The id names Gru's own
+worktree, so the launched Gru's step 2 would read its own peer row — live, its
+`cwd` ending in that ticket id — as the Minion that owns the ticket and never
+launch it; and a launch on it anyway is refused outright on Codex, or attaches
+a second Claude session to Gru's worktree. An epic is safe because Gru works its
+children, never the epic. Hermod does nothing with the id but check it against
+`[A-Za-z0-9][A-Za-z0-9._-]*` and name the worktree and the tab. Gru never works
+in that worktree; it is only where the session stands.
+
+1. Pick the repo. With `--repo <name>`, pass it through. Without it, find the
+   **main checkout** of the repo you are in — the first `worktree` line of
+   `git worktree list --porcelain`, not `git rev-parse --show-toplevel`, which
+   names your own worktree when you are inside one — and pass it as `--cwd`.
+   Run that as its own command and paste the path in literally: on Claude, a
+   worktree session's guard refuses a `hermod` line carrying a variable
+   ([measured](../../standards/worker-spine.md#title-your-tab)), and a `$(...)`
+   was [measured](../../standards/stand-down.md#four-rules-about-when) refused on
+   its quoted form only — too fine a line to rest a launch on, and the literal
+   works on either runtime.
+   **The launch id must be free in that repo**: no `worktree` line of that list
+   (with `--repo`, of `git -C <path> worktree list --porcelain`, `<path>` from
+   `frigg repos get <name> --json`) may end in `/<launch id>`. One that does is
+   an earlier Gru's, and the Claude attach it would draw comes back with a
+   normal-looking ack — so stop and say so; the last paragraph of this section
+   is why.
+2. Launch, once. A bare `start <STARK-epic>`, with no other argument, is
+   hermod's own form:
+
+   ```
+   hermod ticket STARK-<epic> --gru (--repo <name> | --cwd <main checkout>) --agent <agent> --json
+   ```
+
+   Its first message is `$gru start STARK-<epic>` (`/gru start …` on Claude).
+   Hermod does not parse Gru's arguments, so every other form — `--tickets`,
+   `--max-workers`, `--agent` — goes in a brief: write
+   the whole invocation, `$gru start` included — your arguments alone load no
+   skill — minus `--new-tab` and `--repo <name>`, as the one line of a file.
+   Write it with your file tool, or single-quoted: inside double quotes the
+   shell expands `$gru` to nothing and the brief arrives as ` start …`. Launch
+   with
+
+   ```
+   hermod ticket <STARK-epic, or GRU-n> --prompt-file <brief> (--repo <name> | --cwd <main checkout>) --agent <agent> --json
+   ```
+
+   never `--message`, which hands the line's quotes and `$` to the shell.
+   `--gru` excludes `--prompt-file` (and `--agnes`, `--minion`, `--prompt`,
+   `--message`), so it is one form or the other. `--gru` needs hermod v0.20.0 or later
+   (STARK-7537); on v0.19.0 or older the `--prompt-file`
+   form is the only one, and `hermod ticket --help` tells you which you have.
+   Your `--agent` argument keeps its meaning — the Minions' agent — so it belongs
+   in the brief; `--agent` on the launch line is the agent **Gru** runs on, which
+   is your own runtime. **Always pass it on the launch line** — hermod's
+   own default is claude, so leaving it off would not launch your runtime. `--repo` and `--cwd` are mutually exclusive.
+   Leave the tab focused; the operator asked to see it.
+3. Print the ack's `surface`, `workspace`, `name` and `prompt`, and stop. The
+   `prompt` must be the `$gru start …` line you meant (`/gru start …` on Claude).
+
+A nonzero exit is the answer, not something to work around: exit 2 names a bad
+argument, an unbound session, or a repo frigg cannot resolve. A failed start
+looks different per `--agent`, and either leaves the tab and worktree standing
+for inspection: Codex prints `{error, code, stage}` with no ack fields at all;
+Claude exits 1 with a complete, normal-looking ack whose only tell is
+`verified:false`, so check that field and the exit code before you call the
+hand-off done. Report what it printed. Never fall back to running Gru in this session —
+the operator asked for a new tab because they want this one back.
+
+**`--new-tab` starts a Gru; it does not resume one.** The launch cuts a worktree
+on the launch id, so a second `--new-tab` on the same input meets the first
+one's worktree: on Codex `hermod ticket` refuses (`Codex worktree path already
+exists`), and on Claude `claude --worktree=<launch id>` **attaches** a second Gru to
+it, which would then launch Minions the first is already leading. Rerunning
+`start` to resume means rerunning it in the tab Gru is already in. Launch again
+only once that Gru is gone and its worktree with it — and a worktree still
+standing is the operator's to sweep, not yours.
+
 ## Protocol
 
+0. **Title your tab**, if you are in cmux — the mechanics are
+   [the worker spine's](../../standards/worker-spine.md#title-your-tab), and
+   the rule is the same: own tab only, cosmetic, never a blocker. Your title is
+   `GRU (<n>)`, where `<n>` is the epic's number without its `STARK-` prefix,
+   or the first ticket's when you were given `--tickets`: `GRU (1234)`. A rerun
+   `start` sets it again; that is harmless.
 1. **Expand.** Resolve the epic to its children with alfred's `list_children`
    tool (`alfred task show` prints one ticket, never its children). Read every
    ticket and its comments, and note each ticket's repo. A ticket that names
@@ -58,9 +153,10 @@ tells you to stop; there is no other verb.
    until the operator resolves it, and so is a ticket step 3 could not resolve
    to a repo. Everything else is ready once its dependencies are finished.
 3. **Launch.** For each ready ticket while live Minions < N:
-   `hermod ticket STARK-n --repo <ticket's repo> --agent <agent> --no-focus --prompt-file <brief>`.
-   Always pass `--repo` (the default is the repo you are standing in) and use
-   `--prompt-file` (a `--message` brief hands its quotes and `$` to the shell).
+   `hermod ticket STARK-n --repo <ticket's repo> --agent <agent> --no-focus --minion --json`.
+   Always pass `--repo` (the default is the repo you are standing in) and
+   `--agent` (hermod's own default is claude, not yours); `--minion` writes the
+   brief, described at the end of this step.
    Resolve the repo the way hermod does, per ticket and at launch: `frigg repos
    get <ticket's repo> --json` is the exact call `--repo <name>` goes through,
    and it exits 3 on a name the registry does not carry. One record, read when
@@ -86,10 +182,36 @@ tells you to stop; there is no other verb.
    ticket id alone, so a misrouted Minion otherwise reads as a correctly-owned
    one. Seeding the registry is the operator's: run neither `frigg repos scan`
    nor `frigg repos set` yourself; name the fix in your report instead.
-   The brief is: invoke `$minion` (`/minion` on Claude), the ticket id, your peer
-   id (the `hermod msg peers` row whose `sessionId` is your own
-   `$CODEX_THREAD_ID`, or `$CLAUDE_CODE_SESSION_ID` on Claude), and one line:
-   Report done, blocked, or follow-up to that peer over Hermod.
+   The brief `--minion` writes is: invoke `$minion` (`/minion` on Claude), the
+   ticket id, your peer id, and one line: Report done, blocked, or follow-up to
+   that peer over Hermod. Hermod takes your peer id from your own
+   `$CODEX_THREAD_ID` (`$CLAUDE_CODE_SESSION_ID` on Claude), and refuses the
+   launch when it finds neither or both. **Your peer id** is the `id` of the
+   `hermod msg peers` row whose `sessionId` is yours — the whole
+   `<provider>:<id>` address (`codex:<thread-id>`; `claude:<uuid>` on Claude),
+   never the bare session id, which `hermod msg` may not resolve. Look it up
+   before your first launch, so you know what the ack has to say. Then read
+   the first ack's `prompt` before you launch a second Minion: the peer it
+   names must be that `id`. If hermod refused, pass the `id` as
+   `--leader <peer id>` on every launch. If it named someone else, that first
+   Minion is briefed with the wrong leader and its reports go to another
+   session, where step 4 never sees them: send it the correction now —
+   `hermod msg send --to <the ack's peerId> -- "Your leader peer is <peer id>;
+   report there."` — and pass `--leader` on every later launch. Do not rest on
+   the correction: `$minion` takes its leader from the brief, and nothing tells
+   it to trust a peer message that moves it. In step 4 read that ticket off the
+   board and its PR instead of waiting on a report, knowing what the board
+   cannot show: `done` closes the ticket and a follow-up comments on it, but
+   `blocked` leaves no mark on either, so that Minion's peer going idle with
+   its ticket still open is your only sign — ask it what happened
+   (`hermod msg send --to <the ack's peerId> -- "STARK-n: report your status to
+   me."`; its `hermod msg reply` reaches the sender, whatever the brief said)
+   and count the ticket blocked, not owned, until it answers.
+   `--minion` and `--leader` need hermod v0.20.0 or later (STARK-6974);
+   `hermod ticket --help` tells you which you have. On v0.19.0 or older,
+   write those same four things to a file and launch with
+   `--prompt-file <brief>` instead — never `--message`, which hands the brief's
+   quotes and `$` to the shell.
 4. **Wait.** Minions report `done <PR> merged <sha> verified <check>`,
    `blocked <reason>`, or
    `follow-up STARK-m filed, stopping`. Codex receives them through its native
