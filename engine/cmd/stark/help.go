@@ -38,19 +38,27 @@ const binaryName = "stark"
 // cobra's generated `completion` tree inherit this without touching their
 // constructors.
 func installHelpRendering(root *cobra.Command) {
-	r := &helpRenderer{root: root}
+	r := &helpRenderer{root: root, opts: optionsFor}
 	root.SetHelpFunc(r.help)
 	root.SetUsageFunc(r.usage)
 }
 
-type helpRenderer struct{ root *cobra.Command }
+type helpRenderer struct {
+	root *cobra.Command
+	// opts picks the palette and column budget for the stream a page is going
+	// to. A field rather than a direct optionsFor call so a test can force the
+	// palette ON: off a terminal a rendered page and cobra's own are identical
+	// by design, which makes every "did the renderer actually run, and is it
+	// still installed?" assertion vacuous unless the colors can be seen.
+	opts func(io.Writer) help.Options
+}
 
 // help renders a full help page: `stark --help`, `stark <cmd> -h`,
 // `stark help <cmd>`, and a bare `stark` (cobra routes a non-runnable command to
 // HelpFunc). Cobra sends help to stdout.
 func (r *helpRenderer) help(c *cobra.Command, _ []string) {
 	w := c.OutOrStdout()
-	if _, err := io.WriteString(w, help.Render(r.plainHelp(c), optionsFor(w))); err != nil {
+	if _, err := io.WriteString(w, help.Render(r.plainHelp(c), r.opts(w))); err != nil {
 		c.PrintErrln(err)
 	}
 }
@@ -65,7 +73,7 @@ func (r *helpRenderer) help(c *cobra.Command, _ []string) {
 // ErrOrStderr would silently move the page to a different stream.
 func (r *helpRenderer) usage(c *cobra.Command) error {
 	w := c.OutOrStderr()
-	_, err := io.WriteString(w, help.Render(r.plainUsage(c), optionsFor(w)))
+	_, err := io.WriteString(w, help.Render(r.plainUsage(c), r.opts(w)))
 	return err
 }
 

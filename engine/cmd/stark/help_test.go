@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"regexp"
 	"strings"
@@ -58,13 +59,24 @@ func descend(c *cobra.Command) []*cobra.Command {
 
 var reSGR = regexp.MustCompile("\x1b\\[[0-9;]*m")
 
-// renderForTest renders page through the same Render call the seam makes, with
-// the palette forced on. A unit test has no PTY, and whether the stream is one is
-// the single thing optionsFor asks the terminal — so forcing it here tests the
-// rules, and TestNoColorAndDumbTerminalStayPlain tests the asking.
-func renderForTest(t *testing.T, page string) string {
+// coloredTree is the real command tree with the real renderer installed, except
+// that the palette is forced ON instead of sniffed from the stream.
+//
+// A unit test has no PTY, and off a terminal a rendered page is byte-identical to
+// cobra's by design — so without this, "the renderer ran" and "the renderer is
+// still installed" are both unfalsifiable. Only the color DECISION is stubbed;
+// help, usage, plainHelp and plainUsage are the shipped code.
+// TestNoColorAndDumbTerminalStayPlain covers the decision itself.
+func coloredTree(t *testing.T) *cobra.Command {
 	t.Helper()
-	return help.Render(page, help.Options{Colors: colors.New(true), Binary: binaryName})
+	root := newRootCmd()
+	r := &helpRenderer{root: root, opts: func(io.Writer) help.Options {
+		return help.Options{Colors: colors.New(true), Binary: binaryName}
+	}}
+	root.SetHelpFunc(r.help)
+	root.SetUsageFunc(r.usage)
+	initGenerated(root)
+	return root
 }
 
 // helpOf captures one command's help page by path, so the renderer-installed tree
@@ -124,25 +136,19 @@ func TestHelpIsByteIdenticalToCobraOffATerminal(t *testing.T) {
 // page. `stark help <unknown-topic>` reaches it through Root().Usage(), so it is
 // a live surface and not only an internal of the help page.
 //
-// It also proves plainUsage's root-clearing window actually restores: a second
-// call has to render the same page as the first, and cobra's own tree has to
-// still agree with it.
+// Restoration of the root's usage func is NOT what this test proves — off a
+// terminal a restored renderer and cobra's bare default emit the same bytes, so
+// the comparison cannot tell them apart. TestPlainUsageRestoresTheRootsUsageFunc
+// does that, with the palette forced on.
 func TestUsageIsByteIdenticalToCobraOffATerminal(t *testing.T) {
 	root := newRootCmd()
 	for _, c := range walk(root) {
 		name := c.CommandPath()
 		t.Run(name, func(t *testing.T) {
-			var got, again bytes.Buffer
+			var got bytes.Buffer
 			c.SetOut(&got)
 			if err := c.Usage(); err != nil {
 				t.Fatalf("Usage(): %v", err)
-			}
-			c.SetOut(&again)
-			if err := c.Usage(); err != nil {
-				t.Fatalf("second Usage(): %v", err)
-			}
-			if got.String() != again.String() {
-				t.Errorf("%s: usage differs between calls — plainUsage did not restore the root's usage func", name)
 			}
 			// Same command on a pristine tree, found by path.
 			p := pristine(t)
@@ -159,6 +165,33 @@ func TestUsageIsByteIdenticalToCobraOffATerminal(t *testing.T) {
 				t.Errorf("%s: usage is not byte-identical off a terminal:\n got: %q\nwant: %q", name, got.String(), want.String())
 			}
 		})
+	}
+}
+
+// TestPlainUsageRestoresTheRootsUsageFunc pins the `defer` in plainUsage.
+//
+// plainUsage clears the root's usage func to escape its own recursion, so if it
+// failed to put it back, every page rendered after the first would silently fall
+// through to cobra's bare default — the whole fleet look gone from the second
+// page onward, in a process that still exits 0. Off a terminal that is invisible,
+// which is why this runs with the palette forced on: render a page (which goes
+// through plainUsage and therefore through the clear/restore), then render
+// another and require it to still be colorized.
+func TestPlainUsageRestoresTheRootsUsageFunc(t *testing.T) {
+	root := coloredTree(t)
+
+	// First page: goes through help -> plainHelp -> plainUsage's clear/restore.
+	if first := helpOf(t, root, nil); !strings.Contains(first, "\x1b[") {
+		t.Fatalf("the first page is not colorized — the fixture is wrong, not the restore: %q", first)
+	}
+	// Second page on the SAME tree: only reaches the renderer if the defer ran.
+	var second bytes.Buffer
+	root.SetOut(&second)
+	if err := root.Usage(); err != nil {
+		t.Fatalf("Usage(): %v", err)
+	}
+	if !strings.Contains(second.String(), "\x1b[") {
+		t.Errorf("usage after a help render is plain — plainUsage cleared the root's usage func and never restored it:\n%q", second.String())
 	}
 }
 
@@ -187,15 +220,15 @@ func TestUnknownHelpTopicDoesNotRecurse(t *testing.T) {
 
 // TestHelpRendersTheFleetLookOnATerminal is the other half of the acceptance
 // criterion: off a terminal the bytes are cobra's, ON one they carry the fleet
-// palette. A real PTY is not available here, so the render is driven through the
-// same help.Render call the seam makes, with the palette forced on.
+// palette. It drives the real SetHelpFunc seam end to end through Execute, with
+// only the color decision forced, so a seam that stopped calling the renderer
+// fails here.
 //
 // The assertions are the roles the ticket names, checked as SGR sequences on the
 // specific text they must land on — a bare "output contains an escape" would pass
 // on any colorizer at all.
 func TestHelpRendersTheFleetLookOnATerminal(t *testing.T) {
-	page := helpOf(t, newRootCmd(), nil)
-	got := renderForTest(t, page)
+	got := helpOf(t, coloredTree(t), nil)
 
 	for _, want := range []struct{ what, seq string }{
 		// Rule 1: the title's binary name is bold cyan, its tagline plain.
@@ -223,7 +256,7 @@ func TestColorIsPurelyAdditive(t *testing.T) {
 		name := "stark " + strings.Join(path, " ")
 		t.Run(name, func(t *testing.T) {
 			page := helpOf(t, newRootCmd(), path)
-			stripped := reSGR.ReplaceAllString(renderForTest(t, page), "")
+			stripped := reSGR.ReplaceAllString(helpOf(t, coloredTree(t), path), "")
 			if stripped != page {
 				t.Errorf("%s: stripping SGR from the colored page does not return the plain one:\n got: %q\nwant: %q", name, stripped, page)
 			}
