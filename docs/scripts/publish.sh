@@ -53,15 +53,6 @@ done
 [ -d "$STARK_SKILLS/skill" ] || { echo "stark-skills not found at $STARK_SKILLS (set STARK_SKILLS)" >&2; exit 1; }
 echo "→ stark-skills: $STARK_SKILLS"
 
-# Skills deliberately NOT published to the marketplace (personal/experimental).
-# A skill must be either a member of some bundle.yaml OR listed here — otherwise
-# the coverage gate below fails. This is what stops a NEW stark-skills skill from
-# being silently dropped by `stark sync` (which only pulls declared members).
-# Empty today: `stark-voice` used to sit here while it was also a member of
-# stark-write, which made the entry dead config that would have masked a real
-# orphan the day it left that bundle.
-EXCLUDED_SKILLS=()
-
 # bump <file> <minor|patch> — handles both a bundle.yaml `version: X.Y.Z` line and
 # the bare-`X.Y.Z` root VERSION file. minor: X.(Y+1).0 · patch: X.Y.(Z+1).
 bump() {
@@ -107,55 +98,14 @@ if [ -n "$REMOVE_SKILL" ]; then
 fi
 
 # --- coverage gate: every stark-skills skill must be claimed or excluded ------
-# Kills the "new skill silently dropped" papercut: `stark sync` only pulls skills
-# already declared in a bundle.yaml, so a freshly-added stark-skills skill with no
-# membership vanishes without a trace. Fail loudly here instead.
-#
-# Covers EVERY skill dir, not just `stark-*`. The fleet now renames skills out of
-# that prefix (`gru`, `minion`), and a prefix-scoped gate would have
-# left each of them silently droppable — the exact papercut this gate exists to
-# stop. That also means `claimed` can no longer be a bare `- stark-` grep, since an
-# unprefixed name would collide with the `tags:`/`runtimes:` list items; read the
-# `skills:` block only.
-claimed="$(awk '
-  FNR == 1 { inskills = 0 }
-  /^skills:[[:space:]]*$/ { inskills = 1; next }
-  inskills && /^[[:space:]]*-[[:space:]]+/ {
-    sub(/^[[:space:]]*-[[:space:]]+/, ""); sub(/[[:space:]]+$/, ""); print; next
-  }
-  inskills && /^[^[:space:]#]/ { inskills = 0 }
-' "$REPO_ROOT"/catalog/*/bundle.yaml 2>/dev/null | sort -u)"
-# An empty parse is a SCRIPT bug (a `skills:` block shape the awk above stopped
-# matching), not an unpublished fleet. Without this the gate would report every
-# upstream skill as an orphan and bury the real cause in that list.
-[ -n "$claimed" ] || {
-  echo "ERROR: parsed no 'skills:' membership from $REPO_ROOT/catalog/*/bundle.yaml" >&2
-  echo "  → the coverage gate's awk parser, not the catalog, is what to fix." >&2
-  exit 1
-}
-orphans="" nonskill=""
-for d in "$STARK_SKILLS"/skill/*/; do
-  s="$(basename "$d")"
-  # A dir with no SKILL.md (e.g. evals/) is not a skill. Record the skips instead
-  # of dropping them: this branch is fail-OPEN, so a real skill whose manifest is
-  # missing or misnamed vanishes from the gate exactly as silently as the drop the
-  # gate exists to catch.
-  if [ ! -f "$d/SKILL.md" ]; then nonskill="$nonskill $s"; continue; fi
-  printf '%s\n' "$claimed" | grep -qxF "$s" && continue
-  [[ " ${EXCLUDED_SKILLS[*]:-} " == *" $s "* ]] && continue
-  orphans="$orphans $s"
-done
-if [ -n "$orphans" ]; then
-  echo "ERROR: stark-skills skill(s) not published and not excluded:$orphans" >&2
-  echo "  → add each to a bundle's catalog/<bundle>/bundle.yaml 'skills:' list" >&2
-  echo "    (or run with --add-skill NAME --bundle B), OR add to EXCLUDED_SKILLS" >&2
-  echo "    in this script if it is intentionally unpublished." >&2
-  exit 1
-fi
-echo "→ coverage gate clean: every stark-skills skill is claimed or excluded"
-if [ -n "$nonskill" ]; then
-  echo "  (not checked, no SKILL.md:$nonskill)"
-fi
+# Extracted to its own script (STARK-6468) so the AUTOMATED path can call the
+# same code. stark-skills' marketplace-sync.yml regenerates bifrost and opens the
+# sync PR on ~every release without ever invoking publish.sh, so while this gate
+# lived inline here the path that actually publishes had no coverage gate at all
+# — which is how `agnes` shipped un-membered at v0.31.2 (STARK-6249). The
+# EXCLUDED_SKILLS list moved with it, so the two callers cannot disagree about
+# what is deliberately unpublished.
+docs/scripts/coverage-gate.sh "$STARK_SKILLS"
 
 # Root VERSION: the single bifrost deploy-level semver — bumped on every
 # publish, and bumped BEFORE the build because the codex-plugin manifests bake
