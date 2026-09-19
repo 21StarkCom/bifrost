@@ -4,7 +4,10 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 
 ## [Unreleased]
 
+## [0.32.1] - 2026-09-19
+
 ### Changed
+- Refresh marketplace packages from [stark-skills@f8c22bd](https://github.com/21StarkCom/stark-skills/commit/f8c22bd4837e1ec219117161c8d5844ce39ceaf0).
 - **The coverage gate is its own script, `docs/scripts/coverage-gate.sh` (STARK-6468).** It lived inline in `publish.sh`, which is the MANUAL regen path. The path that actually publishes is stark-skills' `marketplace-sync.yml`, which regenerates bifrost and opens the sync PR on ~every release and never invokes `publish.sh` — its gate list (`validate`, `sync --check`, `build --check`, `check-bumps`) is entirely internal-consistency checks between bifrost's own catalog and dist, none of which looks back at the stark-skills tree to ask whether every skill is claimed. So the automated path had no coverage gate at all, which is how `agnes` shipped un-membered at v0.31.2 (STARK-6249) with every gate green. `publish.sh` now delegates; `EXCLUDED_SKILLS` moved with the gate so the two callers cannot disagree about what is deliberately unpublished. Wiring `marketplace-sync.yml` to call it is part 2, a stark-skills PR — **until that lands the automated path is still ungated.** Pinned by `engine/cmd/stark/coverage_gate_test.go`, which runs the real script (including the exact v0.31.2 orphan state) rather than a copy of its logic.
 
 ### Fixed

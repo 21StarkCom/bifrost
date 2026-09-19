@@ -1,6 +1,6 @@
 {
   "name": "stark-analyze",
-  "version": "0.32.0",
+  "version": "0.32.1",
   "description": "Zero-context fresh-eyes review of specs and briefs, multi-agent Terraform/Terragrunt (IaC) review, repository refactor planning, and application-logging authoring/review guidance. Maps to spec-kit's analyze phase.",
   "author": {
     "name": "21 Stark AI",
