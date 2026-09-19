@@ -14,6 +14,19 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// ReservedCatalogDir is the one directory under catalog/ that is NOT a bundle:
+// the generated copy of stark-skills' standards/, emitted by `stark sync` so the
+// `../../standards/*.md` links in catalog/<bundle>/skills/*.md resolve when the
+// catalog is browsed on GitHub (STARK-6357). Those links are correct under dist/**,
+// where standards/ sits beside skills/, and were dead in the flattened catalog.
+//
+// It is skipped BY NAME, deliberately. The obvious alternative — skip any directory
+// with no bundle.yaml — is fail-open: a real bundle whose manifest goes missing or
+// gets misnamed would silently vanish from every build, validate and drift check
+// while they all reported clean. That is the same silent-drop failure STARK-6249 was.
+// An unknown directory here must still be a hard error.
+const ReservedCatalogDir = "standards"
+
 // Load walks catalogDir in sorted order and returns the parsed Catalog.
 // Pure: no clock/network/env. Bytes are normalized to LF on read.
 func Load(catalogDir string) (*model.Catalog, error) {
@@ -23,7 +36,7 @@ func Load(catalogDir string) (*model.Catalog, error) {
 	}
 	names := make([]string, 0, len(entries))
 	for _, e := range entries {
-		if e.IsDir() {
+		if e.IsDir() && e.Name() != ReservedCatalogDir {
 			names = append(names, e.Name())
 		}
 	}

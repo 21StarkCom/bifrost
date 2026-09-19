@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/21StarkCom/bifrost/engine/internal/importer"
 	"github.com/21StarkCom/bifrost/engine/internal/load"
@@ -32,6 +33,7 @@ func runSync(from, catalogDir, repoRoot string, check bool) int {
 	managed := []string{
 		"vendor/stark-skills",
 		"vendor/runtime-overrides/codex",
+		"catalog/" + load.ReservedCatalogDir,
 	} // trees this command fully owns
 
 	for _, b := range cat.Bundles {
@@ -147,6 +149,25 @@ func runSync(from, catalogDir, repoRoot string, check bool) int {
 	}
 	for rel, content := range vendor {
 		expected["vendor/stark-skills/"+rel] = lfNormalize(content)
+
+		// Emit a second copy of standards/ at catalog/standards/ (STARK-6357).
+		//
+		// Every skill body carries links like `../../standards/help.md`. From
+		// catalog/<bundle>/skills/<name>.md that resolves to catalog/standards/<file>,
+		// a directory that did not exist — so all 68 of them were dead when the catalog
+		// was browsed on GitHub, which is where they ARE browsed: the web SPA renders
+		// only metadata from index.json/bundles/*.json, never a skill body, and the
+		// origin serves no catalog/ at all. The same links are already correct under
+		// dist/**, where standards/ sits beside skills/.
+		//
+		// Making the target exist is deliberately preferred over rewriting the links:
+		// a retarget rule would re-render every bundle's catalog bytes and force a
+		// version bump of all seven, where this changes no skill copy and no dist byte.
+		// Taken from the vendor snapshot rather than re-walking the source tree so the
+		// two copies cannot disagree about what standards/ contains.
+		if strings.HasPrefix(rel, "standards/") {
+			expected["catalog/"+rel] = lfNormalize(content)
+		}
 	}
 
 	if check {
