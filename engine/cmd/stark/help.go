@@ -8,11 +8,14 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/21StarkCom/bifrost/engine/internal/starktui/colors"
 	"github.com/21StarkCom/bifrost/engine/internal/starktui/help"
 )
 
 // binaryName marks an example line inside an "Examples:" section. Nothing else
-// keys off it.
+// keys off it. It must stay equal to the root command's name — pinned by
+// TestBinaryNameMatchesTheRootCommand, because a rename that missed this would
+// silently stop example lines being recognised and nothing else would notice.
 const binaryName = "stark"
 
 // installHelpRendering makes every help and usage page in the tree render in the
@@ -27,11 +30,13 @@ const binaryName = "stark"
 // what it is. The colorizer is line-based and needs the FINISHED page, so the
 // seam has to be SetHelpFunc/SetUsageFunc — render last, over cobra's own bytes.
 //
-// The help TEXT is untouched: every Short, Long and flag usage in this repo stays
-// a plain authored string, and off a terminal the page comes back byte for byte
-// as cobra wrote it (help.Render with a disabled palette and no column budget is
-// an exact identity transform). That equivalence is pinned command-by-command
-// against a pristine cobra tree in help_test.go.
+// The help TEXT and its LAYOUT are untouched: every Short, Long and flag usage in
+// this repo stays a plain authored string, and off a terminal the page comes back
+// byte for byte as cobra wrote it (help.Render with a disabled palette and no
+// column budget is an exact identity transform). On a terminal the only
+// difference is the SGR escapes — no column budget is ever asked for, see
+// helpOptions. Both equivalences are pinned command-by-command against a pristine
+// cobra tree in help_test.go.
 //
 // Set on the ROOT only: Command.HelpFunc and Command.UsageFunc walk up to the
 // parent when a command owns none, so all 14 subcommands, `stark help <cmd>` and
@@ -96,6 +101,13 @@ func (r *helpRenderer) plainHelp(c *cobra.Command) string {
 	if long == "" {
 		long = c.Short
 	}
+	// Trim FIRST, then test — defaultHelpFunc's order, not defaultHelpTemplate's.
+	// The two disagree for a whitespace-only description (`{{with}}` decides
+	// before trimTrailingWhitespaces runs, so the template emits a stray blank
+	// line where the func emits none), and it is the FUNC that ships: since
+	// cobra v1.10 getHelpTemplateFunc returns defaultHelpFunc unless someone
+	// installs a template of their own. Pinned by
+	// TestPlainHelpMirrorsCobraOnEmptyDescriptions.
 	if long = strings.TrimRightFunc(long, unicode.IsSpace); long != "" {
 		b.WriteString(long)
 		b.WriteString("\n\n")
@@ -125,14 +137,37 @@ func (r *helpRenderer) plainUsage(c *cobra.Command) string {
 	return c.UsageString()
 }
 
-// optionsFor picks the palette and column budget for the stream the page is
-// going to, per call — a redirected stream is then seen correctly.
+// optionsFor picks the palette for the stream the page is going to, per call —
+// a redirected stream is then seen correctly.
 //
 // A writer that is not an *os.File (a test buffer, or cobra's own UsageString
-// buffer) yields a nil file, which help.For reads as "not a terminal": no color,
-// no reflow, identity. That is the same answer a pipe gets, so `stark --help |
+// buffer) yields a nil file, which help.ColorEnabled reads as "not a terminal":
+// no color, identity. That is the same answer a pipe gets, so `stark --help |
 // cat`, `NO_COLOR=1 stark --help` and a test all see the authored bytes.
 func optionsFor(w io.Writer) help.Options {
 	f, _ := w.(*os.File)
-	return help.For(f, binaryName)
+	return helpOptions(help.ColorEnabled(f))
+}
+
+// helpOptions assembles the render options for an already-made color decision.
+// Split out from optionsFor so a test can exercise the SHIPPED assembly with the
+// palette forced on — off a terminal a rendered page and cobra's own are
+// identical by design, which makes every color assertion vacuous otherwise.
+//
+// Columns is deliberately left at ZERO — no reflow, on a terminal as well as off
+// one — so help.Render only ever ADDS escapes to cobra's page. This is NOT the
+// help.For default (that asks for COLUMNS, else 80), and the difference is a bug
+// fix, not taste: the snapshot's reflow folds any 4+-space-indented line into the
+// item row above it, which is right for a hand-wrapped page and wrong for
+// pflag's, where a flag with NO shorthand is printed at a 6-space indent
+// (`      --index string   …`) while `  -h, --help` sits at two. With a budget,
+// `stark install --help` on a real terminal collapsed eight flag rows into the
+// `--help` row. Cobra and pflag have already laid this page out and aligned its
+// columns; the fleet look is the palette, not a second layout pass.
+//
+// Pinned by TestHelpIsNeverColumnFitted, and
+// TestColumnFittingWouldGarbleCobrasFlagBlock is the tripwire that says when the
+// upstream rule has been fixed and the budget can come back.
+func helpOptions(colorize bool) help.Options {
+	return help.Options{Colors: colors.New(colorize), Binary: binaryName}
 }

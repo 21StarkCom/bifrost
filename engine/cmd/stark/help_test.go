@@ -64,14 +64,17 @@ var reSGR = regexp.MustCompile("\x1b\\[[0-9;]*m")
 //
 // A unit test has no PTY, and off a terminal a rendered page is byte-identical to
 // cobra's by design — so without this, "the renderer ran" and "the renderer is
-// still installed" are both unfalsifiable. Only the color DECISION is stubbed;
-// help, usage, plainHelp and plainUsage are the shipped code.
+// still installed" are both unfalsifiable. Only the color DECISION is stubbed: the
+// options themselves come from the shipped helpOptions, so a page here is exactly
+// what a terminal gets — including its column budget, which is why
+// TestColorIsPurelyAdditive can police that budget at all. help, usage, plainHelp
+// and plainUsage are the shipped code too.
 // TestNoColorAndDumbTerminalStayPlain covers the decision itself.
 func coloredTree(t *testing.T) *cobra.Command {
 	t.Helper()
 	root := newRootCmd()
 	r := &helpRenderer{root: root, opts: func(io.Writer) help.Options {
-		return help.Options{Colors: colors.New(true), Binary: binaryName}
+		return helpOptions(true)
 	}}
 	root.SetHelpFunc(r.help)
 	root.SetUsageFunc(r.usage)
@@ -249,10 +252,18 @@ func TestHelpRendersTheFleetLookOnATerminal(t *testing.T) {
 
 // TestColorIsPurelyAdditive pins the invariant the whole design rests on: the
 // renderer only ADDS escapes. Strip them back out and the page is the authored
-// one, character for character — so no `stark --help` ever loses or reorders a
-// word, whatever the palette does.
+// one, character for character — so no `stark --help` ever loses, reorders or
+// RE-WRAPS a word, whatever the palette does.
+//
+// It walks the whole tree rather than a handful of paths because the shapes
+// differ: only some commands have subcommands, only some have flags, and the
+// generated `help`/`completion` pages are the ones no constructor here can be
+// read for. The budget itself is policed by TestHelpIsNeverColumnFitted, not
+// here — both sides of this comparison go through helpOptions, so a budget
+// applied to both would cancel out.
 func TestColorIsPurelyAdditive(t *testing.T) {
-	for _, path := range [][]string{nil, {"build"}, {"install"}, {"sync"}, {"completion"}} {
+	for _, c := range walk(newRootCmd()) {
+		path := strings.Fields(c.CommandPath())[1:]
 		name := "stark " + strings.Join(path, " ")
 		t.Run(name, func(t *testing.T) {
 			page := helpOf(t, newRootCmd(), path)
@@ -261,6 +272,97 @@ func TestColorIsPurelyAdditive(t *testing.T) {
 				t.Errorf("%s: stripping SGR from the colored page does not return the plain one:\n got: %q\nwant: %q", name, stripped, page)
 			}
 		})
+	}
+}
+
+// TestHelpIsNeverColumnFitted states the budget decision on its own, so a change
+// to it fails with its reason attached instead of only as a pile of diffs in
+// TestColorIsPurelyAdditive.
+//
+// Zero means "keep the authored layout verbatim". Cobra and pflag have already
+// laid the page out and aligned its columns; a second pass can only disagree with
+// them — see helpOptions and TestColumnFittingWouldGarbleCobrasFlagBlock.
+func TestHelpIsNeverColumnFitted(t *testing.T) {
+	for _, colorize := range []bool{false, true} {
+		if got := helpOptions(colorize).Columns; got != 0 {
+			t.Errorf("helpOptions(%v).Columns = %d, want 0 — cobra already laid this page out", colorize, got)
+		}
+	}
+	if got := optionsFor(os.Stdout).Columns; got != 0 {
+		t.Errorf("optionsFor(os.Stdout).Columns = %d, want 0", got)
+	}
+}
+
+// TestColumnFittingWouldGarbleCobrasFlagBlock is the tripwire under helpOptions'
+// zero budget: it pins the upstream behavior that forces the choice, so the day
+// the snapshot is refreshed past a fix, this test — not a user — reports it.
+//
+// help.Render folds any 4+-space-indented line into the item row above it, which
+// is correct for a hand-wrapped page. pflag prints a flag WITHOUT a shorthand at a
+// 6-space indent and `-h, --help` at two, so every long-only flag after `--help`
+// reads as a continuation of it. At 80 columns `stark install --help` lost eight
+// rows into one.
+func TestColumnFittingWouldGarbleCobrasFlagBlock(t *testing.T) {
+	const row = "\n      --index string"
+	page := helpOf(t, newRootCmd(), []string{"install"})
+	if !strings.Contains(page, row) {
+		t.Fatalf("fixture drifted — `stark install --help` no longer prints %q on its own line:\n%s", strings.TrimSpace(row), page)
+	}
+	fitted := help.Render(page, help.Options{Colors: colors.New(false), Columns: 80, Binary: binaryName})
+	if strings.Contains(fitted, row) {
+		t.Errorf("the snapshot now keeps pflag's 6-space flag rows on their own line under a column budget.\n" +
+			"The upstream continuation rule was fixed: helpOptions can go back to help.For(f, binaryName), and this tripwire can be deleted.")
+	}
+}
+
+// TestPlainHelpMirrorsCobraOnEmptyDescriptions covers the branch the shipped tree
+// cannot reach: every stark command carries a real Short, so the byte-identity
+// walk never asks what happens when a description is absent or only whitespace.
+//
+// That branch is exactly where cobra's own two definitions disagree —
+// defaultHelpTemplate's `{{with (or .Long .Short)}}` tests the string BEFORE
+// trimTrailingWhitespaces and emits a stray blank line, while defaultHelpFunc
+// trims first and emits none. plainHelp has to copy the FUNC, because that is
+// what runs: since v1.10 getHelpTemplateFunc returns defaultHelpFunc unless a
+// command installs a template of its own. Comparing against the live HelpFunc()
+// rather than against either source is what keeps that true across an upgrade.
+func TestPlainHelpMirrorsCobraOnEmptyDescriptions(t *testing.T) {
+	for _, tc := range []struct{ name, long, short string }{
+		{"whitespace-only Long", "   \n\t ", ""},
+		{"whitespace-only Short", "", "  "},
+		{"no description at all", "", ""},
+		{"trailing space on a real Long", "does a thing   ", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mk := func() *cobra.Command {
+				c := &cobra.Command{Use: "x", Long: tc.long, Short: tc.short, Run: func(*cobra.Command, []string) {}}
+				c.InitDefaultHelpFlag()
+				return c
+			}
+			c := mk()
+			got := (&helpRenderer{root: c}).plainHelp(c)
+
+			p := mk()
+			var want bytes.Buffer
+			p.SetOut(&want)
+			p.SetErr(&want)
+			p.HelpFunc()(p, nil)
+
+			if got != want.String() {
+				t.Errorf("plainHelp diverges from cobra's default help func:\n got: %q\nwant: %q", got, want.String())
+			}
+		})
+	}
+}
+
+// TestBinaryNameMatchesTheRootCommand pins the one coupling optionsFor cannot see:
+// help.Options.Binary is the token that marks an example line, and it is a const
+// here while the command's name lives in newRootCmd. Rename one without the other
+// and example lines silently stop being recognised — no page changes shape, so
+// nothing else in this file would notice.
+func TestBinaryNameMatchesTheRootCommand(t *testing.T) {
+	if got := newRootCmd().Name(); got != binaryName {
+		t.Errorf("root command name = %q, binaryName = %q — they must agree", got, binaryName)
 	}
 }
 
