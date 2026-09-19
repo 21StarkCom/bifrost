@@ -75,20 +75,18 @@ func TestLoadStillFailsOnANonBundleDirThatIsNotReserved(t *testing.T) {
 	}
 }
 
-// The reserved name is exempt from being READ as a bundle, not from existing. A real
-// bundle legitimately named `standards` would be invisible — so if one is ever added,
-// this test fails and forces the collision to be dealt with rather than discovered.
-func TestReservedNameCollidesWithNoRealBundle(t *testing.T) {
-	cat, err := Load(seedCatalog(t, ReservedCatalogDir, true))
-	if err != nil {
-		t.Fatalf("load: %v", err)
+// THE COLLISION GUARD. The reserved name is exempt from being READ as a bundle, not
+// from COLLIDING with one, and the difference is the whole ticket: silently skipping a
+// manifest found there is the same fail-open the by-name skip exists to avoid. A real
+// bundle at catalog/standards/ would be invisible to every build, validate, lint and
+// drift check, and `stark sync` — which owns that path as a managed root it wipes on
+// every run — would delete it. Load must refuse it outright.
+func TestAManifestUnderTheReservedNameIsAHardError(t *testing.T) {
+	_, err := Load(seedCatalog(t, ReservedCatalogDir, true))
+	if err == nil {
+		t.Fatal("a bundle.yaml under the reserved standards/ dir must be a hard error; skipping it silently lets a real bundle vanish from every gate and be erased by the next sync")
 	}
-	for _, b := range cat.Bundles {
-		if b.Name == ReservedCatalogDir {
-			t.Fatalf("bundle %q loaded despite the reserved name — the exemption is no longer unambiguous", b.Name)
-		}
-	}
-	if len(cat.Bundles) != 1 {
-		t.Fatalf("want 1 bundle (the reserved dir skipped even with a manifest), got %d", len(cat.Bundles))
+	if !strings.Contains(err.Error(), ReservedCatalogDir) {
+		t.Fatalf("the error must name the reserved directory, got: %v", err)
 	}
 }

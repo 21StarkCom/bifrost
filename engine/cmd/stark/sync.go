@@ -14,10 +14,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// runSync regenerates the catalog artifacts (skills/commands/mcp) and the
-// vendor/stark-skills/ asset snapshot from a stark-skills checkout, driven by
-// each bundle's curated bundle.yaml membership manifest (skills:/commands:).
-// bundle.yaml itself is preserved. With check=true it verifies the committed
+// runSync regenerates, from a stark-skills checkout, the catalog artifacts
+// (skills/commands), the shared vendor/stark-skills/ asset snapshot, the
+// per-bundle vendor/plugins/ + Codex runtime-override snapshots, and the
+// catalog/standards/ link target — driven by each bundle's curated bundle.yaml
+// membership manifest (skills:/commands:). Curated content is preserved
+// (bundle.yaml, mcp/); every root listed in `managed` below is owned outright
+// and DELETED before the rewrite. With check=true it verifies the committed
 // tree matches a fresh generation (drift gate, exit 2) instead of writing.
 //
 // Pipeline: `stark sync --from <stark-skills>` then `stark build` (which vendors
@@ -147,26 +150,23 @@ func runSync(from, catalogDir, repoRoot string, check bool) int {
 		fmt.Println("vendor snapshot:", err)
 		return 1
 	}
+	// The snapshot's standards/ subtree is emitted a SECOND time, at catalog/standards/
+	// (STARK-6357). Every skill body carries links like `../../standards/help.md`; from
+	// catalog/<bundle>/skills/<name>.md that resolves to catalog/standards/<file>, a
+	// directory that did not exist — so all 68 were dead when the catalog was browsed on
+	// GitHub, which is where it IS browsed: the web SPA renders only metadata from
+	// index.json/bundles/*.json, never a skill body, and the origin serves no catalog/.
+	// The same links are already correct under dist/**, where standards/ sits beside
+	// skills/. Making the target exist is deliberately preferred over rewriting the
+	// links: a retarget rule would re-render every bundle's catalog bytes and force a
+	// version bump of all seven, where this changes no skill copy and no dist byte.
+	// Written from the snapshot's already-normalized bytes rather than a second walk of
+	// the source tree, so the two copies cannot disagree about what standards/ contains.
 	for rel, content := range vendor {
-		expected["vendor/stark-skills/"+rel] = lfNormalize(content)
-
-		// Emit a second copy of standards/ at catalog/standards/ (STARK-6357).
-		//
-		// Every skill body carries links like `../../standards/help.md`. From
-		// catalog/<bundle>/skills/<name>.md that resolves to catalog/standards/<file>,
-		// a directory that did not exist — so all 68 of them were dead when the catalog
-		// was browsed on GitHub, which is where they ARE browsed: the web SPA renders
-		// only metadata from index.json/bundles/*.json, never a skill body, and the
-		// origin serves no catalog/ at all. The same links are already correct under
-		// dist/**, where standards/ sits beside skills/.
-		//
-		// Making the target exist is deliberately preferred over rewriting the links:
-		// a retarget rule would re-render every bundle's catalog bytes and force a
-		// version bump of all seven, where this changes no skill copy and no dist byte.
-		// Taken from the vendor snapshot rather than re-walking the source tree so the
-		// two copies cannot disagree about what standards/ contains.
+		normalized := lfNormalize(content)
+		expected["vendor/stark-skills/"+rel] = normalized
 		if strings.HasPrefix(rel, "standards/") {
-			expected["catalog/"+rel] = lfNormalize(content)
+			expected["catalog/"+rel] = normalized
 		}
 	}
 

@@ -34,6 +34,15 @@ func Load(catalogDir string) (*model.Catalog, error) {
 	if err != nil {
 		return nil, err
 	}
+	// The reserved name is exempt from being READ as a bundle, not from COLLIDING with
+	// one. A real bundle placed at catalog/standards/ would be invisible to every build,
+	// validate, lint and drift check, and `stark sync` — which owns that path as a
+	// managed root it wipes on every run — would delete it outright. Refuse it here so
+	// the collision is dealt with rather than discovered.
+	if _, statErr := os.Stat(filepath.Join(catalogDir, ReservedCatalogDir, "bundle.yaml")); statErr == nil {
+		return nil, fmt.Errorf("%s/bundle.yaml: %q is reserved for the generated standards copy (STARK-6357) — a bundle there is skipped by every gate and erased by the next `stark sync`; rename it",
+			ReservedCatalogDir, ReservedCatalogDir)
+	}
 	names := make([]string, 0, len(entries))
 	for _, e := range entries {
 		if e.IsDir() && e.Name() != ReservedCatalogDir {
