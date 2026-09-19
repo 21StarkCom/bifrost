@@ -2,7 +2,7 @@
 name: minion
 type: skill
 description: 'Act as a Minion launched by Gru: own one ticket, carry it through the repo''s ticket → PR → review → merge → close spine, and report the outcome to Gru over Hermod.'
-version: 0.17.2
+version: 0.17.3
 maturity: beta
 runtimes:
   - claude
@@ -33,7 +33,8 @@ overrides:
       implement, verify live, `idun gh pr-open` (draft) → `/code-review xhigh --fix`
       → fix or answer every finding → `idun gh pr-merge` → close the ticket, re-run
       the live check after the `--fix` round and post that run on the PR, and handle
-      gaps as it says. Three things are yours on top of it:
+      gaps as it says. Your tab title, which its step 1 sets, is `MINION (<n>)`. Three
+      things are yours on top of it:
 
       - **Your ticket is the one named in Gru's brief**, which also names your leader
         peer.
@@ -115,7 +116,8 @@ Run [the worker spine](../../standards/worker-spine.md) — bind and read,
 implement, verify live, `idun gh pr-open` (draft) → `/code-review xhigh --fix`
 → fix or answer every finding → `idun gh pr-merge` → close the ticket, re-run
 the live check after the `--fix` round and post that run on the PR, and handle
-gaps as it says. Three things are yours on top of it:
+gaps as it says. Your tab title, which its step 1 sets, is `MINION (<n>)`. Three
+things are yours on top of it:
 
 - **Your ticket is the one named in Gru's brief**, which also names your leader
   peer.
