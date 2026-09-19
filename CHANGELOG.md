@@ -4,6 +4,12 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 
 ## [Unreleased]
 
+### Added
+- **bifrost runs the fleet secret scan (STARK-7490).** `.github/workflows/secret-scan.yml` is the fleet's thin caller for the one reusable gitleaks workflow in `21StarkCom/.github`, pinned by commit SHA, producing the `secret-scan / secret-scan` check on every PR and every push to `main`. It is **byte-identical** to what `21StarkCom/21stark`'s `repos/templates/secret-scan-caller.yml.tftpl` renders (verified against the template render and three live repos' copies) but it arrived by PR, not by apply: `main` here carries `enforce_admins = true` plus required PR reviews, which reject the Terraform provider's direct commit even for an admin token, so bifrost sits in that tier's `local.secret_scan_excluded`. `.gitleaks.toml` gains the fleet's `google-oauth-client-secret` rule verbatim, which is what lets the caller run the default self-test with no per-repo `selftest_rule_id` override — the rule is now load-bearing, and removing it turns the check red on a tree with no secrets in it. `engine/cmd/stark/secret_scan_caller_test.go` pins the context halves, the SHA pin, that rule-or-override invariant, and the absence of a skip guard, because nothing else in this repo's CI can see the other half of the contract.
+
+### Changed
+- **`ci` is no longer the only `pull_request` workflow** — `secret-scan` is the second. The five required contexts on `main` are unchanged and remain exactly `ci.yml`'s five jobs: `secret-scan / secret-scan` reports but is deliberately **not** required, because the blocking secret gate here is `ci`'s own `secret scan (catalog)` job, which is the stricter of the two (whole working tree *plus* the PR commit range, against the fleet caller's incoming commits only), and because a hand-made requirement here would be invisible to the Terraform tier that owns every other repo's. `docs/operations/branch-protection.md` records the reasoning; `CLAUDE.md` and `AGENTS.md` correct the "only `pull_request` workflow" claim.
+
 ## [0.32.3] - 2026-09-19
 
 ### Changed
