@@ -9,7 +9,7 @@
       "name": "stark-analyze",
       "source": "./dist/claude/stark-analyze",
       "description": "Zero-context fresh-eyes review of specs and briefs, multi-agent Terraform/Terragrunt (IaC) review, repository refactor planning, and application-logging authoring/review guidance. Maps to spec-kit's analyze phase.",
-      "version": "0.6.2",
+      "version": "0.6.3",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -27,7 +27,7 @@
       "name": "stark-constitution",
       "source": "./dist/claude/stark-constitution",
       "description": "Project setup, decision records, and session priming — scaffold a dev-docs/standards structure (template/backfill/upgrade modes), record architecture decisions (ADRs) under docs/adr/, and assign a session persona. Maps to spec-kit's constitution phase.",
-      "version": "0.2.70",
+      "version": "0.2.71",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -46,7 +46,7 @@
       "name": "stark-design",
       "source": "./dist/claude/stark-design",
       "description": "Design-token architecture — build, name, theme, and govern a design-token system the way the field's canonical sources converge on it. Covers the three-tier model (primitive/semantic/component), naming grammar, OKLCH color scales, DTCG authoring, Style Dictionary pipelines, dark-mode/multi-brand/density theming, CSS-variable distribution, WCAG contrast gates, and token semver/deprecation.",
-      "version": "0.1.28",
+      "version": "0.1.29",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -65,7 +65,7 @@
       "name": "stark-implement",
       "source": "./dist/claude/stark-implement",
       "description": "Implement from an accepted spec. /stark-build runs one fresh headless session per task gated by checks the agent cannot edit, with a held-out e2e gate, one cross-vendor advisory review, and one bounded fix round for medium+ findings.",
-      "version": "0.4.64",
+      "version": "0.4.65",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -82,7 +82,7 @@
       "name": "stark-ops",
       "source": "./dist/claude/stark-ops",
       "description": "Repository operations beyond the spec-driven pipeline — coordinate Minions with Gru, cut releases, run session start/end, and hand off work across sessions.",
-      "version": "0.16.13",
+      "version": "0.16.14",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -101,7 +101,7 @@
       "name": "stark-plan",
       "source": "./dist/claude/stark-plan",
       "description": "Turn a design doc into a phased implementation plan, then decompose it into phased GitHub issues with story points and risk labels. Maps to spec-kit's plan + tasks phases.",
-      "version": "0.5.11",
+      "version": "0.5.12",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -119,7 +119,7 @@
       "name": "stark-write",
       "source": "./dist/claude/stark-write",
       "description": "Long-form writing craft, from the author's reusable voice profile through story editing, adversarial sharpening, independent judging, and multi-model jury calibration.",
-      "version": "0.5.48",
+      "version": "0.5.49",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"

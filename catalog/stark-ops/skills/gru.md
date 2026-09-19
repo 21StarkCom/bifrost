@@ -2,7 +2,7 @@
 name: gru
 type: skill
 description: Gru drives an epic or a list of tickets to done with one Minion per ticket. Use when the operator hands over several tickets to be worked in parallel and carried through merge and closure.
-version: 0.16.13
+version: 0.16.14
 maturity: beta
 runtimes:
   - claude

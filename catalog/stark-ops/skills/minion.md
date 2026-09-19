@@ -2,7 +2,7 @@
 name: minion
 type: skill
 description: 'Act as a Minion launched by Gru: own one ticket, carry it through the repo''s ticket → PR → review → merge → close spine, and report the outcome to Gru over Hermod.'
-version: 0.16.13
+version: 0.16.14
 maturity: beta
 runtimes:
   - claude
