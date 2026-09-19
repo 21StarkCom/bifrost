@@ -112,9 +112,11 @@ artifact's canonical-source digest changed without a `version` bump),
 > cannot be satisfied without a second account or an admin bypass, and a gate
 > that is bypassed on every PR stops being read as a gate anywhere. The control
 > that actually holds the high-trust paths is the mandatory
-> `/code-review xhigh --fix` gate plus the operator attestation
-> `marketplace-sync` requires before it will publish — both of which are
-> exercised per PR and neither of which a second rubber-stamp would strengthen.
+> `/code-review xhigh --fix` gate plus the operator attestation this repo's
+> `publish-sync-pr` workflow requires before it will publish the sync PR
+> (STARK-6208 moved that verification out of stark-skills' `marketplace-sync`,
+> unchanged) — both of which are exercised per PR and neither of which a second
+> rubber-stamp would strengthen.
 >
 > If bifrost ever gains a second maintainer, revisit: the §4 trust model's
 > reasoning holds, it just has no one to spend a second approval.
