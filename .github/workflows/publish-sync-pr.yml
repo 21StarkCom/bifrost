@@ -93,12 +93,33 @@ jobs:
             | . != null and (.state == "COMMENTED" or .state == "APPROVED")
               and (((.body // "") | gsub("\r\n"; "\n")) | startswith("<!-- stark-code-review:complete -->\n") and contains("/code-review xhigh --fix"))'
 
-          # Exit 2 = could not read the reviews at all. A transport blip must not
-          # read as "the operator withdrew the attestation" on the pre-merge recheck.
+          # Three outcomes, never two: 0 = attested, 1 = not attested, 2 = COULD
+          # NOT TELL. A transport blip must not read as "the operator withdrew
+          # the attestation" on the pre-merge recheck — and, just as important,
+          # a BROKEN PREDICATE must not read as "nobody attested".
+          #
+          # `jq -e` exits 1 for a false/null result but 3 for a compile error and
+          # 5 for a runtime error, and those are not verdicts. Returning jq's
+          # status raw folded 3 and 5 into the caller's "not attested" branch,
+          # which exits GREEN — so a typo in the predicate, or a payload shape it
+          # cannot handle (a `null` body with no `// ""` guard aborts with 5),
+          # would have stopped publication forever with every run green and no
+          # alarm anywhere. That is precisely the silent-stall STARK-6208 was
+          # filed to end; it must fail closed and loud instead.
           completed_review() {
-            local reviews
+            local reviews status=0
             reviews="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/$PR/reviews")" || return 2
-            printf '%s' "$reviews" | jq -e --arg head "$1" "$review_filter" >/dev/null
+            # `|| status=$?` rather than a bare pipeline followed by `status=$?`:
+            # under `set -e` the latter only survives because every caller invokes
+            # this function on the left of `||`, which suppresses errexit through
+            # the whole body. That is true today and silently stops being true the
+            # first time someone calls it plainly.
+            printf '%s' "$reviews" | jq -e --arg head "$1" "$review_filter" >/dev/null || status=$?
+            case "$status" in
+              0|1) return "$status" ;;
+              *) echo "the attestation predicate itself failed (jq exit $status) — this is not a verdict" >&2
+                 return 2 ;;
+            esac
           }
 
           # One round trip for every field the guards below read, so they all
@@ -124,7 +145,10 @@ jobs:
           rc=0
           completed_review "$head" || rc=$?
           if [ "$rc" -eq 2 ]; then
-            echo "could not read the PR's reviews; publication withheld" >&2
+            # Either the API was unreadable or the predicate is broken; the
+            # function has already said which on stderr. Both are "could not
+            # tell", and neither may pass for "nobody attested".
+            echo "could not determine the attestation state; publication withheld" >&2
             exit 1
           elif [ "$rc" -ne 0 ]; then
             # Not an error: most review submissions are not attestations. Exit
@@ -187,7 +211,7 @@ jobs:
           recheck=0
           completed_review "$head" || recheck=$?
           if [ "$recheck" -eq 2 ]; then
-            echo "could not re-read the PR's reviews before merging; merge withheld" >&2
+            echo "could not re-determine the attestation state before merging; merge withheld" >&2
             exit 1
           elif [ "$recheck" -ne 0 ]; then
             echo "completed head review changed while waiting for CI; merge withheld" >&2
