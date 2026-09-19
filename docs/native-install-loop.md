@@ -118,9 +118,10 @@ gemini adapter exists, but no bundle ships a gemini artifact today.
 - **Committed:** repo-root `.claude-plugin/marketplace.json`, the `dist/claude/`
   bundle trees (incl. vendored `tools/`/`prompts/`/`config.json` + per-bundle
   `.claude-plugin/plugin.json`), `index.json`, `bundles/*.json`, the
-  `vendor/stark-skills/` asset snapshot, and `catalog/standards/` (the generated
-  link target for every skill body's `../../standards/*.md`, STARK-6357) — all
-  marked `linguist-generated`.
+  `vendor/stark-skills/` asset snapshot, `catalog/standards/` (the generated
+  link target for every skill body's `../../standards/*.md`, STARK-6357), and the
+  generated `catalog/<bundle>/{skills,commands}/` trees (STARK-7363) — all marked
+  `linguist-generated`.
 - **NOT committed:** `dist/codex/`, `dist/gemini/` — built on `stark install`
   (no in-repo consumer).
 

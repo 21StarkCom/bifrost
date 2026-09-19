@@ -3,20 +3,17 @@ schema/** text eol=lf
 *.go text eol=lf
 dist/** linguist-generated=true
 catalog/standards/** linguist-generated=true
-# The catalog's artifact trees are written by `stark sync` from a stark-skills
-# checkout and are never hand-edited (the drift gate rejects it, and the next sync
-# overwrites it). Marking them keeps two things honest: `findings_review_post.ts`
-# resolves this list per run and routes findings on these paths to the review BODY
-# instead of an inline thread — an inline one cannot be resolved by fixing the file,
-# and `main` enforces required_conversation_resolution, so on the shared
-# auto/marketplace-sync branch those threads block a publish (34 of them did, on
-# bifrost#264) — and the curated files a sync reviewer SHOULD read stop being buried.
-# CODEOWNERS is unaffected: it still requires its reviewers on these paths, exactly as
-# it already does for the equally-generated dist/claude/**.
-# Deliberately NOT here: catalog/*/bundle.yaml and catalog/*/mcp/**, which are curated —
-# and NOT catalog/*/agents/**, which sync does not generate either (runSync manages only
-# skills/ and commands/). No agents/ dir exists today; marking one in advance would hide
-# curated content the day somebody adds it.
+# The catalog's artifact trees: `stark sync` writes them from a stark-skills checkout,
+# and the next sync overwrites a hand-edit (no bifrost gate catches one — CI runs
+# validate / build --check / check-bumps; `sync --check` runs only in stark-skills'
+# marketplace-sync, immediately after it regenerates). Marking them collapses them in a
+# sync PR's diff, and stark-skills' `findings_review_post.ts` reads these rows at the PR
+# head and reports findings on these paths in the review BODY rather than an inline
+# thread that `required_conversation_resolution` turns into a publish blocker.
+# Deliberately NOT here: catalog/*/bundle.yaml, catalog/*/mcp/** and catalog/*/agents/**
+# — all curated (`runSync` manages only skills/ and commands/). See CLAUDE.md's Layout
+# entry for what these rows do NOT do: they neither weaken a CODEOWNERS gate nor, on
+# their own, decide routing (stark-skills adds `catalog/**` for this repo).
 catalog/*/skills/** linguist-generated=true
 catalog/*/commands/** linguist-generated=true
 vendor/** linguist-generated=true
