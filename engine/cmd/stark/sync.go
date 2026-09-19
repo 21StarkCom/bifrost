@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -26,6 +27,26 @@ import (
 // Pipeline: `stark sync --from <stark-skills>` then `stark build` (which vendors
 // the snapshot into dist/ and is itself drift-gated).
 func runSync(from, catalogDir, repoRoot string, check bool) int {
+	// Say WHICH tree this regen is about to copy from, before copying from it.
+	//
+	// sync regenerates every bundle's catalog and the shared vendor snapshot from
+	// whatever checkout it is pointed at, so a source that is behind silently REGRESSES
+	// the snapshot for every bundle: merged upstream work is reverted in the catalog and
+	// the operator meets it as an unexplained pile in `git status`, or as a drift-gate
+	// failure naming files they never touched. Hit twice on 2026-09-19 (STARK-6249's
+	// rebuild, and STARK-6357 against a sibling checkout sitting at ccb955b while its
+	// origin/main was 4b69ee2) — the second time by the person who had written the
+	// hazard note about it hours earlier, which is the argument for putting it here
+	// rather than in prose: a warning that must be recalled at the wrong moment is not
+	// a control.
+	//
+	// Deliberately a STATEMENT, not a staleness check. "Behind origin/main" would fire on
+	// the documented happy path — the skill-membership ordering recipe (STARK-6468)
+	// instructs generating membership with `sync --from` an UNMERGED branch — and a gate
+	// that cries wolf on the official workflow is ignored within a week. Printing the
+	// sha is always true and has no false-alarm mode.
+	fmt.Printf("source: %s\n        %s\n", from, sourceRevision(from))
+
 	cat, err := load.Load(catalogDir)
 	if err != nil {
 		fmt.Println("load error:", err)
@@ -292,4 +313,29 @@ func newSyncCmd() *cobra.Command {
 	cmd.Flags().StringVar(&from, "from", "", "path to a stark-skills checkout (source of truth)")
 	cmd.Flags().BoolVar(&check, "check", false, "verify committed catalog+vendor match a fresh sync (CI drift gate)")
 	return cmd
+}
+
+// sourceRevision describes the stark-skills checkout `sync` is regenerating from:
+// short sha, commit date and subject. It is DIAGNOSTICS ONLY and never fails the run —
+// a source that is an export rather than a clone, or a machine without git, must still
+// sync. Those cases say so explicitly rather than printing nothing: a silently empty
+// diagnostic is its own small false comfort, the same shape as a shallow checkout
+// yielding an empty log.
+func sourceRevision(from string) string {
+	if _, err := os.Stat(filepath.Join(from, ".git")); err != nil {
+		return "(not a git checkout — cannot report a source revision)"
+	}
+	gitBin, err := exec.LookPath("git")
+	if err != nil {
+		return "(git not found — cannot report a source revision)"
+	}
+	out, err := exec.Command(gitBin, "-C", from, "log", "-1", "--format=%h %cs %s").Output()
+	if err != nil {
+		return "(git log failed — cannot report a source revision)"
+	}
+	line := strings.TrimSpace(string(out))
+	if line == "" {
+		return "(no commits — cannot report a source revision)"
+	}
+	return line
 }
