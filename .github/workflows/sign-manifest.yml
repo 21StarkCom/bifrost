@@ -11,6 +11,13 @@ name: sign-manifest
 on:
   push:
     branches: [main]
+  # Re-arm for a push that GitHub's anti-loop guard silenced: a merge made with
+  # GITHUB_TOKEN (see `publish-sync-pr.yml`) starts no `push` run, so the
+  # publisher dispatches this workflow by hand afterwards. `workflow_dispatch`
+  # is the documented exception to that guard. Safe to re-run: the tag check
+  # below makes it idempotent per-SHA, and the OIDC cert subject is the workflow
+  # path @ ref, which is identical on either trigger.
+  workflow_dispatch:
 
 permissions:
   contents: write        # create tag + release + upload assets
