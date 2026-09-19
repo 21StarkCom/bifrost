@@ -4,6 +4,17 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-09-19
+
+### Added
+- **`agnes` ships in the `stark-ops` bundle (`0.16.14 → 0.17.0`, STARK-6249).** stark-skills STARK-6182 added `skill/agnes/SKILL.md` alongside the shared `standards/worker-spine.md` + `standards/stand-down.md`, and bifrost 0.31.2 published *those two docs* — `worker-spine.md` line 4 already reads "/minion (led by Gru) and /agnes (unattended, no leader) both execute this doc" — while `catalog/stark-ops/bundle.yaml`'s hand-authored `skills:` manifest never listed `agnes`. `stark sync` only pulls declared members, so the skill itself shipped nowhere: no `catalog/stark-ops/skills/agnes.md`, no `dist/claude/stark-ops/skills/agnes/`, no `dist/codex-plugins/stark-ops/skills/agnes/`. An operator installing `stark-ops@bifrost` got a published contract naming a skill the same release did not carry. A membership add is a MINOR per the semver policy, so root `VERSION` takes a MINOR too.
+
+### Changed
+- `stark-ops`'s description now names the solo unattended worker, so the bundle copy on the marketplace card, both plugin manifests and the web registry match what the bundle actually contains.
+- `docs/scripts/publish.sh` ends with a **release-notes gate**. The script bumps `VERSION`, and a `VERSION` bump on `main` is what makes `sign-manifest` cut `v<VERSION>` and a signed GitHub Release — but it never wrote (or asked for) the `## [<VERSION>]` section that release's body is read from, and the extractor falls back to the bare string "Release <VERSION>." rather than failing. The omission had already shipped once: 0.31.0's own commit message records that "CHANGELOG gained the `## [0.31.0]` section the manual publish path doesn't write". The gate reads the section with `sign-manifest.yml`'s own line-anchored awk rather than a `grep -F` lookalike that a prose mention of the heading would satisfy, and drops the heading from the captured text so an empty section fails too. It runs last, after the regen is drift-clean: add the section and commit, do NOT re-run the script — the `VERSION` bump is not idempotent.
+- `docs/scripts/publish.sh` now also asserts `VERSION` actually changed after its bump. `bump` only rewrites a line that is exactly `X.Y.Z` and is silent otherwise, so a `v`-prefixed or commented `VERSION` previously left the run green while `sign-manifest` skipped the already-existing tag — new content on `main`, no release, no alarm.
+
+
 ## [0.31.3] - 2026-09-19
 
 ### Changed

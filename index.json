@@ -250,6 +250,31 @@
       "digest": "sha256:ec419fd27b00d0048c8c3b5dc0eb3f0f39ec8669ebf89aabbd167d3e947780f3"
     },
     {
+      "name": "agnes",
+      "type": "skill",
+      "bundle": "stark-ops",
+      "description": "Run one ticket solo and unattended, with no Gru: carry it end to end through the repo's ticket → PR → review → merge → close spine, confirm the merge and the close yourself, comment the evidence on the ticket, and tear your own tab down.",
+      "tags": [
+        "release",
+        "coordination",
+        "session",
+        "handover",
+        "git"
+      ],
+      "category": "ops",
+      "maturity": "beta",
+      "version": "0.17.0",
+      "runtimes": [
+        "claude",
+        "codex"
+      ],
+      "support": {
+        "claude": "native",
+        "codex": "native"
+      },
+      "digest": "sha256:39c4f6c190713b1f20f3ac695348762b4eec8cfba14aa0cd09f9764b4b137d6d"
+    },
+    {
       "name": "gru",
       "type": "skill",
       "bundle": "stark-ops",
@@ -263,7 +288,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.14",
+      "version": "0.17.0",
       "runtimes": [
         "claude",
         "codex"
@@ -288,7 +313,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.14",
+      "version": "0.17.0",
       "runtimes": [
         "claude",
         "codex"
@@ -313,7 +338,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.14",
+      "version": "0.17.0",
       "runtimes": [
         "claude",
         "codex"
@@ -338,7 +363,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.14",
+      "version": "0.17.0",
       "runtimes": [
         "claude",
         "codex"
@@ -363,7 +388,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.14",
+      "version": "0.17.0",
       "runtimes": [
         "claude",
         "codex"
@@ -388,7 +413,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.14",
+      "version": "0.17.0",
       "runtimes": [
         "claude"
       ],
@@ -411,7 +436,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.14",
+      "version": "0.17.0",
       "runtimes": [
         "claude",
         "codex"
@@ -436,7 +461,7 @@
       ],
       "category": "ops",
       "maturity": "beta",
-      "version": "0.16.14",
+      "version": "0.17.0",
       "runtimes": [
         "claude",
         "codex"
@@ -615,7 +640,7 @@
     },
     {
       "bundle": "stark-ops",
-      "version": "0.16.14",
+      "version": "0.17.0",
       "digest": "sha256:3b33185154c3d60efd0a5d0a2515466e235353eaf8ab50223e0b56dce68af165"
     },
     {
@@ -647,7 +672,7 @@
     },
     {
       "bundle": "stark-ops",
-      "version": "0.16.14",
+      "version": "0.17.0",
       "digest": "sha256:97f8969368316cc8b5c7487c48e898637b4393fee40f5865c0951302b351c14a"
     },
     {
@@ -679,7 +704,7 @@
     },
     {
       "bundle": "stark-ops",
-      "version": "0.16.14",
+      "version": "0.17.0",
       "digest": "sha256:b6a150a73a17d6347d10b04dbc5cb8c6510f5a6a23a4781471ffccce05d44268"
     },
     {
