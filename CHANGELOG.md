@@ -4,6 +4,10 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 
 ## [Unreleased]
 
+### Changed
+- **`secret-scan / secret-scan` being unrequired is a current state, not a verdict (STARK-7635).** The STARK-7490 docs read as though non-enrolment were settled here; it is not. STARK-7635 owns the enrol-or-not decision for both hand-PR'd repos (bifrost and `.github`) and intends to enrol them, so ADR-0005's "rollout implies enrolment" covers the whole non-archived fleet — and STARK-7490 met its stated precondition by landing the caller and observing a green run on `main`. What stands unchanged is the narrower rule: do not add the context to this repo's ruleset **by hand**, because a hand-made requirement is invisible to the Terraform tier that owns every other repo's and is orphaned by the next pin bump that renames the context's right half. Also corrects the claim that the in-repo `secret scan (catalog)` job is strictly "stricter" — it is wider in scope but weaker in assurance (no checksum on the downloaded binary, no scanner self-test, outside `local.secret_scan_pin`); neither scan dominates the other.
+
+
 ### Added
 <!-- idun:pr-merge pr=291 runId=291 sha=dfc329da -->
 - `stark`'s help output now renders in the shared 21Stark fleet look (colorized title, usage, headings, commands, and flags) via a pinned stark-tui snapshot.

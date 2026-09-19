@@ -57,7 +57,7 @@ because `main` here carries `enforce_admins = true` plus required PR reviews, so
 provider's direct commit is rejected even for an admin token (STARK-7490). The file
 arrived by PR instead, byte-identical to the render.
 
-**Do not add `secret-scan / secret-scan` to the ruleset in §3.** Two reasons:
+**Do not add `secret-scan / secret-scan` to the ruleset in §3 by hand.** Note the last three words: whether the context *should* be required here is **not** settled by this file. STARK-7635 owns that decision for both hand-PR'd repos and intends to enrol them via an explicit enforced-anyway set in 21stark, so ADR-0005's "rollout implies enrolment" covers the whole non-archived fleet; STARK-7490 met its stated precondition. What this section rules out is doing it *from here*, for two reasons:
 
 1. **It would be an unowned rule.** Every other repo's requirement is Terraform
    state in 21stark. A hand-made one here is invisible to that tier's audit
@@ -65,10 +65,16 @@ arrived by PR instead, byte-identical to the render.
    next fleet pin bump — which **renames the right half of the context** if the
    reusable workflow's job name ever changes — would silently orphan it, blocking
    every merge here on "Expected — waiting for status".
-2. **It buys nothing this repo does not already have.** `secret scan (catalog)`
-   is required, blocking, and *stricter*: it scans the whole working tree **and**
-   the PR commit range, against the fleet caller's incoming commits only. The
-   fleet check is the fleet's uniform reporting surface, not bifrost's gate.
+2. **It closes no coverage gap here**, so there is no urgency to front-run
+   STARK-7635. `secret scan (catalog)` is already required and blocking, and the
+   two scans do not dominate each other: the in-repo job is **wider** (whole
+   working tree *plus* the PR commit range, against the fleet caller's incoming
+   commits only) but **weaker in assurance** — no checksum on the binary it
+   downloads, no scanner self-test, and outside `local.secret_scan_pin`, so a
+   fleet gitleaks bump never reaches it. The fleet caller is the narrower and
+   better-assured of the two, and the only one that produces a context 21stark's
+   rulesets can name. The argument for requiring it is fleet consistency, which
+   is exactly what STARK-7635 is for.
 
 What the caller is for, then: it makes bifrost visible in the fleet-wide sweep
 (`gh api repos/21StarkCom/<repo>/commits/main/check-runs`) instead of being the one
