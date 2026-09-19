@@ -23,13 +23,18 @@
  *   - **Marker-aware retry.** Every posted body starts with a marker
  *     (`buildMarker`). Between 5xx retries the poster re-reads the PR's reviews
  *     and stops if the marker is already there, so a
- *     successful-but-unacknowledged POST cannot double-post.
+ *     successful-but-unacknowledged POST cannot double-post. The same read
+ *     happens once up front (STARK-6125, `review_post_rerun.test.ts`), so a
+ *     RERUN over a landed-but-`unposted` review writes nothing either.
  *
  * REST-only by contract: `rejectGraphqlPath` refuses a GraphQL path, and
  * `check-rest-only.sh` guards this file in CI.
  */
-import { spawn, type SpawnOptionsWithoutStdio } from "node:child_process";
+import { createHash } from "node:crypto";
 
+import { spawnBounded } from "./bounded_spawn_lib.ts";
+
+import { assertGhTimeoutMs, explainTermination, resolveGhTimeoutMs } from "./child_termination_lib.ts";
 import {
   buildMarker,
   compareSeverityDesc,
@@ -47,6 +52,9 @@ export interface GhJsonOpts {
   method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   body?: unknown;
   paginate?: boolean;
+  /** Bound on the `gh` subprocess. Default: `resolveGhTimeoutMs()`
+   * (`STARK_GH_TIMEOUT_MS`, else the measured 120 s — see child_termination_lib). */
+  timeoutMs?: number;
 }
 
 export interface GhJsonResult {
@@ -76,63 +84,6 @@ function rejectGraphqlPath(p: string): void {
   }
 }
 
-interface SpawnResult {
-  stdout: string;
-  stderr: string;
-  status: number;
-  /** Signal that killed the child, if any. `status` is -1 in that case;
-   * callers should consult `signal` before formatting "exit N" messages,
-   * since signal-killed processes have no real exit code. Optional so
-   * tests can construct SpawnResult literals without spelling it out. */
-  signal?: NodeJS.Signals | null;
-}
-
-async function spawnCollect(
-  cmd: string,
-  args: string[],
-  opts: {
-    input?: string;
-    env?: NodeJS.ProcessEnv;
-    cwd?: string;
-  } = {},
-): Promise<SpawnResult> {
-  return await new Promise<SpawnResult>((resolve, reject) => {
-    const sopts: SpawnOptionsWithoutStdio = {
-      env: opts.env ?? process.env,
-      cwd: opts.cwd,
-    };
-    const child = spawn(cmd, args, sopts);
-    const out: Buffer[] = [];
-    const err: Buffer[] = [];
-    let stdoutEnded = false;
-    let stderrEnded = false;
-    let closed: SpawnResult | null = null;
-    let settled = false;
-    const tryFinish = () => {
-      if (settled) return;
-      if (closed === null) return;
-      if (!stdoutEnded || !stderrEnded) return;
-      settled = true;
-      resolve(closed);
-    };
-    child.stdout.on("data", (b) => out.push(b as Buffer));
-    child.stderr.on("data", (b) => err.push(b as Buffer));
-    child.stdout.once("end", () => { stdoutEnded = true; tryFinish(); });
-    child.stderr.once("end", () => { stderrEnded = true; tryFinish(); });
-    child.on("error", reject);
-    child.on("close", (code, signal) => {
-      closed = {
-        stdout: Buffer.concat(out).toString("utf8"),
-        stderr: Buffer.concat(err).toString("utf8"),
-        status: code ?? -1,
-        signal: signal ?? null,
-      };
-      tryFinish();
-    });
-    if (opts.input !== undefined) child.stdin.end(opts.input);
-    else child.stdin.end();
-  });
-}
 /**
  * Call `gh api` against a REST endpoint. Forbids any 'graphql' substring in the
  * path. With paginate=true (default for GET array endpoints), uses gh's
@@ -149,10 +100,33 @@ export async function ghJsonOnce(p: string, opts: GhJsonOpts = {}): Promise<GhJs
   args.push(p);
   const input = opts.body !== undefined ? JSON.stringify(opts.body) : undefined;
   if (input !== undefined) args.push("--input", "-");
-  const res = await spawnCollect("gh", args, { input, env: { ...process.env } });
+  // Resolved before the spawn, so an unusable bound is refused outright instead
+  // of running `gh` unbounded. `opts.timeoutMs` is held to the env var's rule:
+  // `setTimeout` fires 0, NaN and anything past 2^31-1 ms after ~1 ms, so an
+  // unvalidated `timeoutMs: 0` ("no timeout", by convention) kills every call.
+  const timeoutMs = opts.timeoutMs === undefined
+    ? resolveGhTimeoutMs()
+    : assertGhTimeoutMs(opts.timeoutMs, "opts.timeoutMs");
+  const res = await spawnBounded("gh", args, { input, env: { ...process.env }, timeoutMs });
+  if (res.status === null) {
+    // Checked BEFORE stdout is parsed: a `--paginate` killed between pages
+    // leaves complete HTTP blocks behind, which parse as a clean 200 silently
+    // missing every later page. A terminated child's output is never a result.
+    const why = explainTermination("gh", res, res.stderr, undefined, timeoutMs);
+    throw new GhError(-1, why, {}, `gh api ${p} failed: ${why.slice(0, 400)}`);
+  }
   const { headers, body, status } = parseHttpStream(res.stdout);
-  if (status === 0) {
-    throw new GhError(-1, res.stderr || res.stdout, {}, `gh api ${p} failed: ${res.stderr.slice(0, 400)}`);
+  // `gh api` exits 0 on every 2xx, so a non-zero exit behind one is the kill
+  // above reached by a plain exit: an earlier page landed, a later one died at
+  // the transport with no HTTP block to parse. Same truncated 200, same answer.
+  const partial = res.status !== 0 && status >= 200 && status < 300;
+  if (status === 0 || partial) {
+    const own = (partial ? res.stderr : res.stderr || res.stdout).trim();
+    // The exit code goes in the BODY, not only the message: `postReview`
+    // reports `err.body`, so a silent non-zero exit would otherwise surface in
+    // `unpostedReason` as a bare `http_-1: `.
+    const why = `gh exited ${res.status}${partial ? " after a partial 2xx response" : ""}: ${own}`;
+    throw new GhError(-1, why, {}, `gh api ${p} failed: ${why.slice(0, 400)}`);
   }
   let data: unknown = null;
   if (body.length > 0) data = parseConcatenatedJson(body);
@@ -325,15 +299,46 @@ export async function findExistingMarker(opts: {
   marker: string;
   ghJsonFn?: typeof ghJson;
 }): Promise<boolean> {
+  return (await findMarkedReview(opts)) !== null;
+}
+
+/**
+ * The rows of a list endpoint, or a throw. A 2xx whose body is not a JSON array
+ * is an UNREADABLE read, not an empty one: both idempotency reads (the review
+ * marker, the overflow comments) exist to stop a double-post, and reading
+ * "nothing there" out of a body that said nothing is how one gets through.
+ */
+function listRows(r: GhJsonResult, what: string): unknown[] {
+  if (Array.isArray(r.data)) return r.data;
+  throw new GhError(-1, `${what} was not a JSON array (HTTP ${r.status})`, {});
+}
+
+/** One line naming why a `gh` call failed, for `unpostedReason`. Reads
+ * `GhError.body`, never the message — that is where the transport puts the
+ * cause (see `ghJsonOnce`). */
+function describeGhFailure(e: unknown): string {
+  return e instanceof GhError ? `http_${e.status}: ${e.body.slice(0, 200)}` : String(e);
+}
+
+/** {@link findExistingMarker}, returning the review it found (its id when
+ * GitHub supplied a numeric one) so a skipped rerun can name what it skipped for.
+ * Throws — never "not found" — when the list cannot be read. */
+export async function findMarkedReview(opts: {
+  repo: string;
+  pr: number;
+  marker: string;
+  ghJsonFn?: typeof ghJson;
+}): Promise<{ id?: number } | null> {
   const gh = opts.ghJsonFn ?? ghJson;
   const r = await gh(`/repos/${opts.repo}/pulls/${opts.pr}/reviews`);
-  if (!Array.isArray(r.data)) return false;
-  for (const rev of r.data) {
+  for (const rev of listRows(r, `the reviews list of ${opts.repo}#${opts.pr}`)) {
     if (typeof rev !== "object" || rev === null) continue;
-    const body = (rev as { body?: unknown }).body;
-    if (typeof body === "string" && body.startsWith(opts.marker)) return true;
+    const { body, id } = rev as { body?: unknown; id?: unknown };
+    if (typeof body === "string" && body.startsWith(opts.marker)) {
+      return typeof id === "number" ? { id } : {};
+    }
   }
-  return false;
+  return null;
 }
 
 // ─── postReview: inline-vs-body routing + 422 no-drop fallback ──────────────
@@ -508,6 +513,9 @@ export function buildReviewBody(
     /** Rendered cross-links to overflow issue comments. Omitted (the normal
      * case) the body is byte-identical to a build without this option. */
     overflowLinks?: string[];
+    /** How many of the leading `overflowLinks` point at the relocated review
+     * summary rather than at findings (STARK-6116), so the footer can say so. */
+    overflowSummaryParts?: number;
   } = {},
 ): string {
   const lines: string[] = [marker, "", humanSummary];
@@ -537,7 +545,7 @@ export function buildReviewBody(
     }
   }
   if (opts.overflowLinks && opts.overflowLinks.length > 0) {
-    lines.push("", renderOverflowFooter(opts.overflowLinks));
+    lines.push("", renderOverflowFooter(opts.overflowLinks, opts.overflowSummaryParts));
   }
   return lines.join("\n");
 }
@@ -558,6 +566,12 @@ export function buildReviewBody(
  * The degrade (not a refusal, and never a truncation): the highest-severity
  * findings that fit stay in the review body, the rest are posted in full as
  * follow-up issue comments on the same PR and cross-linked from the body.
+ *
+ * Two shapes that moving findings cannot shrink (STARK-6116): one finding
+ * larger than a comment is SEGMENTED across consecutive comments that
+ * reassemble byte for byte, and a summary that alone blows the cap is RELOCATED
+ * in full with its head + a pointer left behind. The one refusal left is a body
+ * over the cap with nothing movable in it — named, and before any POST.
  */
 export const GITHUB_REVIEW_BODY_MAX = 65536;
 
@@ -607,18 +621,33 @@ function renderBodyFindingLines(f: Finding): string[] {
   return lines;
 }
 
-function renderOverflowFooter(links: string[]): string {
+function renderOverflowFooter(links: string[], summaryParts = 0): string {
+  // Say what the linked comments actually hold (STARK-6116). A relocated summary
+  // takes the leading `summaryParts` slots, and once it is out every finding may
+  // fit in the body — "carry the remaining findings" is then false in the one
+  // place a reader is told where to look. With no relocated summary the text is
+  // byte-identical to the STARK-6094 footer.
+  const carried =
+    summaryParts === 0
+      ? "the remaining findings"
+      : summaryParts >= links.length
+        ? "the review summary"
+        : `the review summary (overflow 1${summaryParts > 1 ? `–${summaryParts}` : ""}) and the remaining findings`;
   const lines = [
     "## Overflow findings",
     "",
     `The review body hit GitHub's ${GITHUB_REVIEW_BODY_MAX}-char limit. ` +
-      `${links.length} follow-up comment(s) on this PR carry the remaining findings ` +
+      `${links.length} follow-up comment(s) on this PR carry ${carried} ` +
       "in full — nothing was dropped, truncated or summarized:",
     "",
   ];
   links.forEach((url, i) => lines.push(`- overflow ${i + 1} of ${links.length}: ${url}`));
   return lines.join("\n");
 }
+
+/** Opening of an overflow comment's first line, up to the part number. Shared by
+ * {@link renderOverflowComment} and its inverse {@link overflowPartOf}. */
+const OVERFLOW_PART_PREFIX = "**Review overflow — part ";
 
 /** Body of one overflow issue comment. Content-addressed: the same findings in
  * the same slot always render the same text, which is what lets a rebuild reuse
@@ -631,7 +660,7 @@ export function renderOverflowComment(
   const lines: string[] = [
     marker,
     "",
-    `**Review overflow — part ${part}.** These findings did not fit in the review ` +
+    `${OVERFLOW_PART_PREFIX}${part}.** These findings did not fit in the review ` +
       "body's character limit. They are reproduced here in full; none was dropped or truncated.",
     "",
   ];
@@ -639,11 +668,170 @@ export function renderOverflowComment(
   return lines.join("\n");
 }
 
+/** Separates a segment comment's header from the text it carries. Exported so a
+ * reader (or a test) can recover the text exactly: everything after the FIRST
+ * occurrence is payload, byte for byte. */
+export const OVERFLOW_SEGMENT_DELIMITER = "\n\n---\n\n";
+
+/** One overflow issue comment's worth of content. */
+export interface OverflowChunk {
+  /** Whole findings this comment carries. Empty for a segment comment. */
+  findings: Finding[];
+  /**
+   * Set when this comment carries ONE SEGMENT of a text too large for a single
+   * comment (STARK-6116): an over-cap finding, or the relocated review summary.
+   * The segments of one text are consecutive chunks; concatenating their `text`
+   * in order reproduces the original byte for byte.
+   */
+  segment?: SegmentSource & {
+    /** 1-based. */
+    index: number;
+    total: number;
+    text: string;
+  };
+}
+
+/** What a segmented text IS. A union, so "a finding segment with no finding"
+ * is unrepresentable rather than a `!` waiting to throw in the header. */
+export type SegmentSource =
+  | { of: "summary" }
+  /** `finding` is the one being continued — for the header and the counts. */
+  | { of: "finding"; finding: Finding };
+
+/** How long a finding's title may run in a segment header before it is clipped.
+ * The header is navigation, not payload — the full title is in the segments. */
+const SEGMENT_HEADER_TITLE_MAX = 200;
+
+/** `text` clipped to at most `max` UTF-16 units, never ending on the first half
+ * of a surrogate pair — a lone surrogate is not valid UTF-8 on the wire. */
+function clipToCodePoint(text: string, max: number): string {
+  if (text.length <= max) return text;
+  return text.slice(0, /[\uD800-\uDBFF]/.test(text[max - 1]) ? max - 1 : max);
+}
+
+function renderSegmentHeader(marker: string, part: number, seg: NonNullable<OverflowChunk["segment"]>): string {
+  const position = `segment ${seg.index} of ${seg.total}`;
+  if (seg.of === "summary") {
+    return [
+      marker,
+      "",
+      `${OVERFLOW_PART_PREFIX}${part}: review summary,${position}.** The review summary did not fit ` +
+        "under the review body's character limit, so it is reproduced here in full" +
+        (seg.total > 1 ? " across consecutive comments — read the segments in order" : "") +
+        ". Nothing was dropped or truncated.",
+    ].join("\n");
+  }
+  const f = seg.finding;
+  const anchor = f.file ? `${f.file}${f.line ? `:${f.line}` : ""}` : "(no anchor)";
+  const title =
+    f.title.length > SEGMENT_HEADER_TITLE_MAX ? `${clipToCodePoint(f.title, SEGMENT_HEADER_TITLE_MAX)}…` : f.title;
+  return [
+    marker,
+    "",
+    `${OVERFLOW_PART_PREFIX}${part}: one finding,${position}.** This finding is larger than GitHub's ` +
+      "comment limit, so its text continues across consecutive comments — read the segments in order. " +
+      "Nothing was dropped or truncated.",
+    "",
+    `Finding: **${f.severity}** [${f.domain}] (${anchor}) — ${title}`,
+  ].join("\n");
+}
+
+/** Body of one overflow issue comment, whole-findings or segment. */
+export function renderOverflowChunk(marker: string, part: number, chunk: OverflowChunk): string {
+  if (!chunk.segment) return renderOverflowComment(marker, part, chunk.findings);
+  return renderSegmentHeader(marker, part, chunk.segment) + OVERFLOW_SEGMENT_DELIMITER + chunk.segment.text;
+}
+
+/** How much of a relocated summary stays in the review body as its head. */
+export const RELOCATED_SUMMARY_HEAD_MAX = 2000;
+
+/**
+ * Close a fenced code block that `head` was cut inside of. Left open, the fence
+ * swallows everything the review body renders after the head — the pointer, the
+ * findings, the overflow links — into one code block, where a link is not a
+ * link. Only the HEAD is touched, and only by appending: it is a preview, and
+ * the summary itself is reproduced unedited in the overflow comments. (Segments
+ * get no such repair — they reassemble byte for byte, which outranks rendering.)
+ */
+function closeOpenFence(head: string): string {
+  let open: string | null = null;
+  for (const line of head.split("\n")) {
+    const fence = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    if (!fence) continue;
+    if (open === null) {
+      // CommonMark: a backtick opener's info string holds no backtick, so
+      // "```x```" on one line is inline code, not a fence.
+      if (!(fence[1][0] === "`" && fence[2].includes("`"))) open = fence[1];
+    }
+    // CommonMark: a closer is the same character, at least as long, and bare.
+    else if (fence[1][0] === open[0] && fence[1].length >= open.length && fence[2].trim() === "") open = null;
+  }
+  return open === null ? head : `${head}\n${open}`;
+}
+
+/**
+ * What the review body carries in place of a summary that had to be relocated
+ * (STARK-6116): its head, then a pointer that SAYS the rest is elsewhere. The
+ * pointer is the point — a summary shortened without one is a silent
+ * truncation; with one, and the full text posted in the linked comment, it is
+ * a table of contents. The full summary is never edited, only moved.
+ */
+export function relocatedSummaryStub(summary: string): string {
+  // Only the first piece is wanted, so hand the splitter just enough text to
+  // decide that cut (one unit past the budget) instead of segmenting a summary
+  // of any size to keep element 0. The first cut is identical either way.
+  const window = summary.slice(0, RELOCATED_SUMMARY_HEAD_MAX + 1);
+  const head = closeOpenFence(splitTextToFit(window, RELOCATED_SUMMARY_HEAD_MAX)[0].trimEnd());
+  return (
+    `${head}\n\n` +
+    `_…the review summary is longer than GitHub's ${GITHUB_REVIEW_BODY_MAX}-char review-body limit allows. ` +
+    "Only its head is shown above; the summary continues in full, unedited, in the overflow comment(s) " +
+    "linked under **Overflow findings** below, starting at overflow 1._"
+  );
+}
+
+/** Findings a plan's chunks carry, counting a segmented finding ONCE. */
+export function countOverflowFindings(chunks: OverflowChunk[]): number {
+  return chunks.reduce(
+    (n, c) => n + c.findings.length + (c.segment?.of === "finding" && c.segment.index === 1 ? 1 : 0),
+    0,
+  );
+}
+
+/**
+ * The 1-based part number of an overflow comment {@link renderOverflowChunk}
+ * wrote for `marker` — whole-findings (`part N.**`) or segment (`part N: …`) —
+ * or null for anything else: another run's comment, a human quoting one, the
+ * review body itself. The inverse of those renderers, kept beside them so they
+ * cannot drift: a rerun uses it to find the comments an earlier run of the SAME
+ * payload already left on the PR.
+ */
+export function overflowPartOf(marker: string, body: string): number | null {
+  const head = `${marker}\n\n${OVERFLOW_PART_PREFIX}`;
+  if (!body.startsWith(head)) return null;
+  const m = /^(\d+)(?:\.\*\*|: )/.exec(body.slice(head.length));
+  if (!m) return null;
+  const part = Number.parseInt(m[1], 10);
+  return part >= 1 ? part : null;
+}
+
 export interface BodySplitPlan {
   /** Findings that stay in the review body, in the input order (severity-desc). */
   kept: Finding[];
-  /** Overflow findings, chunked to fit one issue comment each. */
-  chunks: Finding[][];
+  /** Overflow content, one entry per issue comment, each fitting under the cap. */
+  chunks: OverflowChunk[];
+  /**
+   * True when the body is over the cap even with NO findings in it — nothing
+   * this function moves can fix that, and posting would 422 (STARK-6116).
+   */
+  unfittable?: boolean;
+  /**
+   * Set with `unfittable`: the size that was measured against the cap — the
+   * body with no findings PLUS the cross-link footer reserved for `chunks`.
+   * The footer is part of the floor, so a refusal that reports the body alone
+   * can name a number that is under the cap it says was exceeded.
+   */
+  floorChars?: number;
 }
 
 /**
@@ -660,17 +848,28 @@ export function planBodySplit(
   marker: string,
   cap = GITHUB_REVIEW_BODY_MAX,
   commentCap = GITHUB_ISSUE_COMMENT_MAX,
+  /** Chunks that exist whatever the split decides — the relocated summary
+   * (STARK-6116). They take the first slots and their links share the footer. */
+  leading: OverflowChunk[] = [],
 ): BodySplitPlan {
-  if (buildBody(bodyFindings).length <= cap) {
+  if (leading.length === 0 && buildBody(bodyFindings).length <= cap) {
     return { kept: bodyFindings, chunks: [] };
+  }
+  const footerReserve = (n: number) => (n > 0 ? OVERFLOW_PREAMBLE_RESERVE + OVERFLOW_LINK_RESERVE * n : 0);
+  // The floor: every finding moved out. If THAT is over the cap, no split can
+  // help — say so instead of returning a plan whose body is known to 422.
+  const allOut = [...leading, ...chunkOverflow(bodyFindings, marker, commentCap, leading.length)];
+  const floorChars = buildBody([]).length + footerReserve(allOut.length);
+  if (floorChars > cap) {
+    return { kept: [], chunks: allOut, unfittable: true, floorChars };
   }
   // The footer reserve depends on the chunk count, which depends on the split.
   // Iterate to a fixpoint; the reserve is monotone in the chunk count, so this
   // converges. The bound keeps a pathological payload from looping.
-  let chunkEstimate = 1;
-  let plan: BodySplitPlan = { kept: [], chunks: [] };
+  let chunkEstimate = Math.max(1, leading.length);
+  let plan: BodySplitPlan = { kept: [], chunks: allOut };
   for (let iter = 0; iter < 8; iter++) {
-    const reserve = OVERFLOW_PREAMBLE_RESERVE + OVERFLOW_LINK_RESERVE * chunkEstimate;
+    const reserve = footerReserve(chunkEstimate);
     // `buildBody` is monotone in the prefix length, so the longest fitting
     // prefix is a binary search. A linear scan re-renders the WHOLE body once
     // per finding — quadratic in exactly the payload this function only ever
@@ -684,33 +883,98 @@ export function planBodySplit(
     }
     const keptCount = lo;
     const kept = bodyFindings.slice(0, keptCount);
-    const chunks = chunkOverflow(bodyFindings.slice(keptCount), marker, commentCap);
+    const chunks = [...leading, ...chunkOverflow(bodyFindings.slice(keptCount), marker, commentCap, leading.length)];
     plan = { kept, chunks };
-    if (chunks.length === chunkEstimate) return plan;
+    if (chunks.length <= chunkEstimate) return plan;
     chunkEstimate = Math.max(chunkEstimate + 1, chunks.length);
   }
   return plan;
 }
 
-/** Greedily pack overflow findings into comment-sized chunks. A single finding
- * larger than the cap gets its own chunk rather than being truncated — the
- * no-drop rule outranks the cap. */
-function chunkOverflow(rest: Finding[], marker: string, commentCap: number): Finding[][] {
-  const chunks: Finding[][] = [];
+/**
+ * Cut `text` into consecutive pieces of at most `budget` chars whose
+ * concatenation is `text` exactly. A cut prefers the last newline in the
+ * window — but only in its back half, so one early newline cannot shrink every
+ * segment to a sliver — and never lands between the halves of a surrogate pair,
+ * which would strand a broken code point at the end of one comment and the
+ * start of the next.
+ */
+export function splitTextToFit(text: string, budget: number): string[] {
+  if (budget < 2) throw new Error(`splitTextToFit: budget ${budget} cannot hold a surrogate pair`);
+  const parts: string[] = [];
+  let at = 0;
+  while (text.length - at > budget) {
+    let end = at + budget;
+    const nl = text.lastIndexOf("\n", end - 1);
+    if (nl >= at + Math.floor(budget / 2)) end = nl + 1;
+    else if (/[\uD800-\uDBFF]/.test(text[end - 1])) end -= 1;
+    parts.push(text.slice(at, end));
+    at = end;
+  }
+  if (at < text.length || parts.length === 0) parts.push(text.slice(at));
+  return parts;
+}
+
+/**
+ * Segment one over-cap text into chunks that each render under `commentCap`.
+ * The header's length depends on `total` and the part number only through
+ * their digit counts, so the budget is taken against a worst-case header
+ * rather than solved for — a few chars of slack per comment, no fixpoint.
+ */
+export function segmentChunks(
+  source: SegmentSource,
+  text: string,
+  marker: string,
+  commentCap: number,
+): OverflowChunk[] {
+  const worst = renderSegmentHeader(marker, 99_999, { ...source, index: 99_999, total: 99_999, text: "" });
+  const budget = commentCap - worst.length - OVERFLOW_SEGMENT_DELIMITER.length;
+  const parts = splitTextToFit(text, budget);
+  return parts.map((t, i) => ({
+    findings: [],
+    segment: { ...source, index: i + 1, total: parts.length, text: t },
+  }));
+}
+
+/**
+ * Greedily pack overflow findings into comment-sized chunks.
+ *
+ * A single finding larger than the cap used to get its own chunk "rather than
+ * being truncated" — and that comment then 422'd on `body is too long`, which
+ * failed the whole run to protect one finding (STARK-6116). It is now SEGMENTED
+ * across consecutive comments instead: still every byte, still never cut short,
+ * and each comment actually postable. `partOffset` is how many chunks precede
+ * these (the relocated summary), so part numbers render as they will be posted.
+ */
+function chunkOverflow(rest: Finding[], marker: string, commentCap: number, partOffset = 0): OverflowChunk[] {
+  const chunks: OverflowChunk[] = [];
   let current: Finding[] = [];
+  const part = () => partOffset + chunks.length + 1;
+  const flush = () => {
+    if (current.length > 0) chunks.push({ findings: current });
+    current = [];
+  };
   for (const f of rest) {
+    // Size `f` against the part it would hold ALONE. With a chunk already open
+    // that is the NEXT part, not this one, and 9 → 10 adds a digit: a finding at
+    // exactly the cap as part 9 is cap + 1 as part 10, and that comment 422s.
+    // (It cannot fit beside `current` instead — that render is longer still.)
+    const alonePart = part() + (current.length > 0 ? 1 : 0);
+    if (renderOverflowComment(marker, alonePart, [f]).length > commentCap) {
+      // Keeps its place in the severity order: flush what precedes it first.
+      flush();
+      chunks.push(...segmentChunks({ of: "finding", finding: f }, renderBodyFindingLines(f).join("\n"), marker, commentCap));
+      continue;
+    }
     const candidate = [...current, f];
-    if (
-      current.length > 0 &&
-      renderOverflowComment(marker, chunks.length + 1, candidate).length > commentCap
-    ) {
-      chunks.push(current);
+    if (current.length > 0 && renderOverflowComment(marker, part(), candidate).length > commentCap) {
+      flush();
       current = [f];
     } else {
       current = candidate;
     }
   }
-  if (current.length > 0) chunks.push(current);
+  flush();
   return chunks;
 }
 
@@ -755,11 +1019,43 @@ function extract422IndicesFromString(s: string): number[] {
   return [...idxs].sort((a, b) => a - b);
 }
 
+/**
+ * The review marker's run hash: a digest of EVERYTHING the review would carry,
+ * pinned to the head it anchors to. Pass its result as
+ * {@link PostReviewOpts.runHash}.
+ *
+ * It lives here, beside the skip it protects, because every caller of
+ * {@link postReview} inherits the failure: since STARK-6125 a run whose marker
+ * is already on the PR writes NOTHING, so a marker that collides across
+ * different payloads silently swallows a review nobody has seen. The hash this
+ * replaced was the joined finding ids cut at 40 chars — three 12-hex ids, each
+ * derived from a title alone — so a later review sharing its first three finding
+ * titles, or the same titles with new bodies or lines, collided. That was
+ * harmless while the marker was only read between retries of one run. A wrong
+ * skip loses findings; a missed one only double-posts — so the hash is as narrow
+ * as the payload. The head sha is in it because inline anchors are per-commit:
+ * the same findings on a new head are a new review.
+ */
+export function computeRunHash(findings: Finding[], humanSummary: string, headSha: string): string {
+  const h = createHash("sha256");
+  h.update(JSON.stringify([
+    headSha,
+    humanSummary,
+    findings.map((f) => [f.id, f.severity, f.file ?? null, f.line ?? null, f.title, f.body, f.body_reason ?? null]),
+  ]));
+  return h.digest("hex").slice(0, 40);
+}
+
 export interface PostReviewOpts {
   repo: string;
   pr: number;
   round: number;
   agent: AgentName;
+  /** Identifies THIS payload in the review marker. It is load-bearing: a marker
+   * already on the PR makes {@link postReview} skip the whole run, so two
+   * different payloads sharing a `runHash` means the second is never posted.
+   * Derive it with {@link computeRunHash}; never from a prefix, a count, or the
+   * finding ids alone. */
   runHash: string;
   findings: Finding[];
   changedFiles: Set<string>;
@@ -801,16 +1097,29 @@ export interface PostReviewResult {
    * non-zero. */
   unposted?: boolean;
   unpostedReason?: string;
-  /** Issue-comment ids created to carry body findings that did not fit under
-   * {@link GITHUB_REVIEW_BODY_MAX}. Empty (and `bodyOverflow` absent) on every
-   * payload that fits, which is the overwhelming majority. */
+  /** Set when the PR already carried this payload's marker before anything was
+   * sent: an earlier run landed it, so this one wrote nothing (no review, no
+   * overflow comment). `posted` is true — the review IS on the PR — `attempts`
+   * is empty, and `reviewId` names the review that was found. `payloadSummary`
+   * and `bodyOverflow` then describe this run's first-pass PLAN, exactly as
+   * `dryRun` reports it — not what the earlier run ended up sending, which a
+   * 422 fallback may have reshaped — and `bodyOverflowComments` stays absent. */
+  alreadyPosted?: boolean;
+  /** Ids of the issue comments carrying body findings that did not fit under
+   * {@link GITHUB_REVIEW_BODY_MAX} — posted by this run or adopted from an
+   * earlier one, and only the ones this review links to. Empty (and
+   * `bodyOverflow` absent) on every payload that fits, which is the
+   * overwhelming majority. */
   bodyOverflowComments?: number[];
   /** Set only when the body overflowed, so a caller can report the split. */
   bodyOverflow?: {
     cap: number;
     chunks: number;
     findingsInBody: number;
+    /** Distinct findings — one segmented across several comments counts once. */
     findingsInOverflow: number;
+    /** Present (true) only when the summary itself was moved out (STARK-6116). */
+    summaryRelocated?: true;
   };
 }
 
@@ -863,19 +1172,50 @@ export async function postReview(opts: PostReviewOpts): Promise<PostReviewResult
     agentsResolved: opts.agentsResolved,
     postingAgentNote: opts.postingAgentNote,
   };
-  const renderBody = (kept: Finding[], overflowLinks?: string[]) =>
-    buildReviewBody(marker, opts.humanSummary, kept, { ...bodyOpts, overflowLinks });
-  const plan = (findings: Finding[]) =>
-    planBodySplit((kept) => renderBody(kept), findings, marker);
-  const summarizeSplit = (s: BodySplitPlan) => ({
+  /** A plan plus the summary text its body carries — the caller's own, or the
+   * head-and-pointer form when the full summary had to be relocated. */
+  type ReviewPlan = BodySplitPlan & { summary: string; summaryRelocated: boolean };
+  const renderBody = (
+    p: Pick<ReviewPlan, "summary"> & { chunks?: OverflowChunk[] },
+    kept: Finding[],
+    overflowLinks?: string[],
+  ) =>
+    buildReviewBody(marker, p.summary, kept, {
+      ...bodyOpts,
+      overflowLinks,
+      overflowSummaryParts: p.chunks?.filter((c) => c.segment?.of === "summary").length,
+    });
+  /**
+   * Plan the body. Moving findings out is always tried first and alone; only
+   * when the body is over the cap with NO findings left in it (STARK-6116) is
+   * the summary relocated — in full — to the leading overflow comment(s), with
+   * its head and a pointer left behind. If even that floor is over the cap the
+   * plan comes back `unfittable`: what remains (`postingAgentNote`, the
+   * `agents_resolved` block) is not something this function may cut.
+   */
+  const plan = (findings: Finding[]): ReviewPlan => {
+    const full = { summary: opts.humanSummary };
+    const first = planBodySplit((kept) => renderBody(full, kept), findings, marker);
+    if (!first.unfittable) return { ...first, ...full, summaryRelocated: false };
+    const head = { summary: relocatedSummaryStub(opts.humanSummary) };
+    const leading = segmentChunks({ of: "summary" }, opts.humanSummary, marker, GITHUB_ISSUE_COMMENT_MAX);
+    const second = planBodySplit(
+      (kept) => renderBody(head, kept), findings, marker,
+      GITHUB_REVIEW_BODY_MAX, GITHUB_ISSUE_COMMENT_MAX, leading,
+    );
+    return { ...second, ...head, summaryRelocated: true };
+  };
+  const summarizeSplit = (s: ReviewPlan) => ({
     cap: GITHUB_REVIEW_BODY_MAX,
     chunks: s.chunks.length,
     findingsInBody: s.kept.length,
-    findingsInOverflow: s.chunks.reduce((n, c) => n + c.length, 0),
+    findingsInOverflow: countOverflowFindings(s.chunks),
+    ...(s.summaryRelocated ? { summaryRelocated: true as const } : {}),
   });
 
   const initialSplit = plan(part.bodyFindings);
   let body = renderBody(
+    initialSplit,
     initialSplit.kept,
     initialSplit.chunks.length > 0
       ? initialSplit.chunks.map((_, i) => `(pending overflow comment ${i + 1})`)
@@ -891,6 +1231,27 @@ export async function postReview(opts: PostReviewOpts): Promise<PostReviewResult
   if (initialSplit.chunks.length > 0) {
     result.bodyOverflow = summarizeSplit(initialSplit);
   }
+  /** Refuse, by name and BEFORE any POST, a body that is over the cap with no
+   * findings and no summary left to move. Posting it 422s with no index, and
+   * the no-drop fallback answers that by folding the inline comments into the
+   * same body — larger, 422 again, `unposted` with a reason that names nothing.
+   * Reported in dry-run too, so the probe says what the real run would. */
+  const refuseUnfittable = (s: ReviewPlan): boolean => {
+    if (!s.unfittable) return false;
+    result.unposted = true;
+    // Name the number that was actually over the cap. The floor is the body's
+    // non-finding parts PLUS the cross-link footer; reporting the first alone
+    // reads as "310 chars against a 65536-char cap" when the footer is what
+    // does not fit.
+    result.unpostedReason =
+      `body_over_cap_without_findings: with every finding and the summary already moved out the review ` +
+      `body still needs ${s.floorChars} chars against a ${GITHUB_REVIEW_BODY_MAX}-char cap — ` +
+      `${renderBody(s, []).length} of non-finding parts (postingAgentNote, agents_resolved) plus the ` +
+      `cross-link footer for ${s.chunks.length} overflow comment(s); ` +
+      "shorten what the caller passes — nothing was posted";
+    return true;
+  };
+  if (refuseUnfittable(initialSplit)) return result;
   if (opts.dryRun) return result;
   const gh = opts.ghJsonFn ?? ghJson;
   // POST transport must NOT retry internally — the outer retry below re-checks
@@ -899,6 +1260,34 @@ export async function postReview(opts: PostReviewOpts): Promise<PostReviewResult
   // re-sent before the marker check ran, double-posting the review.
   const ghPost = opts.ghJsonOnceFn ?? opts.ghJsonFn ?? ghJsonOnce;
   const retry = opts.retryFn ?? withRetry;
+
+  // Idempotency ACROSS runs (STARK-6125). `checkMarker` below only runs between
+  // retries of this run, but a POST can land and still be reported `unposted` —
+  // a `gh` killed after writing a complete 2xx is refused as a terminated
+  // child's output, and so is our own timeout kill — and the operator's rerun is
+  // a fresh run. So look before the first write of ANY kind: the overflow
+  // comments are synced before the review, and checking only ahead of the review
+  // POST would re-post those while skipping the review.
+  //
+  // A failed read REFUSES rather than proceeding, unlike `checkMarker`: between
+  // retries "unknown" costs one more attempt at a POST already owed, here it
+  // would be the unguarded double-post this check exists to stop. Nothing is
+  // lost by refusing — nothing has been written, and the rerun is safe.
+  try {
+    const existing = await findMarkedReview({
+      repo: opts.repo, pr: opts.pr, marker, ghJsonFn: gh,
+    });
+    if (existing) {
+      result.posted = true;
+      result.alreadyPosted = true;
+      if (existing.id !== undefined) result.reviewId = existing.id;
+      return result;
+    }
+  } catch (e) {
+    result.unposted = true;
+    result.unpostedReason = `marker_check_failed: ${describeGhFailure(e)}`;
+    return result;
+  }
 
   // Overflow comments are SLOT-addressed: chunk i always lives in the same
   // issue comment, edited in place when a rebuild changes what is in it.
@@ -919,17 +1308,49 @@ export async function postReview(opts: PostReviewOpts): Promise<PostReviewResult
 
   const failOverflow = (e: unknown): null => {
     result.unposted = true;
-    result.unpostedReason = `overflow_comment_failed: ${
-      e instanceof GhError ? `http_${e.status}: ${e.body.slice(0, 200)}` : String(e)
-    }`;
+    result.unpostedReason = `overflow_comment_failed: ${describeGhFailure(e)}`;
     return null;
+  };
+
+  /**
+   * Seed the slots, once and only when a chunk is about to be written, from the
+   * overflow comments an earlier run of this same payload left on the PR. That
+   * run's review POST truly failed (a landed one is caught by the marker check
+   * above), so its comments sit there linked from nowhere; without this the
+   * rerun posts every chunk a second time. An adopted slot then behaves like any
+   * other: reused when identical, PATCHed when the content moved. Lazy, so the
+   * overwhelming no-overflow majority never pays for the listing; a failed
+   * listing fails the overflow — and with it the review — rather than guessing.
+   */
+  let slotsAdopted = false;
+  const adoptOverflowSlots = async (): Promise<void> => {
+    if (slotsAdopted) return;
+    const r = await gh(`/repos/${opts.repo}/issues/${opts.pr}/comments`);
+    // Unreadable is a throw, same as a failed request: "no comments" read out of
+    // a body that was not a list re-posts every chunk.
+    const rows = listRows(r, `the issue-comments list of ${opts.repo}#${opts.pr}`);
+    slotsAdopted = true;
+    for (const c of rows) {
+      if (typeof c !== "object" || c === null) continue;
+      const { id, body, html_url } = c as { id?: unknown; body?: unknown; html_url?: unknown };
+      if (typeof id !== "number" || typeof body !== "string") continue;
+      const part = overflowPartOf(marker, body);
+      // First match wins: duplicates left by pre-STARK-6125 reruns stay orphans.
+      if (part === null || slots[part - 1]) continue;
+      slots[part - 1] = { id, url: overflowLinkFor(opts.repo, opts.pr, id, html_url), content: body };
+    }
   };
 
   /** Put chunk `i` in its slot — posting the comment the first time, editing it
    * when a rebuild changed its contents, reusing it untouched otherwise — and
    * return the cross-link, or null after recording why it failed. */
-  const syncOverflowSlot = async (i: number, chunk: Finding[]): Promise<string | null> => {
-    const content = renderOverflowComment(marker, i + 1, chunk);
+  const syncOverflowSlot = async (i: number, chunk: OverflowChunk): Promise<string | null> => {
+    const content = renderOverflowChunk(marker, i + 1, chunk);
+    try {
+      await adoptOverflowSlots();
+    } catch (e) {
+      return failOverflow(e);
+    }
     const slot = slots[i];
     if (slot && slot.content === content) return slot.url;
     if (slot?.id !== undefined) {
@@ -967,14 +1388,20 @@ export async function postReview(opts: PostReviewOpts): Promise<PostReviewResult
    */
   const buildBodyWithOverflow = async (
     findings: Finding[],
-    pre?: BodySplitPlan,
+    pre?: ReviewPlan,
   ): Promise<string | null> => {
     const s = pre ?? plan(findings);
+    // A 422-fallback rebuild folds inline comments in and re-plans; the larger
+    // payload can be the one that no longer fits. Checked before any slot sync
+    // so THIS pass posts nothing for a review that cannot land. Comments a
+    // previous pass already posted stay up — they hold real findings, and this
+    // file deletes nothing — and stay listed in `bodyOverflowComments`.
+    if (refuseUnfittable(s)) return null;
     if (s.chunks.length === 0) {
       // Rebuilds only ever ADD findings, so a payload that already overflowed
       // cannot come back under the cap; this is the first pass fitting.
       delete result.bodyOverflow;
-      return renderBody(s.kept);
+      return renderBody(s, s.kept);
     }
     const links: string[] = [];
     for (let i = 0; i < s.chunks.length; i++) {
@@ -982,21 +1409,29 @@ export async function postReview(opts: PostReviewOpts): Promise<PostReviewResult
       if (url === null) return null;
       links.push(url);
     }
+    // Only the slots this plan links to: an adopted slot past the current chunk
+    // count belongs to an earlier, larger split and is not part of this review.
     result.bodyOverflowComments = slots
+      .slice(0, s.chunks.length)
       .map((sl) => sl.id)
       .filter((id): id is number => id !== undefined);
     result.bodyOverflow = summarizeSplit(s);
     // The reserve is an upper bound (see OVERFLOW_LINK_RESERVE), so the rendered
     // body is under the cap by construction rather than by luck.
-    return renderBody(s.kept, links);
+    return renderBody(s, s.kept, links);
   };
 
   const checkMarker = async (): Promise<{ stopReason?: string } | void> => {
     try {
-      const found = await findExistingMarker({
+      const found = await findMarkedReview({
         repo: opts.repo, pr: opts.pr, marker, ghJsonFn: gh,
       });
-      if (found) return { stopReason: "marker_found" };
+      if (found) {
+        // Same landed-but-unacknowledged event as `alreadyPosted`, so name the
+        // review here too rather than only on the rerun.
+        if (found.id !== undefined) result.reviewId = found.id;
+        return { stopReason: "marker_found" };
+      }
     } catch { /* swallow — retry continues */ }
     return undefined;
   };
