@@ -14,10 +14,11 @@
  */
 import * as fs from "node:fs";
 import * as nodePath from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawnBounded, type BoundedSpawnResult } from "./bounded_spawn_lib.ts";
 
 import {
   GITHUB_REVIEW_BODY_MAX,
+  computeRunHash,
   postReview,
   type PostReviewResult,
 } from "./review_post_lib.ts";
@@ -27,6 +28,7 @@ import {
   type Finding,
   type Severity,
 } from "./finding_lib.ts";
+import { assertGhTimeoutMs, explainTermination, resolveGhTimeoutMs } from "./child_termination_lib.ts";
 import { isMainModule } from "./main_module_lib.ts";
 import {
   DEFAULT_GENERATED_PATHS_CONFIG,
@@ -263,16 +265,20 @@ export interface GitattributesFetch {
  * is the exact defect STARK-6095 exists to kill. The reason is returned so the
  * warning can say which happened.
  */
-export function fetchGitattributesResult(
+export async function fetchGitattributesResult(
   repo: string,
   run: RunFn = defaultRun,
   ref?: string,
-): GitattributesFetch {
+): Promise<GitattributesFetch> {
   const path = `repos/${repo}/contents/.gitattributes${ref ? `?ref=${encodeURIComponent(ref)}` : ""}`;
-  const r = run("gh", ["api", path, "-H", "Accept: application/vnd.github.raw"]);
+  const r = await run("gh", ["api", path, "-H", "Accept: application/vnd.github.raw"]);
   if (r.status === 0) return { text: r.stdout, failure: null };
   const stderr = (r.stderr ?? "").trim();
-  const notFound = /\b404\b|Not Found/i.test(stderr);
+  // A TERMINATED child (`status: null` — timeout, maxBuffer, signal) is never a
+  // 404, whatever its stderr reads. Its text is now partly ours: a bound of 404
+  // renders "timed out after 404 ms", which would otherwise match, null the
+  // failure and drop the one warning that says the fallback list may be wrong.
+  const notFound = r.status !== null && /\b404\b|Not Found/i.test(stderr);
   return {
     text: null,
     failure: notFound ? null : `gh api ${path} failed (exit ${r.status}): ${stderr.slice(0, 200)}`,
@@ -280,12 +286,12 @@ export function fetchGitattributesResult(
 }
 
 /** Read the target repo's `.gitattributes`, or null when it could not be read. */
-export function fetchGitattributes(
+export async function fetchGitattributes(
   repo: string,
   run: RunFn = defaultRun,
   ref?: string,
-): string | null {
-  return fetchGitattributesResult(repo, run, ref).text;
+): Promise<string | null> {
+  return (await fetchGitattributesResult(repo, run, ref)).text;
 }
 
 /** Which layer of the precedence order supplied the base list. */
@@ -699,7 +705,10 @@ export interface PrContext {
   anchorable: AnchorableLines;
 }
 
-type RunFn = (cmd: string, args: string[]) => { status: number | null; stdout: string; stderr: string };
+interface RunResult { status: number | null; stdout: string; stderr: string }
+
+/** Async since STARK-6131 (see `runCapturing`); a synchronous fake still fits. */
+type RunFn = (cmd: string, args: string[]) => RunResult | Promise<RunResult>;
 
 /**
  * 64 MiB. Node's spawnSync default is 1 MiB, and `gh api /pulls/N/files
@@ -713,58 +722,11 @@ type RunFn = (cmd: string, args: string[]) => { status: number | null; stdout: s
  * silently on exactly the large PRs whose findings matter most. Note that the
  * killed child does NOT necessarily leave `stderr` empty: it keeps whatever it
  * had already written, and `gh` writes there routinely (rate-limit notices,
- * warnings). `explainTermination` below therefore names the cause whenever the
+ * warnings). `explainTermination` (child_termination_lib.ts, shared with
+ * review_post_lib.ts's posting path) therefore names the cause whenever the
  * child was terminated, never gated on an empty stderr.
  */
 export const GH_MAX_BUFFER = 64 * 1024 * 1024;
-
-/**
- * How much of a terminated child's own stderr is carried alongside the cause.
- * Callers slice the message to 400 chars anyway; the cap exists so an ENOBUFS
- * on the *stderr* stream cannot make this function allocate a fresh `maxBuffer`
- * sized string that is thrown away one line later.
- */
-export const TERMINATION_STDERR_TAIL = 4000;
-
-/** The `spawnSync` fields the explanation needs — nothing more, so it is testable. */
-export interface TerminationInfo {
-  status: number | null;
-  signal?: NodeJS.Signals | null;
-  error?: Error;
-}
-
-/**
- * Explain a TERMINATED child, **cause first**, then its own stderr.
- *
- * A signal kill is otherwise indistinguishable from a crash, and ENOBUFS is the
- * one cause we can name precisely — so name it whenever the child was
- * terminated, NOT only when stderr happens to be empty. A child killed for
- * exceeding maxBuffer keeps whatever it already wrote to stderr; gating on an
- * empty stderr let an unrelated `gh` warning swallow the real cause and put the
- * caller back to reporting `failed (exit null): gh: a warning` on exactly the
- * large PRs this buffer exists for.
- *
- * The ORDER is load-bearing, not cosmetic: every caller interpolates this into
- * an error and slices it to 400 chars, so a cause appended AFTER a chatty
- * child's stderr is swallowed by the truncation — the same defect, relocated.
- * A non-terminated child's stderr is returned untouched.
- */
-export function explainTermination(
-  cmd: string,
-  sp: TerminationInfo,
-  ownStderr: string,
-  maxBuffer: number,
-): string {
-  if (sp.status !== null) return ownStderr;
-  const err = sp.error as NodeJS.ErrnoException | undefined;
-  const why = err?.code === "ENOBUFS"
-    ? `output exceeded maxBuffer (${maxBuffer} bytes)`
-    : err?.message ?? `killed by signal ${sp.signal ?? "unknown"}`;
-  const own = ownStderr.trim();
-  return own
-    ? `${cmd} was terminated: ${why}; its own stderr follows: ${own.slice(0, TERMINATION_STDERR_TAIL)}`
-    : `${cmd} produced no stderr and was terminated: ${why}`;
-}
 
 /**
  * `defaultRun` with an explicit buffer cap. Exported so the termination paths
@@ -772,21 +734,46 @@ export function explainTermination(
  * `GH_MAX_BUFFER` costs a 64 MiB write in the child and ~250 MB RSS in the
  * parent, on every `npm test`, for a mechanism that behaves identically at
  * 64 KiB.
+ *
+ * `timeoutMs` bounds the child (STARK-6113): without it a `gh api --paginate`
+ * stalled on a hung connection blocks forever. The kill is SIGKILL, not SIGTERM
+ * — a bound a child can ignore is not a bound, and `gh` on a read call has
+ * nothing to clean up. A timeout leaves `status: null` + `error.code:
+ * ETIMEDOUT`, which `explainTermination` names with the value.
+ *
+ * Async since STARK-6131: the kill has to reach the child's whole process
+ * GROUP, or whatever `gh` spawned is orphaned rather than bounded, and
+ * `spawnSync` can do neither half of that — its `killSignal` goes to one pid,
+ * and it blocks the event loop the Ctrl-C forwarding handler needs. Both live
+ * in `bounded_spawn_lib.ts`, shared with `review_post_lib.ts`.
  */
-export function runCapturing(
+export async function runCapturing(
   cmd: string,
   args: string[],
   maxBuffer: number,
-): { status: number | null; stdout: string; stderr: string } {
-  const sp = spawnSync(cmd, args, { encoding: "utf8", maxBuffer });
+  timeoutMs: number,
+): Promise<RunResult> {
+  // Held to the env var's rule whichever door it arrives by: `setTimeout` fires
+  // 0, NaN and anything past 2^31-1 ms after ~1 ms.
+  assertGhTimeoutMs(timeoutMs, "runCapturing timeoutMs");
+  let sp: BoundedSpawnResult;
+  try {
+    sp = await spawnBounded(cmd, args, { maxBuffer, timeoutMs });
+  } catch (e) {
+    // A spawn failure (`gh` not on PATH) stays a RESULT, as it was under
+    // `spawnSync`: every caller reports `status`/`stderr`, none catches.
+    sp = { stdout: "", stderr: "", status: null, signal: null, error: e as Error };
+  }
   return {
     status: sp.status,
-    stdout: sp.stdout ?? "",
-    stderr: explainTermination(cmd, sp, sp.stderr ?? "", maxBuffer),
+    stdout: sp.stdout,
+    stderr: explainTermination(cmd, sp, sp.stderr, maxBuffer, timeoutMs),
   };
 }
 
-export const defaultRun: RunFn = (cmd, args) => runCapturing(cmd, args, GH_MAX_BUFFER);
+// The bound is resolved per call, not at import: an unusable
+// `STARK_GH_TIMEOUT_MS` must fail the run that reads it, not every importer.
+export const defaultRun: RunFn = (cmd, args) => runCapturing(cmd, args, GH_MAX_BUFFER, resolveGhTimeoutMs());
 
 /**
  * Build the PR context from the head sha plus the files listing. `filesJson` is
@@ -814,16 +801,19 @@ export async function fetchPrContext(
   pr: number,
   run: RunFn = defaultRun,
 ): Promise<PrContext> {
-  const head = run("gh", ["api", `repos/${repo}/pulls/${pr}`, "--jq", ".head.sha"]);
+  // Independent reads, so they run together now that `run` is async (it was
+  // `spawnSync` until STARK-6131, which forced them in series). The head sha's
+  // failure is still reported first.
+  const [head, files] = await Promise.all([
+    run("gh", ["api", `repos/${repo}/pulls/${pr}`, "--jq", ".head.sha"]),
+    // --paginate --slurp merges every page into one array; a PR over 30 changed
+    // files would otherwise silently expose only the first page, and a finding
+    // in an unlisted file loses its anchor for no visible reason.
+    run("gh", ["api", `repos/${repo}/pulls/${pr}/files`, "--paginate", "--slurp"]),
+  ]);
   if (head.status !== 0) {
     throw new Error(`gh api pulls/${pr} failed (exit ${head.status}): ${head.stderr.slice(0, 400)}`);
   }
-  // --paginate --slurp merges every page into one array; a PR over 30 changed
-  // files would otherwise silently expose only the first page, and a finding in
-  // an unlisted file loses its anchor for no visible reason.
-  const files = run("gh", [
-    "api", `repos/${repo}/pulls/${pr}/files`, "--paginate", "--slurp",
-  ]);
   if (files.status !== 0) {
     throw new Error(`gh api pulls/${pr}/files failed (exit ${files.status}): ${files.stderr.slice(0, 400)}`);
   }
@@ -858,6 +848,12 @@ options:
                     anchor generated-path findings inline like any other
   --dry-run         build the payload and print the plan without posting
   -h, --help        show this help message and exit
+
+Environment:
+  STARK_GH_TIMEOUT_MS
+                    bound on each gh subprocess, in ms (default 120000). A hung
+                    gh is killed and the error names the timeout. An unusable
+                    value (0, negative, non-integer) is refused, never "unbounded".
 
 A finding whose only anchor is a generated path is reported in the review BODY,
 with the file and line it would have anchored to, instead of as an inline
@@ -1019,6 +1015,13 @@ export function readPayload(path: string): ReportFindingsPayload {
  */
 export { GITHUB_REVIEW_BODY_MAX };
 
+/**
+ * Re-exported from `review_post_lib.ts`, where the marker's run hash lives
+ * beside the up-front skip it protects (STARK-6125) — same reason the body cap
+ * above moved there: every caller of `postReview` inherits the failure.
+ */
+export { computeRunHash };
+
 async function main(argv: string[]): Promise<number> {
   if (argv.some((a) => a === "-h" || a === "--help" || a === "help")) {
     console.log(HELP);
@@ -1041,8 +1044,8 @@ async function main(argv: string[]): Promise<number> {
     // is reviewed against the declaration it ships. A fork PR's head sha is not
     // in the base repo, so fall back to the default branch rather than
     // degrading a fork review to the built-in default list.
-    let r = fetchGitattributesResult(args.repo, defaultRun, ctx.headSha);
-    if (r.text === null) r = fetchGitattributesResult(args.repo);
+    let r = await fetchGitattributesResult(args.repo, defaultRun, ctx.headSha);
+    if (r.text === null) r = await fetchGitattributesResult(args.repo);
     gitattributes = r.text;
     gitattributesFailure = r.failure;
   }
@@ -1065,7 +1068,7 @@ async function main(argv: string[]): Promise<number> {
     pr: args.pr,
     round: 1,
     agent: args.agent,
-    runHash: plan.findings.map((f) => f.id).join(",").slice(0, 40) || "empty",
+    runHash: computeRunHash(plan.findings, plan.humanSummary, ctx.headSha),
     findings: plan.findings,
     changedFiles: plan.inlineEligibleFiles,
     // "low" so severity never filters a finding out of the review — the
@@ -1078,6 +1081,12 @@ async function main(argv: string[]): Promise<number> {
   // No size refusal here any more: `postReview` owns the cap and degrades over
   // it (overflow comments), so an oversize payload posts rather than exiting 2.
   const result: PostReviewResult = await postReview({ ...postOpts, dryRun: args.dryRun });
+  if (result.alreadyPosted) {
+    console.error(
+      `findings_review_post: this exact review is already on ${args.repo}#${args.pr}` +
+        `${result.reviewId !== undefined ? ` (review ${result.reviewId})` : ""} — nothing posted.`,
+    );
+  }
   console.log(JSON.stringify({
     findings: plan.findings.length,
     generatedPathSplit: {
