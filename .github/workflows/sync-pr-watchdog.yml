@@ -1,0 +1,178 @@
+name: sync-pr-watchdog
+
+# Say, out loud, when the open `auto/marketplace-sync` PR can no longer be published.
+#
+# `publish-sync-pr` refuses unless `compare(main...head).status` is `ahead`, and it only
+# ever runs on `pull_request_review: [submitted]`. Those two facts do not compose: the
+# precondition is invalidated by a DIFFERENT event — any merge to `main` — and that event
+# starts no publication attempt, so nothing evaluates it and nothing reports it. The
+# regeneration then sits open and unpublishable until a human happens to look.
+#
+# Measured live 2026-09-20 (STARK-8164). PR #293 opened 03:52. Six hand merges landed on
+# `main` between 08:10 and 13:30, the first of which diverged the sync branch. It was
+# spotted by hand at ~15:24 — 11.5 hours, six causing events, zero runs, zero alarms.
+# Publication for the whole repo was stopped for that entire window.
+#
+# This workflow does not heal, and cannot: repairing a diverged sync branch means
+# REGENERATING it, which needs a stark-skills checkout and a token for that repo. bifrost
+# holds neither — `gh secret list` is empty here and `secrets.GITHUB_TOKEN` is scoped to
+# this repo — so the remediation is a `marketplace-sync` dispatch in stark-skills, named in
+# the message below. Rebasing instead would be worse than useless: a stale regeneration
+# replayed onto a newer `main` silently reverts whatever that `main` changed under
+# `catalog/` or `dist/` (the web-registry removal touched six `.codex-plugin/plugin.json`
+# files), which is exactly the class of damage `publish-sync-pr`'s refusal exists to stop.
+#
+# Both triggers are load-bearing and neither covers the other:
+#   push   — fires at the instant a hand merge causes the divergence, so the alarm names
+#            the cause. It cannot cover a merge made with GITHUB_TOKEN (GitHub's anti-loop
+#            guard starts no run for one).
+#   cron   — covers that gap, plus every strand this workflow's own question cannot see:
+#            an attestation that was spent on a `publish-sync-pr` run that then failed, or
+#            a PR simply left open. It reports on age alone, so it needs to understand
+#            nothing about why.
+#
+# GitHub disables a scheduled workflow after 60 days without repo activity and emails the
+# owner. On a repo this quiet that is a real way for this alarm to go silent; re-enabling
+# it is a one-click action on the Actions tab.
+
+on:
+  push:
+    branches: [main]
+  # Off the hour: GitHub delays crons scheduled at :00 under load.
+  schedule:
+    - cron: '17,47 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write   # the diagnosis is left on the PR, where the operator will look
+
+# Never two at once, and never cancel one: the later run would leave the comment mid-edit.
+concurrency:
+  group: sync-pr-watchdog
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    name: sync PR can still publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Report whether the open sync PR is still publishable
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # This job never checks out, and `gh` resolves the repository from the working
+          # directory's git remotes rather than from GITHUB_REPOSITORY — without GH_REPO
+          # every call below dies on "not a git repository". Same reason
+          # `publish-sync-pr.yml` sets it.
+          GH_REPO: ${{ github.repository }}
+          # How long an open sync PR may sit before age alone is reported. The publication
+          # latencies measured over the 37 merged sync PRs to 2026-09-20 are a median of
+          # 1 minute and a maximum of 7.3 hours, so this is deliberately above the worst
+          # legitimate case: the `ahead` check is the fast signal, this is the backstop.
+          MAX_AGE_HOURS: '8'
+        run: |
+          set -euo pipefail
+
+          # The whole decision, in one filter, so the Go test can extract and exercise the
+          # REAL predicate instead of a copy of it (the idiom publish_sync_pr_test.go
+          # established for the attestation check).
+          #
+          # Deliberately narrow: this asks only "can `publish-sync-pr` still succeed",
+          # which is its `compare == ahead` precondition plus a clock. It does NOT restate
+          # the attestation predicate — two copies of a gate is how one of them drifts, and
+          # every other way publication fails already produces a red run of its own. What
+          # nothing else evaluates is this precondition, because the event that falsifies
+          # it triggers no evaluation at all.
+          # shellcheck disable=SC2016
+          verdict_filter='
+            (.maxAgeHours | tonumber) as $max
+            | (((.now | fromdateiso8601) - (.createdAt | fromdateiso8601)) / 3600) as $age
+            | if .compare != "ahead" then "stale: compare(main...head) is \"\(.compare)\", not \"ahead\" — publish-sync-pr will refuse"
+              elif $age > $max then "aging: open \($age | floor)h with no publication (limit \($max | floor)h)"
+              else "ok"
+              end'
+
+          pr="$(gh pr list --head auto/marketplace-sync --state open \
+                  --json number,headRefOid,createdAt --jq '.[0] // empty')"
+          if [ -z "$pr" ]; then
+            echo "no open auto/marketplace-sync PR — nothing to watch"
+            exit 0
+          fi
+          number="$(printf '%s' "$pr" | jq -r '.number')"
+          head="$(printf '%s' "$pr" | jq -r '.headRefOid')"
+
+          # A shape guard for the same reason publish-sync-pr carries one: `jq -r` prints
+          # the literal "null" for a missing field and exits 0, and a `compare` bound to
+          # garbage would 404 into a verdict nobody can act on.
+          case "$head" in
+            ''|null|*[!0-9a-f]*) echo "PR #${number} reported an unusable head '$head'" >&2; exit 1 ;;
+          esac
+
+          # A read the API cannot answer is NOT a verdict. Withhold and go red rather than
+          # letting a transport blip read as "the sync PR is fine".
+          if ! compare="$(gh api "repos/${GITHUB_REPOSITORY}/compare/main...${head}" --jq '.status')"; then
+            echo "could not compare main...${head} — this is not a verdict" >&2
+            exit 1
+          fi
+
+          verdict="$(printf '%s' "$pr" \
+            | jq -r --arg compare "$compare" \
+                    --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+                    --arg maxAgeHours "$MAX_AGE_HOURS" \
+                    '. + {compare: $compare, now: $now, maxAgeHours: $maxAgeHours}' \
+            | jq -r "$verdict_filter")"
+
+          marker='<!-- sync-pr-watchdog -->'
+          existing="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${number}/comments" \
+                        --jq "[.[] | select(.body | startswith(\"$marker\"))] | last | .id // empty")"
+
+          # Every line of the comment is a separate `printf` argument rather than a raw
+          # newline in the script: a line at column 0 would end the YAML block scalar this
+          # whole step lives in, and indenting the continuations instead would put four
+          # leading spaces on each one, which Markdown renders as a code block.
+          if [ "$verdict" = ok ]; then
+            echo "PR #${number} is ahead of main and within the age limit — publishable"
+            # Only edit a comment that is already there: a "resolved" note on a PR that
+            # never had a problem would be noise.
+            if [ -n "$existing" ]; then
+              body="$(printf '%s\n' \
+                "$marker" \
+                "✅ Sync PR is publishable again (head \`${head:0:8}\`, ahead of \`main\`).")"
+              gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" \
+                -f "body=${body}" >/dev/null
+            fi
+            exit 0
+          fi
+
+          body="$(printf '%s\n' \
+            "$marker" \
+            "🚨 **This regeneration cannot be published.** ${verdict}." \
+            "" \
+            "\`publish-sync-pr\` refuses to merge unless \`compare(main...head)\` is \`ahead\`," \
+            "and it only runs on a review submission — so nothing re-evaluates this after" \
+            "\`main\` moves. Until it is repaired, **every** stark-skills change is" \
+            "unpublished, not just this one." \
+            "" \
+            "Repair is a regeneration, not a rebase — a stale regen replayed onto a newer" \
+            "\`main\` reverts whatever that \`main\` changed under \`catalog/\` or \`dist/\`:" \
+            "" \
+            "\`gh workflow run marketplace-sync.yml --repo 21StarkCom/stark-skills --ref main\`" \
+            "" \
+            "If the branch is already \`ahead\` and this is an age report, publication failed" \
+            "after the attestation instead — re-drive it:" \
+            "" \
+            "\`gh workflow run publish-sync-pr.yml --repo 21StarkCom/bifrost -f pr=${number}\`" \
+            "" \
+            "_Posted by \`sync-pr-watchdog\`; this comment is edited in place, not reposted._")"
+
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" -f "body=${body}" >/dev/null
+          else
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${number}/comments" -f "body=${body}" >/dev/null
+          fi
+
+          # Red, every time, for as long as it is true. A green run here would be the same
+          # "gate that cannot fail" this workflow was written to end.
+          echo "::error::PR #${number}: ${verdict}"
+          exit 1
