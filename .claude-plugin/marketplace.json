@@ -1,5 +1,6 @@
 {
   "name": "bifrost",
+  "description": "The stark skills + tools source repo. Seven bundles served straight from this tree — no build step, no registry, no signed manifest.",
   "owner": {
     "name": "21 Stark AI",
     "email": "engineering@21stark.com"
@@ -7,9 +8,9 @@
   "plugins": [
     {
       "name": "stark-analyze",
-      "source": "./dist/claude/stark-analyze",
+      "source": "./",
       "description": "Zero-context fresh-eyes review of specs and briefs, multi-agent Terraform/Terragrunt (IaC) review, repository refactor planning, and application-logging authoring/review guidance. Maps to spec-kit's analyze phase.",
-      "version": "0.6.6",
+      "version": "0.6.7",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -21,13 +22,20 @@
         "analyze",
         "logging"
       ],
+      "skills": [
+        "./skill/stark-refactor-plan",
+        "./skill/stark-terraform-review",
+        "./skill/stark-terragrunt-review",
+        "./skill/stark-logging",
+        "./skill/stark-fresh-eyes"
+      ],
       "strict": true
     },
     {
       "name": "stark-constitution",
-      "source": "./dist/claude/stark-constitution",
+      "source": "./",
       "description": "Project setup, decision records, and session priming — scaffold a dev-docs/standards structure (template/backfill/upgrade modes), record architecture decisions (ADRs) under docs/adr/, and assign a session persona. Maps to spec-kit's constitution phase.",
-      "version": "0.2.74",
+      "version": "0.2.75",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -40,13 +48,18 @@
         "persona",
         "constitution"
       ],
+      "skills": [
+        "./skill/stark-init-docs",
+        "./skill/stark-adr",
+        "./skill/stark-persona"
+      ],
       "strict": true
     },
     {
       "name": "stark-design",
-      "source": "./dist/claude/stark-design",
+      "source": "./",
       "description": "Design-token architecture — build, name, theme, and govern a design-token system the way the field's canonical sources converge on it. Covers the three-tier model (primitive/semantic/component), naming grammar, OKLCH color scales, DTCG authoring, Style Dictionary pipelines, dark-mode/multi-brand/density theming, CSS-variable distribution, WCAG contrast gates, and token semver/deprecation.",
-      "version": "0.1.32",
+      "version": "0.1.33",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -59,13 +72,16 @@
         "dark-mode",
         "accessibility"
       ],
+      "skills": [
+        "./skill/stark-design-tokens"
+      ],
       "strict": true
     },
     {
       "name": "stark-implement",
-      "source": "./dist/claude/stark-implement",
+      "source": "./",
       "description": "Implement from an accepted spec. /stark-build runs one fresh headless session per task gated by checks the agent cannot edit, with a held-out e2e gate, one cross-vendor advisory review, and one bounded fix round for medium+ findings.",
-      "version": "0.4.68",
+      "version": "0.4.69",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -76,13 +92,16 @@
         "automation",
         "autonomous"
       ],
+      "skills": [
+        "./skill/stark-build"
+      ],
       "strict": true
     },
     {
       "name": "stark-ops",
-      "source": "./dist/claude/stark-ops",
+      "source": "./",
       "description": "Repository operations beyond the spec-driven pipeline — coordinate Minions with Gru, cut releases, run session start/end, hand off work across sessions, and run one ticket solo and unattended with Agnes.",
-      "version": "0.17.3",
+      "version": "0.17.4",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -95,13 +114,24 @@
         "handover",
         "git"
       ],
+      "skills": [
+        "./skill/stark-handover",
+        "./skill/stark-release",
+        "./skill/stark-session",
+        "./skill/stark-gha-cost",
+        "./skill/stark-bury",
+        "./skill/stark-memory",
+        "./skill/gru",
+        "./skill/minion",
+        "./skill/agnes"
+      ],
       "strict": true
     },
     {
       "name": "stark-plan",
-      "source": "./dist/claude/stark-plan",
+      "source": "./",
       "description": "Turn a design doc into a phased implementation plan, then decompose it into phased GitHub issues with story points and risk labels. Maps to spec-kit's plan + tasks phases.",
-      "version": "0.5.15",
+      "version": "0.5.16",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -113,13 +143,16 @@
         "tasks",
         "issues"
       ],
+      "skills": [
+        "./skill/stark-author"
+      ],
       "strict": true
     },
     {
       "name": "stark-write",
-      "source": "./dist/claude/stark-write",
+      "source": "./",
       "description": "Long-form writing craft, from the author's reusable voice profile through story editing, adversarial sharpening, independent judging, and multi-model jury calibration.",
-      "version": "0.5.52",
+      "version": "0.5.53",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -131,6 +164,13 @@
         "blog",
         "editing",
         "humor"
+      ],
+      "skills": [
+        "./skill/stark-voice",
+        "./skill/stark-story-edit",
+        "./skill/stark-blog-sharpen",
+        "./skill/stark-story-judge",
+        "./skill/stark-jury"
       ],
       "strict": true
     }

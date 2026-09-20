@@ -1,5 +1,0 @@
-interface:
-  display_name: "Agnes"
-  short_description: "Run one ticket solo and unattended, with no Gru: carry it end to"
-policy:
-  allow_implicit_invocation: true

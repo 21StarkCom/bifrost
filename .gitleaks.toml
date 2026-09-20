@@ -1,25 +1,26 @@
-# gitleaks config for stark-marketplace.
-# Extends the default ruleset (token/key detectors) and tunes it for the catalog:
-# the catalog legitimately references secrets BY NAME via {secretRef: <key>} and
-# never holds values, so secretRef keys must NOT trip the scanner, while any real
-# inline credential ANYWHERE in the repo must fail CI (spec §7.4).
+# gitleaks config for bifrost.
+# Extends the default ruleset (token/key detectors) and adds one repo-wide rule. The
+# tree is skill bodies, prompts, standards and the tools they invoke; none of them has
+# any reason to hold a credential VALUE, so an inline one ANYWHERE must fail CI.
+# Nothing is exempted by path — every exemption below is scoped to a value, so a real
+# secret pasted into a test file still fires.
 #
 # TWO scanners read this file, and they scan different things. `ci.yml`'s
-# `secret scan (catalog)` job — a REQUIRED context on `main` — runs it over the whole
+# `secret scan (tree)` job — a REQUIRED context on `main` — runs it over the whole
 # working tree plus the PR commit range. `.github/workflows/secret-scan.yml`, the
 # fleet's caller, runs it over the incoming commits only and is not required here.
 # A rule added below tightens both; a rule removed loosens both, and may also break
 # the fleet caller's self-test (see the google-oauth-client-secret rule).
 
-title = "stark-marketplace gitleaks"
+title = "bifrost gitleaks"
 
 [extend]
 useDefault = true
 
 # ── Inline-credential rule: applies REPO-WIDE (no path filter), so a token/password/
-#    secret/api_key set to a literal value fails CI wherever it appears — not only in the
-#    catalog. Test fixtures / testdata are exempted via the global [allowlist].paths below;
-#    secretRef object form is the sanctioned way to NAME a secret and is never a finding.
+#    secret/api_key set to a literal value fails CI wherever it appears — skill bodies,
+#    tools, standards and tests alike. The only exemptions are the value-scoped regexes
+#    in the global [allowlist] below, each naming the one fixture string it excuses.
 [[rules]]
 id = "stark-inline-credential"
 description = "Inline credential (token/password/secret/api_key = literal value — use secretRef instead)"
@@ -28,13 +29,6 @@ description = "Inline credential (token/password/secret/api_key = literal value 
 # finding.Secret) evaluate against the value — not the literal word "token"/"api_key".
 regex = '''(?i)(?:token|password|secret|api[_-]?key)\s*[=:]\s*['"]?([A-Za-z0-9_\-]{16,})'''
 secretGroup = 1
-[rules.allowlist]
-regexes = [
-  '''secretRef:\s*[a-z0-9][a-z0-9-]*''',
-  # `ownerToken: perShaLockContent.ownerToken` copies an in-memory field; the
-  # detector captures only the object identifier as its "secret".
-  '''^perShaLockContent$''',
-]
 
 # ── Google OAuth client secrets (`GOCSPX-` prefix). The stock ruleset catches
 #    these only inside a `key = value` assignment; this rule also fires on a bare
@@ -64,23 +58,42 @@ regexes = [
 
 [allowlist]
 description = "Global allowlist — test fixtures and values that ARE a known placeholder"
-paths = [
-  '''engine/.*_test\.go$''',          # test fixtures use fake tokens deliberately
-  '''engine/internal/.*/testdata/.*''',
-  # Vendored .ts tool scripts are GENERATED copies of stark-skills tools (the
-  # trusted source repo, where they are authored + reviewed). Re-scanning the
-  # copies here is redundant and trips code-pattern false positives such as
-  # `const apiKey = resolveOpenaiApiKey(process.env)`. The authored content this
-  # repo owns — catalog skills/commands/mcp, config.json, prompts, engine — stays
-  # fully scanned.
-  '''dist/claude/.*/tools/.*\.ts$''',
-  '''vendor/stark-skills/tools/.*\.ts$''',
-  '''vendor/plugins/.*/tools/.*\.ts$''',  # per-bundle plugin tool copies (same trusted source as above)
-]
 regexes = [
   '''\$\{[A-Z0-9_]+\}''',             # ${ENV_VAR} placeholders are not secrets
-  '''secretRef:\s*[a-z0-9][a-z0-9-]*''',
   # ANCHORED: the whole value must BE a placeholder (example…/placeholder…/x{8,}…),
   # so a real secret that merely CONTAINS the word "example" is NOT excused.
   '''(?i)^(example|placeholder|dummy|redacted|sample|x{8,})[a-z0-9_\-]*$''',
+  # ── Redaction-test fixtures, arriving with tools/ (STARK-8249) ─────────────
+  # Each of these four is the INPUT to a test that asserts the tool scrubs it:
+  # the string exists in order to be redacted, and the assertion on the next
+  # line fails if it survives. They are provably not live credentials — two are
+  # literal alphabet runs (a–z then 0–9; a–p) and two are English sentences
+  # naming their own purpose.
+  #
+  # Deliberately value-scoped and anchored rather than a `tools/.*\.test\.ts$`
+  # entry in an [allowlist].paths array — this config deliberately has none at all.
+  # tools/ carries 78 test files (measured on the tracked tree); keeping them all
+  # under the scanner is worth more than one line of config, and this way a real
+  # credential pasted into a test still fires.
+  # The cost is that a NEW fake-credential fixture reddens CI until it is added
+  # here — which is the conscious decision we want, not a papercut.
+  #
+  # FOUR values, SIX findings — the two counts are both right and neither is the
+  # other: `operator-token-must-not-reach-model` and the `ghp_` fixture are each
+  # asserted on twice, so removing the four regexes below yields six findings
+  # (`tools/runtime_env_lib.test.ts` 118-119, `tools/stark_session_lib.test.ts`
+  # 240 + 248, `tools/stark_handover_lib.test.ts` 252-253). Re-measure the same
+  # way before editing either number: delete the four entries and run
+  # `gitleaks dir . --config … --report-format json` over a tracked-files-only
+  # tree (a local scan also walks ignored worktrees, which CI's checkout has not).
+  #
+  # Note those six findings are new to bifrost, not newly broken: stark-skills
+  # carries no `stark-inline-credential` rule and no global allowlist at all,
+  # and its CI scans only the incoming commit range, where bifrost's `secrets`
+  # job scans the whole working tree fail-closed. The files never had to be
+  # classified until they landed here.
+  '''^operator-token-must-not-reach-model$''',
+  '''^ghp_abcdefghijklmnopqrstuvwxyz0123456789$''',
+  '''^abcdefghijklmnop$''',
+  '''^supersecretvalue$''',
 ]

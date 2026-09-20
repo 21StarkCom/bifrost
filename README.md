@@ -1,103 +1,241 @@
 # Bifröst
 
-The bridge between the realms. Canonical, multi-runtime marketplace for **stark** bundles — one source of truth (`catalog/`) renders into per-runtime trees for **Claude Code**, **Codex**, and **Gemini CLI**, plus a signed registry (`index.json` / `bundles/*.json`). GitHub slug: `21StarkCom/bifrost`.
+The stark skills + tools fleet. `21StarkCom/bifrost` — formerly `21StarkCom/stark-skills`, which it absorbed under STARK-8248.
 
-The repo is also a native marketplace for both hosts. Claude Code reads `.claude-plugin/marketplace.json`; Codex prefers `.agents/plugins/marketplace.json`. Each manifest points at a separate generated package tree, so Codex compatibility cannot alter Claude's installed workflows.
+AI-powered development workflow system for Claude Code, covering the full development lifecycle — from planning through code review, shipping, and maintenance. Codex and Gemini take part as dispatched review agents, enabled through config.
 
-## Bundles
+## Quick Start
 
-| Bundle | Purpose |
-| --- | --- |
-| `stark-constitution` | Project setup & session priming (spec-kit `constitution` phase). |
-| `stark-plan` | Plan-time guidance (spec-kit `plan` phase). |
-| `stark-analyze` | Fresh-eyes doc review, multi-agent Terraform/Terragrunt (IaC) review, refactor planning, logging guidance (spec-kit `analyze` phase). |
-| `stark-implement` | Implementation-time guidance (spec-kit `implement` phase). |
-| `stark-ops` | Ops/runtime utilities. |
-| `stark-design` | Design-token architecture — three-tier tokens, OKLCH scales, DTCG/Style Dictionary, theming, WCAG gates. |
-| `stark-write` | Long-form writing craft — voice profile, story editing, adversarial sharpening, multi-model jury. |
+```bash
+# Install the plugins from the marketplace (in Claude Code)
+/plugin marketplace add 21StarkCom/bifrost
+/plugin install stark-analyze@bifrost   # + stark-plan, stark-implement, stark-ops, ...
 
-## Install (Claude Code)
+# Native Codex packaging is retired; the Codex overlay source lives at runtime-overrides/codex/.
+
+# Start a work session (context loading, health checks, briefing)
+/stark-session start
+
+# Review a PR, then publish the findings on it as one anchored review
+/code-review xhigh --fix
+node tools/findings_review_post.ts --repo ORG/REPO --pr 42 --findings findings.json
+
+# End the session (tests, cleanup, push)
+/stark-session end
+```
+
+All skills are available as `/slash-commands` in Claude Code after installing the plugins. There is nothing to vendor, symlink or install locally: every marketplace entry points at `./`, so an installed plugin is this repo's own `skill/` tree, restricted to that bundle's `skills:` list.
+
+---
+
+## The Development Lifecycle
+
+The human writes and gates the spec (`/stark-author`). Everything after that gate runs autonomously (`/stark-build`) — branching, implementation, one commit per green task, a draft PR, one cross-vendor advisory review, and exactly one fix round over its medium+ findings. Anything still open dies at the human, not in another loop.
+
+---
+
+## Skills
+
+> Every skill supports `--help` (`/stark-<skill> --help`) — prints its purpose, usage, and arguments without running anything.
+
+### Quality Gates
+
+Review artifacts before they ship.
+
+| Skill | What it reviews | When to use |
+|-------|----------------|-------------|
+| [`/stark-fresh-eyes`](skill/stark-fresh-eyes/SKILL.md) | A prompt, brief, spec or doc | Before it ships. ONE zero-context subagent re-verifies every checkable claim by a *different* method than the doc's own, and reports defects only. |
+| [`/stark-terraform-review`](skill/stark-terraform-review/SKILL.md) | Terraform / OpenTofu HCL | Multi-agent, cross-validated, with host scanners (`fmt`, `validate`, `tflint`, `trivy`, `checkov`) as evidence. |
+| [`/stark-terragrunt-review`](skill/stark-terragrunt-review/SKILL.md) | Terragrunt orchestration | include/dependency/generate/remote_state, mock-output schema, DAG cycles, state isolation. |
+
+**PR code review is `/code-review xhigh --fix`** — Claude Code's built-in reviewer, which every change passes before merge. To publish its findings on the PR as ONE anchored review (instead of N zero-body ones), pipe the `ReportFindings` payload through `tools/findings_review_post.ts`.
+
+**Best practice:** Gate the spec at `/stark-author`'s human checklist *before* implementation starts — it's cheaper to fix a spec than to fix code.
+
+### Planning and Execution
+
+Author a spec you have actually gated, then implement from it autonomously.
+
+| Skill | What it does | When to use |
+|-------|-------------|-------------|
+| [`/stark-author`](skill/stark-author/SKILL.md) | Human-gated spec + task DAG in one session | Starting anything non-trivial. Time-boxed recon, structured interview, then a spec you sign off on before a line is written. |
+| [`/stark-build`](skill/stark-build/SKILL.md) | Check-gated autonomous implementation from that spec | After the spec is accepted. One fresh session per task, gated by checks the agent cannot edit. |
+
+**Best practice:** The pipeline is two stages — `/stark-author` (you gate the spec) → `/stark-build` (checks gate the code). There is no LLM-reviewing-LLM loop between them, by design: the 2026-07-25 autopsy found those loops burned tokens without converging, and the five-stage chain they powered was demolished on 2026-07-26.
+
+### Refactoring
+
+Plan a restructure of an existing codebase before touching it.
+
+| Skill | What it does | When to use |
+|-------|-------------|-------------|
+| [`/stark-refactor-plan`](skill/stark-refactor-plan/SKILL.md) | Inspect any repo and emit `REFACTOR_PLAN.md` + `REFACTOR_BACKLOG.json` | Before a refactor. Planning-only — produces an evidence-based, phased, file-by-file plan another agent can execute. Never modifies source. |
+
+**Best practice:** Run `/stark-refactor-plan` first, review the plan and backlog, then execute the backlog one low-risk PR at a time (feed each task through `/stark-author` → `/stark-build`, or drive it by hand). The plan changes nothing but the two artifacts, so it's always safe to run.
+
+### PR and Shipping
+
+Move code from branch to production.
+
+| Skill | What it does | When to use |
+|-------|-------------|-------------|
+| [`/stark-release`](skill/stark-release/SKILL.md) | CHANGELOG → version bump → tag → GitHub Release | When a set of changes is ready to ship. Reads CHANGELOG.md to determine bump type. |
+
+**Best practice:** Always run `/stark-release` when shipping — never tag manually.
+
+### Session Management
+
+Start and end your work sessions with consistent context loading and cleanup.
+
+| Skill | What it does | When to use |
+|-------|-------------|-------------|
+| [`/stark-session start`](skill/stark-session/SKILL.md) | Load context, git state, health checks, briefing | Beginning of every work session. Catches stale branches, failing tests, open PRs. |
+| [`/stark-session end`](skill/stark-session/SKILL.md) | Tests, merge PRs, commit docs, push | End of every work session. Ensures nothing is left dangling. |
+| [`/stark-persona`](skill/stark-persona/SKILL.md) | Session character voices | Adds personality to sessions. Weighted selection, date-aware combos, catchphrases, feedback loop. |
+
+**Best practice:** Make `/stark-session start` and `/stark-session end` habitual — like opening and closing a shift. The start briefing catches context you'd otherwise miss (someone pushed to your branch, CI is red, a PR needs your review).
+
+### Documentation
+
+| Skill | What it does | When to use |
+|-------|-------------|-------------|
+| [`/stark-init-docs`](skill/stark-init-docs/SKILL.md) | Scaffold docs structure (ADRs, runbooks, etc.) | When starting a new project or adding docs to an existing one. Modes: template, backfill, upgrade, clean. |
+
+---
+
+## Typical Workflows
+
+### Starting a new feature (full lifecycle)
+
+```
+/stark-session start                          # context + briefing
+/stark-author "my feature"                    # spec + task DAG, you gate it
+/stark-build docs/specs/2026-01-01-my-feature-spec.md   # autonomous implementation
+/stark-session end                            # cleanup + push
+```
+
+### Reviewing someone else's PR
+
+```
+/code-review xhigh --fix            # the review itself
+node tools/findings_review_post.ts --repo ORG/REPO --pr 42 --findings -
+```
+
+---
+
+## Architecture
+
+Skills are thin protocol wrappers over TypeScript dispatchers in `tools/`. A
+dispatcher resolves the enabled agents from config, spawns each as its own
+headless subprocess with a credential-scrubbed env, parses the structured
+output, and merges the results:
+
+```
+/stark-terraform-review ─┐
+/stark-terragrunt-review ─┼─→ iac_review.ts   ─→ codex, gemini (parallel, read-only)
+/stark-refactor-plan ─────┴─→ refactor_planner.ts ─→ 10 focused subagents
+/stark-jury ──────────────→ jury_dispatch.ts  ─→ claude, codex, gemini panel
+```
+
+PR findings — from `/code-review` or any of the above — reach GitHub through
+`findings_review_post.ts` → `review_post_lib.ts::postReview`: ONE anchored
+`COMMENT` review, inline where the anchor falls inside a diff hunk and in the
+body otherwise, with a no-drop fallback so a rejected anchor never costs a
+finding.
+
+Everything posts through the operator's existing `gh` login as `aryeh-stark`.
+Each review identifies its models in the text.
+
+## Repo Structure
+
+```
+bifrost/
+├── skill/                        ← one dir per skill (25 × SKILL.md)
+│   ├── stark-author/SKILL.md
+│   ├── stark-persona/SKILL.md
+│   └── ...
+├── tools/                        ← TypeScript dispatch infra, agent CLIs, meta-tooling
+│   ├── findings_review_post.ts   ← publish findings on a PR as one anchored review
+│   ├── review_post_lib.ts        ← the REST gh transport + postReview
+│   ├── iac_review.ts             ← multi-agent Terraform/Terragrunt reviewer
+│   └── ...
+├── global/                       ← config + prompts the skills read at runtime
+│   ├── config.json               ← global defaults
+│   └── prompts/{iac-review,refactor-planner}/  ← per-dispatcher rubrics
+├── config/                       ← operator machine config (statusline, hooks, settings, output styles)
+├── scripts/                      ← healer_patterns.json
+├── runtime-overrides/codex/      ← Codex-only artifact + support overlays; source only, shipped nowhere
+├── data/persona/                 ← persona roster
+├── standards/                    ← org-wide doc templates and workflows
+├── docs/operations/              ← branch-protection.md: what `main` gates on
+├── .claude-plugin/               ← marketplace.json: the seven plugin entries (source ./ + skills: partitions)
+└── .github/workflows/            ← ci.yml (secret scan (tree), actionlint, test, typecheck) + secret-scan.yml
+```
+
+## Status
+
+Skills are edited **here** and take effect **here**. There is no build step, no
+generated catalog, no registry, no signed manifest and no sync PR — the
+marketplace apparatus this repo used to be was removed under STARK-8248/8249.
+
+`.claude-plugin/marketplace.json` serves the seven bundles straight off `./`:
+every entry's `source` is the repo root, and each carries a disjoint
+`skills:` list of `./skill/<name>` paths, so the seven entries partition
+`skill/` by path. `skills:` **restricts** discovery rather than adding to it —
+measured on a probe install, where `stark-design` reported `Skills (1)` and
+`stark-ops` `Skills (9)` out of the 25-skill root.
 
 ```
 /plugin marketplace add 21StarkCom/bifrost
-/plugin install stark-ops@bifrost
+/plugin install stark-analyze@bifrost   # then stark-plan, stark-implement, stark-ops, ...
+/plugin update  stark-analyze@bifrost   # re-fetch after an entry's version moves
 ```
 
-Each plugin is **self-contained** — its supporting tool scripts, prompts, config, and standard per-skill `references/`, `scripts/`, and `assets/` are vendored into the bundle, so `/plugin install` works with **no `install.sh`** and no stark-skills checkout on your machine. Only prerequisite: **Node ≥ 24** (skills run plain `node` with native TypeScript and SQLite; `stark doctor` checks it).
+Bumping an entry's `version` in the manifest is the **only** thing that makes an
+installed Claude Code plugin re-fetch: `~/.claude/plugins/installed_plugins.json`
+keys `installPath` by version, so an edited `SKILL.md` under an unchanged
+version never reaches the machine. Changing a skill means bumping the version of
+every bundle that lists it.
 
-## Install (Codex)
+Native Codex packaging is **retired** — no `dist/codex-plugins/`, no
+`.agents/plugins/marketplace.json`. `runtime-overrides/codex/` survives as
+source: the Codex-only variants and their changed support files, kept here so
+nothing is lost, shipped nowhere today.
 
-```bash
-codex plugin marketplace add 21StarkCom/bifrost
-codex plugin add stark-ops@bifrost
+Immutable assets (tools/prompts/config) resolve from the installed plugin root (`${CLAUDE_PLUGIN_ROOT}`) via `tools/asset_root_lib.ts`; mutable state (`history/`, `sessions/`, `locks/`, …) lives under `~/.claude/code-review/` (`stateRoot()`).
+
+## Config Hierarchy
+
+Same merge pattern as CLAUDE.md — most specific wins:
+
+```
+~/.claude/code-review/config.json   ← global (from this repo)
+~/Code/.code-review/config.json     ← org override
+~/Code/some-repo/.code-review/config.json   ← repo override
 ```
 
-Start a new thread after installing or updating, then verify the install with
-`$stark-handover status` (or select a skill through `/skills`). Codex installs
-native skills from `dist/codex-plugins/`; it does not migrate the Claude command
-files.
+Repos can override the enabled agents and the per-dispatcher sections
+(`iac_review`, `runtime`, `models`, …). The per-agent prompt and per-domain
+override layers are gone: they belonged to `/stark-review`, which was buried in
+STARK-6098. Dispatcher rubrics now live once under
+`global/prompts/<dispatcher>/` and are shared by every agent that runs them.
 
-Direct/project-local Codex installs still go through the engine CLI:
+## Prerequisites
 
-```bash
-cd engine
-go run ./cmd/stark install stark-ops --runtime codex   # standalone Codex
-```
+- macOS
+- `claude`, `codex`, `gemini` CLI tools in PATH
+- Node.js ≥ 24 (TypeScript and SQLite tooling runs via plain `node`)
+- GitHub CLI authenticated as `aryeh-stark`
 
-See [`docs/native-install-loop.md`](docs/native-install-loop.md) for the full install loop.
+## Skill Documentation
 
-## Develop
+Each skill documents itself: `skill/<name>/SKILL.md` is the source of truth, and
+every skill answers `--help`. There is no generated documentation layer — the
+previous one drifted two generations out of date and its generator was deleted,
+so it described a pipeline that no longer existed. Read the skill, or run it
+with `--help`.
 
-**Source of truth is the [stark-skills](https://github.com/21StarkCom/stark-skills) repo**, not this one. The catalog's `skills/` + `commands/`, `catalog/standards/` (the link target for the `../../standards/*.md` references in every skill body), the shared vendor snapshot, and the Codex-only runtime-overlay snapshot are **generated** from a stark-skills checkout — never hand-edit them, either generated runtime package tree, `index.json`, or `bundles/*.json`. What you DO edit here: each `catalog/<bundle>/bundle.yaml` (metadata + the `skills:`/`commands:` membership manifest) and curated `catalog/<bundle>/mcp/` artifacts.
-
-Standard loop:
-
-```bash
-cd engine
-# 1. regenerate catalog skills/commands + vendor/ from a stark-skills checkout
-go run ./cmd/stark sync --from ../../stark-skills ../catalog
-# 2. render dist/claude + dist/codex-plugins and both native manifests
-go run ./cmd/stark build ../catalog
-# 3. gates — all must be clean before pushing
-go run ./cmd/stark validate ../catalog
-go run ./cmd/stark sync --from ../../stark-skills --check ../catalog   # catalog/vendor drift
-go run ./cmd/stark build --check ../catalog                            # dist drift
-go run ./cmd/stark check-bumps ../catalog                              # bump bundle version on content change
-go test ./... -count=1
-```
-
-To publish a skill change: edit it in **stark-skills**, bump the affected bundle's `version` in its `bundle.yaml` here, then run the loop. CI does this automatically — a push to stark-skills `main` regenerates and opens a PR here (`.github/workflows/marketplace-sync.yml` in stark-skills). This repo's `.github/workflows/ci.yml` then gates the PR: `gofmt → vet → tests → validate → build --check → check-bumps → lint --strict → allowlist --check → gitleaks → actionlint`. All blocking.
-
-Adding a **new** skill is different, and the order is load-bearing: stark-skills' `tests.yml` and `marketplace-sync.yml` both run this repo's `docs/scripts/coverage-gate.sh` out of a checkout of bifrost's default branch, so a skill that reaches stark-skills `main` with no `bundle.yaml` membership here stops marketplace publication outright. Land the membership here first (generated from the unmerged stark-skills branch — `stark sync` hard-errors on a declared member with no source), then merge the upstream skill immediately after; the reverse order, and the gap between the two, are both red. See `CLAUDE.md` → "Coverage gate".
-
-## Architecture, in one paragraph
-
-`internal/load` parses `catalog/` into a `model.Catalog`. Per-runtime adapters in `internal/adapter/{claude,codex,gemini}` render bundles into runtime-specific file trees. `internal/build` independently generates committed Claude packages in `dist/claude/` and native marketplace Codex packages in `dist/codex-plugins/`; `internal/install` still produces standalone/project-local runtime installs. `cmd/stark` wires these. Determinism is load-bearing: `build --check` is the drift gate and `check-bumps` enforces canonical version-bump immutability. `dist/codex/` and `dist/gemini/` remain ignored standalone install outputs.
-
-More detail in [`CLAUDE.md`](CLAUDE.md).
-
-## Trust & governance
-
-This distributes code that runs inside developer agents and, for `mcp/` entries, spawns commands on developer machines. Integrity rests on:
-
-1. Protected, linear `main` (no force-push, no deletions, `enforce_admins` on). The required CI contexts are the exception: they live in a ruleset that a repository admin bypasses always — see [`docs/SECURITY.md`](docs/SECURITY.md) §1.
-2. CI-signed build manifest (GitHub OIDC → sigstore/cosign keyless, signer `repo:21StarkCom/bifrost@refs/heads/main`).
-3. Commit SHA, which the manifest binds digests to.
-
-`stark verify-manifest` checks all three. Self-computed digests alone are only an anti-drift signal.
-
-MCP `command` values and `agent.tools` must be on positive allowlists (`engine/internal/validate/{allowlist,toolsallow}.go`). Adding an entry takes a PR touching only the allowlist file, with a written justification. `CODEOWNERS` names `@aryeh-stark` as its reviewer but is **not** an enforced merge gate today (`require_code_owner_reviews` is `false`, approvals are `0`) — see [`docs/SECURITY.md`](docs/SECURITY.md) §2, §3.
-
-Full threat model and controls: [`docs/SECURITY.md`](docs/SECURITY.md).
-
-## Documentation map
+## Manuals
 
 - [`CLAUDE.md`](CLAUDE.md) — orientation for Claude Code / agentic contributors.
 - [`AGENTS.md`](AGENTS.md) — same orientation for Codex / Gemini.
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — how to add or change a bundle/artifact.
-- [`docs/native-install-loop.md`](docs/native-install-loop.md) — end-to-end install via CC native marketplace.
-- [`docs/SECURITY.md`](docs/SECURITY.md) — trust model, signing, allowlist process, branch protection.
-
-## License & ownership
-
-Internal 21 Stark AI project. See [`CODEOWNERS`](CODEOWNERS) for review gates.

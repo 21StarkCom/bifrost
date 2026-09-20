@@ -1,0 +1,814 @@
+#!/usr/bin/env bash
+# Claude Code status line — Catppuccin Mocha palette
+# Input: JSON via stdin
+#
+# Runs on every refresh tick (60s), so forks are the enemy:
+#   • the stdin payload + statusline-segments.json are parsed in PURE BASH
+#     ([[ =~ ]] + BASH_REMATCH, zero forks) — replaced the one-jq parse, which
+#     profiled as ~5ms of a ~17ms render (see parse_payload below)
+#   • account identity (~/.claude.json is big) is mtime-cached to a tab file
+#   • repo root / worktree / branch are read straight off .git files in bash
+#     (pointer file, commondir, HEAD) — no `git rev-parse` fork
+#   • remote URL is read from .git/config in bash (no `git remote` fork)
+#   • the dirty scan (status + numstat, the priciest part) runs only when the
+#     git_dirty segment is enabled, in ONE process substitution, and its
+#     result is TTL-cached (4s) keyed on repo root — bursty event-driven
+#     re-renders are fork-free
+#   • gauge bars substring a pre-built fill string — no per-cell loop
+#   • helpers return via printf -v globals (TC/FD/FR/GRAD) — no $(...) subshells
+
+# ── Extract all fields (pure bash, no jq fork) ───────────────────────────
+# The statusline runs on every 1s refresh across every open window, so the
+# single jq that used to parse the payload was the dominant per-render cost:
+# ~5ms of a ~17ms render (measured — the bash body + everything else profiled
+# under 1ms combined). parse_payload reads the same fields with `[[ =~ ]]` +
+# BASH_REMATCH and ZERO forks — no $(...) and no echoing helpers, since a
+# command substitution forks a subshell PER FIELD, which is the very cost this
+# removes (see the header). Verified byte-identical to the old jq across a
+# payload matrix by config/statusline-parse.test.sh (run in CI via
+# tools/statusline_parse.test.ts).
+parse_payload() {
+  local j="$1" _m _eff _vim _ag _sd _fh _rest _pr
+  local Sr='":"([^"]*)"' Nr='":(-?[0-9][0-9.eE+-]*)'   # string / number key-tails
+
+  # cwd: workspace.current_dir, else top-level cwd (jq's // only falls through
+  # on absent/null, so a present current_dir — even "" — wins, matching jq).
+  if   [[ $j =~ \"current_dir\":\"([^\"]*)\" ]]; then cwd="${BASH_REMATCH[1]}"
+  elif [[ $j =~ \"cwd\":\"([^\"]*)\" ]];         then cwd="${BASH_REMATCH[1]}"
+  else cwd=""; fi
+
+  session_name=""; [[ $j =~ \"session_name$Sr ]] && session_name="${BASH_REMATCH[1]}"
+  sid="";          [[ $j =~ \"session_id$Sr ]]   && sid="${BASH_REMATCH[1]}"
+
+  s_added="";    [[ $j =~ \"total_lines_added$Nr ]]     && s_added="${BASH_REMATCH[1]}"
+  s_removed="";  [[ $j =~ \"total_lines_removed$Nr ]]   && s_removed="${BASH_REMATCH[1]}"
+
+  # scoped scalars — capture the FLAT parent body ([^{}]* = no nested object),
+  # then read the field from it (order-independent within the parent).
+  _m=""; [[ $j =~ \"model\":\{([^{}]*)\} ]] && _m="${BASH_REMATCH[1]}"
+  model="";    [[ $_m =~ \"display_name$Sr ]] && model="${BASH_REMATCH[1]}"
+
+  _eff=""; [[ $j =~ \"effort\":\{([^{}]*)\} ]] && _eff="${BASH_REMATCH[1]}"
+  effort=""; [[ $_eff =~ \"level$Sr ]] && effort="${BASH_REMATCH[1]}"
+  _vim=""; [[ $j =~ \"vim\":\{([^{}]*)\} ]] && _vim="${BASH_REMATCH[1]}"
+  vim_mode=""; [[ $_vim =~ \"mode$Sr ]] && vim_mode="${BASH_REMATCH[1]}"
+  _ag=""; [[ $j =~ \"agent\":\{([^{}]*)\} ]] && _ag="${BASH_REMATCH[1]}"
+  agent_name=""; [[ $_ag =~ \"name$Sr ]] && agent_name="${BASH_REMATCH[1]}"
+
+  over_200k=false; [[ $j =~ \"exceeds_200k_tokens\":(true|false) ]] && over_200k="${BASH_REMATCH[1]}"
+
+  # PR for this branch — payload `pr` block (present only when one exists). Flat
+  # object (no nested braces), so the parent-scope trick applies.
+  _pr=""; [[ $j =~ \"pr\":\{([^{}]*)\} ]] && _pr="${BASH_REMATCH[1]}"
+  pr_number=""; [[ $_pr =~ \"number$Nr ]]       && pr_number="${BASH_REMATCH[1]}"
+  pr_state="";  [[ $_pr =~ \"review_state$Sr ]] && pr_state="${BASH_REMATCH[1]}"
+
+  _sd=""; [[ $j =~ \"seven_day\":\{([^{}]*)\} ]] && _sd="${BASH_REMATCH[1]}"
+  week_pct="";   [[ $_sd =~ \"used_percentage$Nr ]] && week_pct="${BASH_REMATCH[1]}"
+  week_reset=""; [[ $_sd =~ \"resets_at$Nr ]]       && week_reset="${BASH_REMATCH[1]}"
+  _fh=""; [[ $j =~ \"five_hour\":\{([^{}]*)\} ]] && _fh="${BASH_REMATCH[1]}"
+  five_pct="";   [[ $_fh =~ \"used_percentage$Nr ]] && five_pct="${BASH_REMATCH[1]}"
+  five_reset=""; [[ $_fh =~ \"resets_at$Nr ]]       && five_reset="${BASH_REMATCH[1]}"
+
+  # context_window.used_percentage: 3 keys share the name (context_window +
+  # seven_day + five_hour). Drop the two flat rate-limit blocks (captured above)
+  # so context_window's is the only used_percentage left — order-independent,
+  # no brace walking.
+  _rest="$j"
+  [ -n "$_sd" ] && _rest="${_rest/\"seven_day\":\{$_sd\}/}"
+  [ -n "$_fh" ] && _rest="${_rest/\"five_hour\":\{$_fh\}/}"
+  used_pct=""; [[ $_rest =~ \"used_percentage$Nr ]] && used_pct="${BASH_REMATCH[1]}"
+}
+
+# Slurp the whole stdin payload into a var, fork-free (`read -d ''` reads to
+# EOF; the nonzero rc at EOF is expected and ignored).
+IFS= read -r -d '' _payload 2>/dev/null || true
+parse_payload "$_payload"
+
+# Segment visibility: statusline-segments.json (from statusline-setup) lists
+# segments toggled off. Read it in bash — each key with a literal false value
+# lands in $skip. Absent file (the common case) → nothing skipped, no fork.
+_cfg="$HOME/.claude/statusline-segments.json" skip=""
+if [ -f "$_cfg" ]; then
+  _segj=""; IFS= read -r -d '' _segj < "$_cfg" 2>/dev/null || true
+  while [[ $_segj =~ \"([a-zA-Z_]+)\"[[:space:]]*:[[:space:]]*false ]]; do
+    skip="$skip ${BASH_REMATCH[1]}"
+    _segj="${_segj/${BASH_REMATCH[0]}/}"        # drop the match so the loop advances
+  done
+fi
+_skip=" ${skip} "
+_on() { [[ "$_skip" != *" $1 "* ]]; }
+
+# ── Colors (Catppuccin Mocha 256-color) ──────────────────────────────────
+R="\033[0m" DIM="\033[38;5;245m"
+PEACH="\033[38;5;216m" YEL="\033[38;5;229m" GRN="\033[38;5;150m"
+SAP="\033[38;5;117m"   RED="\033[38;5;211m" TEAL="\033[38;5;158m"
+MAR="\033[38;5;217m"   MAUVE="\033[38;5;141m"
+CTX_COL="\033[38;2;77;165;220m"    # #4da5dc — CTX label (context gauge)
+FIVEHR_COL="\033[38;2;237;117;78m" # #ed754e — 5H label (5-hour window gauge)
+DAY_COL="\033[38;2;229;114;74m"    # #e5724a — 7D label (7-day window gauge)
+SEP=" ${DIM}|${R} "
+
+# Usage-bar fill — each gauge fades a light tint (cell 0) → its OWN saturated hue
+# (cell 9) across the 10 cells, depth growing with fill. Prefixes are precomputed
+# once per gauge (see build_grad). Each bar carries a hue from its label's family so
+# the three gauges are distinguishable at a glance: CTX blue, 5H amber, 7D red (the
+# 5H/7D labels are near-identical warm oranges; the bars split them amber vs crimson).
+build_grad() { # arrname r0 g0 b0 r1 g1 b1 → global array of 11 filled-cell prefixes
+  local -n _a="$1"; local r0=$2 g0=$3 b0=$4 r1=$5 g1=$6 b1=$7 i r g b acc=""
+  _a=("")
+  for (( i = 0; i < 10; i++ )); do
+    r=$(( r0 + (r1 - r0) * i / 9 ))
+    g=$(( g0 + (g1 - g0) * i / 9 ))
+    b=$(( b0 + (b1 - b0) * i / 9 ))
+    acc+="\033[38;2;${r};${g};${b}m█"
+    _a+=("$acc")
+  done
+}
+build_grad _CTX_FB   156 205 240  26  92 138   # #9ccdf0 → #1a5c8a — CTX (light→deep blue)
+build_grad _FIVEH_FB 245 201 160 200  90  30   # #f5c9a0 → #c85a1e — 5H (light→deep amber)
+build_grad _SEVEN_FB 240 165 143 158  34  51   # #f0a58f → #9e2233 — 7D (light→crimson)
+
+# Cache wall-clock once; bash printf-builtin avoids a `date +%s` fork on
+# each call site (rate segs, session-start).
+printf -v NOW '%(%s)T' -1
+
+# ── Helpers ──────────────────────────────────────────────────────────────
+# All formatters write to globals via printf -v instead of echoing into
+# $(...): a command substitution forks a subshell, and these run up to a
+# dozen times per tick.
+seg()  { [ -z "$out" ] && out="$1" || out="${out}${SEP}$1"; }      # line 1 append
+seg2() { [ -z "$l2" ] && l2="$1" || l2="${l2}${SEP}$1"; }         # line 2 append
+seg3() { [ -z "$l3" ] && l3="$1" || l3="${l3}${SEP}$1"; }         # line 3 append
+
+tcolor() { # val hi_thresh mid_thresh → sets TC
+  if [ "$1" -ge "$2" ] 2>/dev/null; then TC="$RED"
+  elif [ "$1" -ge "$3" ] 2>/dev/null; then TC="$YEL"
+  else TC="$DIM"; fi
+}
+
+fmt_dur() { # seconds → sets FD: "XhYm" | "Xm" | "<1m"  (minute granularity, no seconds)
+  local h=$(( $1 / 3600 )) m=$(( ($1 % 3600) / 60 ))
+  if [ "$h" -gt 0 ]; then FD="${h}h${m}m"
+  elif [ "$m" -gt 0 ]; then FD="${m}m"
+  else FD="<1m"; fi
+}
+
+fmt_age() { # seconds → sets FA: "<1m" | "Xm" | "H:MM" — session-age scale
+  # Minute granularity (no seconds): sub-minute reads "<1m", sub-hour in whole
+  # minutes, hours as a clock face (2:06) rather than fmt_dur's "2h6m" — a
+  # long-lived process reads as an elapsed clock, which is what "session age" wants.
+  if [ "$1" -lt 60 ]; then FA="<1m"
+  elif [ "$1" -lt 3600 ]; then FA="$(( $1 / 60 ))m"
+  else printf -v FA '%d:%02d' $(( $1 / 3600 )) $(( ($1 % 3600) / 60 )); fi
+}
+
+fmt_remain() { # reset_epoch [time_emoji] → sets FR: " ⏳ XdYh" or " XdYh" (emoji arg "") or ""
+  FR=""
+  [ -z "$1" ] || ! [ "$1" -gt 0 ] 2>/dev/null && return
+  local diff=$(( $1 - NOW )) e="${2-\\u23f3}"
+  [ "$diff" -le 0 ] && return
+  local d=$(( diff / 86400 )) h=$(( (diff % 86400) / 3600 )) m=$(( (diff % 3600) / 60 ))
+  local lead=""; [ -n "$e" ] && lead="${e} "
+  if [ "$d" -gt 0 ]; then FR=" ${lead}${d}d${h}h"
+  elif [ "$h" -gt 0 ]; then FR=" ${lead}${h}h${m}m"
+  else FR=" ${lead}${m}m"; fi
+}
+
+# Claude Code start epoch → sets PROCSTART (0 when unresolvable).
+#
+# Hoisted out of the session-times block because the usage snapshot needs it
+# too: a snapshot is only attributable when the RENDERING process was launched
+# under the currently-recorded identity (see the snapshot guard below).
+#
+# Claude Code execs the statusline directly, so $PPID is the `claude` process —
+# stable across renders, distinct per window. Cached per-PPID: the warm path is
+# a single file read, zero forks (matching the git/account caches). Only a cold
+# miss touches ps+date. If a shell wrapper ever sits between (PPID != claude),
+# walk ancestors to find claude and skip the cache — the wrapper pid is
+# ephemeral, so caching it would leak a file per render and never hit anyway.
+#
+# Memoized for the render: process start can't change within a single tick, and
+# two call sites need it (the usage-snapshot guard and the session-times block).
+# The first call resolves; the second returns instantly, sparing a file read on
+# the warm path and an entire ps-ancestor-walk + date fork on a cold miss.
+resolve_procstart() {
+  [ -n "${_PS_DONE:-}" ] && return
+  _PS_DONE=1
+  PROCSTART=0
+  local _ccpid="$PPID" _psf="$HOME/.claude/.statusline-procstart-${PPID}"
+  local _v="" _ppcomm _p _c _ls
+  [ -r "$_psf" ] && IFS= read -r _v < "$_psf"
+  if [ "$_v" -gt 0 ] 2>/dev/null; then PROCSTART="$_v"; return; fi
+  _ppcomm=$(ps -o comm= -p "$PPID" 2>/dev/null); _ppcomm="${_ppcomm##*/}"
+  if [ "$_ppcomm" != "claude" ]; then             # resolve claude via ancestors
+    _p=$PPID
+    for _ in 1 2 3 4 5 6; do
+      _p=$(ps -o ppid= -p "$_p" 2>/dev/null); _p="${_p//[[:space:]]/}"
+      { [ -n "$_p" ] && [ "$_p" -gt 1 ] 2>/dev/null; } || break
+      _c=$(ps -o comm= -p "$_p" 2>/dev/null)
+      [ "${_c##*/}" = "claude" ] && { _ccpid="$_p"; break; }
+    done
+  fi
+  _ls=$(ps -o lstart= -p "$_ccpid" 2>/dev/null)
+  _ls="${_ls%"${_ls##*[![:space:]]}"}"            # rstrip trailing spaces
+  [ -n "$_ls" ] || return
+  _v=$(date -j -f "%a %b %d %T %Y" "$_ls" +%s 2>/dev/null) \
+    || _v=$(date -d "$_ls" +%s 2>/dev/null)       # GNU/Linux fallback
+  [ "$_v" -gt 0 ] 2>/dev/null || return
+  PROCSTART="$_v"
+  [ "$_ppcomm" = "claude" ] && printf '%s\n' "$_v" > "$_psf" 2>/dev/null
+}
+
+# All gauges render at width 10. Each gauge's filled prefixes are precomputed
+# by build_grad (light→dark), so mkbar is a pure array lookup + substring — no
+# per-cell loop.
+_E10="░░░░░░░░░░"
+_BORD="\033[38;5;252m"   # bright neutral rail — contrasts both filled + empty cells
+
+mkbar() { # pct gradarray → sets BAR: railed █ bar, filled cells fading light→dark
+  local -n _fb="$2"
+  local filled=$(( ($1 * 10 + 50) / 100 ))
+  (( filled > 10 )) && filled=10
+  (( filled < 0 )) && filled=0
+  BAR="${_BORD}▐${R}${_fb[filled]}${DIM}${_E10:0:10-filled}${_BORD}▌${R}"
+}
+
+
+gradient() { # text [palette] → sets GRAD: per-account color sweep
+  # Static spatial gradient across the label. A 60s `refreshInterval` (settings.json)
+  # re-runs the command on a timer so time-based segments (CTX / 5H / 7D, git
+  # state) stay current while the session is idle — each re-render reads a fresh
+  # EPOCHREALTIME and drifts the gradient a frame (60s cadence, not a smooth
+  # animation clock). Palette ($2)
+  # selects the account's color family: gold (Max/Com), violet (Max/Net), blue
+  # (Enterprise), magenta (Team#0 fallback), plus a shade per agent account —
+  # ice/cyan (A1), lime (A2), crimson→rose (A3), emerald→teal (A4),
+  # amber/orange (A5), indigo (A6), magenta (A7), turquoise (A8),
+  # copper (A9), lavender (A10), rose-gold (K), and the four stark slots —
+  # yellow (S1), green (S2), pink (S3), slate (S4). The label→slot map is in the
+  # private roster (see the resolvers below). Pure bash fixed-point math, no
+  # forks. GRAD holds
+  # interpreted ESC bytes (printf -v %b) — embed directly, don't re-%b it.
+  local text="$1" pal="${2:-gold}" RST=$'\033[0m'
+  local -a PR PG PB
+  case "$pal" in
+    violet) PR=(203 180 224 150) PG=(140 110 120 90 ) PB=(247 250 255 240) ;;  # purple→magenta — Max/Net
+    blue)   PR=(0   64  138 33 ) PG=(160 196 224 182) PB=(255 255 255 255) ;;  # strong light blue — Enterprise
+    team0)  PR=(225 255 240 210) PG=(60  95  72  48 ) PB=(200 230 215 190) ;;  # magenta/fuchsia — Team#0 (.net fallback)
+    agent1) PR=(56  103 125 80 ) PG=(189 232 240 210) PB=(248 249 255 250) ;; # ice/cyan→sky — A1
+    agent2) PR=(190 214 163 235) PG=(242 255 230 250) PB=(100 133 80  120) ;; # lime→chartreuse — A2
+    agent3) PR=(255 255 240 250) PG=(90  130 70  105) PB=(110 150 95  130) ;; # crimson→rose — A3
+    agent4) PR=(52  45  34  110) PG=(211 212 211 231) PB=(153 191 238 183) ;; # emerald→teal→cyan — A4
+    agent5) PR=(255 240 255 235) PG=(165 125 180 145) PB=(70  48  92  62 ) ;; # amber→orange→coral — A5
+    agent6) PR=(150 120 100 175) PG=(130 100 80  140) PB=(252 240 220 248) ;; # indigo→blue-violet — A6
+    agent7) PR=(232 255 246 214) PG=(20  70  36  96 ) PB=(180 214 150 205) ;; # magenta→hot-pink — A7
+    agent8) PR=(64  112 150 92 ) PG=(224 242 255 232) PB=(208 216 205 212) ;; # turquoise→aqua — A8
+    agent9) PR=(210 235 190 225) PG=(120 150 100 135) PB=(40  60  30  50 ) ;; # copper→bronze — A9
+    agent10) PR=(180 210 160 195) PG=(200 225 185 212) PB=(255 255 240 250) ;; # lavender→periwinkle — A10
+    acctk) PR=(240 250 235 245) PG=(200 165 150 180) PB=(150 130 165 140) ;; # rose-gold — account slot K
+    stark1) PR=(225 240 210 235) PG=(220 235 230 225) PB=(60  85  95  70 ) ;; # yellow — S1 (cyan is now A1)
+    stark2) PR=(90  120 70  140) PG=(210 230 195 235) PB=(110 140 90  150) ;; # green — S2 (lime is now A2)
+    stark3) PR=(255 250 255 250) PG=(130 160 120 150) PB=(180 200 175 195) ;; # pink/rose — S3 (crimson is now A3)
+    stark4) PR=(140 165 120 155) PG=(160 180 145 175) PB=(190 205 175 200) ;; # slate/steel-blue — S4 (teal is now A4)
+    *)      PR=(230 255 255 250) PG=(150 190 224 204) PB=(0   0   60  15 ) ;;  # amber→gold — Max/Com
+  esac
+  local n=${#PR[@]} len=${#text}
+
+  local et="${EPOCHREALTIME:-}"
+  if [[ -z $et ]]; then # bash <5 / unset → static first stop, reset-terminated
+    printf -v GRAD '%b' "\033[38;2;${PR[0]};${PG[0]};${PB[0]}m${text}${RST}"
+    return
+  fi
+
+  local frac="${et#*.}"; frac="${frac}000"; frac="${frac:0:3}"
+  local secs="${et%.*}"
+  local phase=$(( 10#$secs * 1000 + 10#$frac ))
+
+  local out='' i ch pos span m idx t j r g b
+  span=$(( n * 1000 ))                  # palette ring width (1000 units/stop)
+  for (( i = 0; i < len; i++ )); do
+    ch="${text:i:1}"
+    pos=$(( i * 1000 + phase / 2 ))     # 1 stop/char; phase/2 drifts the field
+    m=$(( pos % span )); (( m < 0 )) && m=$(( m + span ))
+    idx=$(( m / 1000 )); t=$(( m % 1000 )); j=$(( (idx + 1) % n ))
+    r=$(( (PR[idx]*(1000 - t) + PR[j]*t) / 1000 ))
+    g=$(( (PG[idx]*(1000 - t) + PG[j]*t) / 1000 ))
+    b=$(( (PB[idx]*(1000 - t) + PB[j]*t) / 1000 ))
+    out+="\033[38;2;${r};${g};${b}m${ch}"
+  done
+  printf -v GRAD '%b' "${out}${RST}"
+}
+
+# ── Account label + palette resolvers ────────────────────────────────────
+# GENERIC defaults: domain + org type only, no personal roster. The full
+# per-account map (email local-parts → S1/A3/K labels + per-account hues) is
+# PII and lives in the PRIVATE stark-workspace repo, sourced below to override
+# these. Absent (CI, a fresh machine, a public clone), the statusline degrades
+# to these generic labels. Both set caller-scope vars in place — no command
+# substitution, to stay fork-free on the tick.
+_stark_resolve_account_label() {   # $1=email $2=orgType → sets acct_label
+  local dom=${1##*@} otype="$2"
+  case "$dom" in
+    *.com) [ "$otype" = "claude_max" ] && acct_label="Max/Com" || acct_label="Enterprise" ;;
+    *.net) [ "$otype" = "claude_max" ] && acct_label="Max/Net" || acct_label="Team#0" ;;
+    *)     acct_label="$dom" ;;
+  esac
+}
+_stark_resolve_account_palette() { # $1=label → sets _pal (a gradient palette slot)
+  case "$1" in
+    Max/Net)    _pal=violet ;;
+    Enterprise) _pal=blue ;;
+    Max/*)      _pal=gold ;;
+    Team*)      _pal=team0 ;;
+    *)          _pal=gold ;;
+  esac
+}
+# Private roster override (see stark-workspace config/statusline-accounts.sh).
+source "$HOME/.claude/.statusline-accounts.sh" 2>/dev/null || true
+
+# ── Git (pure-bash discovery, TTL-cached dirty scan) ─────────────────────
+# Repo root / worktree / branch come straight off the filesystem (.git
+# pointer file, commondir, HEAD) — replaces the `git rev-parse` fork.
+wt_name="" repo_name="" git_branch="" git_dirty="" _root=""
+if [ -n "$cwd" ]; then
+  _root="$cwd"
+  while [ -n "$_root" ] && [ ! -e "$_root/.git" ]; do _root="${_root%/*}"; done
+fi
+if [ -n "$_root" ]; then
+  gd="$_root/.git" gc=""
+  if [ -f "$gd" ]; then                       # pointer file: worktree/submodule
+    IFS= read -r _l < "$gd"
+    gd="${_l#gitdir: }"
+    [[ "$gd" != /* ]] && gd="$_root/$gd"
+    if [ -f "$gd/commondir" ]; then           # linked worktree → resolve common dir
+      IFS= read -r _cd < "$gd/commondir"
+      [[ "$_cd" != /* ]] && _cd="$gd/$_cd"
+      gc="$_cd" wt_name=${cwd##*/}
+    else gc="$gd"; fi                         # submodule: common == git dir
+  else gc="$gd"; fi
+
+  # Branch: parse HEAD directly — "ref: refs/heads/x" → x; detached → "HEAD"
+  # (matches `rev-parse --abbrev-ref HEAD`).
+  if [ -r "$gd/HEAD" ]; then
+    IFS= read -r _h < "$gd/HEAD"
+    case "$_h" in
+      "ref: refs/heads/"*) git_branch="${_h#ref: refs/heads/}" ;;
+      "ref: "*)            git_branch="${_h#ref: }" ;;
+      *)                   git_branch="HEAD" ;;
+    esac
+  fi
+
+  # Repo name: read `[remote "origin"] url` straight out of the common-dir
+  # config file — pure bash, replaces a `git remote get-url` fork. (Skips
+  # url.*.insteadOf rewrites, which don't change the basename.)
+  if [ -r "$gc/config" ]; then
+    _sect=0
+    while IFS= read -r cline; do
+      if [[ "$cline" =~ ^[[:space:]]*\[ ]]; then
+        [[ "$cline" == *'[remote "origin"]'* ]] && _sect=1 || _sect=0
+      elif (( _sect )) && [[ "$cline" =~ ^[[:space:]]*url[[:space:]]*=[[:space:]]*([^[:space:]]+) ]]; then
+        repo_name="${BASH_REMATCH[1]##*/}"; repo_name=${repo_name%.git}
+        break
+      fi
+    done < "$gc/config"
+  fi
+
+  # Dirty-state scan is the priciest part of the tick — only pay for it when
+  # the segment is displayed (branch + dirty both on), and TTL-cache the
+  # result (4s, keyed on repo root): event-driven renders burst, and a burst
+  # should fork git exactly once. Both git calls share one process
+  # substitution, split by a \x01 sentinel line.
+  if [ -n "$git_branch" ] && _on git_branch && _on git_dirty; then
+    _gcf="$HOME/.claude/.statusline-git-dirty-cache" _hit=""
+    if [ -r "$_gcf" ]; then
+      { IFS= read -r _ce; IFS= read -r _cr; IFS= read -r git_dirty; } < "$_gcf"
+      if [[ "$_ce" =~ ^[0-9]+$ ]] && [ "$_cr" = "$_root" ] && (( NOW - _ce < 4 )); then
+        _hit=1
+      else git_dirty=""; fi
+    fi
+    if [ -z "$_hit" ]; then
+      # File counts: porcelain replaces diff + diff --cached + ls-files;
+      # `diff HEAD --numstat` covers staged+unstaged lines in one call.
+      changed=0 untracked=0 la=0 lr=0 _num=""
+      while IFS= read -r line; do
+        [ "$line" = $'\x01' ] && { _num=1; continue; }
+        if [ -z "$_num" ]; then
+          x=${line:0:1} y=${line:1:1}
+          if [ "$x" = "?" ]; then (( untracked++ ))
+          else [ "$x" != " " ] && (( changed++ )); [ "$y" != " " ] && (( changed++ )); fi
+        else
+          added="${line%%$'\t'*}" _rest="${line#*$'\t'}" removed="${_rest%%$'\t'*}"
+          [[ "$added" =~ ^[0-9]+$ ]] && la=$((la + added))
+          [[ "$removed" =~ ^[0-9]+$ ]] && lr=$((lr + removed))
+        fi
+      done < <(git -C "$cwd" --no-optional-locks status --porcelain 2>/dev/null
+               printf '\x01\n'
+               git -C "$cwd" --no-optional-locks diff HEAD --numstat 2>/dev/null)
+
+      p=""
+      [ "$changed" -gt 0 ]   && p="\U0001f4c4 ${changed}"
+      [ "$untracked" -gt 0 ] && { [ -n "$p" ] && p="${p} "; p="${p}\U0001f50e ${untracked}"; }
+      dp=""
+      [ "$la" -gt 0 ] && dp="${GRN}+${la}${R}"
+      [ "$lr" -gt 0 ] && { [ -n "$dp" ] && dp="${dp} "; dp="${dp}${RED}-${lr}${R}"; }
+      [ -n "$dp" ] && { [ -n "$p" ] && p="${p} "; p="${p}${dp}"; }
+      git_dirty="$p"
+      printf '%s\n%s\n%s\n' "$NOW" "$_root" "$git_dirty" > "$_gcf" 2>/dev/null
+    fi
+  fi
+fi
+
+# ═════════════════════════════════════════════════════════════════════════
+# Line 1: repo · branch · PR · operational
+# ═════════════════════════════════════════════════════════════════════════
+out=""
+if _on repo_name && [ -n "$repo_name" ]; then
+  out="${MAUVE}\U0001f5c2️ ${repo_name}${R}"
+else
+  out="${YEL}${cwd##*/}${R}"
+fi
+_on wt_name && [ -n "$wt_name" ] && seg "${TEAL}\U0001f332 ${wt_name}${R}"
+
+if _on git_branch && [ -n "$git_branch" ]; then
+  seg "${GRN}☘️ ${git_branch}${R}"
+  _on git_dirty && [ -n "$git_dirty" ] && out="${out} ${MAR}${git_dirty}${R}"
+fi
+
+# Open PR for this branch (payload `pr` block; absent unless a PR exists).
+# Colour + glyph by review state; the number is always shown when present.
+if _on pr && [ -n "$pr_number" ]; then
+  case "${pr_state,,}" in
+    approved)          _prc="$GRN"   _prg="✓" ;;   # ✓ approved
+    changes_requested) _prc="$RED"   _prg="✗" ;;   # ✗ changes requested
+    commented)         _prc="$SAP"   _prg="\U0001f4ac" ;; # 💬 commented
+    pending|"")        _prc="$YEL"   _prg="⏳" ;;   # ⏳ pending / no review yet
+    *)                 _prc="$DIM"   _prg="$pr_state" ;;
+  esac
+  seg "${_prc}\U0001f500 #${pr_number} ${_prg}${R}"
+fi
+
+# Active subagent (--agent foo or via agent settings).
+_on agent && [ -n "$agent_name" ] && seg "${TEAL}\U0001f916 ${agent_name}${R}"
+
+# Bound work ticket (STARK-4405): alfred is the sole writer of
+# ~/.claude/.statusline-task-<sid>, one line "<id>\t<title>", mirroring the session's
+# bound ticket (task use / task new --bind write it, task unbind clears it). Show
+# "<id> · <title>" in place of the session_name segment; fall back to the session
+# name when unbound (no file). Fork-free — one file read, sid sanitized to the same
+# [a-zA-Z0-9_-] set the writer and the prompt/stop hooks use so the filename agrees.
+_task_id="" _task_title=""
+if [ -n "$sid" ]; then
+  _tsid="${sid//[^a-zA-Z0-9_-]/}"; _tsid="${_tsid:-default}"
+  _tf="$HOME/.claude/.statusline-task-${_tsid}"
+  if [ -r "$_tf" ]; then
+    IFS= read -r _tl < "$_tf" 2>/dev/null || true
+    # The whole line is emitted through the final printf %b, so a literal backslash
+    # in this untrusted ticket title would be re-interpreted (\n breaks the line, \c
+    # blanks the rest of the statusline). Escape backslashes so %b renders them raw.
+    _tl="${_tl//\\/\\\\}"
+    _task_id="${_tl%%$'\t'*}"
+    [ "$_task_id" != "$_tl" ] && _task_title="${_tl#*$'\t'}"
+  fi
+fi
+if _on session_name && [ -n "$_task_id" ]; then
+  if [ -n "$_task_title" ]; then
+    seg "${SAP}${_task_id}${DIM} · ${PEACH}${_task_title}${R}"
+  else
+    seg "${SAP}${_task_id}${R}"
+  fi
+elif _on session_name && [ -n "$session_name" ]; then
+  seg "${DIM}${session_name}${R}"
+fi
+_on vim_mode && [ -n "$vim_mode" ] && { [ "$vim_mode" = "NORMAL" ] && seg "${YEL}N${R}" || seg "${DIM}I${R}"; }
+
+# ═════════════════════════════════════════════════════════════════════════
+# Line 2: account · duration · gauges · tokens
+# ═════════════════════════════════════════════════════════════════════════
+l2=""
+
+# Logged-in account — distinguished by email + org type, mapped to a short
+# label by the resolvers above (generic domain-only here, the personal roster
+# when the private map is sourced).
+# Resolve from ~/.claude.json oauthAccount {emailAddress, organizationType};
+# the statusline
+# stdin payload doesn't carry it. ~/.claude.json is big and changes rarely
+# relative to the 60s tick, so the jq parse is mtime-cached ([ -nt ] is a
+# builtin — zero forks on the hot path).
+# Resolved unconditionally (not just when the account segment is shown):
+# the 5H/7D gauges below key their fill style off acct_label (Enterprise → 🔸).
+acct_label=""
+{
+  acct_email="" acct_otype="" acct_seat=""
+  _ac="$HOME/.claude/.statusline-account-cache"
+  if [ -f "$_ac" ] && ! [ "$HOME/.claude.json" -nt "$_ac" ]; then
+    IFS=$'\t' read -r acct_email acct_otype acct_seat < "$_ac"
+  fi
+  # Re-parse on a miss OR on a cache left by an earlier keying scheme (2 fields,
+  # or 3 with a bare org uuid): those files stay valid by mtime, so without this
+  # the seat key would read empty or wrong until ~/.claude.json next changed —
+  # silently suspending usage snapshots, or worse, writing them under a key that
+  # merges two seats. The `:` is what distinguishes a seat key from a bare uuid.
+  case "$acct_seat" in
+    *:*) ;;                                  # already a seat key
+    *)   acct_seat="" ;;
+  esac
+  if [ -z "$acct_seat" ]; then
+    IFS=$'\t' read -r acct_email acct_otype acct_seat < <(
+      jq -r '.oauthAccount | "\(.emailAddress // "")\t\(.organizationType // "")\t" + (if (.accountUuid // "") != "" and (.organizationUuid // "") != "" then "\(.accountUuid):\(.organizationUuid)" else "" end)' \
+        "$HOME/.claude.json" 2>/dev/null)
+    printf '%s\t%s\t%s\n' "$acct_email" "$acct_otype" "$acct_seat" > "$_ac" 2>/dev/null
+  fi
+  if [ -n "$acct_email" ]; then
+    # Resolve email + org type → label. The generic resolver defined above knows
+    # only domain + plan (Max/Com, Enterprise, Max/Net, Team#0); the private
+    # roster sourced above overrides it with the per-account labels (S1/A3/K).
+    _stark_resolve_account_label "$acct_email" "$acct_otype"
+    if _on account && [ -n "$acct_label" ]; then
+      # Palette family per label. Generic: Max/Net → violet, Enterprise → blue,
+      # Max/* → gold, Team* → team0. The private roster override maps each
+      # per-account label to its own hue slot (agent1..stark4 / acctk) below.
+      _pal=gold
+      _stark_resolve_account_palette "$acct_label"
+      gradient "$acct_label" "$_pal"
+      # Emoji stays static (glyphs ignore fg color); the label carries the gradient.
+      seg2 "${MAUVE}\U0001f464${R} ${GRAD}"
+    fi
+  fi
+}
+
+# Live 5H/7D windows from the idun daemon's poll of the ACTIVE seat.
+#
+# idun (>= 0.26.0, STARK-2807) polls the OAuth usage endpoint itself and writes
+# ~/.claude/.idun-daemon-state.json, keyed by the same accountUuid:organizationUuid
+# seat key resolved above. Unlike the stdin payload — frozen to the seat THIS
+# process authenticated to at launch, so wrong after a mid-session /login or
+# `idun cc` rotation — the daemon figure always tracks the CURRENT live seat. So
+# the gauges below use the daemon reading as their PRIMARY value and fall back to
+# the frozen payload only when the daemon has no fresh entry: the live number
+# survives a rotation without a restart, and no launch-seat staleness gate (the
+# retired resolve_startseat / usage_windows_stale machinery) is needed.
+#
+# Fork-free: slurp the file, slice the current seat's object by its `"<seat>": {`
+# opener, regex the numbers out of the flat (brace-free) object body. Three guards:
+#   • the `== *"<seat>": {*` presence check is load-bearing — a missing seat leaves
+#     the WHOLE file in $_blk, and the first-`}` cut would then surface some OTHER
+#     seat's numbers (one account can hold seats in two orgs at once).
+#   • the seat key is lowercased to match idun, which stores perSeat keys lowercased
+#     (idun daemon.ts: active.toLowerCase()). Real Claude UUIDs are already lowercase,
+#     so this is belt-and-suspenders against an uppercase-hex accountUuid.
+#   • a FRESHNESS gate on the seat's own stampedAt. The daemon only polls its ACTIVE
+#     seat, so an entry goes stale once that seat stops being polled — a dead/asleep
+#     daemon, or a seat that is current in ~/.claude.json but not the one idun drives.
+#     A stale entry must NOT be painted as live: that is the confident-wrong-number
+#     failure this whole redesign killed (the live state file already carries entries
+#     days stale). So blank the daemon side when NOW - stampedAt > DAEMON_TTL → dim
+#     "—". DAEMON_TTL is a fixed ceiling, NOT idun's exact pollSecs*3 (pollSecs isn't
+#     in the state file): generous enough that a healthy active seat (stampedAt
+#     refreshes every poll, seconds old) never false-negatives, tight enough that a
+#     frozen daemon stops lying within minutes. Errs toward "—" when liveness is
+#     unprovable, matching idun's own reader intent (daemon.ts cmdReading).
+DAEMON_TTL=300
+d5_pct="" d5_reset="" d7_pct="" d7_reset=""
+_dsf="$HOME/.claude/.idun-daemon-state.json"
+if [ -n "$acct_seat" ] && [ -r "$_dsf" ]; then
+  _dseat="${acct_seat,,}"
+  _ds=""; IFS= read -r -d '' _ds < "$_dsf" 2>/dev/null || true
+  if [[ $_ds == *"\"$_dseat\": {"* ]]; then
+    _blk="${_ds#*\"$_dseat\": \{}"; _blk="${_blk%%\}*}"
+    _dstamp=""; [[ $_blk =~ \"stampedAt\":[[:space:]]*([0-9]+) ]] && _dstamp="${BASH_REMATCH[1]}"
+    if [ -n "$_dstamp" ] && [ "$(( NOW - _dstamp ))" -le "$DAEMON_TTL" ] 2>/dev/null; then
+      [[ $_blk =~ \"fivePct\":[[:space:]]*(-?[0-9]+) ]]  && d5_pct="${BASH_REMATCH[1]}"
+      [[ $_blk =~ \"fiveReset\":[[:space:]]*([0-9]+) ]]  && d5_reset="${BASH_REMATCH[1]}"
+      [[ $_blk =~ \"weekPct\":[[:space:]]*(-?[0-9]+) ]]  && d7_pct="${BASH_REMATCH[1]}"
+      [[ $_blk =~ \"weekReset\":[[:space:]]*([0-9]+) ]]  && d7_reset="${BASH_REMATCH[1]}"
+    fi
+  fi
+fi
+
+# Context capacity gauge — how full is the window. Always visible: a payload
+# without the field renders as 0% rather than hiding the gauge. Not seat-pinned
+# (context is this process's own live state), so the staleness gate never applies.
+printf -v ctx '%.0f' "${used_pct:-0}"
+tcolor "$ctx" 80 50; mkbar "$ctx" _CTX_FB
+seg2 "${CTX_COL}CTX${R} ${BAR} ${TC}${ctx}%${R}"
+
+# 5H + 7D rate-limit windows — a usage bar per window (like CTX above), filled by
+# the idun daemon's live poll of the CURRENT seat when present, else this process's
+# payload reading:
+#   daemon  = idun's live poll of the CURRENT seat (survives a mid-session rotation)
+#   payload = this process's launch reading, frozen to the seat it started under
+# The daemon is the PRIMARY source because it tracks the live seat; the payload is
+# the FALLBACK, since a still-running process's payload figures belong to the
+# rotated-away seat after a /login or `idun cc` switch. A daemon value < 0 (idun's
+# "no data" sentinel) is treated as absent so it falls back too. The bar + percent
+# are severity-colored on the shown value, and the reset countdown that trails is
+# read from the SAME source as the shown value (never mixed — a payload percent must
+# not sit beside the daemon's reset, and the "—" dash must carry no countdown). Only
+# when NEITHER source has a value does the bar render dim-empty with "—". _fpct/_wpct
+# stay the PAYLOAD values — the snapshot WRITE below persists this process's own
+# launch-seat reading, never the daemon's.
+_ratebar() { # daemon_pct payload_raw daemon_reset payload_reset labelcol label gradarr → seg2 a usage bar
+  local dr="$1" pr="$2" drst="$3" prst="$4" col="$5" lbl="$6" grad="$7" val="" rst=""
+  if   [ -n "$dr" ] && [ "$dr" -ge 0 ] 2>/dev/null; then val="$dr"; rst="$drst"
+  elif [ -n "$pr" ]; then printf -v val '%.0f' "$pr"; rst="$prst"; fi
+  fmt_remain "$rst" ""            # reset follows the shown value's source ("" → no countdown)
+  if [ -n "$val" ]; then
+    tcolor "$val" 80 50; mkbar "$val" "$grad"
+    seg2 "${col}${lbl}${R} ${BAR} ${TC}${val}%${R}${FR}"
+  else
+    mkbar 0 "$grad"
+    seg2 "${col}${lbl}${R} ${BAR} ${DIM}—${R}${FR}"
+  fi
+}
+printf -v _fpct '%.0f' "${five_pct:-0}"
+_ratebar "$d5_pct" "$five_pct" "$d5_reset" "$five_reset" "$FIVEHR_COL" "5H" _FIVEH_FB
+printf -v _wpct '%.0f' "${week_pct:-0}"
+_ratebar "$d7_pct" "$week_pct" "$d7_reset" "$week_reset" "$DAY_COL" "7D" _SEVEN_FB
+
+_on tier_warn && [ "$over_200k" = "true" ] && seg2 "${RED}⚠️ 1M-tier${R}"
+
+# Persist this account's rate-limit windows for `idun cc limits`.
+#
+# These four fields arrive ONLY in the statusline stdin payload — they are not
+# written to ~/.claude.json or anywhere else on disk, so a tool asking "how much
+# headroom does my other account have?" has no source but this. Snapshotting
+# here is free: the values are already parsed above, and the write is a bash
+# redirect (no fork), matching the account/git caches alongside it.
+#
+# Keyed by SEAT — accountUuid:organizationUuid — because neither component is
+# unique. One address can hold seats in several orgs (e.g. both a Team seat and
+# a personal Max plan) and one org can hold many members (several distinct
+# accounts in the same org). Team limits are
+# per-member, so every (account, org) pair has its own budget. Keying by either
+# component alone pointed two seats at one file, so each reported the other's
+# usage. The `:` is replaced by `_` on disk (see idun's cc_lib.ts::sanitizeKey —
+# the reader that must resolve the same filename).
+#
+# Guarded on the RAW $five_pct, not the rounded $_fpct: when the payload omits
+# rate_limits entirely, $_fpct is 0, and persisting that would claim the account
+# is completely free. Skipping the write leaves the previous (older but true)
+# snapshot in place, which the reader ages honestly.
+#
+# `seat_key=` is written LAST so a torn read degrades to "unknown" rather than
+# to a falsely-low percentage — see idun's cc_lib.ts::formatSnapshot (the
+# cross-language snapshot wire-format contract this bash writer must match).
+#
+# GUARD — a snapshot is only attributable when the RENDERING process was
+# launched under the currently-recorded identity.
+#
+# `~/.claude.json` is global but each `claude` process authenticates ONCE at
+# startup and then reports ITS OWN account's rate_limits forever. So a process
+# started before a /login keeps reporting the previous account's window while
+# reading the new account's identity from the shared file — and files the wrong
+# percentages under the wrong seat.
+#
+# This is not hypothetical or brief. Observed live on 2026-07-29 with ELEVEN
+# concurrent claude processes spanning three days: one seat's snapshot thrashed
+# 60% -> 46% -> 73% as different processes rendered, and ten per-pid records
+# carried four distinct reset epochs under a single seat key. Both directions
+# occur, and the understating one is the harmful one — it breaks the `floor`
+# lower-bound promise and ranks an exhausted account first.
+#
+# The rule that holds: a process launched AFTER an identity became current is
+# authenticated to it. So track when the current seat first appeared, and write
+# only from processes that started later. A stale process simply stops
+# contributing — its seat reads `unknown` (sorted last) until a process started
+# under it renders, which is exactly the honest answer.
+#
+# This subsumes the /login settling window too: on a switch the marker's epoch
+# becomes now, so every already-running process is excluded until restart.
+#
+# (The 5H/7D RENDER above no longer gates on launch-seat staleness at all — it
+# fills each bar from the idun daemon's live poll of the current seat, falling back
+# to the payload only when the daemon has no fresh entry. This snapshot WRITE keeps
+# its own marker guard because it still seeds those daemon figures: a stale process
+# must not file the wrong seat's percentages.)
+_scf="$HOME/.claude/.statusline-seat-current"
+_cur_seat="" _cur_since=""
+[ -r "$_scf" ] && IFS=$'\t' read -r _cur_seat _cur_since < "$_scf"
+if [ -n "$acct_seat" ] && [ "$_cur_seat" != "$acct_seat" ]; then
+  _cur_seat="$acct_seat" _cur_since="$NOW"
+  printf '%s\t%s\n' "$acct_seat" "$NOW" > "$_scf" 2>/dev/null
+fi
+if [ -n "$acct_seat" ] && [ -n "$five_pct" ]; then
+  resolve_procstart
+  if [ "$PROCSTART" -gt 0 ] 2>/dev/null &&
+     [ "${_cur_since:-0}" -gt 0 ] 2>/dev/null &&
+     [ "$PROCSTART" -ge "$_cur_since" ]; then
+    _ccu="$HOME/.claude/.cc-usage-${acct_seat//:/_}"
+    printf 'five_pct=%s\nfive_reset=%s\nweek_pct=%s\nweek_reset=%s\nstamped_at=%s\nemail=%s\nseat_key=%s\n' \
+      "$_fpct" "${five_reset:-0}" "$_wpct" "${week_reset:-0}" "$NOW" "$acct_email" "$acct_seat" \
+      > "$_ccu" 2>/dev/null
+    # NOTE: this snapshot WRITE is load-bearing and stays — `idun cc limits` reads
+    # `.cc-usage-*` directly to rank inactive seats, and `idun daemon` seeds its
+    # per-seat state from these files at boot. What used to follow here was a
+    # `idun daemon send --from-file "$_ccu"` push to the daemon's Unix socket;
+    # STARK-2807 removed the socket + `send` verb (idun >= 0.26.0). The daemon now
+    # polls the usage endpoint itself for the active seat's real 5H/7D figures —
+    # fresher and authoritative — so the push is gone. Do NOT re-add it.
+  fi
+fi
+
+if _on code_churn; then
+  churn=""
+  [ -n "$s_added" ]  && [ "$s_added" -gt 0 ]  2>/dev/null && churn="${GRN}+${s_added}${R}"
+  [ -n "$s_removed" ] && [ "$s_removed" -gt 0 ] 2>/dev/null && { [ -n "$churn" ] && churn="${churn} "; churn="${churn}${RED}-${s_removed}${R}"; }
+  [ -n "$churn" ] && seg2 "${DIM}✏️${R} ${churn}"
+fi
+
+# ═════════════════════════════════════════════════════════════════════════
+# Line 3: session clocks + model/effort — now+age · 👤 since-enter · 🤖 since-reply · model · effort
+# (now leads; 👤 marks the human's Enter, 🤖 the agent's last reply; model + effort trail.)
+# ═════════════════════════════════════════════════════════════════════════
+# "Now (age)" = current wall clock plus session age (NOW − process start),
+# scaled by fmt_age (Xs / Xm / H:MM). Process start = when the Claude Code
+# PROCESS opened (survives /clear, unlike cost.total_duration_ms which resets
+# per session), read from the parent process' start time (ps lstart → epoch)
+# and cached per PPID so the ps+date forks run once per run, not every render.
+# "Enter" = the last prompt-submission epoch, stamped to
+# ~/.claude/.statusline-prompt-<sid> by the UserPromptSubmit hook
+# (config/statusline-prompt-hook.sh). That hook carries an idle-gap guard
+# (STARK-662): machine re-prompts (/loop, cron) that fire within ~5s of a Stop
+# do NOT re-stamp, so 👤 tracks the human's real enter, not each loop tick.
+# No stamp yet (hook not fired this session) → the segment is hidden rather
+# than faked from process start.
+# The status segment resolves running-vs-idle from TWO hook stamps — the
+# prompt stamp above and the Stop-hook stamp in
+# ~/.claude/.statusline-stop-<sid> (config/statusline-stop-hook.sh): the agent
+# is RUNNING while the prompt stamp is the newer of the two (prompt_ts ≥
+# stop_ts), and IDLE once Stop fires and advances its stamp past the prompt.
+# Both segments are RELATIVE durations ("N ago"), never a clock time:
+#   • 👤 human = elapsed since Enter, ALWAYS shown — while running it is the live
+#     turn duration, while idle it is "how long since I asked".
+#   • 🤖 bot   = elapsed since the last reply, shown ONLY when idle. A running
+#     turn has no completed reply of its own, and the human counter above is
+#     already the live one, so the bot segment would just be stale noise.
+# Both stamps come from hooks, not the payload, so a segment is hidden rather
+# than faked when its hook has not fired this session.
+l3=""
+if _on session_times; then
+  resolve_procstart; _procstart="$PROCSTART"
+
+  # Now + session age — the leading segment.
+  printf -v _nowc '%(%H:%M)T' "$NOW"
+  if [ "$_procstart" -gt 0 ] 2>/dev/null; then
+    fmt_age $(( NOW - _procstart ))
+    seg3 "${SAP}\U0001f552 ${_nowc}${DIM} (${FA})${R}"  # now · session age
+  else
+    seg3 "${SAP}\U0001f552 ${_nowc}${R}"          # now (age unresolved)
+  fi
+
+  # Enter + running/idle status — both from hook stamps (see block comment).
+  # Coerce each stamp to a clean integer (0 when absent/garbage) so the -ge
+  # comparison below is always numeric.
+  _ppf="$HOME/.claude/.statusline-prompt-${sid:-default}"
+  _spf="$HOME/.claude/.statusline-stop-${sid:-default}"
+  _pt="" _st=""
+  [ -r "$_ppf" ] && IFS= read -r _pt < "$_ppf"
+  [ -r "$_spf" ] && IFS= read -r _st < "$_spf"
+  [ "$_pt" -gt 0 ] 2>/dev/null || _pt=0
+  [ "$_st" -gt 0 ] 2>/dev/null || _st=0
+  _running=0
+  [ "$_pt" -gt 0 ] && [ "$_pt" -ge "$_st" ] && _running=1
+
+  # 👤 human — elapsed since Enter, always (running = live turn counter, idle =
+  # since I asked). Relative only, no clock time.
+  if [ "$_pt" -gt 0 ]; then
+    fmt_dur $(( NOW - _pt ))
+    seg3 "${PEACH}\U0001f464 ${FD}${DIM} ago${R}"  # 👤 since enter
+  fi
+
+  # 🤖 bot — elapsed since the last reply, only while idle.
+  if [ "$_running" != 1 ] && [ "$_st" -gt 0 ]; then
+    fmt_dur $(( NOW - _st ))
+    seg3 "${GRN}\U0001f916 ${FD}${DIM} ago${R}"    # 🤖 since last reply (waiting)
+  fi
+fi
+
+# Model + reasoning effort — the tail of line 3 (independent of session_times).
+# Model keeps its version, shortening " (1M context)" → " 1M" (pure-bash regex,
+# no sed fork). Effort renders Lo / Me / Hi / Xh / Mx; both materially affect
+# output token volume and cost.
+if _on model && [ -n "$model" ]; then
+  m="$model"
+  [[ $m =~ ^(.*)\ \(([0-9]+[KMG])\ context\)(.*)$ ]] && m="${BASH_REMATCH[1]} ${BASH_REMATCH[2]}${BASH_REMATCH[3]}"
+  seg3 "${SAP}${m}${R}"
+fi
+if _on effort && [ -n "$effort" ]; then
+  case "$effort" in
+    low)    _ec="$DIM";   _el="Lo";;
+    medium) _ec="$DIM";   _el="Me";;
+    high)   _ec="$YEL";   _el="Hi";;
+    xhigh)  _ec="$PEACH"; _el="Xh";;
+    max)    _ec="$RED";   _el="Mx";;
+    *)      _ec="$DIM";   _el="${effort:0:2}";;
+  esac
+  seg3 "${_ec}${_el}${R}"
+fi
+
+if [ -n "$l3" ]; then
+  printf "%b\n" "${out}\n${l2}\n${l3}"
+else
+  printf "%b\n" "${out}\n${l2}"
+fi

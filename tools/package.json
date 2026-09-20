@@ -1,0 +1,18 @@
+{
+  "name": "bifrost-tools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "rest-only": "./check-rest-only.sh",
+    "test": "./check-rest-only.sh && node --test *.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.5",
+    "typescript": "^5.6.0"
+  }
+}
