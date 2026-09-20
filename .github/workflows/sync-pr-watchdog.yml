@@ -172,9 +172,20 @@ jobs:
           # without the shape. Pinned by TestWorkflowsNeverCombineSlurpWithJq, because
           # actionlint, shellcheck and a stubbed `gh` are all blind to it: the line is valid
           # shell, valid YAML, and a stub accepts flags the real binary rejects.
-          comments="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/${number}/comments")"
+          #
+          # A read the API cannot answer is not a verdict here either — and this one runs
+          # AFTER the verdict, so a transport blip must not redden a perfectly publishable
+          # PR with nothing but gh's own error to explain it. Same shape as the two guards
+          # above; a bare `set -e` exit would be just as red and say nothing.
+          if ! comments="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/${number}/comments")"; then
+            echo "could not read PR #${number}'s comments — this is not a verdict" >&2
+            exit 1
+          fi
+          # `.body // ""` rather than `.body`: `startswith` on a null body aborts jq with
+          # exit 5, and `pipefail` turns that into a run that died before saying anything.
+          # The same guard, for the same reason, as publish-sync-pr's review filter.
           existing="$(printf '%s' "$comments" \
-            | jq -r --arg marker "$marker" '[.[][] | select(.body | startswith($marker))] | last // empty')"
+            | jq -r --arg marker "$marker" '[.[][] | select((.body // "") | startswith($marker))] | last // empty')"
           existing_id="$(printf '%s' "$existing" | jq -r '.id // empty')"
           existing_body="$(printf '%s' "$existing" | jq -r '.body // empty')"
 
