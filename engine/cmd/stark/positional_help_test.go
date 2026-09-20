@@ -152,6 +152,9 @@ func TestBuiltEntrypointHelpSafety(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "help"), []byte("{}"), 0644); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(root, "index.json"), []byte(`{"schemaVersion":1,"artifacts":[{"name":"help","type":"command","bundle":"fixture","maturity":"beta","support":{"codex":"native"}}]}`), 0644); err != nil {
+		t.Fatal(err)
+	}
 	before := snapshotHelpFixture(t, root)
 	count := 0
 	run := func(executable string, args []string, wantHelp bool) {
@@ -162,6 +165,9 @@ func TestBuiltEntrypointHelpSafety(t *testing.T) {
 		cmd.Dir = root
 		cmd.Env = []string{"HOME=" + root, "PATH=" + traps, "NO_COLOR=1", "TERM=dumb"}
 		out, err := cmd.CombinedOutput()
+		if ctx.Err() != nil {
+			t.Fatalf("entrypoint timed out: %s %v", executable, args)
+		}
 		if wantHelp {
 			if err != nil || !bytes.Contains(out, []byte("Usage:")) {
 				t.Fatalf("%s %v: %v\n%s", executable, args, err, out)
@@ -216,6 +222,33 @@ func TestBuiltEntrypointHelpSafety(t *testing.T) {
 				run(bash, append([]string{script}, args...), false)
 			}
 		}
+	}
+	for _, args := range [][]string{
+		{"search", "help", "--json"},
+		{"search", "--json", "help"},
+		{"search", "--", "help"},
+		{"__complete", "build", "help"},
+		{"__completeNoDesc", "build", "help"},
+	} {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cmd := exec.CommandContext(ctx, bin, args...)
+		cmd.Dir = root
+		cmd.Env = []string{"HOME=" + root, "PATH=" + traps, "NO_COLOR=1", "TERM=dumb"}
+		out, err := cmd.CombinedOutput()
+		cancel()
+		if err != nil || bytes.Contains(out, []byte("Usage:")) {
+			t.Fatalf("literal/protocol case %v: %v\n%s", args, err, out)
+		}
+		if args[0] == "search" && !bytes.Contains(out, []byte("help")) {
+			t.Fatalf("query data lost: %s", out)
+		}
+		if strings.HasPrefix(args[0], "__complete") && !bytes.Contains(out, []byte(":")) {
+			t.Fatalf("completion directive missing: %s", out)
+		}
+		if got := snapshotHelpFixture(t, root); !reflect.DeepEqual(before, got) {
+			t.Fatal("literal case changed fixture")
+		}
+		count++
 	}
 	t.Logf("PASS: %d built CLI/script invocations; zero subprocess trips or fixture changes", count)
 }
