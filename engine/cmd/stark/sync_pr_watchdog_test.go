@@ -135,6 +135,12 @@ func TestWatchdogKeepsItsLoadBearingInvocationDetails(t *testing.T) {
 		{"select(.isCrossRepository == false)", "gh answers newest-first, so an unfiltered `.[0]` lets any fork PR take the watch and silence the real strand"},
 		{"git/commits/${head}", "the branch is long-lived and force-pushed, so `createdAt` ages while the regeneration on it does not"},
 		{"--paginate --slurp", "`--jq` with `--paginate` alone runs the filter once per PAGE, so a marker comment on two pages yields a two-line id"},
+		// The other half of the shape TestWorkflowsNeverCombineSlurpWithJq bans: that
+		// test forbids the inline filter, and the needle above pins the slurp, but
+		// neither notices if the slurped pages are then never filtered at all. Drop
+		// this pipe and `existing_id` is always empty — the watchdog re-POSTS a fresh
+		// comment every cron tick instead of editing one, with every test still green.
+		{`printf '%s' "$comments"`, "the slurped pages must still reach the marker filter; `gh api` cannot apply it inline"},
 		{"GH_REPO:", "the job never checks out; gh resolves the repo from git remotes, not GITHUB_REPOSITORY"},
 	} {
 		if !strings.Contains(wf, c.needle) {
@@ -268,5 +274,112 @@ func TestWatchdogNeverRewritesTheSyncBranch(t *testing.T) {
 	// be spent by a later edit that forgets why.
 	if strings.Contains(wf, "contents: write") {
 		t.Fatalf("%s must not take `contents: write` — it reports, it does not push", watchdogWorkflowPath)
+	}
+}
+
+// The flags `gh api` refuses alongside `--slurp`, in every spelling it accepts for them.
+// The refusal names two options and each has a shorthand, so the same fatal command line
+// has FOUR forms — all measured on gh 2.101.0, all rejected identically. A gate that knew
+// only `--jq` would have passed three of them, which is the whole failure mode below
+// repeated: a pin that looks right and catches a quarter of the bug.
+var ghFlagsSlurpRefuses = []string{"--jq", "-q", "--template", "-t"}
+
+// ghAPIHasFlag reports whether one of `names` appears as its OWN argument in the `gh api`
+// invocation on this line. Token-wise, not `strings.Contains`: `-t` and `-q` are two
+// characters and would otherwise fire on any path, URL or jq program that happens to
+// spell them. The scan starts at `gh api` so a flag belonging to a command piped after it
+// is not read as gh's.
+func ghAPIHasFlag(line string, names ...string) bool {
+	i := strings.Index(line, "gh api")
+	if i < 0 {
+		return false
+	}
+	for _, tok := range strings.Fields(line[i:]) {
+		for _, n := range names {
+			if tok == n || strings.HasPrefix(tok, n+"=") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// `gh api` REFUSES `--slurp` together with `--jq` or `--template`: "the `--slurp` option is
+// not supported with `--jq` or `--template`". Not a runner quirk — reproduced on gh 2.101.0
+// too, for the shorthands `-q` and `-t` as well.
+//
+// This killed sync-pr-watchdog's first live run (35523084147, 2026-09-20): it printed gh's
+// usage text and exited 1 before reaching any verdict. The workflow was merged green,
+// because nothing that ran before that could see it — the line is valid shell and valid
+// YAML, so `actionlint` and `shellcheck` pass it; the Go suite exercises the jq predicate,
+// not the gh command line; and the review round that introduced the flag verified it
+// against a STUBBED `gh`, which accepts every flag the real binary rejects.
+//
+// So the pin is on the command line itself, across every file that can carry one rather
+// than just this workflow, because the mistake is a copy of `publish-sync-pr`'s flag
+// without its shape — slurp into a variable, then pipe to `jq` — and the next copy will be
+// somewhere else. "Somewhere else" is deliberately read wide: `.yaml` as well as `.yml`
+// (GitHub Actions reads both, so a scan that stops at one is blind to half the directory)
+// and `docs/scripts/`, which runs the same shell in the same CI and is under no rule that
+// keeps a copied flag out of it.
+//
+// One scanned file is not this repo's to fix: `.github/workflows/secret-scan.yml` is a
+// byte-identical copy of a Terraform render owned by 21stark. It is still scanned — losing
+// the coverage silently would be worse — but the fix for a hit there is in that template,
+// never here; see CLAUDE.md.
+func TestWorkflowsNeverCombineSlurpWithJq(t *testing.T) {
+	root := repoRoot(t)
+	var files []string
+	for _, scope := range []struct {
+		dir  string
+		exts []string
+	}{
+		{filepath.Join(".github", "workflows"), []string{".yml", ".yaml"}},
+		{filepath.Join("docs", "scripts"), []string{".sh"}},
+	} {
+		dir := filepath.Join(root, scope.dir)
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			t.Fatalf("read %s: %v", scope.dir, err)
+		}
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			for _, ext := range scope.exts {
+				if strings.HasSuffix(e.Name(), ext) {
+					files = append(files, filepath.Join(dir, e.Name()))
+					break
+				}
+			}
+		}
+	}
+	// A gate that scanned nothing passes for the wrong reason; a moved directory must
+	// redden rather than go quiet.
+	if len(files) == 0 {
+		t.Fatal("scanned no files — this gate would pass vacuously")
+	}
+
+	for _, path := range files {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		// One `gh api` invocation may span continuation lines, so join them before
+		// looking — the broken call had `--slurp` and `--jq` on different physical
+		// lines. CRLF is normalized first, or a file checked out with CRLF endings
+		// leaves `\`+`\r\n` unjoined and splits the pair back apart.
+		joined := strings.ReplaceAll(strings.ReplaceAll(string(b), "\r\n", "\n"), "\\\n", " ")
+		for _, line := range strings.Split(joined, "\n") {
+			if !strings.Contains(line, "gh api") || strings.HasPrefix(strings.TrimSpace(line), "#") {
+				continue
+			}
+			if !ghAPIHasFlag(line, "--slurp") || !ghAPIHasFlag(line, ghFlagsSlurpRefuses...) {
+				continue
+			}
+			t.Errorf("%s combines --slurp with one of %v, which `gh api` refuses outright:\n  %s\n"+
+				"slurp into a variable and pipe to jq instead (publish-sync-pr.yml does)",
+				filepath.Base(path), ghFlagsSlurpRefuses, strings.TrimSpace(line))
+		}
 	}
 }
