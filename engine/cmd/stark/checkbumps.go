@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -15,23 +16,64 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// prevIndexJSON returns the previously committed index.json bytes, preferring
-// origin/main and falling back to HEAD. Returns nil (skip) when neither ref has
-// the file (first commit / fresh repo).
+// gitOK runs a git command for its exit status only.
 //
 // Through gitCommand, not a bare exec: an inherited GIT_DIR wins over `-C repoRoot`, so
-// under a hook or `git rebase --exec` the gate would read some OTHER repo's index as the
-// previous one and pass or fail by accident.
-func prevIndexJSON(repoRoot string) []byte {
-	for _, ref := range []string{"origin/main:index.json", "HEAD:index.json"} {
-		cmd := gitCommand(repoRoot, "show", ref)
-		var stdout, stderr bytes.Buffer
-		cmd.Stdout, cmd.Stderr = &stdout, &stderr
-		if err := cmd.Run(); err == nil {
-			return stdout.Bytes()
-		}
+// under a hook or `git rebase --exec` every probe below would answer about some OTHER
+// repo and the gate would pass or fail by accident.
+func gitOK(repoRoot string, args ...string) bool {
+	cmd := gitCommand(repoRoot, args...)
+	cmd.Stdout, cmd.Stderr = io.Discard, io.Discard
+	return cmd.Run() == nil
+}
+
+// gitShow returns the bytes of one path at one ref, and whether it exists there.
+func gitShow(repoRoot, ref string) ([]byte, bool) {
+	cmd := gitCommand(repoRoot, "show", ref)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
+		return nil, false
 	}
-	return nil
+	return stdout.Bytes(), true
+}
+
+// prevIndexJSON returns the previously committed index.json bytes and a human-readable
+// name for where they came from. `ok` is false when the baseline could not be established
+// at all — which is a REFUSAL, not a pass.
+//
+// The baseline is `origin/main`, because the question this gate asks is "did content
+// already published on main change under an unchanged version". `HEAD` is a fallback for a
+// repo with no origin at all (a scratch tree, a test fixture) and is NOT interchangeable:
+// on a `pull_request` checkout HEAD is the PR's own merge commit, whose index.json
+// `build --check` has already forced to agree with the change — so a HEAD baseline
+// compares the change to itself and the gate cannot fail. Measured 2026-09-20
+// (STARK-8161): one violating commit printed "OK: no un-bumped source changes" with only
+// `refs/remotes/pull/N/merge` present, and 7 shared-assets violations once
+// `refs/remotes/origin/main` was fetched into the identical tree.
+func prevIndexJSON(repoRoot string) (data []byte, ref string, ok bool) {
+	// An `origin` remote means this is a clone of something, so the baseline MUST be
+	// reachable. `actions/checkout@v4` configures origin but, on a pull_request event at
+	// its default depth, fetches only `refs/pull/N/merge` and no remote-tracking branch —
+	// exactly the shape that has to refuse instead of falling through to HEAD.
+	hasOrigin := gitOK(repoRoot, "remote", "get-url", "origin")
+	mainResolves := gitOK(repoRoot, "rev-parse", "--verify", "--quiet", "origin/main^{commit}")
+
+	if hasOrigin && !mainResolves {
+		return nil, "", false
+	}
+	if mainResolves {
+		// The ref is there. index.json may not be, on a repo that has never published —
+		// that is a real "nothing to compare against", unlike a missing ref.
+		if b, found := gitShow(repoRoot, "origin/main:index.json"); found {
+			return b, "origin/main", true
+		}
+		return nil, "origin/main (carries no index.json yet)", true
+	}
+	if b, found := gitShow(repoRoot, "HEAD:index.json"); found {
+		return b, "HEAD (no origin remote)", true
+	}
+	return nil, "none (no committed index.json)", true
 }
 
 // leanPrev is the minimal shape we read from a previous index.json (CC-2 keys).
@@ -117,7 +159,21 @@ func emptyDirDigest() string { return digest.Files(map[string][]byte{}) }
 // runCheckBumps loads the previous committed index + the current catalog and
 // errors (exit 1) on any version-bump immutability violation (CC-5 / spec §11).
 func runCheckBumps(catalogDir, repoRoot string) int {
-	prevBytes := prevIndexJSON(repoRoot)
+	prevBytes, baseRef, baseOK := prevIndexJSON(repoRoot)
+	if !baseOK {
+		// Fail closed, and say what to do. A gate that cannot find the thing it
+		// compares against must never print OK — that is how this one spent its whole
+		// life green in CI while catching nothing (STARK-8161).
+		fmt.Println("check-bumps: this clone has an `origin` remote but no `origin/main` to compare against.")
+		fmt.Println("check-bumps: without that baseline the only other committed index.json is this very")
+		fmt.Println("check-bumps: change's own, so the gate would compare the change to itself and pass.")
+		fmt.Println("check-bumps: fetch it first — `git fetch --no-tags --depth=1 origin +refs/heads/main:refs/remotes/origin/main`")
+		return 1
+	}
+	// Say which baseline was used, every run. `stark sync` prints its source for the same
+	// reason (STARK-7364): a gate that silently changes what it measured is indistinguishable
+	// from one that measured nothing.
+	fmt.Println("check-bumps: baseline", baseRef)
 	prev := map[string]bumps.Previous{}
 	if len(prevBytes) > 0 {
 		var lp leanPrev

@@ -115,7 +115,11 @@ func TestPrevIndexJSONIgnoresAnInheritedGitDir(t *testing.T) {
 	t.Setenv("GIT_DIR", filepath.Join(other, ".git"))
 	t.Setenv("GIT_WORK_TREE", other)
 
-	if got := string(prevIndexJSON(root)); got != `{"mine":true}`+"\n" {
+	data, _, ok := prevIndexJSON(root)
+	if !ok {
+		t.Fatal("no baseline: neither fixture has an origin remote, so the HEAD fallback must apply")
+	}
+	if got := string(data); got != `{"mine":true}`+"\n" {
 		t.Fatalf("an inherited GIT_DIR retargeted the previous index: %q", got)
 	}
 }
