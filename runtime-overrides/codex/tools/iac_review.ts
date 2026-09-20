@@ -39,6 +39,7 @@
  *   # Terragrunt real review after dispatch consent; no HCL evaluation:
  *   iac_review.ts --kind terragrunt live/ --changed --allow-agent-dispatch --no-tools
  */
+import { cliValue } from "./cli_args_lib.ts";
 import {
   runIacReview,
   renderReport,
@@ -88,24 +89,24 @@ function parseArgs(argv: string[]): {
   const positionals: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    const next = () => argv[++i];
+    const next = () => cliValue(argv, ++i, argv[i - 1]);
     switch (a) {
-      case "--help": case "-h": o.help = true; break;
+      case "help": case "--help": case "-h": o.help = true; break;
       case "--kind": o.kind = next() as Kind; break;
-      case "--agents": o.agents = String(next() ?? "").split(",").map((s) => s.trim()).filter(Boolean); break;
+      case "--agents": o.agents = next().split(",").map((s) => s.trim()).filter(Boolean); break;
       case "--changed": o.changed = true; break;
       case "--no-tools": o.noTools = true; break;
       case "--allow-agent-dispatch": o.allowAgentDispatch = true; break;
       case "--include-tfvars": o.includeTfvars = true; break;
       case "--trust-source": o.trustSource = true; break;
       case "--min-severity": {
-        const v = String(next() ?? "").toLowerCase();
+        const v = next().toLowerCase();
         if (!isSeverity(v)) throw new Error(`--min-severity must be one of critical|high|medium|low (got '${v}')`);
         o.minSeverity = v;
         break;
       }
       case "--pr": o.pr = Number(next()); break;
-      case "--repo": o.repo = next() ?? null; break;
+      case "--repo": o.repo = next(); break;
       case "--timeout": o.timeout = Number(next()); break;
       case "--dry-run": o.dryRun = true; break;
       case "--json": o.json = true; break;
@@ -114,6 +115,7 @@ function parseArgs(argv: string[]): {
         positionals.push(a);
     }
   }
+  if (positionals.length > 1) throw new Error("unexpected positional argument: " + positionals[1]);
   if (positionals.length > 0) o.target = positionals[0];
   return o;
 }

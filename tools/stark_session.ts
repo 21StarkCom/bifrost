@@ -22,6 +22,7 @@
  * collectors run in parallel so the slowest single child caps total time.
  */
 
+import { hasCliHelp } from "./cli_args_lib.ts";
 import { isMainModule } from "./main_module_lib.ts";
 
 import {
@@ -47,6 +48,7 @@ function parseFlags(argv: string[]): Map<string, string> {
       throw new Error(`unexpected positional argument: ${tok}`);
     }
     const key = tok.slice(2);
+    if (!["session-id", "start-head", "started-at", "name"].includes(key)) throw new Error(`unknown flag: ${tok}`);
     const next = argv[i + 1];
     if (next === undefined || next.startsWith("--")) {
       throw new Error(`flag --${key} requires a value`);
@@ -82,7 +84,7 @@ export async function runEnd(rest: string[], deps?: Deps): Promise<number> {
 
 export async function main(argv: string[], deps?: Deps): Promise<number> {
   const [sub, ...rest] = argv;
-  if (!sub || sub === "--help" || sub === "-h") {
+  if (!sub || hasCliHelp(argv, ["--session-id", "--start-head", "--started-at", "--name"])) {
     process.stdout.write(USAGE);
     return sub ? 0 : 1;
   }

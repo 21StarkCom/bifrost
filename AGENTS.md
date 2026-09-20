@@ -17,6 +17,8 @@ Claude, Codex and Gemini are all enabled (Gemini → `gemini-3.1-pro-preview`, d
 
 ## Operating Principles
 
+- **Operational help is side-effect-free (STARK-8286).** `help`/`--help`/`-h` exits before work, or unsupported forms receive a precise usage refusal. Option values and stdin remain literal data; unknown arguments and missing values must not swallow later safety flags. Shared argv helpers live in `tools/cli_args_lib.ts`; `tools/source_help.test.ts` drives real entrypoints with calibrated tripwires. The source/route inventory, protocol exclusions and optional macOS confinement check are in [the source help audit](docs/operations/source-entrypoint-help-audit.md).
+
 This is a **personal playground**, not production. No customers depend on it; the only user is the author.
 
 - **Branch + PR for everything — no exceptions.** Every change lands on a branch and merges through a PR. **Never commit or push to `main` directly.** "Ship straight to main" means *merge once the PR is green* — it does **not** mean bypass the PR. (This file said "Ship straight to main" with no branch+PR rule until 2026-08-07. That was wrong, and it was wrong only for you — Claude read the correct rule the whole time.)
@@ -43,7 +45,7 @@ This is a **personal playground**, not production. No customers depend on it; th
 
 ## Repo Layout
 
-- `tools/` — **all** TypeScript tooling (170 tracked files): dispatchers, agent utilities, session/state, GitHub transport, skill meta-tooling. The only executable surface, and the subject of `ci`'s required `test` + `typecheck` contexts.
+- `tools/` — **all** TypeScript tooling (176 tracked files): dispatchers, agent utilities, session/state, GitHub transport, skill meta-tooling. The only executable surface, and the subject of `ci`'s required `test` + `typecheck` contexts.
 - `skill/` — all skills (`skill/*/SKILL.md`, **25** skills across 25 dirs: 22 `stark-*` plus `agnes`, `gru`, `minion`), served as the seven marketplace plugins by the root manifest's per-plugin `skills:` partition. There is no `skill/evals/` any more.
 - `global/` — global config + prompts (`config.json`, `forge_heuristics.json`, `prompts/`)
 - `scripts/` — shell helpers + JSON only (`healer_patterns.json`). **No Python lives here any more.**
@@ -53,9 +55,9 @@ This is a **personal playground**, not production. No customers depend on it; th
 - `standards/` — org-wide doc templates and workflows
 - `.claude-plugin/marketplace.json` — the marketplace manifest: seven plugins, each `"source": "./"` plus its own `skills:` partition. Hand-curated, must stay at the repo root.
 - `.github/workflows/` — `ci.yml` (`secret scan (tree)`, `actionlint`, `test`, `typecheck` — all four required) and `secret-scan.yml` (the fleet's secret-scan caller)
-- `docs/operations/branch-protection.md` — the one doc that survives: what `main` gates on, and the operator-only APPLY commands for the ruleset
+- `docs/operations/branch-protection.md` — what `main` gates on, and the operator-only APPLY commands for the ruleset
 
-The only `docs/` file here is `docs/operations/branch-protection.md`, and there is no
+The `docs/operations/` files cover branch protection and the source help audit; there is no
 `org/` tree: the doc layout below is what `/stark-init-docs` scaffolds into a *target*
 repo, and `org/evinced/` went with `/stark-review`, the only reader of its overrides (STARK-6098).
 
@@ -106,7 +108,7 @@ Skills are edited **here** and they take effect **here**. There is no build step
 
 ## Conventions
 
-- **Docs live with the code** under `docs/`, folder per type — `adr/` (`NNNN-<topic>.md`, immutable: supersede, don't edit), `specs/` (`YYYY-MM-DD-<topic>-spec.md`), `retros/` (`YYYY-MM-DD-<topic>-retro.md`). **That is what `/stark-init-docs` scaffolds into a target repo, guarded by `tools/doc_convention.test.ts` — it is not a layout this repo keeps.** This repo carries no `docs/` tree of its own beyond `docs/operations/branch-protection.md`: every skill is documented by its own `SKILL.md` and its `--help`.
+- **Docs live with the code** under `docs/`, folder per type — `adr/` (`NNNN-<topic>.md`, immutable: supersede, don't edit), `specs/` (`YYYY-MM-DD-<topic>-spec.md`), `retros/` (`YYYY-MM-DD-<topic>-retro.md`). **That is what `/stark-init-docs` scaffolds into a target repo, guarded by `tools/doc_convention.test.ts` — it is not a layout this repo keeps.** This repo carries no `docs/` tree of its own beyond `docs/operations/`: every skill is documented by its own `SKILL.md` and its `--help`.
 - **There is never a `docs/plans/`.** Since `/stark-author` (2026-08-01) the spec carries the plan — task DAG, done-whens, closing verification command.
 - Tier by blast radius: trivial → PR only · feature → spec · architectural → ADR + spec.
 - Config is JSON, prompts are markdown. **The per-agent × per-domain review prompt corpus is gone** — it belonged to `/stark-review` and was buried with it (STARK-6098). `global/prompts/` now holds one rubric dir per dispatcher (`iac-review/`, `refactor-planner/`), shared by every agent that runs it.

@@ -15,6 +15,7 @@
  * `config.self_heal.*` from Codex's state overlay on the packaged config.
  */
 
+import { parseCli } from "./cli_args_lib.ts";
 import { loadConfig } from "./healer_canary_lib.ts";
 import { runHeal, type HealMode } from "./self_healer_lib.ts";
 import { isMainModule } from "./main_module_lib.ts";
@@ -23,29 +24,14 @@ import { isMainModule } from "./main_module_lib.ts";
 // Tiny argv parser
 // ---------------------------------------------------------------------------
 
-interface ParsedArgs {
-  flags: Map<string, string | true>;
-}
+type ParsedArgs = ReturnType<typeof parseCli>;
 
 function parseArgs(argv: string[]): ParsedArgs {
-  const flags = new Map<string, string | true>();
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (!a.startsWith("--")) continue;
-    const eq = a.indexOf("=");
-    if (eq !== -1) {
-      flags.set(a.slice(2, eq), a.slice(eq + 1));
-    } else {
-      const next = argv[i + 1];
-      if (next !== undefined && !next.startsWith("--")) {
-        flags.set(a.slice(2), next);
-        i++;
-      } else {
-        flags.set(a.slice(2), true);
-      }
-    }
-  }
-  return { flags };
+  return parseCli(argv, {
+    equals: true,
+    values: ["--pattern-id", "--stderr-file", "--mode"],
+    switches: ["--json"],
+  });
 }
 
 function flagString(args: ParsedArgs, name: string): string | undefined {
@@ -104,11 +90,11 @@ const HELP =
   "[--mode suggest|auto] [--json]\n";
 
 function main(argv: string[]): number {
-  if (argv.includes("-h") || argv.includes("--help")) {
+  const args = parseArgs(argv);
+  if (args.help) {
     process.stderr.write(HELP);
     return 0;
   }
-  const args = parseArgs(argv);
   const patternId = flagString(args, "pattern-id");
   const stderrFile = flagString(args, "stderr-file");
   const modeRaw = flagString(args, "mode") ?? "suggest";

@@ -17,8 +17,12 @@ set -euo pipefail
 SCOPE_KIND="" SCOPE=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --enterprise) SCOPE_KIND=enterprises; SCOPE="$2"; shift 2 ;;
-    --org)        SCOPE_KIND=organizations; SCOPE="$2"; shift 2 ;;
+    help|--help|-h) echo "usage: $0 --enterprise <slug> | --org <login>"; exit 0 ;;
+    --enterprise|--org)
+      if [ "$#" -lt 2 ]; then echo "$1 requires a value" >&2; exit 2; fi
+      case "$2" in --*|-h) echo "$1 requires a value" >&2; exit 2 ;; esac
+      if [ "$1" = --enterprise ]; then SCOPE_KIND=enterprises; else SCOPE_KIND=organizations; fi
+      SCOPE="$2"; shift 2 ;;
     *) echo "usage: $0 --enterprise <slug> | --org <login>" >&2; exit 2 ;;
   esac
 done

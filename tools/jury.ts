@@ -1011,7 +1011,7 @@ interface Args {
 export function parseArgs(argv: string[]): Args {
   const args: Args = { cmd: null, positional: [], json: false, help: false };
   const need = (flag: string, value: string | undefined): string => {
-    if (value === undefined) throw new JuryUsageError(`${flag} requires a value`);
+    if (value === undefined || /^--|^-h$/.test(value)) throw new JuryUsageError(`${flag} requires a value`);
     return value;
   };
   for (let i = 0; i < argv.length; i += 1) {
@@ -1037,6 +1037,8 @@ export function parseArgs(argv: string[]): Args {
     } else args.positional.push(a);
   }
   args.cmd = args.positional[0] ?? null;
+  const limit = args.cmd === "show" ? 2 : 1;
+  if (args.positional.length > limit) throw new JuryUsageError(`unexpected positional argument: ${args.positional[limit]}`);
   return args;
 }
 

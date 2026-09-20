@@ -255,15 +255,14 @@ test("skill_optimize.ts runs main() when reached through a symlink", () => {
   // nothing. The spaced-path list above cannot catch that — this guard was
   // always space-safe — so it gets its own probe.
   //
-  // A deliberately bogus flag, not `--help`: the CLI rejects unknown arguments
-  // from inside its guarded block with its own `[skill_optimize]` prefix, which
-  // nothing but a main() that ran can print. Anchoring on that prefix (rather
-  // than "any output") keeps the test honest if `--help` is ever implemented.
+  // A deliberately bogus flag: main() must reach its argv guard and return
+  // the tool's precise usage refusal, not silently skip the guarded block.
   withTempDir((dir) => {
     const link = path.join(dir, "skill_optimize-link.ts");
     fs.symlinkSync(path.join(HERE, "skill_optimize.ts"), link);
     const r = run(link, ["--not-a-real-flag"]);
-    assert.match(r.stderr, /\[skill_optimize\]/, `main() never ran: ${JSON.stringify(r)}`);
+    assert.equal(r.status, 2, r.stderr);
+    assert.match(r.stderr, /unknown argument: --not-a-real-flag\nusage: skill_optimize\.ts/, `main() never ran: ${JSON.stringify(r)}`);
   });
 });
 

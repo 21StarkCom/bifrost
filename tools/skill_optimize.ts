@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { precheckCli } from "./cli_args_lib.ts";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -105,6 +106,15 @@ type RunState = {
 };
 
 async function main(): Promise<void> {
+  // Help and argument validation, before the repo walk and the API calls. The
+  // shape must stay in step with `parseArgs`: a flag added there and not here
+  // is refused as unknown before `parseArgs` ever sees it.
+  precheckCli(process.argv.slice(2), {
+    values: ["--api-timeout-ms", "--mode", "--skill", "--skills", "--model", "--out-dir", "--poll-interval-ms", "--reasoning-effort", "--max-output-tokens"],
+    switches: ["--apply", "--diff", "--reuse-proposal"],
+  }, "usage: skill_optimize.ts [--mode plan|api] [--skill TARGET] [--skills A,B]\n" +
+     "       [--model ID] [--out-dir DIR] [--reasoning-effort E] [--api-timeout-ms N]\n" +
+     "       [--poll-interval-ms N] [--max-output-tokens N] [--apply] [--diff] [--reuse-proposal]");
   // findRepoRoot returns null when no ancestor has .git/, so the type
   // system forces an explicit guard here instead of relying on a follow-up
   // existsSync check that could drift out of sync with the resolver.
@@ -612,7 +622,7 @@ function parseArgs(argv: string[]): CliOptions {
 
 function readValue(argv: string[], index: number, flag: string): string {
   const value = argv[index];
-  if (!value) {
+  if (!value || /^--|^-h$/.test(value)) {
     throw new Error(`${flag} requires a value`);
   }
   return value;

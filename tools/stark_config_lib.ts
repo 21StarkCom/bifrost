@@ -22,6 +22,7 @@
  * path ever needs it.
  */
 
+import { parseCli } from "./cli_args_lib.ts";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -510,16 +511,26 @@ export function discoverConfig(opts: DiscoverConfigOpts = {}): DiscoveredConfig 
 const USAGE = "usage: stark_config_lib.ts --model <agent>\n";
 
 function main(argv: string[]): number {
-  if (argv.includes("--help") || argv.includes("-h") || argv.includes("help")) {
+  let args: ReturnType<typeof parseCli>;
+  try {
+    args = parseCli(argv, { values: ["--model"] });
+  } catch (err) {
+    // The entrypoint below only sets `process.exitCode`, so an escaped throw
+    // here is an uncaught stack trace, not the usage refusal the contract
+    // promises. `main` returns the code; don't reach for `process.exit`.
+    process.stderr.write(`${(err as Error).message}\n${USAGE}`);
+    return 2;
+  }
+  if (args.help) {
     process.stdout.write(USAGE);
     return 0;
   }
-  const i = argv.indexOf("--model");
-  if (i === -1 || !argv[i + 1]) {
+  const model = args.flags.get("model");
+  if (typeof model !== "string" || !model) {
     process.stderr.write(USAGE);
     return 1;
   }
-  const id = getModelId(argv[i + 1]);
+  const id = getModelId(model);
   if (!id) return 1;
   process.stdout.write(`${id}\n`);
   return 0;

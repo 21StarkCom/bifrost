@@ -1,11 +1,16 @@
 #!/usr/bin/env node
 
+import { precheckCli } from "./cli_args_lib.ts";
 import {
   collectSharedRefs,
   discoverSkillBundles,
   findRepoRoot,
   hasBrokenRefs,
 } from "./skill_lib.ts";
+
+// Help and argument validation, before the repo walk below.
+precheckCli(process.argv.slice(2), { switches: ["--json", "--validate"] },
+  "usage: skill_audit.ts [--json] [--validate]");
 
 // findRepoRoot returns null when no ancestor .git/ exists. The narrowed
 // return type forces this check, so we can't accidentally audit a tree

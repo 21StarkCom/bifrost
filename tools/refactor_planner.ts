@@ -10,6 +10,7 @@
 //   run       full multi-agent planning workflow -> REFACTOR_PLAN.md + REFACTOR_BACKLOG.json
 //   validate  validate an existing REFACTOR_BACKLOG.json (schema + DAG + path checks)
 
+import { cliValue } from "./cli_args_lib.ts";
 import { runDispatcher, type DispatcherReceipt, type RunMode } from "./refactor_planner_lib.ts";
 import type { ProviderKind } from "./refactor_planner_provider.ts";
 
@@ -50,32 +51,40 @@ Planning only: writes <root>/.refactor-planner/ and the two root artifacts; neve
 
 function parseArgs(argv: string[]): CliArgs | { help: true } | { error: string } {
   const a: CliArgs = { mode: "dry-run", root: process.cwd(), overwrite: true, allowPartial: false, json: false };
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
-    const next = () => argv[++i];
-    switch (arg) {
-      case "-h": case "--help": return { help: true };
-      case "--mode": {
-        const m = next();
-        if (m !== "dry-run" && m !== "run" && m !== "validate") return { error: `invalid --mode '${m}'` };
-        a.mode = m; break;
+  // `cliValue` signals a missing value by throwing, but this file's usage
+  // contract is a RETURNED error: `main` renders it with HELP and exits 2.
+  // Letting the throw escape lands in `main().catch`, which prints a stack
+  // trace and exits 1 — a different exit code for the same class of mistake.
+  try {
+    for (let i = 0; i < argv.length; i++) {
+      const arg = argv[i];
+      const next = () => cliValue(argv, ++i, argv[i - 1]);
+      switch (arg) {
+        case "help": case "-h": case "--help": return { help: true };
+        case "--mode": {
+          const m = next();
+          if (m !== "dry-run" && m !== "run" && m !== "validate") return { error: `invalid --mode '${m}'` };
+          a.mode = m; break;
+        }
+        case "--root": a.root = next(); break;
+        case "--provider": {
+          const p = next();
+          if (p !== "claude" && p !== "codex" && p !== "noop") return { error: `invalid --provider '${p}'` };
+          a.provider = p; break;
+        }
+        case "--model": a.model = next(); break;
+        case "--out": a.out = next(); break;
+        case "--max-concurrency": a.maxConcurrency = Number(next()); break;
+        case "--prompts-dir": a.promptsDir = next(); break;
+        case "--exclude": a.excludes = next().split(",").map((s) => s.trim()).filter(Boolean); break;
+        case "--no-overwrite": a.overwrite = false; break;
+        case "--allow-partial": a.allowPartial = true; break;
+        case "--json": a.json = true; break;
+        default: return { error: `unknown argument '${arg}'` };
       }
-      case "--root": a.root = next(); break;
-      case "--provider": {
-        const p = next();
-        if (p !== "claude" && p !== "codex" && p !== "noop") return { error: `invalid --provider '${p}'` };
-        a.provider = p; break;
-      }
-      case "--model": a.model = next(); break;
-      case "--out": a.out = next(); break;
-      case "--max-concurrency": a.maxConcurrency = Number(next()); break;
-      case "--prompts-dir": a.promptsDir = next(); break;
-      case "--exclude": a.excludes = (next() ?? "").split(",").map((s) => s.trim()).filter(Boolean); break;
-      case "--no-overwrite": a.overwrite = false; break;
-      case "--allow-partial": a.allowPartial = true; break;
-      case "--json": a.json = true; break;
-      default: return { error: `unknown argument '${arg}'` };
     }
+  } catch (err) {
+    return { error: (err as Error).message };
   }
   return a;
 }

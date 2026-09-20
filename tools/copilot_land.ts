@@ -51,6 +51,7 @@
  * one shape. (This line used to cite `write_spec_land.ts` / `red_team_fold.ts` as
  * the source of the style; both files were deleted, so it pointed nowhere.)
  */
+import { hasCliHelp } from "./cli_args_lib.ts";
 import { spawnSync } from "node:child_process";
 import { isMainModule } from "./main_module_lib.ts";
 import {
@@ -199,8 +200,10 @@ function parseFlags(argv: string[], booleans: Set<string>, values: Set<string>):
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
     if (!arg.startsWith("--")) throw new Error(`unexpected argument: ${arg}`);
-    const key = arg.slice(2);
+    const eq = arg.indexOf("=");
+    const key = eq < 0 ? arg.slice(2) : arg.slice(2, eq);
     if (booleans.has(key)) {
+      if (eq >= 0) throw new Error(`--${key} takes no value`);
       flags[key] = true;
       continue;
     }
@@ -208,8 +211,20 @@ function parseFlags(argv: string[], booleans: Set<string>, values: Set<string>):
       const known = [...booleans, ...values].sort().map((k) => `--${k}`).join(", ");
       throw new Error(`unknown flag: --${key} (known flags: ${known})`);
     }
+    // `--key=VALUE` is the ONLY way to pass a value that legitimately begins
+    // with a dash — `--body` and `--title` carry free text, and a body whose
+    // first line is a markdown rule (`---`) has to stay expressible. The space
+    // form refuses one instead, because a missing value must never swallow the
+    // next flag: a typo'd `--require-base` eating `--dry-run` is exactly the
+    // silently-wrong run this parser's strictness exists to stop.
+    if (eq >= 0) {
+      flags[key] = arg.slice(eq + 1);
+      continue;
+    }
     const v = argv[++i];
-    if (v === undefined) throw new Error(`--${key} requires a value`);
+    if (v === undefined || /^--|^-h$/.test(v)) {
+      throw new Error(`--${key} requires a value; use --${key}=VALUE for a leading-dash literal`);
+    }
     flags[key] = v;
   }
   return flags;
@@ -611,7 +626,7 @@ async function main(argv: string[]): Promise<number> {
     process.stdout.write(HELP);
     return 0;
   }
-  if (rest.includes("--help") || rest.includes("-h")) {
+  if (hasCliHelp(rest, ["--plan-slug","--fallback-slug","--branch","--repo-dir","--require-base","--repo","--title","--body","--base","--lead","--ticket","--known-prs"])) {
     process.stdout.write(HELP);
     return 0;
   }

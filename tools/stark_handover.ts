@@ -17,6 +17,7 @@
  * (default ~/Code/Handovers).
  */
 
+import { cliValue } from "./cli_args_lib.ts";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -73,13 +74,15 @@ function parseArgs(argv: string[]): Args {
   const positional: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === "--help" || a === "-h") args.help = true;
+    if (a === "--help" || a === "-h" || a === "help") args.help = true;
     else if (a === "--all") args.all = true;
-    else if (a === "--task") args.task = argv[++i];
-    else if (a === "--handover-file") args.handoverFile = argv[++i];
-    else if (a === "--progress-file") args.progressFile = argv[++i];
+    else if (a === "--task") args.task = cliValue(argv, ++i, argv[i - 1]);
+    else if (a === "--handover-file") args.handoverFile = cliValue(argv, ++i, argv[i - 1]);
+    else if (a === "--progress-file") args.progressFile = cliValue(argv, ++i, argv[i - 1]);
+    else if (a.startsWith("-")) throw new Error(`unknown argument: ${a}`);
     else positional.push(a);
   }
+  if (positional.length > 1) throw new Error(`unexpected positional argument: ${positional[1]}`);
   args.cmd = positional[0] ?? null;
   return args;
 }
@@ -226,12 +229,25 @@ function cmdList(root: string, ctx: GitContext, all: boolean): void {
 }
 
 if (isMainModule(import.meta.url)) {
-  const args = parseArgs(process.argv.slice(2));
+  // `parseArgs` throws on an unknown flag or a missing value. Uncaught, that is
+  // a Node stack trace on stderr with exit 1 — outside this tool's contract,
+  // which is one `{"error": …}` JSON line on stdout and exit 2. Every caller
+  // parses that JSON, so an escaped throw leaves them with nothing to read.
+  const args: Args = ((): Args => {
+    try {
+      return parseArgs(process.argv.slice(2));
+    } catch (err) {
+      return fail(err instanceof Error ? err.message : String(err));
+    }
+  })();
   if (args.help || args.cmd === null) {
     process.stdout.write(`${USAGE}\n`);
     process.exit(args.help ? 0 : 2);
   }
 
+  // Refuse before `deriveGitContext()` shells out to git — which is why this
+  // replaces the switch's old `default:` arm rather than sitting beside it.
+  if (!["resolve", "save", "resume", "list"].includes(args.cmd)) fail(`unknown subcommand: ${args.cmd}`);
   const root = resolveRoot({ configRoot: getHandoverConfig().root });
   const ctx = deriveGitContext();
 
@@ -249,9 +265,6 @@ if (isMainModule(import.meta.url)) {
       case "list":
         cmdList(root, ctx, args.all);
         break;
-      default:
-        process.stderr.write(`unknown subcommand: ${args.cmd}\n${USAGE}\n`);
-        process.exit(2);
     }
   } catch (err) {
     fail(err instanceof Error ? err.message : String(err));

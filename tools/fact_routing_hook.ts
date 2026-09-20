@@ -90,6 +90,16 @@ function main(): void {
   );
 }
 
+// Argv is not part of the PostToolUse protocol, so anything here is either a
+// help request or a mistake. A refusal goes to stderr: this hook's stdout is
+// read by Claude Code, so a usage line printed there is protocol noise.
+if (process.argv.length > 2) {
+  const asked = ["help", "--help", "-h"].includes(process.argv[2]);
+  const usage = "usage: fact_routing_hook.ts (no arguments; PostToolUse JSON on stdin)\n";
+  if (asked) process.stdout.write(usage);
+  else process.stderr.write(`unsupported argument: ${process.argv[2]}\n${usage}`);
+  process.exit(asked ? 0 : 2);
+}
 try {
   main();
 } catch {

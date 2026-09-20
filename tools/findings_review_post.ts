@@ -12,6 +12,7 @@
  * Everything here is mapping plus a CLI: no new posting logic, no new retry or
  * fallback behavior.
  */
+import { hasCliHelp } from "./cli_args_lib.ts";
 import * as fs from "node:fs";
 import * as nodePath from "node:path";
 import { spawnBounded, type BoundedSpawnResult } from "./bounded_spawn_lib.ts";
@@ -1023,7 +1024,7 @@ export { GITHUB_REVIEW_BODY_MAX };
 export { computeRunHash };
 
 async function main(argv: string[]): Promise<number> {
-  if (argv.some((a) => a === "-h" || a === "--help" || a === "help")) {
+  if (hasCliHelp(argv, ["--repo","--pr","--findings","--agent","--generated-paths","--add-generated-paths"])) {
     console.log(HELP);
     return 0;
   }

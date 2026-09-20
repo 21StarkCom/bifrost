@@ -6,6 +6,7 @@
 // canonical extracted version under `standards/` — if a skill already
 // links to that doc, the inline copy is treated as already-extracted.
 
+import { precheckCli } from "./cli_args_lib.ts";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -247,6 +248,9 @@ function formatText(summary: DietSummary): string {
 }
 
 function main(): void {
+  // Help and argument validation, before the repo walk below.
+  precheckCli(process.argv.slice(2), { switches: ["--json", "--check"] },
+    "usage: skill_diet.ts [--json] [--check]");
   const repoRoot = findRepoRoot(process.cwd());
   if (repoRoot === null) {
     console.error(

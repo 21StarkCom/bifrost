@@ -7,6 +7,7 @@
  *   node failure_classifier.ts --stderr-file PATH [--json]
  */
 
+import { cliValue } from "./cli_args_lib.ts";
 import fs from "node:fs";
 import { classify, logResult } from "./failure_classifier_lib.ts";
 import { isMainModule } from "./main_module_lib.ts";
@@ -27,13 +28,13 @@ function main(argv: string[]): number {
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg === "--help" || arg === "-h") {
+    if (arg === "--help" || arg === "-h" || arg === "help") {
       process.stdout.write(HELP);
       return 0;
     } else if (arg === "--json") {
       asJson = true;
     } else if (arg === "--stderr-file") {
-      stderrFile = argv[++i];
+      stderrFile = cliValue(argv, ++i, argv[i - 1]);
     } else if (arg.startsWith("--stderr-file=")) {
       stderrFile = arg.slice("--stderr-file=".length);
     } else {

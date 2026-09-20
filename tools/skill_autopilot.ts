@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { precheckCli } from "./cli_args_lib.ts";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -73,6 +74,16 @@ type BundleFile = {
   action: "update" | "delete" | "keep";
   summary: string;
 };
+
+// Help and argument validation, before the optimizer subprocess below. The
+// shape must stay in step with `parseArgs`: a flag added there and not here is
+// refused as unknown before `parseArgs` ever sees it.
+precheckCli(process.argv.slice(2), {
+  values: ["--skill", "--output", "--out-dir", "--model", "--reasoning-effort", "--api-timeout-ms", "--poll-interval-ms", "--max-output-tokens"],
+  switches: ["--reuse-proposal", "--diff"],
+}, "usage: skill_autopilot.ts --skill PATH [--output PATH] [--out-dir DIR] [--model ID]\n" +
+   "       [--reasoning-effort E] [--api-timeout-ms N] [--poll-interval-ms N]\n" +
+   "       [--max-output-tokens N] [--reuse-proposal] [--diff]");
 
 const scriptPath = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(scriptPath), "..");
@@ -181,7 +192,7 @@ function parseArgs(argv: string[]): CliOptions {
 
 function readValue(argv: string[], index: number, flag: string): string {
   const value = argv[index];
-  if (!value) {
+  if (!value || /^--|^-h$/.test(value)) {
     throw new Error(`${flag} requires a value`);
   }
   return value;
