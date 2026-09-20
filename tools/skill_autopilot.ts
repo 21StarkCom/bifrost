@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { parseCli } from "./cli_args_lib.ts";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -73,6 +74,12 @@ type BundleFile = {
   action: "update" | "delete" | "keep";
   summary: string;
 };
+
+  const cli = parseCli(process.argv.slice(2), {
+    values: ["--skill", "--output", "--out-dir", "--model", "--reasoning-effort", "--api-timeout-ms", "--poll-interval-ms", "--max-output-tokens"],
+    switches: ["--reuse-proposal", "--diff"],
+  });
+  if (cli.help) { console.log("usage: skill_autopilot.ts --skill VALUE --output VALUE --out-dir VALUE --model VALUE --reasoning-effort VALUE --api-timeout-ms VALUE --poll-interval-ms VALUE --max-output-tokens VALUE --reuse-proposal --diff [help|--help|-h]"); process.exit(0); }
 
 const scriptPath = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(scriptPath), "..");
@@ -181,7 +188,7 @@ function parseArgs(argv: string[]): CliOptions {
 
 function readValue(argv: string[], index: number, flag: string): string {
   const value = argv[index];
-  if (!value) {
+  if (!value || /^--|^-h$/.test(value)) {
     throw new Error(`${flag} requires a value`);
   }
   return value;

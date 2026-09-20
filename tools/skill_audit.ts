@@ -1,11 +1,17 @@
 #!/usr/bin/env node
 
+import { parseCli } from "./cli_args_lib.ts";
 import {
   collectSharedRefs,
   discoverSkillBundles,
   findRepoRoot,
   hasBrokenRefs,
 } from "./skill_lib.ts";
+
+  const cli = parseCli(process.argv.slice(2), {
+    switches: ["--json", "--validate"],
+  });
+  if (cli.help) { console.log("usage: skill_audit.ts --json --validate [help|--help|-h]"); process.exit(0); }
 
 // findRepoRoot returns null when no ancestor .git/ exists. The narrowed
 // return type forces this check, so we can't accidentally audit a tree

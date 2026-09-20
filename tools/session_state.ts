@@ -18,6 +18,7 @@
  *     none exists for the resolved session id.
  */
 
+import { parseCli } from "./cli_args_lib.ts";
 import {
   type SessionState,
   defaultSessionsDir,
@@ -32,34 +33,15 @@ import { isMainModule } from "./main_module_lib.ts";
 // Tiny argv parser
 // ---------------------------------------------------------------------------
 
-interface ParsedArgs {
-  positionals: string[];
-  flags: Map<string, string | true>;
-}
+type ParsedArgs = ReturnType<typeof parseCli>;
 
 function parseArgs(argv: string[]): ParsedArgs {
-  const positionals: string[] = [];
-  const flags = new Map<string, string | true>();
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a.startsWith("--")) {
-      const eq = a.indexOf("=");
-      if (eq !== -1) {
-        flags.set(a.slice(2, eq), a.slice(eq + 1));
-      } else {
-        const next = argv[i + 1];
-        if (next !== undefined && !next.startsWith("--")) {
-          flags.set(a.slice(2), next);
-          i++;
-        } else {
-          flags.set(a.slice(2), true);
-        }
-      }
-    } else {
-      positionals.push(a);
-    }
-  }
-  return { positionals, flags };
+  return parseCli(argv, {
+    equals: true,
+    values: ["--session-id", "--field", "--value"],
+    switches: ["--json"],
+    positionals: 1,
+  });
 }
 
 function flagString(args: ParsedArgs, name: string): string | undefined {
@@ -145,19 +127,17 @@ function cmdSet(args: ParsedArgs): number {
 // ---------------------------------------------------------------------------
 
 function main(argv: string[]): number {
-  // Subcommand form: `session_state.ts set --field … --value …`
-  if (argv[0] === "set") {
-    return cmdSet(parseArgs(argv.slice(1)));
-  }
-  // Default form (no subcommand): same surface as Python.
-  if (argv[0] === "--help" || argv[0] === "-h") {
-    process.stderr.write(
-      "usage: session_state.ts [--session-id ID] [--json]\n" +
-        "       session_state.ts set --field <name|start_head|last_checkpoint> --value VAL [--session-id ID]\n",
-    );
+  const args = parseArgs(argv);
+  if (args.help) {
+    process.stdout.write("usage: session_state.ts [--session-id ID] [--json] | set --field FIELD --value VALUE\n");
     return 0;
   }
-  return cmdShow(parseArgs(argv));
+  if (args.positionals.some((p) => p !== "set")) throw new Error("unknown session_state subcommand");
+  // Subcommand form: `session_state.ts set --field … --value …`
+  if (args.positionals[0] === "set") {
+    return cmdSet(args);
+  }
+  return cmdShow(args);
 }
 
 void defaultSessionsDir;

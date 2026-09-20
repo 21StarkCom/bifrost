@@ -25,6 +25,7 @@
  *   iac_review.ts --kind terraform infra/ --agents gemini,codex
  *   iac_review.ts --kind terragrunt live/ --changed --pr 42 --repo 21-Stark-AI/foo
  */
+import { cliValue } from "./cli_args_lib.ts";
 import {
   runIacReview,
   renderReport,
@@ -70,9 +71,9 @@ function parseArgs(argv: string[]): {
   const positionals: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    const next = () => argv[++i];
+    const next = () => cliValue(argv, ++i, argv[i - 1]);
     switch (a) {
-      case "--help": case "-h": o.help = true; break;
+      case "help": case "--help": case "-h": o.help = true; break;
       case "--kind": o.kind = next() as Kind; break;
       case "--agents": o.agents = String(next() ?? "").split(",").map((s) => s.trim()).filter(Boolean); break;
       case "--changed": o.changed = true; break;
@@ -94,6 +95,7 @@ function parseArgs(argv: string[]): {
         positionals.push(a);
     }
   }
+  if (positionals.length > 1) throw new Error("unexpected positional argument: " + positionals[1]);
   if (positionals.length > 0) o.target = positionals[0];
   return o;
 }

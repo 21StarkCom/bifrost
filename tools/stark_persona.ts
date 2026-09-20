@@ -18,6 +18,7 @@
  *   session-end
  */
 
+import { parseCli } from "./cli_args_lib.ts";
 import {
   addPersona,
   deleteActive,
@@ -39,34 +40,14 @@ import {
 // Tiny argv parser — only the flags we actually use (no yargs / commander).
 // ---------------------------------------------------------------------------
 
-interface ParsedArgs {
-  positionals: string[];
-  flags: Map<string, string | true>;
-}
+type ParsedArgs = ReturnType<typeof parseCli>;
 
 function parseArgs(argv: string[]): ParsedArgs {
-  const positionals: string[] = [];
-  const flags = new Map<string, string | true>();
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a.startsWith("--")) {
-      const eq = a.indexOf("=");
-      if (eq !== -1) {
-        flags.set(a.slice(2, eq), a.slice(eq + 1));
-      } else {
-        const next = argv[i + 1];
-        if (next !== undefined && !next.startsWith("--")) {
-          flags.set(a.slice(2), next);
-          i++;
-        } else {
-          flags.set(a.slice(2), true);
-        }
-      }
-    } else {
-      positionals.push(a);
-    }
-  }
-  return { positionals, flags };
+  return parseCli(argv, {
+    equals: true,
+    values: ["--name", "--source", "--traits", "--rating", "--question", "--answer", "--format"],
+    switches: ["--combo", "--auto"],
+  });
 }
 
 function flagString(args: ParsedArgs, name: string): string | undefined {
@@ -471,12 +452,14 @@ function main(argv: string[]): number {
     return 1;
   }
   const [sub, ...rest] = argv;
+  const args = parseArgs(rest);
+  if (["help", "--help", "-h"].includes(sub) || args.help) { printHelp(); return 0; }
   const handler = SUBCOMMANDS[sub];
   if (!handler) {
     printHelp();
     return 1;
   }
-  return handler(parseArgs(rest));
+  return handler(args);
 }
 
 process.exit(main(process.argv.slice(2)));

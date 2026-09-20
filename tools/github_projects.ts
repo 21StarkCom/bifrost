@@ -86,7 +86,7 @@ function parseArgs(argv: string[]): Parsed {
   let i = 0;
   while (i < argv.length) {
     const a = argv[i]!;
-    if (a === "-h" || a === "--help") {
+    if (a === "-h" || a === "--help" || a === "help") {
       out.flags.add("help");
       i++;
       continue;
@@ -98,8 +98,9 @@ function parseArgs(argv: string[]): Parsed {
         i++;
         continue;
       }
+      if (!["org","name","project","issue","item","value","fields","repo","status","from","to","repo-root","filter"].includes(name)) throw new Error(`unknown flag: --${name}`);
       const value = argv[i + 1];
-      if (value === undefined) {
+      if (value === undefined || /^--|^-h$/.test(value)) {
         throw new Error(`Missing value for --${name}`);
       }
       if (MULTI_OPTS.has(name)) {
@@ -112,15 +113,14 @@ function parseArgs(argv: string[]): Parsed {
       i += 2;
       continue;
     }
-    out.positional.push(a);
-    i++;
+    throw new Error(`unexpected positional argument: ${a}`);
   }
   return out;
 }
 
 function requireOpt(parsed: Parsed, key: string): string {
   const v = parsed.options.get(key);
-  if (v === undefined) throw new Error(`Missing required flag: --${key}`);
+  if (v === undefined || /^--|^-h$/.test(v)) throw new Error(`Missing required flag: --${key}`);
   return v;
 }
 
@@ -256,7 +256,7 @@ async function run(command: string, parsed: Parsed): Promise<void> {
 }
 
 async function main(argv: string[]): Promise<number> {
-  if (argv.length === 0 || argv[0] === "-h" || argv[0] === "--help") {
+  if (argv.length === 0 || argv[0] === "-h" || argv[0] === "--help" || argv[0] === "help") {
     process.stdout.write(HELP);
     return 0;
   }

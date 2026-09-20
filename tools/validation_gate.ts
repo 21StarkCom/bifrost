@@ -9,6 +9,7 @@
  *   node validation_gate.ts [--json] [--repo-root PATH] [--timeout SECONDS]
  */
 
+import { cliValue } from "./cli_args_lib.ts";
 import path from "node:path";
 
 import {
@@ -36,17 +37,17 @@ function main(argv: string[]): number {
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg === "--help" || arg === "-h") {
+    if (arg === "--help" || arg === "-h" || arg === "help") {
       process.stdout.write(HELP);
       return 0;
     } else if (arg === "--json") {
       asJson = true;
     } else if (arg === "--repo-root") {
-      repoRoot = argv[++i];
+      repoRoot = cliValue(argv, ++i, argv[i - 1]);
     } else if (arg.startsWith("--repo-root=")) {
       repoRoot = arg.slice("--repo-root=".length);
     } else if (arg === "--timeout") {
-      timeoutArg = Number(argv[++i]);
+      timeoutArg = Number(cliValue(argv, ++i, argv[i - 1]));
     } else if (arg.startsWith("--timeout=")) {
       timeoutArg = Number(arg.slice("--timeout=".length));
     } else {

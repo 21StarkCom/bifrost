@@ -31,6 +31,7 @@
  *     circuit state, computed stats, mode, eligibility.
  */
 
+import { parseCli } from "./cli_args_lib.ts";
 import {
   cmdCheck,
   cmdCloseCircuit,
@@ -45,29 +46,14 @@ import { isMainModule } from "./main_module_lib.ts";
 // Tiny argv parser
 // ---------------------------------------------------------------------------
 
-interface ParsedArgs {
-  flags: Map<string, string | true>;
-}
+type ParsedArgs = ReturnType<typeof parseCli>;
 
 function parseArgs(argv: string[]): ParsedArgs {
-  const flags = new Map<string, string | true>();
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (!a.startsWith("--")) continue;
-    const eq = a.indexOf("=");
-    if (eq !== -1) {
-      flags.set(a.slice(2, eq), a.slice(eq + 1));
-    } else {
-      const next = argv[i + 1];
-      if (next !== undefined && !next.startsWith("--")) {
-        flags.set(a.slice(2), next);
-        i++;
-      } else {
-        flags.set(a.slice(2), true);
-      }
-    }
-  }
-  return { flags };
+  return parseCli(argv, {
+    equals: true,
+    values: ["--promote", "--demote", "--close-circuit", "--explain"],
+    switches: ["--status", "--check", "--json"],
+  });
 }
 
 function flagString(args: ParsedArgs, name: string): string | undefined {
@@ -155,11 +141,11 @@ const HELP = [
 ].join("\n");
 
 function main(argv: string[]): number {
-  if (argv.includes("-h") || argv.includes("--help")) {
+  const args = parseArgs(argv);
+  if (args.help) {
     process.stderr.write(HELP);
     return 0;
   }
-  const args = parseArgs(argv);
   const asJson = flagBool(args, "json");
 
   const promote = flagString(args, "promote");

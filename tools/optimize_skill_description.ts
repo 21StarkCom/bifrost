@@ -295,7 +295,7 @@ function parseCliArgs(argv: string[]): CliArgs {
     const a = argv[i];
     const need = () => {
       const v = argv[i + 1];
-      if (v === undefined) throw new Error(`Missing value for ${a}`);
+      if (v === undefined || /^--|^-h$/.test(v)) throw new Error(`Missing value for ${a}`);
       i++;
       return v;
     };
@@ -308,6 +308,7 @@ function parseCliArgs(argv: string[]): CliArgs {
       case "--timeout": args.timeout = Number(need()); break;
       case "--trigger-threshold": args.triggerThreshold = Number(need()); break;
       case "--out-json": args.outJson = need(); break;
+      case "help":
       case "-h":
       case "--help":
         process.stderr.write(

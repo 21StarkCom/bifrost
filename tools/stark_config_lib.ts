@@ -22,6 +22,7 @@
  * path ever needs it.
  */
 
+import { parseCli } from "./cli_args_lib.ts";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -510,16 +511,17 @@ export function discoverConfig(opts: DiscoverConfigOpts = {}): DiscoveredConfig 
 const USAGE = "usage: stark_config_lib.ts --model <agent>\n";
 
 function main(argv: string[]): number {
-  if (argv.includes("--help") || argv.includes("-h") || argv.includes("help")) {
+  const args = parseCli(argv, { values: ["--model"] });
+  if (args.help) {
     process.stdout.write(USAGE);
     return 0;
   }
-  const i = argv.indexOf("--model");
-  if (i === -1 || !argv[i + 1]) {
+  const model = args.flags.get("model");
+  if (typeof model !== "string" || !model) {
     process.stderr.write(USAGE);
     return 1;
   }
-  const id = getModelId(argv[i + 1]);
+  const id = getModelId(model);
   if (!id) return 1;
   process.stdout.write(`${id}\n`);
   return 0;

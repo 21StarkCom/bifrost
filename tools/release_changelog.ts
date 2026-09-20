@@ -10,6 +10,7 @@
 // Output is a structured JSON receipt the skill can render and act on, so the
 // SKILL.md doesn't have to inline 60 lines of bash + parsing rules.
 
+import { parseCli } from "./cli_args_lib.ts";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -348,6 +349,11 @@ function parseArgs(argv: string[]): {
 }
 
 function main(): void {
+  const cli = parseCli(process.argv.slice(2), {
+    values: ["--repo"],
+    switches: ["--json"],
+  });
+  if (cli.help) { console.log("usage: release_changelog.ts --repo VALUE --json [help|--help|-h]"); return; }
   const opts = parseArgs(process.argv.slice(2));
   let changelogContent: string;
   try {

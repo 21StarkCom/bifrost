@@ -24,6 +24,7 @@
  * refuses to write anything it cannot splice unambiguously.
  */
 
+import { hasCliHelp } from "./cli_args_lib.ts";
 import { execFileSync, spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -398,6 +399,10 @@ function list(opts: Options): number {
   return 0;
 }
 
+if (hasCliHelp(process.argv.slice(2), [...KNOWN_FLAGS])) {
+  console.log("usage: gcp_scope.ts <init|install|check|list> [--root DIR] [--map FILE] [--direnvrc FILE] [--dry-run] [--no-allow]");
+  process.exit(0);
+}
 const [, , command = "", ...rest] = process.argv;
 if (!["init", "install", "check", "list"].includes(command)) {
   console.error(

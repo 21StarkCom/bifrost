@@ -8,6 +8,8 @@ The stark skills + tools fleet: a **two-stage development pipeline** (`/stark-au
 
 ## Operating Principles
 
+- **Operational help is side-effect-free (STARK-8286).** `help`/`--help`/`-h` exits before work, or unsupported forms receive a precise usage refusal. Option values and stdin remain literal data; unknown arguments and missing values must not swallow later safety flags. Shared argv helpers live in `tools/cli_args_lib.ts`; `tools/source_help.test.ts` drives real entrypoints with calibrated tripwires. The source/route inventory, protocol exclusions and optional macOS confinement check are in [the source help audit](docs/operations/source-entrypoint-help-audit.md).
+
 This is a **personal playground**, not production. No customers depend on it; the only user is the author.
 
 - **No rollout ceremony.** Skip soaking, gating, smoking, canary, and gradual-rollout patterns. Merge straight to main once the PR is green.
@@ -49,7 +51,7 @@ Skills are edited **HERE** and they take effect **HERE**. There is no build step
 - `data/persona/` — persona roster.
 - `.claude-plugin/marketplace.json` — the marketplace manifest itself: seven plugins, each `"source": "./"` plus its own `skills:` partition. Hand-curated, must stay at the repo root, and the file a broken edit takes the whole marketplace down with.
 - `.github/workflows/` — `ci.yml` (`secret scan (tree)`, `actionlint`, `test`, `typecheck` — all four required) and `secret-scan.yml` (the fleet's secret-scan caller).
-- `docs/operations/branch-protection.md` — the one doc that survives: what `main` gates on, and the operator-only APPLY commands for the ruleset.
+- `docs/operations/branch-protection.md` — what `main` gates on, and the operator-only APPLY commands for the ruleset.
 
 ## Key Files
 
@@ -174,7 +176,7 @@ All skills live in `skill/*/SKILL.md` and are packaged into marketplace plugins 
 
 ## Conventions
 
-- **Docs live with the code** under `docs/`, folder per type — `adr/` (`NNNN-<topic>.md`, immutable: supersede, don't edit), `specs/` (`YYYY-MM-DD-<topic>-spec.md`), `retros/` (`YYYY-MM-DD-<topic>-retro.md`). **This is the layout `/stark-init-docs` scaffolds into a target repo, and `tools/doc_convention.test.ts` guards that scaffolding — it is not a layout this repo keeps.** This repo carries no `docs/` tree of its own beyond `docs/operations/branch-protection.md`: every skill is documented by its own `SKILL.md` and its `--help`. **There is never a `docs/plans/`** — the spec carries the plan (task DAG, per-task done-whens, closing verification command), which `/stark-build` consumes. Tier by blast radius: trivial → PR only · feature → spec · architectural → ADR + spec.
+- **Docs live with the code** under `docs/`, folder per type — `adr/` (`NNNN-<topic>.md`, immutable: supersede, don't edit), `specs/` (`YYYY-MM-DD-<topic>-spec.md`), `retros/` (`YYYY-MM-DD-<topic>-retro.md`). **This is the layout `/stark-init-docs` scaffolds into a target repo, and `tools/doc_convention.test.ts` guards that scaffolding — it is not a layout this repo keeps.** This repo carries no `docs/` tree of its own beyond `docs/operations/`: every skill is documented by its own `SKILL.md` and its `--help`. **There is never a `docs/plans/`** — the spec carries the plan (task DAG, per-task done-whens, closing verification command), which `/stark-build` consumes. Tier by blast radius: trivial → PR only · feature → spec · architectural → ADR + spec.
 - Config uses JSON, prompts use markdown. **The per-agent × per-domain review
   prompt corpus is gone** — it was `/stark-review`'s and was buried with it
   (STARK-6098). `global/prompts/` now holds one rubric dir per dispatcher

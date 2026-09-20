@@ -7,9 +7,13 @@
  * substitution in SKILL.md keeps working.
  */
 
+import { parseCli } from "./cli_args_lib.ts";
 import { resolveSessionId } from "./session_id_lib.ts";
 import { isMainModule } from "./main_module_lib.ts";
 
 if (isMainModule(import.meta.url)) {
+  const cli = parseCli(process.argv.slice(2), {});
+  if (cli.help) { console.log("usage: session_id.ts  [help|--help|-h]"); process.exit(0); }
+
   process.stdout.write(`${resolveSessionId()}\n`);
 }

@@ -1,4 +1,11 @@
 #!/bin/sh
+# CLI help is separate from the hook's stdin payload.
+if [ "$#" -gt 0 ]; then
+  case "#!/bin/sh
+" in help|--help|-h) printf 'usage: %s (no arguments; protocol input on stdin where applicable)\n' "$0"; exit 0 ;; esac
+  printf 'unsupported argument: %s\n' "#!/bin/sh
+" >&2; exit 2
+fi
 # REST-only contract guard for the PR-posting path.
 #
 # Originally written for the stark-review dispatcher; that skill was buried

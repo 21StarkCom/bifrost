@@ -11,6 +11,7 @@
  * internal result is stripped before printing, like the Python.
  */
 
+import { parseCli } from "./cli_args_lib.ts";
 import {
   computeSuggestions,
   humanReadable,
@@ -25,29 +26,14 @@ import { isMainModule } from "./main_module_lib.ts";
 // Tiny argv parser
 // ---------------------------------------------------------------------------
 
-interface ParsedArgs {
-  flags: Map<string, string | true>;
-}
+type ParsedArgs = ReturnType<typeof parseCli>;
 
 function parseArgs(argv: string[]): ParsedArgs {
-  const flags = new Map<string, string | true>();
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (!a.startsWith("--")) continue;
-    const eq = a.indexOf("=");
-    if (eq !== -1) {
-      flags.set(a.slice(2, eq), a.slice(eq + 1));
-    } else {
-      const next = argv[i + 1];
-      if (next !== undefined && !next.startsWith("--")) {
-        flags.set(a.slice(2), next);
-        i++;
-      } else {
-        flags.set(a.slice(2), true);
-      }
-    }
-  }
-  return { flags };
+  return parseCli(argv, {
+    equals: true,
+    values: ["--context"],
+    switches: ["--json"],
+  });
 }
 
 function flagString(args: ParsedArgs, name: string): string | undefined {
@@ -64,13 +50,13 @@ function flagBool(args: ParsedArgs, name: string): boolean {
 // ---------------------------------------------------------------------------
 
 function main(argv: string[]): number {
-  if (argv.includes("-h") || argv.includes("--help")) {
+  const args = parseArgs(argv);
+  if (args.help) {
     process.stderr.write(
       "usage: skill_router.ts --context {review|implementation|session} [--json]\n",
     );
     return 0;
   }
-  const args = parseArgs(argv);
   const context = flagString(args, "context");
   if (!context) {
     process.stderr.write("Error: --context is required\n");

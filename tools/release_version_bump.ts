@@ -11,6 +11,7 @@
 // rewriting the file would either be silently ignored or fight with the
 // scm tool.
 
+import { parseCli } from "./cli_args_lib.ts";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -332,6 +333,11 @@ function formatText(result: BumpResult): string {
 }
 
 function main(): void {
+  const cli = parseCli(process.argv.slice(2), {
+    values: ["--version", "--repo"],
+    switches: ["--json", "--dry-run"],
+  });
+  if (cli.help) { console.log("usage: release_version_bump.ts --version VALUE --repo VALUE --json --dry-run [help|--help|-h]"); return; }
   const opts = parseArgs(process.argv.slice(2));
   if (!opts.version) {
     console.error("--version is required");

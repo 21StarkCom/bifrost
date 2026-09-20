@@ -11,6 +11,7 @@
  *   statusline-setup --reset                # reset all to enabled
  */
 
+import { cliValue } from "./cli_args_lib.ts";
 import {
   applyToggle,
   installStatusline,
@@ -42,7 +43,7 @@ function main(argv: string[]): number {
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg === "--help" || arg === "-h") {
+    if (arg === "--help" || arg === "-h" || arg === "help") {
       process.stdout.write(HELP);
       return 0;
     } else if (arg === "--list") {
@@ -53,13 +54,13 @@ function main(argv: string[]): number {
       mode = "reset";
     } else if (arg === "--enable") {
       mode = "enable";
-      ids = argv[++i] ?? "";
+      ids = cliValue(argv, ++i, argv[i - 1]) ?? "";
     } else if (arg.startsWith("--enable=")) {
       mode = "enable";
       ids = arg.slice("--enable=".length);
     } else if (arg === "--disable") {
       mode = "disable";
-      ids = argv[++i] ?? "";
+      ids = cliValue(argv, ++i, argv[i - 1]) ?? "";
     } else if (arg.startsWith("--disable=")) {
       mode = "disable";
       ids = arg.slice("--disable=".length);

@@ -11,27 +11,25 @@
  * — consumed by `tools/stark_session_lib.ts:collectAlerts`.
  */
 
+import { parseCli } from "./cli_args_lib.ts";
 import { checkAlerts } from "./alert_delivery_lib.ts";
 import { isMainModule } from "./main_module_lib.ts";
 
-interface ParsedArgs {
-  flags: Map<string, true>;
-}
+type ParsedArgs = ReturnType<typeof parseCli>;
 
 function parseArgs(argv: string[]): ParsedArgs {
-  const flags = new Map<string, true>();
-  for (const a of argv) {
-    if (a.startsWith("--")) flags.set(a.slice(2), true);
-  }
-  return { flags };
+  return parseCli(argv, {
+    equals: true,
+    switches: ["--check", "--json"],
+  });
 }
 
 function main(argv: string[]): number {
-  if (argv.includes("--help") || argv.includes("-h")) {
+  const args = parseArgs(argv);
+  if (args.help) {
     process.stderr.write("usage: alert_delivery.ts [--check] [--json]\n");
     return 0;
   }
-  const args = parseArgs(argv);
   const asJson = args.flags.has("json");
 
   const result = checkAlerts();

@@ -8,6 +8,15 @@
 #
 # Usage: GH_TOKEN=<pat> ./gha-repo-actions-drill.sh <owner/repo> [since=YYYY-MM-DD]
 set -euo pipefail
+for arg in "$@"; do
+  case "$arg" in
+    help|--help|-h) echo "usage: $0 <owner/repo> [YYYY-MM-DD]"; exit 0 ;;
+    -*) echo "unsupported option: $arg" >&2; exit 2 ;;
+  esac
+done
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then echo "usage: $0 <owner/repo> [YYYY-MM-DD]" >&2; exit 2; fi
+case "$1" in */*) ;; *) echo 'expected owner/repo' >&2; exit 2 ;; esac
+if [ "$#" -eq 2 ] && ! [[ "$2" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then echo 'expected YYYY-MM-DD' >&2; exit 2; fi
 REPO="${1:?usage: gha-repo-actions-drill.sh <owner/repo> [since=YYYY-MM-DD]}"
 SINCE="${2:-$(date -u +%Y-%m-01)}"   # default: start of current month
 : "${GH_TOKEN:?set GH_TOKEN}"; export GH_TOKEN

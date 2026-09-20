@@ -107,6 +107,10 @@ async function readStdin(): Promise<unknown> {
 
 async function main(): Promise<void> {
   const mode = process.argv[2];
+  if (process.argv.length !== 3 || !["jobs", "billing"].includes(mode)) {
+    console.log("usage: gha-cost-json.ts jobs|billing (JSON on stdin)");
+    process.exit(["help", "--help", "-h"].includes(mode) ? 0 : 2);
+  }
   const input = await readStdin();
   if (mode === "jobs") {
     const s = summarizeJobs(input);

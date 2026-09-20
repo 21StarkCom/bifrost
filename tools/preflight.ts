@@ -48,7 +48,7 @@ function parseArgs(argv: string[]): Parsed {
   let i = 0;
   while (i < argv.length) {
     const a = argv[i]!;
-    if (a === "-h" || a === "--help") {
+    if (a === "-h" || a === "--help" || a === "help") {
       out.help = true;
       i++;
       continue;
@@ -60,14 +60,14 @@ function parseArgs(argv: string[]): Parsed {
     }
     if (a === "--workflow") {
       const v = argv[i + 1];
-      if (v === undefined) throw new Error("Missing value for --workflow");
+      if (v === undefined || /^--|^-h$/.test(v)) throw new Error("Missing value for --workflow");
       out.workflow = v;
       i += 2;
       continue;
     }
     if (a === "--skip-check") {
       const v = argv[i + 1];
-      if (v === undefined) throw new Error("Missing value for --skip-check");
+      if (v === undefined || /^--|^-h$/.test(v)) throw new Error("Missing value for --skip-check");
       out.skip.add(v);
       i += 2;
       continue;

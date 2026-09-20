@@ -51,6 +51,7 @@
  * one shape. (This line used to cite `write_spec_land.ts` / `red_team_fold.ts` as
  * the source of the style; both files were deleted, so it pointed nowhere.)
  */
+import { hasCliHelp } from "./cli_args_lib.ts";
 import { spawnSync } from "node:child_process";
 import { isMainModule } from "./main_module_lib.ts";
 import {
@@ -209,7 +210,7 @@ function parseFlags(argv: string[], booleans: Set<string>, values: Set<string>):
       throw new Error(`unknown flag: --${key} (known flags: ${known})`);
     }
     const v = argv[++i];
-    if (v === undefined) throw new Error(`--${key} requires a value`);
+    if (v === undefined || /^--|^-h$/.test(v)) throw new Error(`--${key} requires a value`);
     flags[key] = v;
   }
   return flags;
@@ -611,7 +612,7 @@ async function main(argv: string[]): Promise<number> {
     process.stdout.write(HELP);
     return 0;
   }
-  if (rest.includes("--help") || rest.includes("-h")) {
+  if (hasCliHelp(rest, ["--plan-slug","--fallback-slug","--branch","--repo-dir","--require-base","--repo","--title","--body","--base","--lead","--ticket","--known-prs"])) {
     process.stdout.write(HELP);
     return 0;
   }

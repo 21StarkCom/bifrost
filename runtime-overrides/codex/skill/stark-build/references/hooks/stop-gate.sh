@@ -1,4 +1,12 @@
 #!/bin/bash
+# Only the leading help token is syntax; later task/path arguments are data.
+case "${1:-}" in help|--help|-h) printf '%s\n' 'usage: stop-gate.sh CHECK COUNTER PROGRESS_OR_LOG TASK [MAX]'; exit 0 ;; esac
+if [ "$#" -lt 4 ] || [ "$#" -gt 5 ]; then
+  printf '%s\n' 'usage: stop-gate.sh CHECK COUNTER PROGRESS_OR_LOG TASK [MAX]' >&2; exit 2
+fi
+for arg in "$@"; do
+  case "$arg" in --*|-h) printf 'unsupported option: %s\n' "$arg" >&2; exit 2 ;; esac
+done
 # Stop-hook gate for $stark-build task sessions.
 # The task's done-when check owns turn-end: red blocks the stop (exit 2,
 # reason fed back); green allows it. An exact deviation marker already emitted

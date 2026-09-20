@@ -1,4 +1,12 @@
 #!/bin/bash
+# Only the leading help token is syntax; later task/path arguments are data.
+case "${1:-}" in help|--help|-h) printf '%s\n' 'usage: protect-paths.sh LIST'; exit 0 ;; esac
+if [ "$#" -lt 1 ] || [ "$#" -gt 1 ]; then
+  printf '%s\n' 'usage: protect-paths.sh LIST' >&2; exit 2
+fi
+for arg in "$@"; do
+  case "$arg" in --*|-h) printf 'unsupported option: %s\n' "$arg" >&2; exit 2 ;; esac
+done
 # PreToolUse path-deny for /stark-build task sessions.
 # Blocks writes to gated files (spec, gated existing tests, harness scripts,
 # CI config). Deterministic deny — exit 2 blocks the tool call; prompts are

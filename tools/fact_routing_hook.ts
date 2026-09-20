@@ -90,6 +90,10 @@ function main(): void {
   );
 }
 
+if (process.argv.length > 2) {
+  console.log("usage: fact_routing_hook.ts (no arguments; PostToolUse JSON on stdin)");
+  process.exit(["help", "--help", "-h"].includes(process.argv[2]) ? 0 : 2);
+}
 try {
   main();
 } catch {

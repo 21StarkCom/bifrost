@@ -10,6 +10,7 @@
 //   run       full multi-agent planning workflow -> REFACTOR_PLAN.md + REFACTOR_BACKLOG.json
 //   validate  validate an existing REFACTOR_BACKLOG.json (schema + DAG + path checks)
 
+import { cliValue } from "./cli_args_lib.ts";
 import { runDispatcher, type DispatcherReceipt, type RunMode } from "./refactor_planner_lib.ts";
 import type { ProviderKind } from "./refactor_planner_provider.ts";
 
@@ -52,9 +53,9 @@ function parseArgs(argv: string[]): CliArgs | { help: true } | { error: string }
   const a: CliArgs = { mode: "dry-run", root: process.cwd(), overwrite: true, allowPartial: false, json: false };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    const next = () => argv[++i];
+    const next = () => cliValue(argv, ++i, argv[i - 1]);
     switch (arg) {
-      case "-h": case "--help": return { help: true };
+      case "help": case "-h": case "--help": return { help: true };
       case "--mode": {
         const m = next();
         if (m !== "dry-run" && m !== "run" && m !== "validate") return { error: `invalid --mode '${m}'` };

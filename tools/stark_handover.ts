@@ -17,6 +17,7 @@
  * (default ~/Code/Handovers).
  */
 
+import { cliValue } from "./cli_args_lib.ts";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -73,13 +74,15 @@ function parseArgs(argv: string[]): Args {
   const positional: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === "--help" || a === "-h") args.help = true;
+    if (a === "--help" || a === "-h" || a === "help") args.help = true;
     else if (a === "--all") args.all = true;
-    else if (a === "--task") args.task = argv[++i];
-    else if (a === "--handover-file") args.handoverFile = argv[++i];
-    else if (a === "--progress-file") args.progressFile = argv[++i];
+    else if (a === "--task") args.task = cliValue(argv, ++i, argv[i - 1]);
+    else if (a === "--handover-file") args.handoverFile = cliValue(argv, ++i, argv[i - 1]);
+    else if (a === "--progress-file") args.progressFile = cliValue(argv, ++i, argv[i - 1]);
+    else if (a.startsWith("-")) throw new Error(`unknown argument: ${a}`);
     else positional.push(a);
   }
+  if (positional.length > 1) throw new Error(`unexpected positional argument: ${positional[1]}`);
   args.cmd = positional[0] ?? null;
   return args;
 }
@@ -232,6 +235,7 @@ if (isMainModule(import.meta.url)) {
     process.exit(args.help ? 0 : 2);
   }
 
+  if (!["resolve", "save", "resume", "list"].includes(args.cmd)) fail(`unknown subcommand: ${args.cmd}`);
   const root = resolveRoot({ configRoot: getHandoverConfig().root });
   const ctx = deriveGitContext();
 

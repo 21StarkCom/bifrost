@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+# CLI help is separate from the hook's stdin payload.
+if [ "$#" -gt 0 ]; then
+  case "#!/usr/bin/env bash
+" in help|--help|-h) printf 'usage: %s (no arguments; protocol input on stdin where applicable)\n' "$0"; exit 0 ;; esac
+  printf 'unsupported argument: %s\n' "#!/usr/bin/env bash
+" >&2; exit 2
+fi
 #
 # cmux-autoname.sh — auto-name the cmux workspace + tab for an agent session.
 #

@@ -7,6 +7,7 @@
  *   node approach_contract.ts --plan-file PATH [--force-confirm] [--json]
  */
 
+import { cliValue } from "./cli_args_lib.ts";
 import os from "node:os";
 import path from "node:path";
 import * as readline from "node:readline/promises";
@@ -50,7 +51,7 @@ async function main(argv: string[]): Promise<number> {
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg === "--help" || arg === "-h") {
+    if (arg === "--help" || arg === "-h" || arg === "help") {
       process.stdout.write(HELP);
       return 0;
     } else if (arg === "--force-confirm") {
@@ -58,7 +59,7 @@ async function main(argv: string[]): Promise<number> {
     } else if (arg === "--json") {
       asJson = true;
     } else if (arg === "--plan-file") {
-      planFileArg = argv[++i];
+      planFileArg = cliValue(argv, ++i, argv[i - 1]);
     } else if (arg.startsWith("--plan-file=")) {
       planFileArg = arg.slice("--plan-file=".length);
     } else {

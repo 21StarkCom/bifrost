@@ -9,6 +9,7 @@
  * lines naming the freshly-written and latest checkpoint paths.
  */
 
+import { parseCli } from "./cli_args_lib.ts";
 import {
   generateCheckpoint,
   getLatestCheckpoint,
@@ -20,29 +21,14 @@ import { isMainModule } from "./main_module_lib.ts";
 // Tiny argv parser
 // ---------------------------------------------------------------------------
 
-interface ParsedArgs {
-  flags: Map<string, string | true>;
-}
+type ParsedArgs = ReturnType<typeof parseCli>;
 
 function parseArgs(argv: string[]): ParsedArgs {
-  const flags = new Map<string, string | true>();
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (!a.startsWith("--")) continue;
-    const eq = a.indexOf("=");
-    if (eq !== -1) {
-      flags.set(a.slice(2, eq), a.slice(eq + 1));
-    } else {
-      const next = argv[i + 1];
-      if (next !== undefined && !next.startsWith("--")) {
-        flags.set(a.slice(2), next);
-        i++;
-      } else {
-        flags.set(a.slice(2), true);
-      }
-    }
-  }
-  return { flags };
+  return parseCli(argv, {
+    equals: true,
+    values: ["--session-id"],
+    switches: ["--json"],
+  });
 }
 
 function flagString(args: ParsedArgs, name: string): string | undefined {
@@ -59,13 +45,13 @@ function flagBool(args: ParsedArgs, name: string): boolean {
 // ---------------------------------------------------------------------------
 
 function main(argv: string[]): number {
-  if (argv.includes("--help") || argv.includes("-h")) {
+  const args = parseArgs(argv);
+  if (args.help) {
     process.stderr.write(
       "usage: context_compactor.ts [--session-id ID] [--json]\n",
     );
     return 0;
   }
-  const args = parseArgs(argv);
   const sessionId = flagString(args, "session-id");
   const asJson = flagBool(args, "json");
 
