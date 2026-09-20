@@ -2,7 +2,7 @@
 name: stark-release
 description: >-
   Cut a release: changelog review (auto-generating from git log if [Unreleased] is empty), version bump, git tag, GitHub Release. Use for release, tag, bump version.
-argument-hint: [patch|minor|major] (optional — auto-detected if omitted)
+argument-hint: "[patch|minor|major] (optional — auto-detected if omitted)"
 disable-model-invocation: true
 model: opus
 revision: 8a249169623b83c1677dcda2bee230a3dd9fa8d1
