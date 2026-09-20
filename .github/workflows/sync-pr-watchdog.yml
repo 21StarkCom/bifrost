@@ -22,7 +22,7 @@ name: sync-pr-watchdog
 # `catalog/` or `dist/` (the web-registry removal touched six `.codex-plugin/plugin.json`
 # files), which is exactly the class of damage `publish-sync-pr`'s refusal exists to stop.
 #
-# Both triggers are load-bearing and neither covers the other:
+# All three triggers are load-bearing and none covers another:
 #   push   — fires at the instant a hand merge causes the divergence, so the alarm names
 #            the cause. It cannot cover a merge made with GITHUB_TOKEN (GitHub's anti-loop
 #            guard starts no run for one).
@@ -30,6 +30,8 @@ name: sync-pr-watchdog
 #            an attestation that was spent on a `publish-sync-pr` run that then failed, or
 #            a PR simply left open. It reports on age alone, so it needs to understand
 #            nothing about why.
+#   manual — the only way to re-ask after a run died for an unrelated reason, and the way
+#            back in once GitHub has auto-disabled the schedule for inactivity (below).
 #
 # GitHub disables a scheduled workflow after 60 days without repo activity and emails the
 # owner. On a repo this quiet that is a real way for this alarm to go silent; re-enabling
@@ -66,7 +68,7 @@ jobs:
           # every call below dies on "not a git repository". Same reason
           # `publish-sync-pr.yml` sets it.
           GH_REPO: ${{ github.repository }}
-          # How long an open sync PR may sit before age alone is reported. The publication
+          # How long a REGENERATION may sit before age alone is reported. The publication
           # latencies measured over the 37 merged sync PRs to 2026-09-20 are a median of
           # 1 minute and a maximum of 7.3 hours, so this is deliberately above the worst
           # legitimate case: the `ahead` check is the fast signal, this is the backstop.
@@ -87,14 +89,21 @@ jobs:
           # shellcheck disable=SC2016
           verdict_filter='
             (.maxAgeHours | tonumber) as $max
-            | (((.now | fromdateiso8601) - (.createdAt | fromdateiso8601)) / 3600) as $age
+            | (((.now | fromdateiso8601) - (.headCommittedAt | fromdateiso8601)) / 3600) as $age
             | if .compare != "ahead" then "stale: compare(main...head) is \"\(.compare)\", not \"ahead\" — publish-sync-pr will refuse"
-              elif $age > $max then "aging: open \($age | floor)h with no publication (limit \($max | floor)h)"
+              elif $age > $max then "aging: head is \($age | floor)h old with no publication (limit \($max | floor)h)"
               else "ok"
               end'
 
+          # The query refuses a FORK head. `--head` matches the ref NAME, which carries no
+          # owner — the same fact that makes publish-sync-pr check `isCrossRepository` —
+          # and `gh pr list` answers newest-first, so a PR opened from any fork of this
+          # public repo on a branch of that name would take `.[0]` and this watchdog would
+          # spend every run reporting on it while the real strand went unseen. That is the
+          # exact silence it exists to end, so forks are filtered out before the pick.
           pr="$(gh pr list --head auto/marketplace-sync --state open \
-                  --json number,headRefOid,createdAt --jq '.[0] // empty')"
+                  --json number,headRefOid,isCrossRepository \
+                  --jq '[.[] | select(.isCrossRepository == false)] | .[0] // empty')"
           if [ -z "$pr" ]; then
             echo "no open auto/marketplace-sync PR — nothing to watch"
             exit 0
@@ -102,9 +111,12 @@ jobs:
           number="$(printf '%s' "$pr" | jq -r '.number')"
           head="$(printf '%s' "$pr" | jq -r '.headRefOid')"
 
-          # A shape guard for the same reason publish-sync-pr carries one: `jq -r` prints
-          # the literal "null" for a missing field and exits 0, and a `compare` bound to
-          # garbage would 404 into a verdict nobody can act on.
+          # Shape guards for the same reason publish-sync-pr carries one: `jq -r` prints
+          # the literal "null" for a missing field and exits 0, and an API path or a
+          # `compare` bound to garbage would 404 into a verdict nobody can act on.
+          case "$number" in
+            ''|null|*[!0-9]*) echo "the sync PR reported an unusable number '$number'" >&2; exit 1 ;;
+          esac
           case "$head" in
             ''|null|*[!0-9a-f]*) echo "PR #${number} reported an unusable head '$head'" >&2; exit 1 ;;
           esac
@@ -116,16 +128,60 @@ jobs:
             exit 1
           fi
 
+          # The age is anchored on the HEAD COMMIT, not on the PR's `createdAt`. The sync
+          # branch is long-lived and force-pushed — stark-skills' marketplace-sync reuses
+          # the open PR and only rewrites its title — so ONE PR carries regeneration after
+          # regeneration while its creation time recedes. Measured on the very PR this
+          # ticket is about: #293 was created 03:52 and its head pushed at 15:24, so a
+          # `createdAt` clock would have called a four-hour-old, perfectly publishable
+          # regeneration a 12-hour strand. Worse, the repair this workflow prescribes
+          # (regenerate) moves the head and NOT `createdAt`, so doing what the alarm asks
+          # could never clear it: red forever, on `main` as well as on the PR.
+          #
+          # Read from the git-database endpoint by SHA rather than from the PR's commit
+          # list, so the date is the head's own by construction — `commits` is fetched
+          # oldest-first and capped, so its `last` is only the head while the list is
+          # short.
+          if ! head_at="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${head}" --jq '.committer.date')"; then
+            echo "could not read the head commit ${head} — this is not a verdict" >&2
+            exit 1
+          fi
+          case "$head_at" in
+            ''|null) echo "PR #${number}'s head ${head} reported no commit date" >&2; exit 1 ;;
+          esac
+
           verdict="$(printf '%s' "$pr" \
             | jq -r --arg compare "$compare" \
+                    --arg headCommittedAt "$head_at" \
                     --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
                     --arg maxAgeHours "$MAX_AGE_HOURS" \
-                    '. + {compare: $compare, now: $now, maxAgeHours: $maxAgeHours}' \
+                    '. + {compare: $compare, headCommittedAt: $headCommittedAt, now: $now, maxAgeHours: $maxAgeHours}' \
             | jq -r "$verdict_filter")"
 
           marker='<!-- sync-pr-watchdog -->'
-          existing="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${number}/comments" \
-                        --jq "[.[] | select(.body | startswith(\"$marker\"))] | last | .id // empty")"
+          # `--slurp`, because `--jq` alongside `--paginate` runs the filter ONCE PER PAGE
+          # and concatenates the outputs: a marker comment on two pages would make the id
+          # below two lines and every URL built from it malformed. publish-sync-pr slurps
+          # its review pages for the same reason.
+          existing="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/${number}/comments" \
+                        --jq "[.[][] | select(.body | startswith(\"$marker\"))] | last // empty")"
+          existing_id="$(printf '%s' "$existing" | jq -r '.id // empty')"
+          existing_body="$(printf '%s' "$existing" | jq -r '.body // empty')"
+
+          # Say it once. The cron re-asks every 30 minutes, so re-PATCHing a byte-identical
+          # body would rewrite the comment 48 times a day for as long as the strand lasts —
+          # and each rewrite touches the PR's `updatedAt`, which is exactly the kind of
+          # self-inflicted activity a later staleness measure must not have to discount.
+          upsert() {
+            if [ "$existing_body" = "$1" ]; then
+              return 0
+            fi
+            if [ -n "$existing_id" ]; then
+              gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing_id}" -f "body=$1" >/dev/null
+            else
+              gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${number}/comments" -f "body=$1" >/dev/null
+            fi
+          }
 
           # Every line of the comment is a separate `printf` argument rather than a raw
           # newline in the script: a line at column 0 would end the YAML block scalar this
@@ -135,19 +191,24 @@ jobs:
             echo "PR #${number} is ahead of main and within the age limit — publishable"
             # Only edit a comment that is already there: a "resolved" note on a PR that
             # never had a problem would be noise.
-            if [ -n "$existing" ]; then
-              body="$(printf '%s\n' \
+            if [ -n "$existing_id" ]; then
+              upsert "$(printf '%s\n' \
                 "$marker" \
                 "✅ Sync PR is publishable again (head \`${head:0:8}\`, ahead of \`main\`).")"
-              gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" \
-                -f "body=${body}" >/dev/null
             fi
             exit 0
           fi
 
+          # An `aging` PR is `ahead`: it CAN be published and simply has not been, and a
+          # headline that says otherwise sends the reader to the wrong repair.
+          case "$verdict" in
+            stale:*) headline="🚨 **This regeneration cannot be published.**" ;;
+            *)       headline="🚨 **This regeneration has not been published.**" ;;
+          esac
+
           body="$(printf '%s\n' \
             "$marker" \
-            "🚨 **This regeneration cannot be published.** ${verdict}." \
+            "${headline} ${verdict}." \
             "" \
             "\`publish-sync-pr\` refuses to merge unless \`compare(main...head)\` is \`ahead\`," \
             "and it only runs on a review submission — so nothing re-evaluates this after" \
@@ -166,11 +227,7 @@ jobs:
             "" \
             "_Posted by \`sync-pr-watchdog\`; this comment is edited in place, not reposted._")"
 
-          if [ -n "$existing" ]; then
-            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" -f "body=${body}" >/dev/null
-          else
-            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${number}/comments" -f "body=${body}" >/dev/null
-          fi
+          upsert "$body"
 
           # Red, every time, for as long as it is true. A green run here would be the same
           # "gate that cannot fail" this workflow was written to end.

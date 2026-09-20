@@ -48,16 +48,16 @@ func watchdogFilter(t *testing.T) string {
 }
 
 // verdict runs the real filter over the same object shape the workflow assembles.
-func verdict(t *testing.T, filter, compare, createdAt, now, maxAgeHours string) string {
+func verdict(t *testing.T, filter, compare, headCommittedAt, now, maxAgeHours string) string {
 	t.Helper()
 	requireJQ(t)
 	in, err := json.Marshal(map[string]any{
-		"number":      293,
-		"headRefOid":  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		"createdAt":   createdAt,
-		"compare":     compare,
-		"now":         now,
-		"maxAgeHours": maxAgeHours,
+		"number":          293,
+		"headRefOid":      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		"headCommittedAt": headCommittedAt,
+		"compare":         compare,
+		"now":             now,
+		"maxAgeHours":     maxAgeHours,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -77,7 +77,10 @@ func verdict(t *testing.T, filter, compare, createdAt, now, maxAgeHours string) 
 
 func TestWatchdogVerdicts(t *testing.T) {
 	filter := watchdogFilter(t)
-	const created = "2026-09-20T03:52:09Z"
+	// The head commit's time, NOT the PR's creation time. The sync branch is
+	// long-lived and force-pushed onto one reused PR, so the two diverge by however
+	// long that PR has been open: #293 was created 03:52 and its head pushed 15:24.
+	const headAt = "2026-09-20T03:52:09Z"
 
 	cases := []struct {
 		name       string
@@ -103,7 +106,7 @@ func TestWatchdogVerdicts(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := verdict(t, filter, tc.compare, created, tc.now, "8")
+			got := verdict(t, filter, tc.compare, headAt, tc.now, "8")
 			if !strings.HasPrefix(got, tc.wantPrefix) {
 				t.Fatalf("compare=%s now=%s: want a %q verdict, got %q", tc.compare, tc.now, tc.wantPrefix, got)
 			}
@@ -112,6 +115,39 @@ func TestWatchdogVerdicts(t *testing.T) {
 				t.Fatalf("the verdict must name what it saw; got %q", got)
 			}
 		})
+	}
+}
+
+// The invocation details every case above is blind to, because they live in the shell
+// around the filter rather than in it. Each needle is the GUARD, not a word near it —
+// the same shape (and the same reason) as
+// TestPublishWorkflowKeepsItsLoadBearingInvocationDetails.
+func TestWatchdogKeepsItsLoadBearingInvocationDetails(t *testing.T) {
+	wf := watchdogWorkflow(t)
+
+	for _, c := range []struct{ needle, why string }{
+		// Without this the filter above can be assigned and then never run — swap in
+		// a literal `jq -r '"ok"'` and every other assertion in this file still
+		// passes, because they exercise the string the workflow happens to define,
+		// not the one it happens to execute.
+		{`jq -r "$verdict_filter"`, "the extracted verdict must be the verdict the job actually runs"},
+		{"isCrossRepository", "`--head` matches the ref NAME with no owner, so a fork PR on that branch reads identically to the sync branch"},
+		{"select(.isCrossRepository == false)", "gh answers newest-first, so an unfiltered `.[0]` lets any fork PR take the watch and silence the real strand"},
+		{"git/commits/${head}", "the branch is long-lived and force-pushed, so `createdAt` ages while the regeneration on it does not"},
+		{"--paginate --slurp", "`--jq` with `--paginate` alone runs the filter once per PAGE, so a marker comment on two pages yields a two-line id"},
+		{"GH_REPO:", "the job never checks out; gh resolves the repo from git remotes, not GITHUB_REPOSITORY"},
+	} {
+		if !strings.Contains(wf, c.needle) {
+			t.Errorf("%s lost %q — %s", watchdogWorkflowPath, c.needle, c.why)
+		}
+	}
+
+	// The age anchor, asserted on the predicate itself: reading `.createdAt` again
+	// would call a freshly regenerated PR a 12-hour strand and leave an alarm that
+	// the prescribed repair — which moves the head, never the creation time — can
+	// never clear.
+	if strings.Contains(watchdogFilter(t), ".createdAt") {
+		t.Errorf("%s times the backstop from the PR's creation, not from its head commit", watchdogWorkflowPath)
 	}
 }
 
@@ -143,6 +179,11 @@ func TestWatchdogWatchesOnBothPushAndSchedule(t *testing.T) {
 	}
 	if !hasKey("  ", "schedule") {
 		t.Fatalf("%s must keep the `schedule` trigger: push alone cannot see a merge made with GITHUB_TOKEN", watchdogWorkflowPath)
+	}
+	// The third trigger is the only way to re-ask after a run died for an unrelated
+	// reason, and a scheduled workflow GitHub has auto-disabled for inactivity.
+	if !hasKey("  ", "workflow_dispatch") {
+		t.Fatalf("%s must keep `workflow_dispatch`: it is the only manual re-drive", watchdogWorkflowPath)
 	}
 	// A real cron expression, not just the word: five whitespace-separated fields.
 	cron := ""
