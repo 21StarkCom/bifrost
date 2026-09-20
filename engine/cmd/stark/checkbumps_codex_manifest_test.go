@@ -31,8 +31,20 @@ import (
 // re-renders every skill body under unchanged bundle versions). Spec §7.7 hands ADAPTER
 // re-renders to the adapter target version; `internal/marketplace` is not an adapter target,
 // so no target version covers the manifest either (bifrost#294 moved none). Nothing forces the
-// root VERSION to move, and nothing needs to (STARK-7998, measured): a Codex consumer
-// re-installs from the marketplace git ref; `version` only names its cache directory.
+// root VERSION to move, and nothing needs to (STARK-7998): `version` only names the Codex cache
+// directory, and `codex plugin marketplace upgrade` re-installs from the refreshed marketplace
+// snapshot regardless of it.
+//
+// UNLIKE the two reasons above, that last premise is pinned by NOTHING in this file and no test
+// below reddens when it stops being true — CI has no Codex. It was measured on 2026-09-20 on
+// codex-cli 0.155.1: the upgrade behavior against a hand-written `source_type = "git"`
+// marketplace, and separately what a real `codex plugin marketplace add` over HTTPS records
+// (source, no ref, default branch — no SHA pin). Re-measure both on any newer codex-cli before
+// leaning on them, and read CLAUDE.md "Version-bump immutability" for what each probe did and
+// did not establish.
+//
+// Refusing the root-VERSION row is not a reason to add a per-bundle codexManifests row instead:
+// reasons 1 and 2 above rule the manifest out on their own.
 
 const codexFixtureBundle = "stark-ops"
 

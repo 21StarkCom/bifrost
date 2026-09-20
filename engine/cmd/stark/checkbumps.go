@@ -94,8 +94,17 @@ func sharedAssetKey(bundle string) string { return bundle + "/shared-assets/" + 
 // There is deliberately no row for the engine-rendered `.codex-plugin/plugin.json`
 // (STARK-7977): it is display metadata the spec exempts, and it carries the root VERSION,
 // which a bundle bump does not move. See checkbumps_codex_manifest_test.go and CLAUDE.md
-// "Version-bump immutability". No root-VERSION row either (STARK-7998): a Codex consumer
-// re-installs from the marketplace git ref, and `version` only names its cache directory.
+// "Version-bump immutability". No root-VERSION row either (STARK-7998): `version` only names
+// the Codex cache directory, and `codex plugin marketplace upgrade` re-installs from the
+// refreshed marketplace snapshot regardless of it — a native consumer tracks the marketplace
+// branch (a plain `marketplace add` records no ref and clones the default branch), not a
+// version. Those two are EXTERNAL-CLI facts nothing here pins (measured 2026-09-20 on
+// codex-cli 0.155.1; CI has no Codex) — re-measure before leaning on them. Codex-only:
+// Claude Code does pin an install to plugin.json's version.
+//
+// Refusing the root-VERSION row does NOT reopen the manifest row: the STARK-7977 reasons
+// above are permanent, not a deferral on a subsumer that never arrived, so do not add a
+// per-bundle codexManifests family here as the replacement.
 func codexAssetKey(bundle string) string { return bundle + "/codex-assets/" + bundle }
 
 // emptyDirDigest is `digest.Files` over no files — the value a bundle without a
