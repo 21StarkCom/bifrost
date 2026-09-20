@@ -1,6 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Bare help is operational; use -- help or ./help for a literal checkout.
+show_help=0
+literal=0
+checkout=""
+for arg in "$@"; do
+  if [ "$literal" = 0 ]; then
+    case "$arg" in
+      --) literal=1; continue ;;
+      help|-h|--help) show_help=1; continue ;;
+      -*) echo "unknown arg: $arg" >&2; exit 2 ;;
+    esac
+  fi
+  [ -z "$checkout" ] || { echo "expected one checkout" >&2; exit 2; }
+  checkout="$arg"
+done
+if [ "$show_help" = 1 ]; then
+  printf 'Usage: docs/scripts/coverage-gate.sh [--] <stark-skills-checkout>\n'
+  exit 0
+fi
+
 # coverage-gate.sh — every stark-skills skill must be claimed by a bundle or
 # deliberately excluded.
 #
@@ -46,7 +66,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-STARK_SKILLS="${1:-${STARK_SKILLS:-$REPO_ROOT/../stark-skills}}"
+STARK_SKILLS="${checkout:-${STARK_SKILLS:-$REPO_ROOT/../stark-skills}}"
 [ -d "$STARK_SKILLS/skill" ] || {
   echo "ERROR: coverage-gate: stark-skills not found at $STARK_SKILLS" >&2
   echo "  → pass the checkout as \$1, or set STARK_SKILLS." >&2

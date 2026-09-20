@@ -1,6 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Parse before resolving paths or starting any external command.
+show_help=0
+for arg in "$@"; do
+  case "$arg" in
+    help|-h|--help) show_help=1 ;;
+    *) echo "unknown arg: $arg" >&2; exit 2 ;;
+  esac
+done
+if [ "$show_help" = 1 ]; then
+  printf 'Usage: docs/scripts/ci-local.sh\n'
+  exit 0
+fi
+
 # ci-local.sh — run the full CI gate locally.
 #
 # A local mirror of `.github/workflows/ci.yml`. GitHub Actions ARE enabled and

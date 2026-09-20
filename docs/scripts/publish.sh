@@ -31,23 +31,34 @@ set -euo pipefail
 # It does NOT commit, push, or open a PR — that stays a deliberate human step
 # (the script prints the next commands).
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$REPO_ROOT"
-
-STARK_SKILLS="${STARK_SKILLS:-$REPO_ROOT/../stark-skills}"
 ADD_SKILL="" REMOVE_SKILL="" BUNDLE="" RUN_CI=0
 MEMBERSHIP_CHANGED=0
-
+show_help=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --add-skill)    ADD_SKILL="${2:?}"; shift 2 ;;
-    --remove-skill) REMOVE_SKILL="${2:?}"; shift 2 ;;
-    --bundle)       BUNDLE="${2:?}"; shift 2 ;;
-    --ci)           RUN_CI=1; shift ;;
-    -h|--help)      sed -n '3,33p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    --add-skill|--remove-skill|--bundle)
+      [ $# -ge 2 ] && [ -n "$2" ] && [[ "$2" != -* ]] || {
+        echo "missing value for $1" >&2; exit 2;
+      }
+      case "$1" in
+        --add-skill) ADD_SKILL="$2" ;;
+        --remove-skill) REMOVE_SKILL="$2" ;;
+        --bundle) BUNDLE="$2" ;;
+      esac
+      shift 2 ;;
+    --ci) RUN_CI=1; shift ;;
+    help|-h|--help) show_help=1; shift ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
+if [ "$show_help" = 1 ]; then
+  printf 'Usage: docs/scripts/publish.sh [--add-skill NAME | --remove-skill NAME] [--bundle NAME] [--ci]\n'
+  exit 0
+fi
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$REPO_ROOT"
+STARK_SKILLS="${STARK_SKILLS:-$REPO_ROOT/../stark-skills}"
 
 [ -d "$STARK_SKILLS/skill" ] || { echo "stark-skills not found at $STARK_SKILLS (set STARK_SKILLS)" >&2; exit 1; }
 echo "→ stark-skills: $STARK_SKILLS"

@@ -1,6 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Parse before resolving paths or starting any external command.
+show_help=0
+for arg in "$@"; do
+  case "$arg" in
+    help|-h|--help) show_help=1 ;;
+    *) echo "unknown arg: $arg" >&2; exit 2 ;;
+  esac
+done
+if [ "$show_help" = 1 ]; then
+  printf 'Usage: docs/scripts/verify-native-install.sh\n'
+  exit 0
+fi
+
 # Verifies the native CC install loop offline:
 #  1. marketplace.json is drift-free vs a fresh build
 #  2. root uses owner, entries use author

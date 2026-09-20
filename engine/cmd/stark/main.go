@@ -51,5 +51,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newVersionCmd())
 	root.AddCommand(newSelfUpdateCmd())
 	installHelpRendering(root)
+	root.InitDefaultCompletionCmd()
+	installPositionalHelp(root)
 	return root
 }
