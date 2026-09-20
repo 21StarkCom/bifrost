@@ -13,7 +13,7 @@
     ],
     "defaultMode": "bypassPermissions",
     "additionalDirectories": [
-      "/Users/aryeh/Code/Evinced"
+      "~/Code/Evinced"
     ]
   },
   "hooks": {
@@ -47,7 +47,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "bash /Users/aryeh/.claude/statusline-command.sh"
+    "command": "bash \"$HOME/.claude/statusline-command.sh\""
   },
   "enabledPlugins": {
     "superpowers@claude-plugins-official": true,
@@ -113,11 +113,6 @@
   "agentPushNotifEnabled": true,
   "skipAutoPermissionPrompt": true,
   "useAutoModeDuringPlan": false,
-  "autoMode": {
-    "allow": [
-      "Pushing branches and opening/merging PRs in repos under /Users/aryeh/Code/21Stark/ is permitted — trusted repos in Aryeh’s workspace covered by the same review workflow. (stark-data-core/stark-night-watch note retired 2026-07-11: archived, clones deleted in the Code reorg.)"
-    ]
-  },
   "enableWorkflows": true,
   "deniedMcpServers": [
     {

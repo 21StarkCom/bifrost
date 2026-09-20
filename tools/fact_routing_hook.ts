@@ -5,7 +5,11 @@
  * Wire in ~/.claude/settings.json:
  *   "PostToolUse": [{ "matcher": "Write|Edit|MultiEdit", "hooks": [
  *     { "type": "command",
- *       "command": "node --experimental-strip-types /Users/aryeh/Code/21Stark/stark-skills/tools/fact_routing_hook.ts" }]}]
+ *       "command": "node --experimental-strip-types $HOME/.claude/code-review/tools/fact_routing_hook.ts" }]}]
+ *
+ * Wire it through the ~/.claude/code-review/tools symlink, which points at this
+ * repo's tools/, rather than at a checkout path: the hook then survives the repo
+ * moving. $HOME expands because a command hook with no `args` runs in shell form.
  *
  * Reads the PostToolUse payload on stdin. When the written file is a
  * `<project>/memory/<name>.md` auto-memory that smells corpus- or repo-CLAUDE-worthy, it

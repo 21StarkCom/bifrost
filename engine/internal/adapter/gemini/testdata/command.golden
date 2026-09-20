@@ -1,2 +1,0 @@
-description = 'PR review command.'
-prompt = "Usage: /review [PR_NUMBER]\n\nReview {{args}}.\n"

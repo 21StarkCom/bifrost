@@ -376,15 +376,23 @@ test("generated_paths: defaults when nothing is configured", async () => {
   });
 });
 
-test("generated_paths: no catalog glob ships in the defaults, globally or per repo", () => {
-  // `catalog/**` must never reach the global default: it would demote a hand-written
-  // `catalog/` in every other repo. And since STARK-7536 it is not shipped for bifrost
-  // either — bifrost declares its own generated catalog trees, and `catalog/**` was
-  // broader than what is generated, so it also demoted bifrost's CURATED
-  // catalog/*/bundle.yaml and catalog/*/mcp/**. Re-adding it anywhere here silently
-  // stops those findings from opening the inline thread that holds a merge.
+test("generated_paths: the global default carries no one-repo glob, and one repo entry ships", () => {
+  // `catalog/**` must never reach the global default: that list applies to EVERY repo
+  // `/code-review` targets, so a glob copied there from one repo's tree demotes a
+  // hand-written path of the same shape everywhere else. It is the measured case —
+  // shipped for bifrost once, and broad enough to cover that repo's own curated files
+  // too — but the rule is about the layer, not about this glob.
   assert.ok(!DEFAULT_GENERATED_PATHS_CONFIG.default.includes("catalog/**"));
-  assert.deepEqual(DEFAULT_GENERATED_PATHS_CONFIG.repos, {});
+  // Exactly one repo entry ships, and it says the opposite of what it looks like: a
+  // glob matching NO path in this repo is how "nothing here is generated" is expressed.
+  // It is not removable and `paths: []` is not an equivalent — both fall through to the
+  // fail-open default above, whose `.claude-plugin/**` demotes
+  // `.claude-plugin/marketplace.json` from a merge-blocking inline thread to a note in
+  // the PR body. The resolver behaviour is pinned in `findings_review_post.test.ts`;
+  // this pins the shipped value, and `global/config.json` is pinned against it there.
+  assert.deepEqual(DEFAULT_GENERATED_PATHS_CONFIG.repos, {
+    "21StarkCom/bifrost": { paths: ["__none__/**"] },
+  });
 });
 
 test("generated_paths: a repo entry is expressible per repo, from the user layer", async () => {
@@ -394,14 +402,16 @@ test("generated_paths: a repo entry is expressible per repo, from the user layer
     });
     const cfg = getGeneratedPathsConfig();
     assert.deepEqual(cfg.repos["o/other"], { paths: ["gen/**"] });
-    // No repo entry ships by default since STARK-7536, so the user's is the whole map.
-    // That is why this no longer says "merges in": with an empty base there is nothing to
-    // merge WITH, so it proves only that the user layer is read. `deepMerge`'s actual
-    // map-merge semantics — a user key added without clobbering its siblings — are pinned
-    // on the sections that still ship defaults (`getModelRates`, `getModelLimits`,
-    // `getRuntimeConfig`), and the resolver's own per-repo layering is pinned in
-    // `findings_review_post.test.ts` against an explicit `config`.
-    assert.deepEqual(cfg.repos, { "o/other": { paths: ["gen/**"] } });
+    // The shipped map is not empty, so this pins `deepMerge`'s map semantics on THIS
+    // section as well as the read: a user key lands BESIDE the shipped one, never
+    // instead of it. A clobber here would drop bifrost's own entry, which is the entry
+    // that keeps `.claude-plugin/marketplace.json` on a blocking inline thread — and it
+    // would do so only on machines that configure some unrelated repo, so nothing in a
+    // default-config run would ever show it.
+    assert.deepEqual(cfg.repos, {
+      "21StarkCom/bifrost": { paths: ["__none__/**"] },
+      "o/other": { paths: ["gen/**"] },
+    });
   });
 });
 

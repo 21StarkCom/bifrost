@@ -14,88 +14,23 @@ permissions:
 # not when GitHub flips the default. (Reversible: drop this env to revert.)
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
-  # ONE pin for the whole workflow. Two jobs install this binary now — `secrets`
-  # runs it as the gate, `engine` needs it on PATH for TestGitleaksConfigContract —
-  # and a per-job copy is how the gate and the test that asserts on the gate's
-  # config end up scanning with different rulesets.
+  # ONE pin. Only `secrets` installs this binary now; the Go config-contract test
+  # that was the second consumer went with the engine. The pin stays at workflow
+  # level so a second consumer cannot reintroduce a per-job version skew.
   GITLEAKS_VERSION: 8.30.1
 
+# GitHub counts a CANCELLED required check as FAILING, and `main` has already
+# carried commits with `engine: cancelled` from back-to-back merges sharing the
+# `ci-refs/heads/main` group. With `test` and `typecheck` becoming required
+# contexts, a cancelled run is a blocked merge that only a new commit clears —
+# so runs are scoped per PR and never cancelled.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  engine:
-    name: engine (validate + drift + tests)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: engine
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      # `check-bumps` asks "did content already published on main change under an
-      # unchanged version", so it needs main's index.json. On a `pull_request` event
-      # actions/checkout fetches ONLY `refs/pull/N/merge` — no remote-tracking branch —
-      # and the gate then fell back to `HEAD:index.json`, which IS this PR's own index
-      # (the drift gate forces it to be regenerated in the same commit). It therefore
-      # compared the change to itself and could not fail. Measured 2026-09-20 on one
-      # violating commit: `OK` with only the merge ref present, 7 violations once this
-      # fetch had run (STARK-8161). Depth 1 is enough — a shallow commit carries its
-      # whole tree. Keep this step: `prevIndexJSON` now refuses rather than passing when
-      # the ref is missing, so dropping it turns the job red rather than quiet.
-      #
-      # This arms the `pull_request` run. The `push: [main]` run of this same job stays
-      # vacuous and always will be: after a merge, HEAD and `origin/main` are the same
-      # commit, so previous == current for every row no matter what the change did. That
-      # is correct — the question "did this change publish content under an unchanged
-      # version" can only be answered before it lands — but do not read a green
-      # `check-bumps` on a `main` push as evidence of anything.
-      - name: fetch main (the check-bumps baseline)
-        run: git fetch --no-tags --depth=1 origin +refs/heads/main:refs/remotes/origin/main
-        working-directory: .
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
-        with:
-          go-version-file: engine/go.mod   # pinned toolchain (spec §7.6)
-          cache: true
-      # TestGitleaksConfigContract shells to this binary to prove `.gitleaks.toml`
-      # actually fires — including the `google-oauth-client-secret` probe the fleet
-      # caller's self-test asserts on (STARK-7490). It t.Skip'd when the binary was
-      # absent and NOTHING installed it in this job, so it had never once run in CI
-      # while its own comment said it did: a rule whose regex drifted left every gate
-      # here green and turned `secret-scan / secret-scan` red. The test now fails
-      # instead of skipping when CI is set, so this step going missing is loud.
-      - name: install gitleaks (pinned CLI, for the Go config-contract test)
-        working-directory: ${{ runner.temp }}
-        run: |
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o gitleaks.tar.gz
-          tar -xzf gitleaks.tar.gz gitleaks
-          sudo install gitleaks /usr/local/bin/gitleaks
-          gitleaks version
-      - name: gofmt (blocks unformatted Go)
-        run: |
-          out=$(gofmt -l .)
-          if [ -n "$out" ]; then
-            echo "::error::gofmt found unformatted files:"
-            echo "$out"
-            exit 1
-          fi
-      - name: go vet
-        run: go vet ./...
-      - name: unit + golden + determinism + integration tests
-        run: go test ./... -count=1
-      - name: stark validate (fail-closed, blocking)
-        run: go run ./cmd/stark validate ../catalog
-      - name: stark build --check (drift — REQUIRED, non-bypassable)
-        run: go run ./cmd/stark build --check ../catalog
-      - name: stark check-bumps (version-bump immutability — REQUIRED, blocking)
-        run: go run ./cmd/stark check-bumps ../catalog
-      - name: stark lint --strict (body suspicious-pattern scan — BLOCKING)
-        run: go run ./cmd/stark lint --strict ../catalog
-      - name: stark allowlist --check (docs/allowlist.md drift — BLOCKING)
-        run: go run ./cmd/stark allowlist --check ../docs/allowlist.md
-
   secrets:
-    name: secret scan (catalog)
+    name: secret scan (tree)
     runs-on: ubuntu-latest
     # gitleaks-action@v2 requires a paid license for GitHub orgs; the CLI is free
     # (MIT). Pin + run the binary directly so the gate stays fail-closed and
@@ -126,15 +61,13 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: rhysd/actionlint@03d0035246f3e81f36aed592ffb4bebf33a03106 # v1.7.7
 
-  # ── The TypeScript suite, arriving with tools/ (STARK-8249) ─────────────────
+  # ── The TypeScript suite over tools/ ───────────────────────────────────────
   #
   # `tools/` moved here from stark-skills, where these two jobs were `tests.yml`
-  # and both were REQUIRED contexts. Nothing ran them in the gap between the two
-  # repos, so they come over in the same change that brings the code.
-  #
-  # NOT required contexts here yet: phase 1 adds the jobs, phase 2 (STARK-8250)
-  # appends them to the ruleset. They report on every PR meanwhile, so a red one
-  # is visible before it is blocking.
+  # and both were REQUIRED contexts. They are the required contexts HERE now
+  # too: with the Go engine deleted, this suite plus the two scanners below is
+  # the whole gate, so a red `test` is the only thing standing between a broken
+  # tool and `main`.
   #
   # Neither job sets a job-level `name:`, deliberately — that leaves the reported
   # contexts as the bare job ids `test` and `typecheck`, the same strings

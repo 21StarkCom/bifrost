@@ -1,28 +1,32 @@
-.superpowers/
+# ── Agent + session scratch ───────────────────────────────────────────
 .claude/
-# Local Codex installs stay ignored; the one native repo-marketplace manifest
-# is generated, drift-gated, and intentionally committed.
-.agents/*
-!.agents/plugins/
-.agents/plugins/*
-!.agents/plugins/marketplace.json
+.superpowers/
+# config/settings.json's first SessionStart hook runs
+# `mkdir -p "${CLAUDE_PROJECT_DIR:-.}/.remember/logs"` in every repo it applies to.
+.remember/
+
+# ── Dependencies ──────────────────────────────────────────────────────
+node_modules/
+
+# ── Skill outputs written into the repo under test ────────────────────
+# tools/skill_optimize.ts + tools/skill_autopilot.ts stage under artifacts/skill-optimizer/;
+# /stark-refactor-plan writes the two root artifacts plus its intermediates.
+artifacts/
+.refactor-planner/
+/REFACTOR_PLAN.md
+/REFACTOR_BACKLOG.json
+
+# ── Local Codex install outputs ───────────────────────────────────────
+.agents/
 .codex/
 .stark/
 /config.toml
-.DS_Store
-node_modules/
-dist/codex/
-dist/gemini/
-.goreleaser-dist/
-# sign-manifest.yml workflow scratch files — never committed
-build-manifest.json
-build-manifest.json.sig
-build-manifest.json.pem
-build-manifest.sha256
-release-notes.md
-*.log
+
+# ── Local git worktrees (idun gh pr-open does `git add -A`) ───────────
+/.worktrees/
+
+# ── Local env + noise ─────────────────────────────────────────────────
 .env
 .env.*
-
-# local git worktrees (idun gh pr-open does `git add -A`, which would commit these as gitlinks)
-/.worktrees/
+.DS_Store
+*.log

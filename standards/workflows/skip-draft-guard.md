@@ -50,18 +50,22 @@ runs on the current head. Marking ready is the single CI-triggering moment.
 
 ## What is NOT guarded
 
-- **`push`-triggered workflows** (e.g. deploy-on-merge, `marketplace-sync`) — a
-  merge to the default branch is never "draft", so leave them alone. A workflow
-  that itself *opens* a downstream PR still follows the review gate.
-  `marketplace-sync` opens a draft, waits for a completed review on that head,
-  then marks it ready and waits for CI before merging that exact head.
-  - **The CI that publisher gate reads must NOT be draft-guarded.** bifrost's
-    `ci.yml` is `pull_request: branches: [main]` with the default `types`, so it
-    runs on the draft itself and `gh pr ready` fires nothing extra. Add the guard
-    there (or omit `ready_for_review` from `types` after adding it) and every
-    check on the draft reports `skipped` — the publisher still counts them,
-    `gh pr checks --watch --fail-fast` still exits 0, and it merges a suite that
-    never ran. That is the unrepairable false green described below.
+- **`push`-triggered workflows** (deploy-on-merge, tag-and-release, a downstream
+  sync job) — a merge to the default branch is never "draft", so leave them
+  alone. A workflow that itself *opens* a downstream PR still follows the review
+  gate.
+  - **Anything that MERGES a PR reads that PR's checks, so the checks it reads
+    must not be draft-guarded.** `idun gh pr-merge` rebases, force-pushes, marks
+    the draft ready, then waits on the head's checks before it squashes. Guard
+    the workflow behind those checks and every one of them reports `skipped` on
+    the draft: the watch exits 0 and it merges a suite that never ran. That is
+    the unrepairable false green described below.
+  - Use `gh pr checks --required --watch --fail-fast`, never the same command
+    without `--required`. Two reasons, and both bite. Without it the watch
+    includes every optional check on the head — so an advisory job's failure
+    blocks a merge the branch ruleset would allow; and if the watcher is itself
+    running inside a workflow whose check run attaches to that same head, it
+    waits on itself and never converges.
 - **Merge gates that read PR status** — a draft never reaches "Ready to Merge",
   so a status-driven gate is already a no-op on drafts; the guard is just
   belt-and-suspenders (and, for `check_run`-triggered gates, must use `!= true`).
@@ -110,33 +114,51 @@ at all.
 - **Never require a check whose step carries `continue-on-error: true`.** It
   reports SUCCESS whether the step passed or not, so requiring it satisfies the
   gate unconditionally — the same false-green shape, wearing a different hat.
-  Drop the flag first, then require the check. `tests.yml`'s `typecheck` job sat
-  in exactly that trap: it was left out of the ruleset because it was advisory,
-  and was advisory because of this flag (STARK-5008). Both were fixed together.
+  Drop the flag first, then require the check. The `typecheck` job that is now a
+  required context in `.github/workflows/ci.yml` sat in exactly that trap while
+  it lived in stark-skills' `tests.yml`: left out of the ruleset because it was
+  advisory, and advisory because of this flag (STARK-5008). Both were fixed
+  together, and the ban is now a comment on the step itself.
 - **List EVERY job of a workflow whose checks are required, or decide out loud
   that one is not.** Sibling jobs share triggers and look interchangeable, so a
   new one silently reports a check nobody gates on. `typecheck` sat unrequired
-  next to `test` for five weeks that way. `tools/typecheck_gate.test.ts` pins
-  the job set, so adding a job to `tests.yml` fails the suite until someone
-  updates the list.
+  next to `test` for five weeks that way. The defence is a test that reads the
+  real workflow file and fails when the job set moves; **this repo has none
+  today** — the job-set pin (`tools/typecheck_gate.test.ts`) was not carried over
+  when the suite moved — so a fifth job added to `ci.yml` reports a check nobody
+  gates on and nothing goes red. Until one exists, adding or renaming a job means
+  editing the branch ruleset in the same change
+  (`docs/operations/branch-protection.md` §1, §3).
 - **`if:` is not the only way to lose a run.** A *step*-level `if:` leaves the
   job concluding SUCCESS with nothing executed; a job-level `name:` renames the
   check-run so the required context never reports; a narrowed `types:` or a
   `paths:` filter means no run exists for the head sha at all. Ban all four
   alongside the guard, not just the job-level conditional.
 
-`.github/workflows/tests.yml` in this repo is the reference: no `if:` on either
-job or any of their steps, no job-level `name:`, no path filter,
-`cancel-in-progress: false`, no `continue-on-error` anywhere, and both jobs
-(`test`, `typecheck`) required by the branch ruleset.
+`.github/workflows/ci.yml` in this repo is the reference: no draft guard, no
+`paths:` filter, `cancel-in-progress: false` on a per-PR concurrency group, no
+`continue-on-error` anywhere, and all four jobs required by the branch ruleset.
+Two details it gets right that a "no `if:`, no `name:`" summary would get wrong.
+`test` and `typecheck` carry no job-level `name:` **because the bare job id is
+then the context string** — the point is not that a `name:` is forbidden, it is
+that the name IS the required context, so `secrets` carries `name: secret scan
+(tree)` and the ruleset names that. And the `secrets` job does carry one
+step-level `if:`, on its PR-range scan, which is correct precisely because the
+unconditional fail-closed scan above it is what the context proves: a step-level
+`if:` is fatal when it skips the *only* substantive step, leaving the job green
+having executed nothing.
 
 ## Reference implementations in this repo
 
-- `.github/workflows/project-pr-sync.yml` — `== false` (pull_request +
-  pull_request_review only), plus a `ready_for_review → Human Review` mapping.
-- `.github/workflows/tests.yml` — **deliberately unguarded**, per "Never guard a
-  required check" above.
-- `standards/workflows/doc-staleness.yml` — `== false`, the adoptable template.
+- `standards/workflows/doc-staleness.yml` — `== false`, the adoptable template:
+  `types: [opened, synchronize, ready_for_review]` plus a job-level
+  `if: github.event.pull_request.draft == false`.
+- `.github/workflows/ci.yml` — **deliberately unguarded**, per "Never guard a
+  required check" above. All four of its checks are required.
+- `.github/workflows/secret-scan.yml` — also unguarded, and it must stay that way
+  even though its check is not required here: the same bytes are the fleet's
+  secret-scan caller in every other rolled-out repo, and they are a Terraform
+  render this repo may not edit.
 
 ## Downstream, per target repo
 

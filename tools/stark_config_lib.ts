@@ -225,10 +225,11 @@ export const DEFAULT_IAC_REVIEW = {
  *
  * `repos` is keyed by `owner/name`, so a repo-specific list is expressible
  * without a flag: `{ paths: [...] }` REPLACES the layer below it,
- * `{ add: [...] }` EXTENDS it. It ships EMPTY since STARK-7536 — the comment
- * on `repos` below says which entry it used to carry and why that entry went.
- * A catalog glob must never migrate up into `default` either: it would demote
- * a hand-written `catalog/` in every other repo.
+ * `{ add: [...] }` EXTENDS it. It carries exactly one entry — this repo's — and
+ * the comment on `repos` below says why a repo that generates NOTHING is the
+ * one that needs it. A glob that describes a single repo must never migrate up
+ * into `default`: it would demote a hand-written path of the same shape in
+ * every other repo the reviewer is pointed at.
  *
  * `enabled: false` turns the split off globally, exactly like
  * `--no-generated-split` per run.
@@ -260,34 +261,42 @@ export const DEFAULT_GENERATED_PATHS_CONFIG: GeneratedPathsConfig = {
     ".claude-plugin/**",
     "index.json",
   ],
-  // Empty on purpose since STARK-7536. It carried
-  // `"21StarkCom/bifrost": { add: ["catalog/**"] }` while bifrost machine-rewrote that
-  // tree WITHOUT declaring it generated — the condition the comment above names. bifrost
-  // now marks `catalog/standards/**`, `catalog/*/skills/**` and `catalog/*/commands/**`
-  // `linguist-generated=true` itself (STARK-7363), so the entry became redundant on every
-  // normal run AND broader than what is generated: it also demoted the hand-authored
-  // parts of that tree — `catalog/*/bundle.yaml`'s membership block, `catalog/*/mcp/**`
-  // and `catalog/*/agents/**` — whose findings are fixable exactly where they are posted
-  // and should hold a merge.
+  // bifrost generates nothing and declares no `.gitattributes`. The entry below says so
+  // in the only vocabulary this resolver has: a glob that matches no path in the repo.
   //
-  // THE TRADE, stated rather than implied: `catalog/*/bundle.yaml` is not purely curated
-  // in a SYNC PR. `marketplace-sync.yml` patch-bumps its `version:` line, so all seven
-  // bundle.yaml files appear in every sync diff carrying that machine-written hunk and
-  // nothing else (verified on bifrost@d23f84a7). A finding anchored there now opens a
-  // gating thread on the SHARED `auto/marketplace-sync` branch — the STARK-5637 failure
-  // mode, at one file per bundle. Judged worth it because the curated membership block is
-  // what a review actually lands findings on, and because the cover is per-run and
-  // explicit rather than baked in: `--add-generated-paths 'catalog/*/bundle.yaml'`.
+  // WHY AN ENTRY AT ALL, when the honest answer is "no generated paths here". Because
+  // silence is not that answer. Saying nothing — no repo entry, an absent
+  // `.gitattributes`, or one carrying no `linguist-generated=true` row — resolves to
+  // `source: "default"` and the fail-open list above, which is deliberately FAIL-OPEN and
+  // deliberately bifrost-SHAPED (STARK-5637 hand-copied the marketplace-era file). Four of
+  // its five globs are dead here now that `vendor/`, `dist/`, `bundles/` and `index.json`
+  // are deleted. The fifth, `.claude-plugin/**`, matches
+  // `.claude-plugin/marketplace.json` — the single most hand-curated file in the repo, the
+  // seven-plugin `skills:` partition every install resolves through. A /code-review
+  // finding there would be demoted from a merge-blocking inline thread to a non-gating
+  // note in the PR body, and since `main` enforces `required_conversation_resolution`,
+  // that demotion IS the whole difference between a finding that must be answered and one
+  // that need not be. The only signal is a single stderr line inside a review run.
   //
-  // Not re-added in narrowed form on purpose: mirroring another repo's globs here is the
-  // drift this file's own comment argues against, and STARK-6095's stated direction is
-  // that the target repo's rows are the source of truth. Accepted consequence: the split
-  // now rests entirely on bifrost's rows being readable AT THE PR HEAD. Two states resolve
-  // with no catalog glob at all — an unfetchable `.gitattributes`, which fails OPEN to
-  // `default` above and warns on stderr, and a bifrost branch cut before the declaring
-  // commit (`a23e6a26`), which does NOT warn because the read succeeded and the older
-  // declaration is simply narrower. Both are rare; only the first announces itself.
-  repos: {},
+  // WHY `["__none__/**"]` AND NOT `[]`. Measured: an empty array is not a narrower list,
+  // it is no list — `globList` returns `[]`, `repoPaths.length` is 0, and resolution falls
+  // through the repo layer to exactly the default above, byte for byte the same outcome as
+  // having no entry. `resolveGeneratedPaths` has no "declared empty" state on purpose:
+  // an empty resolved list silently disables the split, so disabling stays explicit
+  // (`--no-generated-split`, or `enabled: false`). A non-matching pattern is therefore the
+  // only way to say "nothing here is generated" — it wins the repo-config layer,
+  // `source` reads `repo-config` instead of `default`, and every path in the repo keeps
+  // its inline, blocking thread.
+  //
+  // Nothing narrows this back by itself: the entry is the whole declaration, and this repo
+  // has no generated tree left for it to drift against. If bifrost ever does generate
+  // something, declare it in a `.gitattributes` with `linguist-generated=true` rows and
+  // delete this entry — the repo's own rows outrank the default and are the intended
+  // source of truth (STARK-6095) — rather than growing a list here that mirrors, and then
+  // silently lags, the other repo's words.
+  repos: {
+    "21StarkCom/bifrost": { paths: ["__none__/**"] },
+  },
 };
 
 // ---------------------------------------------------------------------------

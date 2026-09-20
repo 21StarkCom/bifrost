@@ -1,5 +1,0 @@
-[mcp_servers]
-[mcp_servers.bigquery]
-command = 'stark-bq-mcp'
-args = ['--project', '${BQ_PROJECT}']
-env_vars = ['BQ_PROJECT']

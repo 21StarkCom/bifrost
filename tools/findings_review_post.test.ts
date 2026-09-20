@@ -528,26 +528,37 @@ describe("defaultRun", () => {
 const BIFROST = "21StarkCom/bifrost";
 
 /**
- * `21StarkCom/bifrost`'s `.gitattributes`, byte for byte as of `a23e6a26`
- * (2026-09-19) — every line, in file order, including the rows this reader must
- * NOT take (`text eol=lf`) and the comment block interleaved between the taken
- * ones. Verbatim rather than a tidied extract on purpose: the last time this
- * fixture was a reformatted subset it drifted from the file it names and nothing
- * caught it, which is the same class of bug STARK-6095 removed from the RUNTIME
- * path by reading the repo's own rows instead of a hand-copied mirror. There is
- * no cross-repo gate on this copy from this side; bifrost pins its own rows in
- * `engine/cmd/stark/gitattributes_test.go`. Re-copy it whole, never patch it.
+ * A FROZEN HISTORICAL SAMPLE of a `.gitattributes` that declares generated
+ * paths. It is test INPUT and nothing else: no test compares it to a file on
+ * disk, and it is NOT a copy of any live file — this repo ships no
+ * `.gitattributes` at all (pinned by the live-tree test in the shipped-config
+ * suite below, and by the non-matching `generated_paths.repos` entry that
+ * decision requires).
  *
- * Note the catalog wildcard carries ONLY `text eol=lf` — the generated catalog
- * trees are declared narrowly, as standards, skills and commands (STARK-7363),
- * which is why no catalog wildcard is shipped for this repo any more
- * (STARK-7536). See the routing test below for what that narrowness does and
- * does not buy.
+ * It happens to be `21StarkCom/bifrost`'s own file as it stood at `a23e6a26`
+ * (2026-09-19), back when this repo generated a marketplace. Kept because it is
+ * a realistic multi-row file rather than a tidied extract: rows this reader must
+ * NOT take (`text eol=lf`), a comment block interleaved between the taken ones,
+ * a slash-less pattern (`index.json`) that exercises the root-anchoring
+ * divergence, and directory wildcards that must not swallow their siblings.
+ * Nothing about the repo it was copied from is asserted anywhere below, so
+ * there is nothing here to keep current — do not "refresh" it.
+ *
+ * The header this replaced claimed the opposite: that the constant was a
+ * byte-for-byte mirror to be re-copied whole and never patched, pinned from the
+ * other side by `engine/cmd/stark/gitattributes_test.go`. Both halves were
+ * already false before the rename. The file it named gained six lines in
+ * `a9540f13` — five of comment and one more declared row,
+ * `engine/internal/starktui/**` — and this suite stayed green, because a string
+ * constant compared to nothing cannot drift-fail; and that Go test lived in the
+ * engine, which is deleted. Relabelled rather than deleted, because the tests it
+ * feeds exercise real glob-resolution logic over string inputs and none of them
+ * is a claim about this repo's tree.
  *
  * (Paths are spelled out in the array rather than in this prose: a glob
  * containing a star-slash would close this block comment.)
  */
-const BIFROST_GITATTRIBUTES = [
+const LEGACY_GITATTRIBUTES_FIXTURE = [
   "catalog/** text eol=lf",
   "schema/** text eol=lf",
   "*.go text eol=lf",
@@ -775,16 +786,17 @@ describe("generated-path routing", () => {
     assert.equal(matchGeneratedPath("engine/internal/install/testdata/index.json", DEFAULT_GENERATED_PATHS), null);
   });
 
-  test("the resolved bifrost list covers the generated trees a sync PR rewrites", () => {
-    // Taken from `git show --stat` on a real sync commit plus bifrost's
-    // `.gitattributes` `linguist-generated=true` rows. `.claude-plugin/**` was
-    // missing from the first cut of the hand-copied list, so the one file every
-    // sync touches kept opening a gating thread — the exact failure the split
-    // exists to prevent. That is why the rows are now READ from the repo:
-    // resolving them here, not restating them.
+  test("a declared row demotes every path under it and nothing beside it", () => {
+    // Pure glob resolution over string inputs: a `.gitattributes` text in, a
+    // pattern list out, then paths matched against it. No claim about any
+    // repo's tree is made here — the fixture is a frozen sample (see its
+    // header) and the repo id is a stand-in for "some repo that declares rows",
+    // deliberately NOT one `DEFAULT_GENERATED_PATHS_CONFIG.repos` pins, since a
+    // repo-config entry outranks `.gitattributes` and would skip the layer
+    // under test.
     const { patterns } = resolveGeneratedPaths({
-      repo: BIFROST,
-      gitattributes: BIFROST_GITATTRIBUTES,
+      repo: "o/declaring",
+      gitattributes: LEGACY_GITATTRIBUTES_FIXTURE,
       config: DEFAULT_GENERATED_PATHS_CONFIG,
     });
     for (const f of [
@@ -799,21 +811,13 @@ describe("generated-path routing", () => {
     ]) {
       assert.notEqual(matchGeneratedPath(f, patterns), null, `${f} must demote`);
     }
-    // The deliberate NOT-demoted set, and the reason the catalog wildcard is no longer
-    // shipped for bifrost (STARK-7536): `bundle.yaml`'s membership block, an MCP server
-    // definition and `agents/` are all authored by hand, and a finding on one is fixable
-    // exactly where it is posted, so it must keep the inline thread that holds a merge.
-    //
-    // This is a TRADE, not a free win, and the test name says "generated trees" rather
-    // than "every path" because of it: `catalog/*/bundle.yaml` is ALSO machine-written in
-    // a sync PR — `marketplace-sync.yml` patch-bumps its `version:` line, so all seven
-    // appear in every sync diff carrying that hunk and nothing else (bifrost@d23f84a7).
-    // A finding anchored on that hunk is now a gating thread on the SHARED
-    // `auto/marketplace-sync` branch, which is the STARK-5637 failure mode; the per-run
-    // escape hatch is `--add-generated-paths 'catalog/*/bundle.yaml'`.
-    //
-    // `CHANGELOG.md` is the older counter-case in the same family: a sync writes it, but
-    // it is hand-reviewable, so it keeps its thread on purpose.
+    // The other half of the claim, and the half that can regress silently: a
+    // declaration demotes exactly what it NAMES. `catalog/*/skills/**` and
+    // `catalog/*/commands/**` are declared; the sibling paths under the same
+    // `catalog/*/` parent are not, and must keep the inline thread that holds a
+    // merge. Widening a resolved glob is the failure mode with no symptom —
+    // findings simply stop gating, one directory at a time, and the only
+    // evidence is a line in the review body nobody is looking at.
     for (const f of [
       "catalog/stark-ops/bundle.yaml",
       "catalog/stark-ops/mcp/example.yaml",
@@ -993,7 +997,7 @@ describe("parseArgs generated-path flags", () => {
 
 describe("parseGeneratedGlobs", () => {
   test("reads exactly the linguist-generated=true rows, in file order", () => {
-    assert.deepEqual(parseGeneratedGlobs(BIFROST_GITATTRIBUTES), [
+    assert.deepEqual(parseGeneratedGlobs(LEGACY_GITATTRIBUTES_FIXTURE), [
       "dist/**",
       "catalog/standards/**",
       "catalog/*/skills/**",
@@ -1071,7 +1075,7 @@ describe("resolveGeneratedPaths precedence", () => {
     const r = resolveGeneratedPaths({
       repo: BIFROST,
       cliPaths: ["cli/**"],
-      gitattributes: BIFROST_GITATTRIBUTES,
+      gitattributes: LEGACY_GITATTRIBUTES_FIXTURE,
       config: layered,
     });
     assert.deepEqual(r.patterns, ["cli/**"]);
@@ -1081,7 +1085,7 @@ describe("resolveGeneratedPaths precedence", () => {
   test("layer 2 — the repo config entry outranks the repo's .gitattributes", () => {
     const r = resolveGeneratedPaths({
       repo: BIFROST,
-      gitattributes: BIFROST_GITATTRIBUTES,
+      gitattributes: LEGACY_GITATTRIBUTES_FIXTURE,
       config: layered,
     });
     assert.deepEqual(r.patterns, ["repocfg/**"]);
@@ -1091,7 +1095,7 @@ describe("resolveGeneratedPaths precedence", () => {
   test("layer 3 — .gitattributes outranks the built-in default", () => {
     const r = resolveGeneratedPaths({
       repo: "o/other",
-      gitattributes: BIFROST_GITATTRIBUTES,
+      gitattributes: LEGACY_GITATTRIBUTES_FIXTURE,
       config: layered,
     });
     assert.equal(r.source, "gitattributes");
@@ -1105,19 +1109,16 @@ describe("resolveGeneratedPaths precedence", () => {
   });
 });
 
-describe("resolveGeneratedPaths against a real repo", () => {
-  test("bifrost with no flags resolves its own rows and nothing added", () => {
-    // The acceptance case: sourced ENTIRELY from the repo's `.gitattributes`, with no
-    // hand-copied mirror and — since STARK-7536 — no repo-keyed addition either. The
-    // empty `added` is the assertion that matters: while a wildcard covering the whole
-    // catalog was bolted on here, it also demoted the hand-authored parts of the catalog
-    // (`bundle.yaml`'s membership block, `mcp/`, `agents/`), whose findings are fixable
-    // where they are posted and must keep an inline thread. Anything reappearing in
-    // `added` for this repo is a decision, not a default — re-adding a catalog glob here
-    // (rather than per run, with `--add-generated-paths`) is the bug returning.
+describe("resolveGeneratedPaths against the shipped config", () => {
+  test("a repo that declares rows resolves entirely from them, with nothing added", () => {
+    // The acceptance case for the layer meant to do the work: the TARGET repo's own
+    // words, with no hand-copied mirror and no repo-keyed addition. The empty `added`
+    // is the assertion that matters — a glob bolted on here applies to that repo on
+    // every run and silently widens what stops gating, where `--add-generated-paths`
+    // is per run and visible in the command somebody typed.
     const r = resolveGeneratedPaths({
-      repo: BIFROST,
-      gitattributes: BIFROST_GITATTRIBUTES,
+      repo: "o/declaring",
+      gitattributes: LEGACY_GITATTRIBUTES_FIXTURE,
       config: DEFAULT_GENERATED_PATHS_CONFIG,
     });
     assert.equal(r.source, "gitattributes");
@@ -1133,12 +1134,92 @@ describe("resolveGeneratedPaths against a real repo", () => {
     ]);
     assert.deepEqual(r.added, []);
     assert.deepEqual(r.warnings, []);
-    // bifrost's declared `index.json` is slash-less: git would match it by
+    // The fixture's declared `index.json` is slash-less: git would match it by
     // basename at any depth, this tool anchors it at the repo root on purpose
     // (STARK-5637). Disclosed in the summary, never as a stderr warning — a
-    // warning here would fire on EVERY bifrost run and advise `**/index.json`,
-    // which is precisely what STARK-5637 refused.
+    // warning here would fire on EVERY run against such a repo and advise
+    // `**/index.json`, which is precisely what STARK-5637 refused.
     assert.deepEqual(r.rootAnchored, ["index.json"]);
+  });
+
+  // --- this repo's own entry -------------------------------------------------
+  // bifrost generates nothing and declares no `.gitattributes`, and saying nothing is
+  // NOT how the resolver hears that. An absent file, a file with no
+  // `linguist-generated=true` row, and `paths: []` all fall through to
+  // `generated_paths.default`, which is FAIL-OPEN by design and still marketplace-SHAPED
+  // (STARK-5637 hand-copied it from the file the fixture above preserves). Four of its
+  // five globs are dead here; the fifth, `.claude-plugin/**`, matches
+  // `.claude-plugin/marketplace.json` — the seven-plugin `skills:` partition every
+  // install resolves through, and the most hand-curated file in the repo. A finding
+  // there would move from a merge-blocking inline thread to a note in the PR body, and
+  // since `main` enforces `required_conversation_resolution`, that move is the whole
+  // difference between a finding that must be answered and one that need not be.
+  test("bifrost resolves to its own non-matching entry, never the fail-open default", () => {
+    const r = resolveGeneratedPaths({
+      repo: BIFROST,
+      gitattributes: null,
+      config: DEFAULT_GENERATED_PATHS_CONFIG,
+    });
+    assert.equal(r.source, "repo-config", "the repo layer must answer, even with no .gitattributes");
+    assert.deepEqual(r.patterns, ["__none__/**"]);
+    assert.deepEqual(r.added, []);
+    assert.deepEqual(r.warnings, [], "the repo layer answered, so nothing fell open");
+    assert.equal(
+      matchGeneratedPath(".claude-plugin/marketplace.json", r.patterns),
+      null,
+      "a finding on the marketplace manifest must keep its blocking inline thread",
+    );
+  });
+
+  test("dropping the entry — or writing it empty — demotes the marketplace manifest", () => {
+    // The counterfactual, asserted rather than described. Deleting the entry looks like
+    // tidying, and `paths: []` reads like a narrower statement of the same thing; both
+    // restore the fail-open default, and the only signal at runtime is one stderr line
+    // inside a review run nobody is watching. Fail here instead.
+    const shapes: GeneratedPathsConfig["repos"][] = [{}, { [BIFROST]: { paths: [] } }];
+    for (const repos of shapes) {
+      const r = resolveGeneratedPaths({
+        repo: BIFROST,
+        gitattributes: null,
+        config: { ...DEFAULT_GENERATED_PATHS_CONFIG, repos },
+      });
+      assert.equal(r.source, "default", "an empty or absent entry is no entry at all");
+      assert.equal(
+        matchGeneratedPath(".claude-plugin/marketplace.json", r.patterns),
+        ".claude-plugin/**",
+        "this is what the shipped entry prevents",
+      );
+    }
+  });
+
+  test("the repo declares no .gitattributes, so the config entry is the whole declaration", () => {
+    // The only assertion in this file that reads the tree it lives in. Everything above
+    // is strings in, strings out — which is exactly how the fixture at the top of this
+    // file came to describe a file that had moved on, and later one that did not exist,
+    // without anything ever failing.
+    const file = nodePathMod.join(import.meta.dirname, "..", ".gitattributes");
+    if (!nodeFs.existsSync(file)) {
+      // The expected state, pinned by its consequence rather than by the absence alone.
+      const r = resolveGeneratedPaths({
+        repo: BIFROST,
+        gitattributes: null,
+        config: DEFAULT_GENERATED_PATHS_CONFIG,
+      });
+      assert.equal(r.source, "repo-config");
+      return;
+    }
+    // A `.gitattributes` may legitimately come back, but it does not take effect on its
+    // own: the repo-config entry is layer 2 and outranks layer 3. Rows added while that
+    // entry stands are dead — no review run reads them — so a declaration that looks
+    // live and is not must fail here rather than pass quietly.
+    assert.deepEqual(
+      parseGeneratedGlobs(nodeFs.readFileSync(file, "utf8")),
+      [],
+      "linguist-generated rows were declared while generated_paths.repos still pins this " +
+        "repo to a non-matching glob, so the rows are ignored. Either delete the rows, or " +
+        "drop the entry from BOTH global/config.json and DEFAULT_GENERATED_PATHS_CONFIG in " +
+        "the same change.",
+    );
   });
 
   test("a repo declaring a glob the built-in default lacks honors it with no flag", () => {
@@ -1269,7 +1350,7 @@ describe("resolveGeneratedPaths fails open, never narrow", () => {
 
     const configOff = resolveGeneratedPaths({
       repo: BIFROST,
-      gitattributes: BIFROST_GITATTRIBUTES,
+      gitattributes: LEGACY_GITATTRIBUTES_FIXTURE,
       config: { ...BARE_CONFIG, enabled: false },
     });
     assert.deepEqual(configOff.patterns, []);
@@ -1283,7 +1364,7 @@ describe("resolveGeneratedPaths extend vs replace", () => {
     const r = resolveGeneratedPaths({
       repo: "o/other",
       cliAdd: ["extra/**"],
-      gitattributes: BIFROST_GITATTRIBUTES,
+      gitattributes: LEGACY_GITATTRIBUTES_FIXTURE,
       config: BARE_CONFIG,
     });
     assert.equal(r.source, "gitattributes");
@@ -1296,7 +1377,7 @@ describe("resolveGeneratedPaths extend vs replace", () => {
     const r = resolveGeneratedPaths({
       repo: BIFROST,
       cliPaths: ["only/**"],
-      gitattributes: BIFROST_GITATTRIBUTES,
+      gitattributes: LEGACY_GITATTRIBUTES_FIXTURE,
       config: DEFAULT_GENERATED_PATHS_CONFIG,
     });
     assert.deepEqual(r.patterns, ["only/**"]);
@@ -1317,7 +1398,7 @@ describe("resolveGeneratedPaths extend vs replace", () => {
     const r = resolveGeneratedPaths({
       repo: "o/other",
       cliAdd: ["dist/**"],
-      gitattributes: BIFROST_GITATTRIBUTES,
+      gitattributes: LEGACY_GITATTRIBUTES_FIXTURE,
       config: BARE_CONFIG,
     });
     assert.equal(r.patterns.filter((g) => g === "dist/**").length, 1);
@@ -1328,7 +1409,7 @@ describe("resolveGeneratedPaths extend vs replace", () => {
     for (const r of [
       resolveGeneratedPaths({ repo: "o/r", cliPaths: [], config: BARE_CONFIG }),
       resolveGeneratedPaths({ repo: "o/r", cliPaths: ["a/**"], config: BARE_CONFIG }),
-      resolveGeneratedPaths({ repo: "o/r", gitattributes: BIFROST_GITATTRIBUTES, config: BARE_CONFIG }),
+      resolveGeneratedPaths({ repo: "o/r", gitattributes: LEGACY_GITATTRIBUTES_FIXTURE, config: BARE_CONFIG }),
       resolveGeneratedPaths({ repo: "o/r", gitattributes: null, config: BARE_CONFIG }),
     ]) {
       assert.ok(sources.includes(r.source));
@@ -1341,9 +1422,9 @@ describe("fetchGitattributes", () => {
     const calls: string[][] = [];
     const text = await fetchGitattributes(BIFROST, (cmd, args) => {
       calls.push([cmd, ...args]);
-      return { status: 0, stdout: BIFROST_GITATTRIBUTES, stderr: "" };
+      return { status: 0, stdout: LEGACY_GITATTRIBUTES_FIXTURE, stderr: "" };
     });
-    assert.equal(text, BIFROST_GITATTRIBUTES);
+    assert.equal(text, LEGACY_GITATTRIBUTES_FIXTURE);
     assert.deepEqual(calls, [[
       "gh", "api", `repos/${BIFROST}/contents/.gitattributes`,
       "-H", "Accept: application/vnd.github.raw",
