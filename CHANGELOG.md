@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to `stark-marketplace`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/spec/v2.0.0.html). Bumping `VERSION` on `main` triggers a tag + signed release.
+All notable changes to `bifrost`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/spec/v2.0.0.html). Bumping `VERSION` on `main` triggers a tag + signed release.
 
 ## [Unreleased]
 
@@ -566,11 +566,11 @@ First tagged release. Spec slices 1–8 complete (catalog → engine → web →
 - Cosign-keyless signed build manifest via GitHub OIDC → Fulcio + Rekor.
 - Top-level docs: `CLAUDE.md`, `AGENTS.md`, `README.md`, `CONTRIBUTING.md`, `docs/SECURITY.md`, `docs/native-install-loop.md`, `docs/web-hosting.md`.
 
-[Unreleased]: https://github.com/21-Stark-AI/stark-marketplace/compare/v0.1.6...HEAD
-[0.1.6]: https://github.com/21-Stark-AI/stark-marketplace/releases/tag/v0.1.6
-[0.1.5]: https://github.com/21-Stark-AI/stark-marketplace/releases/tag/v0.1.5
-[0.1.4]: https://github.com/21-Stark-AI/stark-marketplace/releases/tag/v0.1.4
-[0.1.3]: https://github.com/21-Stark-AI/stark-marketplace/releases/tag/v0.1.3
-[0.1.2]: https://github.com/21-Stark-AI/stark-marketplace/releases/tag/v0.1.2
-[0.1.1]: https://github.com/21-Stark-AI/stark-marketplace/releases/tag/v0.1.1
-[0.1.0]: https://github.com/21-Stark-AI/stark-marketplace/releases/tag/v0.1.0
+[Unreleased]: https://github.com/21StarkCom/bifrost/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/21StarkCom/bifrost/releases/tag/v0.1.6
+[0.1.5]: https://github.com/21StarkCom/bifrost/releases/tag/v0.1.5
+[0.1.4]: https://github.com/21StarkCom/bifrost/releases/tag/v0.1.4
+[0.1.3]: https://github.com/21StarkCom/bifrost/releases/tag/v0.1.3
+[0.1.2]: https://github.com/21StarkCom/bifrost/releases/tag/v0.1.2
+[0.1.1]: https://github.com/21StarkCom/bifrost/releases/tag/v0.1.1
+[0.1.0]: https://github.com/21StarkCom/bifrost/releases/tag/v0.1.0
