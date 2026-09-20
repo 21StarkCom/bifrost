@@ -51,6 +51,13 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newVersionCmd())
 	root.AddCommand(newSelfUpdateCmd())
 	installHelpRendering(root)
+	// Load-bearing, not a tidy-up: cobra attaches the `completion` subtree part-way
+	// through ExecuteC, which is AFTER installPositionalHelp has walked the tree, so
+	// without forcing it here the four `completion <shell>` leaves ship unguarded.
+	// Production behaviour is otherwise unchanged — ExecuteC passes c.args, which is
+	// nil for a real argv, so the shipped binary made this same zero-arg call anyway.
+	// The `help` command is deliberately NOT forced: it owns `stark help <topic>` and
+	// must keep treating a positional as a topic name.
 	root.InitDefaultCompletionCmd()
 	installPositionalHelp(root)
 	return root

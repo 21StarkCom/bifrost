@@ -2,6 +2,8 @@
 set -euo pipefail
 
 # Bare help is operational; use -- help or ./help for a literal checkout.
+# Every non-zero path names itself with an `ERROR:` prefix — see the Exit block
+# below; that prefix is what an operator greps for in a red cross-repo run.
 show_help=0
 literal=0
 checkout=""
@@ -10,10 +12,10 @@ for arg in "$@"; do
     case "$arg" in
       --) literal=1; continue ;;
       help|-h|--help) show_help=1; continue ;;
-      -*) echo "unknown arg: $arg" >&2; exit 2 ;;
+      -*) echo "ERROR: coverage-gate: unknown argument: $arg" >&2; exit 2 ;;
     esac
   fi
-  [ -z "$checkout" ] || { echo "expected one checkout" >&2; exit 2; }
+  [ -z "$checkout" ] || { echo "ERROR: coverage-gate: expected one stark-skills checkout, got a second: $arg" >&2; exit 2; }
   checkout="$arg"
 done
 if [ "$show_help" = 1 ]; then
@@ -56,13 +58,18 @@ fi
 # dying at 126/127, but they still fail. Change them in the same window, or not at
 # all. engine/cmd/stark/coverage_gate_test.go pins the path + exec bit from here.
 #
-# Usage:  docs/scripts/coverage-gate.sh <stark-skills-checkout>
-# Exit:   0 = every skill claimed or excluded
+# Usage:  docs/scripts/coverage-gate.sh [--] <stark-skills-checkout>
+#         `help`, `-h`, `--help` print this usage and exit 0, so no operator's
+#         reflex starts a gate run; pass `-- help` or `./help` for the (absurd)
+#         checkout literally named help.
+# Exit:   0 = every skill claimed or excluded, or usage was requested
 #         1 = orphans found, OR the gate could not run (missing/empty stark-skills
 #             checkout, no readable catalog, a membership parse that came back
-#             empty). Every non-zero path names itself on stderr with an `ERROR:`
-#             prefix — the one thing this script must never do is exit 0, or exit
-#             silently, over a tree it did not actually read.
+#             empty)
+#         2 = the argument list itself was rejected, before any tree was read
+#         Every non-zero path names itself on stderr with an `ERROR:` prefix —
+#         the one thing this script must never do is exit 0, or exit silently,
+#         over a tree it did not actually read.
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 

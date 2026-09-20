@@ -21,10 +21,12 @@ import (
 // The actual tree supplies flags and validators; every operational hook becomes
 // a tripwire. Thus a nonempty successful response cannot disguise real work.
 func TestPositionalHelpBeforeBackend(t *testing.T) {
+	routes := 0
 	for _, route := range walk(newRootCmd()) {
 		if !route.Runnable() || route.Name() == "help" || route.Name() == "search" {
 			continue
 		}
+		routes++
 		path := strings.Fields(route.CommandPath())[1:]
 		cases := [][]string{{"help"}, {"help", "--help=false"}, {"--help=false", "help"}, {"other", "help"}}
 		route.Flags().VisitAll(func(f *pflag.Flag) {
@@ -46,6 +48,14 @@ func TestPositionalHelpBeforeBackend(t *testing.T) {
 						c.Run = nil
 						c.RunE = func(*cobra.Command, []string) error { t.Fatal("backend ran"); return nil }
 						c.PreRunE = func(*cobra.Command, []string) error { t.Fatal("pre-run ran"); return nil }
+						// Persistent hooks too: no command wires one today, so a
+						// tripwire set only on Run/RunE/PreRunE is correct by luck
+						// and would let the first PersistentPreRun added here run
+						// under this test's "the backend never ran" claim.
+						c.PersistentPreRunE = func(*cobra.Command, []string) error {
+							t.Fatal("persistent pre-run ran")
+							return nil
+						}
 					}
 				}
 				var out bytes.Buffer
@@ -60,6 +70,15 @@ func TestPositionalHelpBeforeBackend(t *testing.T) {
 				}
 			})
 		}
+	}
+	// Fail-open guard, same reason as help_test.go's `len(paths) < 16`: every
+	// assertion above lives inside this walk, so a tree that came back empty —
+	// a refactor of newRootCmd, or cobra ceasing to attach `completion` before
+	// installPositionalHelp sees it — passes green having proved nothing. 13
+	// authored commands (14 less `search`) plus cobra's four `completion <shell>`
+	// leaves.
+	if routes < 17 {
+		t.Fatalf("walked %d guarded routes, want at least 17 — the walk shrank, so this test proved nothing", routes)
 	}
 }
 
@@ -204,8 +223,18 @@ func TestBuiltEntrypointHelpSafety(t *testing.T) {
 	for _, args := range [][]string{{"sync", "help", "--from"}, {"install", "help", "--plan=bad"}, {"build", "--unknown", "help"}} {
 		run(bin, args, false)
 	}
-	for _, name := range []string{"ci-local", "coverage-gate", "publish", "verify-native-install"} {
-		script, err := filepath.Abs(filepath.Join("..", "..", "..", "docs", "scripts", name+".sh"))
+	// Globbed, not a hardcoded list of the four that exist today: the claim this
+	// test carries is "no owned shell entrypoint does work before it recognises
+	// help", and a name list quietly exempts the fifth script someone adds next.
+	scripts, err := filepath.Glob(filepath.Join("..", "..", "..", "docs", "scripts", "*.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scripts) < 4 {
+		t.Fatalf("globbed %d shell entrypoints under docs/scripts, want at least the four this repo ships", len(scripts))
+	}
+	for _, rel := range scripts {
+		script, err := filepath.Abs(rel)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -214,7 +243,7 @@ func TestBuiltEntrypointHelpSafety(t *testing.T) {
 		}
 		run(bash, []string{script, "help", "--unknown"}, false)
 		run(bash, []string{script, "--unknown", "help"}, false)
-		if name == "publish" {
+		if filepath.Base(script) == "publish.sh" {
 			for _, args := range [][]string{{"--ci", "help"}, {"help", "--ci"}, {"--bundle", "help", "help", "--ci"}} {
 				run(bash, append([]string{script}, args...), true)
 			}
@@ -227,6 +256,9 @@ func TestBuiltEntrypointHelpSafety(t *testing.T) {
 		{"search", "help", "--json"},
 		{"search", "--json", "help"},
 		{"search", "--", "help"},
+		{"verify-manifest", "--skip-signature", "--", "help"},
+		{"verify-manifest", "--skip-signature", "./help"},
+		{"verify-manifest", "--root", "help", "--skip-signature", "./help"},
 		{"__complete", "build", "help"},
 		{"__completeNoDesc", "build", "help"},
 	} {
@@ -239,6 +271,9 @@ func TestBuiltEntrypointHelpSafety(t *testing.T) {
 		if err != nil || bytes.Contains(out, []byte("Usage:")) {
 			t.Fatalf("literal/protocol case %v: %v\n%s", args, err, out)
 		}
+		if args[0] == "verify-manifest" && !bytes.Contains(out, []byte("OK: manifest verified")) {
+			t.Fatalf("literal manifest did not run: %s", out)
+		}
 		if args[0] == "search" && !bytes.Contains(out, []byte("help")) {
 			t.Fatalf("query data lost: %s", out)
 		}
@@ -249,6 +284,13 @@ func TestBuiltEntrypointHelpSafety(t *testing.T) {
 			t.Fatal("literal case changed fixture")
 		}
 		count++
+	}
+	// The matrix is built by walking the live tree and globbing the script dir, so
+	// every assertion above is inside a loop that can go to zero. `count` is the
+	// only witness that it did not: without a floor this test reports "PASS: 0
+	// invocations" and is still green. Today's matrix is 115.
+	if count < 100 {
+		t.Fatalf("only %d built CLI/script invocations ran, want at least 100 — the matrix collapsed, so this test proved nothing", count)
 	}
 	t.Logf("PASS: %d built CLI/script invocations; zero subprocess trips or fixture changes", count)
 }

@@ -37,8 +37,8 @@ is never considered proof of help.
 | `completion` | Parent already prints help | Built parent help |
 | `completion bash`, `zsh`, `fish`, `powershell` | Cobra NoArgs refuses help without generating code | Each now prints route help |
 | `__complete`, `__completeNoDesc` | Shell completion protocol, partial arguments are data | Deliberately retain Cobra protocol; no application handlers |
-| `docs/scripts/publish.sh` | Bare help safely refused (2); loop did not drop later flags | `--ci help`, `help --ci`: help before subprocesses |
-| `docs/scripts/coverage-gate.sh` | Reads checkout help; ignores subsequent arguments | Bare help now prints usage; unknown trailing flags refuse (2) |
+| `docs/scripts/publish.sh` | Bare help safely refused (2); loop did not drop later flags | `--ci help`, `help --ci`: the full header block, printed with bash builtins (no `sed`), before subprocesses |
+| `docs/scripts/coverage-gate.sh` | Reads checkout help; ignores subsequent arguments | Bare help now prints usage; unknown trailing flags refuse (2) with the file's documented `ERROR:` prefix |
 | `docs/scripts/ci-local.sh` | Ignores all arguments, starts Go/secret/workflow checks | Help returns usage; unknown arguments refuse (2) |
 | `docs/scripts/verify-native-install.sh` | Ignores all arguments, starts git/build/temp-file operations | Help returns usage; unknown arguments refuse (2) |
 
@@ -71,14 +71,17 @@ checkout. Its normal checkout argument and environment fallback are preserved.
 
 `go test ./cmd/stark -run 'TestPositionalHelp|TestBuiltEntrypointHelpSafety' -count=1 -v`
 runs parser/hook tripwires and builds the real shipping binary. The process
-matrix invokes it and all four real shell scripts with an empty inherited
-environment, isolated home/cwd, command tripwires, timeouts and before/after
+matrix invokes it and every `docs/scripts/*.sh` — globbed, not named, so a fifth
+script cannot be added outside the gate — with a fixed four-variable environment
+(no inheritance), isolated home/cwd, command tripwires, timeouts and before/after
 file/directory snapshots. Each help case asserts a usage page; refusals assert
-nonzero status. No production credentials, installs, publishing or network
-operations are needed. Normal coverage-gate fixtures and existing command,
+nonzero status. Both tests carry a floor on the number of routes and invocations
+they actually ran, so a walk or glob that came back empty fails rather than
+reporting a green pass over nothing. No production credentials, installs,
+publishing or network operations are needed. Normal coverage-gate fixtures and existing command,
 install and rendering tests remain in `go test ./... -count=1`.
 
-Generated `catalog/*/{skills,commands}`, `vendor/stark-skills`,
+Generated `catalog/*/{skills,commands}`, `vendor/stark-skills`, `vendor/plugins`,
 `vendor/runtime-overrides/codex`, and packaged `dist/**` are excluded as runtime
 copies whose behavior is owned by stark-skills, per AGENTS.md. Curated MCP JSON,
 bundle metadata, schemas and GitHub workflow inline steps are configuration,

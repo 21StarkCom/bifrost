@@ -31,14 +31,37 @@ set -euo pipefail
 # It does NOT commit, push, or open a PR — that stays a deliberate human step
 # (the script prints the next commands).
 
+# usage prints the header block above — the semver policy, the worked examples and
+# the STARK_SKILLS contract, which are documented nowhere else. It reads this file
+# with bash builtins rather than `sed -n '3,33p'`: the help path must start no
+# subprocess (STARK-8083), and a line range silently prints the wrong thing the
+# next time something is inserted above. Everything from the first comment line
+# after the shebang up to the first blank line that follows the block.
+usage() {
+  local line seen=0
+  while IFS= read -r line; do
+    if [ "${line#\#!}" != "$line" ]; then
+      continue
+    elif [ "${line#\#}" != "$line" ]; then
+      seen=1
+      printf '%s\n' "$line"
+    elif [ "$seen" = 1 ]; then
+      break
+    fi
+  done < "${BASH_SOURCE[0]}"
+}
+
 ADD_SKILL="" REMOVE_SKILL="" BUNDLE="" RUN_CI=0
 MEMBERSHIP_CHANGED=0
 show_help=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --add-skill|--remove-skill|--bundle)
-      [ $# -ge 2 ] && [ -n "$2" ] && [[ "$2" != -* ]] || {
-        echo "missing value for $1" >&2; exit 2;
+      [ $# -ge 2 ] || { echo "missing value for $1" >&2; exit 2; }
+      # Reported separately from "missing": `--bundle -x` has a value, it is just
+      # not one, and "missing value" sends the operator looking for an absent word.
+      [ -n "$2" ] && [[ "$2" != -* ]] || {
+        echo "invalid value for $1: '$2' (names cannot be empty or start with -)" >&2; exit 2;
       }
       case "$1" in
         --add-skill) ADD_SKILL="$2" ;;
@@ -52,7 +75,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 if [ "$show_help" = 1 ]; then
-  printf 'Usage: docs/scripts/publish.sh [--add-skill NAME | --remove-skill NAME] [--bundle NAME] [--ci]\n'
+  usage
   exit 0
 fi
 
