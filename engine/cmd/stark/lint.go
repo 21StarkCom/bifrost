@@ -18,6 +18,19 @@ func runLint(catalogDir string, strict bool) int {
 	cat, err := load.Load(catalogDir)
 	if err != nil {
 		fmt.Println("load error:", err)
+		// `--strict` is a CI gate, and a gate that could not READ what it scans must not
+		// report success — the same "passes by finding nothing to measure" shape as
+		// check-bumps' missing baseline (STARK-8161). Exposure in `ci.yml` today is nil
+		// only by accident of ordering: `stark validate` runs one step earlier and is
+		// fail-closed on this same `load.Load` error. That is step ordering, not a
+		// property of this gate, and it does not survive a reordering or a caller
+		// outside that workflow (STARK-8165).
+		//
+		// Non-strict keeps returning 0: spec §7.4 makes that mode explicitly
+		// surfacing-only, and a caller that opted out of blocking opted out here too.
+		if strict {
+			return 2
+		}
 		return 0
 	}
 	r := validate.LintBodies(cat)
