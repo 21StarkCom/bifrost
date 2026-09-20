@@ -161,10 +161,20 @@ jobs:
           marker='<!-- sync-pr-watchdog -->'
           # `--slurp`, because `--jq` alongside `--paginate` runs the filter ONCE PER PAGE
           # and concatenates the outputs: a marker comment on two pages would make the id
-          # below two lines and every URL built from it malformed. publish-sync-pr slurps
-          # its review pages for the same reason.
-          existing="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/${number}/comments" \
-                        --jq "[.[][] | select(.body | startswith(\"$marker\"))] | last // empty")"
+          # below two lines and every URL built from it malformed.
+          #
+          # And the slurp is a SEPARATE step from the filter, because `gh api` refuses
+          # `--slurp` together with `--jq` outright — "the `--slurp` option is not supported
+          # with `--jq` or `--template`", on every version, not a runner quirk. That is what
+          # killed this workflow's first live run (35523084147, STARK-8217): it died on gh's
+          # usage text before reaching a verdict. `publish-sync-pr` has always had the right
+          # shape — slurp into a variable, pipe to `jq` — and the flag was copied from it
+          # without the shape. Pinned by TestWorkflowsNeverCombineSlurpWithJq, because
+          # actionlint, shellcheck and a stubbed `gh` are all blind to it: the line is valid
+          # shell, valid YAML, and a stub accepts flags the real binary rejects.
+          comments="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/${number}/comments")"
+          existing="$(printf '%s' "$comments" \
+            | jq -r --arg marker "$marker" '[.[][] | select(.body | startswith($marker))] | last // empty')"
           existing_id="$(printf '%s' "$existing" | jq -r '.id // empty')"
           existing_body="$(printf '%s' "$existing" | jq -r '.body // empty')"
 

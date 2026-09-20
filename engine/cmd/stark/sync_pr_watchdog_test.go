@@ -270,3 +270,45 @@ func TestWatchdogNeverRewritesTheSyncBranch(t *testing.T) {
 		t.Fatalf("%s must not take `contents: write` — it reports, it does not push", watchdogWorkflowPath)
 	}
 }
+
+// `gh api` REFUSES `--slurp` together with `--jq`: "the `--slurp` option is not supported
+// with `--jq` or `--template`". Not a runner quirk — reproduced on gh 2.101.0 too.
+//
+// This killed sync-pr-watchdog's first live run (35523084147, 2026-09-20): it printed gh's
+// usage text and exited 1 before reaching any verdict. The workflow was merged green,
+// because nothing that ran before that could see it — the line is valid shell and valid
+// YAML, so `actionlint` and `shellcheck` pass it; the Go suite exercises the jq predicate,
+// not the gh command line; and the review round that introduced the flag verified it
+// against a STUBBED `gh`, which accepts every flag the real binary rejects.
+//
+// So the pin is on the command line itself, across every workflow rather than just this
+// one, because the mistake is a copy of `publish-sync-pr`'s flag without its shape —
+// slurp into a variable, then pipe to `jq` — and the next copy will be somewhere else.
+func TestWorkflowsNeverCombineSlurpWithJq(t *testing.T) {
+	dir := filepath.Join(repoRoot(t), ".github", "workflows")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read %s: %v", dir, err)
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".yml") {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			t.Fatalf("read %s: %v", e.Name(), err)
+		}
+		// One `gh api` invocation may span continuation lines, so join them before
+		// looking — the broken call had `--slurp` and `--jq` on different physical lines.
+		joined := strings.ReplaceAll(string(b), "\\\n", " ")
+		for _, line := range strings.Split(joined, "\n") {
+			if !strings.Contains(line, "gh api") || strings.HasPrefix(strings.TrimSpace(line), "#") {
+				continue
+			}
+			if strings.Contains(line, "--slurp") && strings.Contains(line, "--jq") {
+				t.Errorf("%s combines --slurp with --jq, which `gh api` refuses outright:\n  %s\n"+
+					"slurp into a variable and pipe to jq instead (publish-sync-pr.yml does)", e.Name(), strings.TrimSpace(line))
+			}
+		}
+	}
+}
