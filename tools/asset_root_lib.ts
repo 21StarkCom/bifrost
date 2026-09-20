@@ -6,13 +6,15 @@
  * Two distinct roots:
  *
  *   - `assetRoot()` — IMMUTABLE shipped assets: `tools/`, `prompts/`,
- *     `standards/`, `config.json`, `forge_heuristics.json`, `orchestrator.md`.
+ *     `standards/`, `config.json`, `forge_heuristics.json` (see
+ *     `assetConfigPath()` for the two layouts those last three live in).
  *     In an installed plugin Claude Code sets `CLAUDE_PLUGIN_ROOT` to the
- *     plugin's cache dir, which the bifrost engine populates with
- *     these assets (vendored per bundle). For direct (non-plugin) invocations
- *     `CLAUDE_PLUGIN_ROOT` is unset and we fall back to the canonical
- *     `~/.claude/code-review` tree. `STARK_ASSET_ROOT` overrides both
- *     (tests / unusual layouts).
+ *     plugin's cache dir. Every entry in `.claude-plugin/marketplace.json` now
+ *     names `"source": "./"`, so that cache is a copy of THIS repo — there is
+ *     no build step and no per-bundle vendoring behind it any more. For direct
+ *     (non-plugin) invocations `CLAUDE_PLUGIN_ROOT` is unset and we fall back
+ *     to the canonical `~/.claude/code-review` tree. `STARK_ASSET_ROOT`
+ *     overrides both (tests / unusual layouts).
  *
  *   - `stateRoot()` — MUTABLE runtime state: `history/`, `sessions/`,
  *     `staged/`, `dashboard/`, `locks/`, `logs/`, alerts, healer + cost ledgers.
@@ -112,13 +114,27 @@ export function stateRoot(): string {
 }
 
 /**
- * The shipped global config file. Layout-robust: the install.sh symlink tree
- * and the vendored marketplace plugin keep it FLAT at `<assetRoot>/config.json`
- * (the marketplace engine drops the `global/` layer when bundling — see
- * `bifrost/engine/internal/importer/vendor.go`), but a raw source
- * checkout keeps it under `<assetRoot>/global/config.json`. Try the flat layout
- * first, then the source layout, then fall back to the flat path for
- * back-compat when neither exists on disk yet.
+ * The shipped global config file. Layout-robust because `assetRoot()` can hand
+ * back either of two shapes that are BOTH live:
+ *
+ *   - FLAT — `<assetRoot>/config.json`. The `~/.claude/code-review` tree is a
+ *     farm of symlinks INTO a checkout (`config.json` ->
+ *     `<checkout>/global/config.json`, `prompts` -> `<checkout>/global/prompts`,
+ *     `tools` -> `<checkout>/tools`), so the `global/` layer is already
+ *     collapsed and no `global/` dir sits beside them. This is the root
+ *     whenever `CLAUDE_PLUGIN_ROOT` is unset.
+ *   - SOURCE — `<assetRoot>/global/config.json`. A raw checkout of this repo,
+ *     and now an INSTALLED PLUGIN too: every marketplace entry is
+ *     `"source": "./"`, so `CLAUDE_PLUGIN_ROOT` points at a cache of the whole
+ *     repo tree with `global/` intact. It was flat there while a build step
+ *     vendored a per-bundle asset root; that engine is gone, so the plugin and
+ *     the checkout are now the same shape.
+ *
+ * No live root carries both, so the order settles nothing today — it stays
+ * flat-first because that is the branch the no-plugin default takes, and
+ * flipping it would re-order a probe for no gain. The last-resort return is the
+ * flat path so a root with neither layout still yields a concrete, nameable
+ * path for the caller's error instead of throwing here.
  */
 export function assetConfigPath(): string {
   const root = assetRoot();
@@ -127,10 +143,11 @@ export function assetConfigPath(): string {
 }
 
 /**
- * The per-agent prompt tree. Layout-robust for the same reason as
- * `assetConfigPath()`: flat `<assetRoot>/prompts` in the symlink tree and the
- * vendored plugin, `<assetRoot>/global/prompts` in a raw source checkout. Try
- * flat first, then source, then fall back to flat.
+ * The prompt tree (`iac-review/`, `refactor-planner/`). Two layouts for exactly
+ * the reason `assetConfigPath()` spells out: flat `<assetRoot>/prompts` in the
+ * `~/.claude/code-review` symlink tree, `<assetRoot>/global/prompts` in a source
+ * checkout and in a plugin cache. Try flat first, then source, then fall back to
+ * flat.
  */
 export function assetPromptsDir(): string {
   const root = assetRoot();

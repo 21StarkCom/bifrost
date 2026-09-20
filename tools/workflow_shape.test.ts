@@ -39,6 +39,13 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 
 const CI_REL = ".github/workflows/ci.yml";
 
+// The repository's default branch — the ref `main`'s ruleset targets
+// (`~DEFAULT_BRANCH`) and the only branch a PR here merges into. Written as a
+// literal because the `test` job runs with no git metadata to ask and no network:
+// a derived value would have to come from `git symbolic-ref`, which a shallow
+// runner checkout does not answer for the remote.
+const DEFAULT_BRANCH = "main";
+
 // The four jobs, and the check-run context each one reports under.
 //
 // A context string is the job's `name:` when it has one and the bare job id when
@@ -222,6 +229,75 @@ test("ci.yml fires on every pull request, unfiltered", () => {
         `counts as a pass — the required gate silently stops running on exactly the changes it ` +
         `was not expecting.`,
     );
+  }
+});
+
+test("both triggers reach the default branch, and no `types:` narrows the PR trigger", () => {
+  const onBlock = topLevelBlock(codeLines(readCi()), "on");
+
+  for (const trigger of ["pull_request", "push"]) {
+    const at = onBlock.findIndex((l) => new RegExp(`^ {2}${trigger}:`).test(l));
+    assert.notEqual(
+      at,
+      -1,
+      `${CI_REL}: no \`${trigger}:\` trigger. Every one of the four required contexts is reported by a ` +
+        `run of THIS workflow; a trigger that is gone is a context that never reports.`,
+    );
+    const body = blockBody(onBlock, at);
+
+    // `branches-ignore` is the inverted spelling and is banned outright: it can
+    // exclude the default branch while still *containing* the word `main`, so a
+    // positive-match assertion below would read it as satisfied.
+    const ignore = body.find((l) => /^\s*branches-ignore\s*:/.test(l));
+    assert.equal(
+      ignore,
+      undefined,
+      `${CI_REL}: \`on.${trigger}\` uses \`branches-ignore\`. Use the positive \`branches:\` form — an ` +
+        `exclusion list is one entry away from silently excluding \`${DEFAULT_BRANCH}\` itself, and this ` +
+        `gate cannot tell an allow-list from a deny-list by reading the branch name.`,
+    );
+
+    // `branches:` accepts both the flow form (`branches: [main]`) and a block
+    // sequence, so the key's own line plus its body are searched together rather
+    // than just the one line.
+    const branchesAt = body.findIndex((l) => /^\s*branches\s*:/.test(l));
+    assert.notEqual(
+      branchesAt,
+      -1,
+      `${CI_REL}: \`on.${trigger}\` carries no \`branches:\` filter. Unfiltered is not a failure of this ` +
+        `assertion's intent, but it is a change from the shape the ruleset was written against — state ` +
+        `the branch explicitly, or move this test in the same change.`,
+    );
+    const branches = [body[branchesAt], ...blockBody(body, branchesAt)].join("\n");
+    assert.ok(
+      new RegExp(`(^|[^A-Za-z0-9_/-])${DEFAULT_BRANCH}([^A-Za-z0-9_/-]|$)`).test(branches),
+      `${CI_REL}: \`on.${trigger}.branches\` does not name \`${DEFAULT_BRANCH}\`:\n  ` +
+        `${branches.trim().replace(/\n\s*/g, " ")}\n` +
+        `A branch filter that misses the default branch means no run of this workflow ever exists for the ` +
+        `head sha, so all four required contexts stay permanently UNREPORTED — the merge box waits forever ` +
+        `on "Expected — waiting for status", and \`gh pr checks --required\` cannot show you why because an ` +
+        `unreported context has no statusCheckRollup entry at all.`,
+    );
+
+    if (trigger === "pull_request") {
+      // GitHub's default `pull_request` activity types are opened/synchronize/
+      // reopened. Declaring `types:` REPLACES that default wholesale rather than
+      // adding to it, so `types: [ready_for_review]` — the reflex when someone
+      // wants CI to skip drafts — stops the workflow firing on the pushes that
+      // actually change the code, and the head sha carries no run at all. That is
+      // strictly worse than the `if:` draft guard banned above: a skipped job at
+      // least reports (as a pass, wrongly); an absent run reports nothing and
+      // blocks the merge forever.
+      const types = body.find((l) => /^\s*types\s*:/.test(l));
+      assert.equal(
+        types,
+        undefined,
+        `${CI_REL}: \`on.pull_request\` declares \`${types?.trim()}\`. Declaring \`types:\` replaces ` +
+          `GitHub's default set (opened/synchronize/reopened) instead of extending it, so the workflow ` +
+          `stops firing on the events it is required for and the head sha ends up with no run — a required ` +
+          `context that never reports.`,
+      );
+    }
   }
 });
 

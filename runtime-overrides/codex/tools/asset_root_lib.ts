@@ -1,16 +1,23 @@
 /**
  * Asset- vs. state-root resolution — the seam that lets a skill/tool resolve
- * its shipped assets whether it runs inside a self-contained Codex plugin
- * (marketplace distribution) or via a direct, non-plugin invocation.
+ * its shipped assets from wherever it happens to be run: a checkout, a symlink
+ * farm, or (historically) a self-contained Codex plugin rendered out of this
+ * tree.
  *
  * Two distinct roots:
  *
  *   - `assetRoot()` — IMMUTABLE shipped assets: `tools/`, `prompts/`,
- *     `standards/`, `config.json`, `forge_heuristics.json`, `orchestrator.md`.
- *     The bifrost Codex adapter exports `STARK_PLUGIN_ROOT` for native plugins
- *     and `STARK_ASSET_ROOT` for standalone installs. For direct invocations
- *     without either variable we fall back to `~/.stark/code-review`, never a
- *     Claude-owned path.
+ *     `standards/`, `config.json`, `forge_heuristics.json` (see
+ *     `assetConfigPath()` for the two layouts those last three live in).
+ *     HISTORICAL: `STARK_PLUGIN_ROOT` was exported by bifrost's Codex adapter,
+ *     which rendered this tree into a native Codex install. That adapter, and
+ *     the whole render step behind it, are gone — `runtime-overrides/codex/` is
+ *     SOURCE ONLY now and nothing renders it. The precedence chain below is
+ *     left exactly as it stands: both variables remain the documented way to
+ *     aim a Codex-side run at a checkout, and dropping `STARK_PLUGIN_ROOT`
+ *     would silently break any environment that still exports it. For direct
+ *     invocations with neither variable set we fall back to
+ *     `~/.stark/code-review`, never a Claude-owned path.
  *
  *   - `stateRoot()` — MUTABLE runtime state: `history/`, `sessions/`,
  *     `staged/`, `dashboard/`, `locks/`, `logs/`, alerts, healer + cost ledgers.
@@ -126,13 +133,21 @@ export function stateRootForHome(
 }
 
 /**
- * The shipped global config file. Layout-robust: the install.sh symlink tree
- * and the vendored marketplace plugin keep it FLAT at `<assetRoot>/config.json`
- * (the marketplace engine drops the `global/` layer when bundling — see
- * `bifrost/engine/internal/importer/vendor.go`), but a raw source
- * checkout keeps it under `<assetRoot>/global/config.json`. Try the flat layout
- * first, then the source layout, then fall back to the flat path for
- * back-compat when neither exists on disk yet.
+ * The shipped global config file. Layout-robust because the root it resolves
+ * against can be either of two shapes:
+ *
+ *   - FLAT — `<assetRoot>/config.json`. What a symlink farm produces when it
+ *     links `config.json`, `prompts` and `tools` straight into a checkout's
+ *     `global/` and top-level dirs, collapsing the `global/` layer away.
+ *   - SOURCE — `<assetRoot>/global/config.json`. A raw checkout of this repo,
+ *     which is what `STARK_ASSET_ROOT` points at today. The build step that
+ *     once flattened `global/` into a per-bundle Codex asset root is gone with
+ *     the rest of the render, so there is no vendored flat layout on this side
+ *     any more.
+ *
+ * Try flat first, then source, then fall back to the flat path so a root with
+ * neither layout still yields a concrete, nameable path for the caller's error
+ * instead of throwing here.
  */
 export function assetConfigPath(): string {
   const root = assetRoot();
@@ -141,10 +156,10 @@ export function assetConfigPath(): string {
 }
 
 /**
- * The per-agent prompt tree. Layout-robust for the same reason as
- * `assetConfigPath()`: flat `<assetRoot>/prompts` in the symlink tree and the
- * vendored plugin, `<assetRoot>/global/prompts` in a raw source checkout. Try
- * flat first, then source, then fall back to flat.
+ * The prompt tree (`iac-review/`, `refactor-planner/`). Two layouts for exactly
+ * the reason `assetConfigPath()` spells out: flat `<assetRoot>/prompts` under a
+ * symlink farm, `<assetRoot>/global/prompts` in a source checkout. Try flat
+ * first, then source, then fall back to flat.
  */
 export function assetPromptsDir(): string {
   const root = assetRoot();

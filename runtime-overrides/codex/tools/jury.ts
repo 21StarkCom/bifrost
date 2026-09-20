@@ -144,10 +144,19 @@ export function defaultRepoRoot(): string {
 }
 
 /** The payload roots probed for `<dir>/stark-<id>/SKILL.md`, in order: an
- *  explicit `STARK_JURY_SKILLS_ROOT` override, this repo's `skill/` layout,
- *  the Claude plugin `skills/` layout, and the Codex install layout. Bifrost
- *  installs this tool under `.agents/stark/<bundle>/tools/`, while native
- *  Codex skills live two levels above that bundle root at `.agents/skills/`. */
+ *  explicit `STARK_JURY_SKILLS_ROOT` override, this repo's `skill/` layout, a
+ *  `skills/` layout beside it, and a `skills/` layout two levels up.
+ *
+ *  HISTORICAL, the last two. `skills/` was the shape a per-bundle plugin render
+ *  produced, and `../../skills/` was the native Codex install: this tool landed
+ *  under `.agents/stark/<bundle>/tools/` while Codex's own skills sat two levels
+ *  above at `.agents/skills/`. Neither install is produced any more —
+ *  `runtime-overrides/codex/` is source only and nothing renders it, and the
+ *  Claude marketplace serves `"source": "./"`, so a plugin cache is this repo
+ *  verbatim: `skill/` and nothing else. They stay because they are pure
+ *  existence probes — one `fs.existsSync` each, and a `skills/` dir has to
+ *  actually be on disk to win — so they cannot mis-resolve a live layout, while
+ *  deleting them would break any operator tree still laid out that way. */
 export function skillPathCandidates(
   skillId: SkillId,
   repoRoot: string = defaultRepoRoot(),

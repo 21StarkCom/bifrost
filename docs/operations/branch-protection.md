@@ -189,7 +189,7 @@ including an admin because `enforce_admins` is `true`:
 
 The two surfaces are **additive**: a ruleset does not replace classic protection,
 and the most restrictive rule across both wins. **A ruleset's bypass actor grants
-no bypass of classic protection** — the admin can merge past a red required
+no exemption from classic protection** — the admin can merge past a red required
 check, and cannot push to `main` directly, cannot force-push, and cannot leave a
 review thread unresolved.
 

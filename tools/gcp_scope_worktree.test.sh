@@ -1,9 +1,20 @@
 #!/usr/bin/env bash
+#
+# End-to-end harness for the `gcp_scope.ts` CLI. `gcp_scope_lib.test.ts` covers
+# the library surface exhaustively (splice, render, worktree inclusion, the
+# ambient-default checker); what only this file covers is that the CLI actually
+# WIRES those functions together — that `install` writes both `.envrc` and
+# `.worktreeinclude` from one invocation, that a second run is byte-identical,
+# and that `check` reaches its success line. Driven from `gcp_scope_worktree.test.ts`
+# so `npm test` and CI run it; it was an orphan advertising a gate nobody ran.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 node_bin="$(command -v node)"
-fixture="$(mktemp -d /private/tmp/gcp-scope-worktree.XXXXXX)"
+# Not a hardcoded /private/tmp: CI runs this harness on ubuntu, where that
+# directory does not exist. Nothing below compares an absolute path, so the
+# macOS /var -> /private/var realpath difference cannot bite.
+fixture="$(mktemp -d "${TMPDIR:-/tmp}/gcp-scope-worktree.XXXXXX")"
 trap 'rm -rf "$fixture"' EXIT
 root="$fixture/Code"
 repo="$root/Mapped/demo"

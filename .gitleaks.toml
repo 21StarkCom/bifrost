@@ -72,13 +72,22 @@ regexes = [
   #
   # Deliberately value-scoped and anchored rather than a `tools/.*\.test\.ts$`
   # entry in an [allowlist].paths array — this config deliberately has none at all.
-  # tools/ arrived with 78 test files; keeping them all under the scanner is worth
-  # more than one line of config, and this way a real credential pasted into a test
-  # still fires.
+  # tools/ carries 76 test files (measured on the tracked tree); keeping them all
+  # under the scanner is worth more than one line of config, and this way a real
+  # credential pasted into a test still fires.
   # The cost is that a NEW fake-credential fixture reddens CI until it is added
   # here — which is the conscious decision we want, not a papercut.
   #
-  # Note these six findings are new to bifrost, not newly broken: stark-skills
+  # FOUR values, SIX findings — the two counts are both right and neither is the
+  # other: `operator-token-must-not-reach-model` and the `ghp_` fixture are each
+  # asserted on twice, so removing the four regexes below yields six findings
+  # (`tools/runtime_env_lib.test.ts` 118-119, `tools/stark_session_lib.test.ts`
+  # 240 + 248, `tools/stark_handover_lib.test.ts` 252-253). Re-measure the same
+  # way before editing either number: delete the four entries and run
+  # `gitleaks dir . --config … --report-format json` over a tracked-files-only
+  # tree (a local scan also walks ignored worktrees, which CI's checkout has not).
+  #
+  # Note those six findings are new to bifrost, not newly broken: stark-skills
   # carries no `stark-inline-credential` rule and no global allowlist at all,
   # and its CI scans only the incoming commit range, where bifrost's `secrets`
   # job scans the whole working tree fail-closed. The files never had to be

@@ -1,4 +1,4 @@
-# Config Reference — stark-skills
+# Config Reference — bifrost
 
 Explanatory context for `global/config.json`. Does not duplicate the values themselves.
 
