@@ -2,8 +2,14 @@
 
 > Historical note, 2026-06-23: current hosting is public at
 > `https://marketplace.21stark.com` in `ev-infra-group` without IAP.
-> See `docs/web-hosting.md` for live hosting. This file preserves the original
-> red-team context.
+> This file preserves the original red-team context.
+>
+> Update, 2026-09-20 (STARK-7972): the web registry (SPA + static origin) was
+> removed; `docs/web-hosting.md` no longer exists and the `marketplace.21stark.com`
+> origin is being torn down (STARK-7974). Claude Code installs from
+> `.claude-plugin/marketplace.json` + `dist/claude/` on GitHub; `index.json` /
+> `bundles/*.json` remain the source of truth, read directly from disk by
+> `stark install/search/info`.
 
 **Date:** 2026-06-06 · Four parallel adversarial reviews (security/abuse, architecture,
 operability, correctness+runtime-accuracy) against the v1 spec. Resolutions folded into
