@@ -17,25 +17,31 @@ A published bundle version is **content-locked** by `stark check-bumps`. Yanking
    - Edit the affected GitHub Release page notes with a header: `⚠️ DO NOT USE — superseded by vX.Y.Z due to <one-line reason>`. Don't delete the release (consumers may have pinned the SHA; deleting breaks `stark verify-manifest`).
    - Email/Slack the alert channel (notification channel `email` in `ev-infra-group/infra/monitoring.tf`) with the same advisory.
 
-> **The yank does not reach a native Codex consumer (STARK-7998; measured 2026-09-20 on
-> codex-cli 0.155.1 — pinned by nothing, CI has no Codex, so re-measure before leaning on it).**
+> **The SemVer bump is not what reaches a native Codex consumer (STARK-7998; measured 2026-09-20
+> on codex-cli 0.155.1 — pinned by nothing, CI has no Codex, so re-measure before leaning on it.
+> `CLAUDE.md` "Version-bump immutability" records what each probe did and did not establish,
+> including that the `upgrade` path and the recorded source shape were measured separately).**
 > Step 2 assumes a consumer that re-fetches when a version moves. That holds for Claude Code and
 > not for the `dist/codex-plugins/` packages: their manifest carries the root `VERSION`, not the
 > bundle's, so a bundle bump changes no byte of the Codex package
 > (`TestABundleBumpChangesNoByteOfTheCodexPackage`), and `version` only names the cache directory
 > (`~/.codex/plugins/cache/<marketplace>/<plugin>/<version>/`) rather than gating retrieval. What
-> a native consumer tracks is the marketplace's git branch — `codex plugin marketplace add` of
-> this repo records the source with no ref and clones the default branch — advanced only by an
-> explicit `codex plugin marketplace upgrade`. Two consequences during an incident:
+> a native consumer tracks is the marketplace's git branch — a bare `codex plugin marketplace add`
+> of this repo records the source with no ref and clones the default branch — advanced only by an
+> explicit `codex plugin marketplace upgrade`. That is the default path and the only one measured:
+> `add` also takes `--ref`, so a consumer who pinned one follows that ref and a successor landing
+> on `main` may never reach them at all. Two consequences during an incident:
 > - **The fix reaches them, but not because you bumped.** `upgrade` re-installs from the refreshed
 >   marketplace snapshot regardless of version, so step 2's replacement bytes arrive once they are
 >   on `main` and the consumer upgrades. The SemVer bump is not what carries them, and nothing
 >   prompts the upgrade — a consumer who never runs it keeps the bad bundle indefinitely.
 > - **Deleting the bundle withdraws nothing.** A plugin dropped from the marketplace manifest and
 >   deleted from the repo stayed in `~/.codex/plugins/cache/` and enabled in the consumer's
->   `config.toml`, with `errors: []`; `upgrade` does not remove it. So step 2's "empty/no-op shell"
->   is the only form of yank that works here — removal is not a substitute for it — and step 3's
->   advisory is the only control that reaches a consumer who does not upgrade at all.
+>   `config.toml`, with `errors: []`; `upgrade` does not remove it. So a yank here has to be a
+>   *replacement* published under the same bundle name — either of step 2's two forms, the fixed
+>   implementation or the empty/no-op shell — and deleting the bundle is not a substitute for
+>   either. Step 3's advisory is the only control that reaches a consumer who does not upgrade
+>   at all.
 
 ## 2. Signed-release revocation
 

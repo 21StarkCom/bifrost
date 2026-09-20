@@ -98,9 +98,11 @@ func sharedAssetKey(bundle string) string { return bundle + "/shared-assets/" + 
 // the Codex cache directory, and `codex plugin marketplace upgrade` re-installs from the
 // refreshed marketplace snapshot regardless of it — a native consumer tracks the marketplace
 // branch (a plain `marketplace add` records no ref and clones the default branch), not a
-// version. Those two are EXTERNAL-CLI facts nothing here pins (measured 2026-09-20 on
-// codex-cli 0.155.1; CI has no Codex) — re-measure before leaning on them. Codex-only:
-// Claude Code does pin an install to plugin.json's version.
+// version. Every claim in that sentence is an EXTERNAL-CLI fact nothing here pins — two
+// separate probes, the `upgrade` behavior and what a plain `add` records, neither of which
+// ran against the other's setup (measured 2026-09-20 on codex-cli 0.155.1; CI has no Codex) —
+// re-measure before leaning on them. Codex-only: Claude Code does pin an install to
+// plugin.json's version.
 //
 // Refusing the root-VERSION row does NOT reopen the manifest row: the STARK-7977 reasons
 // above are permanent, not a deferral on a subsumer that never arrived, so do not add a
