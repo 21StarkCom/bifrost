@@ -173,10 +173,21 @@ go run ./cmd/stark sync --from "$STARK_SKILLS" ../catalog
 # changes membership (that only happens above via the flags), so these are always
 # content-only → PATCH. Loop: detect → bump → re-sync until the gate is clean.
 for round in 1 2 3 4 5; do
-  cb_out="$(go run ./cmd/stark check-bumps ../catalog 2>&1 || true)"
+  # Capture the STATUS as well as the output. The gate can exit nonzero WITHOUT naming a
+  # single bundle — it refuses when it has no baseline to compare against (STARK-8161) —
+  # and a bare `|| true` made that indistinguishable from a clean run: the loop announced
+  # "gate clean", skipped every auto-bump, and died several steps later at the final gate.
+  if cb_out="$(go run ./cmd/stark check-bumps ../catalog 2>&1)"; then cb_rc=0; else cb_rc=$?; fi
   changed=$(printf '%s\n' "$cb_out" \
     | sed -nE 's#^[[:space:]]*-[[:space:]]+([a-z0-9-]+)/.*#\1#p' | sort -u)
-  [ -z "$changed" ] && { echo "→ version-bump gate clean"; break; }
+  if [ -z "$changed" ]; then
+    if [ "$cb_rc" -ne 0 ]; then
+      printf '%s\n' "$cb_out" >&2
+      echo "ERROR: check-bumps failed without naming a bundle to bump (see above)" >&2
+      exit 1
+    fi
+    echo "→ version-bump gate clean"; break
+  fi
   echo "→ content changed in: $(echo "$changed" | tr '\n' ' ') — patch-bumping + re-syncing (round $round)"
   for b in $changed; do bump "$REPO_ROOT/catalog/$b/bundle.yaml" patch; done
   go run ./cmd/stark sync --from "$STARK_SKILLS" ../catalog >/dev/null

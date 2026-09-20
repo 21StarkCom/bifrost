@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -16,26 +16,26 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// gitOK runs a git command for its exit status only.
+// gitProbe runs a git command and returns its stdout plus git's OWN failure, not a bare
+// bool: `gitFailure(err)` turns the error into git's first stderr line, so a refusal can
+// say "detected dubious ownership" or "git not found on PATH" instead of leaving the
+// operator to reproduce by hand what git already explained (same reasoning as
+// sourceRevision's, STARK-7364).
 //
 // Through gitCommand, not a bare exec: an inherited GIT_DIR wins over `-C repoRoot`, so
 // under a hook or `git rebase --exec` every probe below would answer about some OTHER
 // repo and the gate would pass or fail by accident.
-func gitOK(repoRoot string, args ...string) bool {
-	cmd := gitCommand(repoRoot, args...)
-	cmd.Stdout, cmd.Stderr = io.Discard, io.Discard
-	return cmd.Run() == nil
+func gitProbe(repoRoot string, args ...string) ([]byte, error) {
+	return gitCommand(repoRoot, args...).Output()
 }
 
-// gitShow returns the bytes of one path at one ref, and whether it exists there.
-func gitShow(repoRoot, ref string) ([]byte, bool) {
-	cmd := gitCommand(repoRoot, "show", ref)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if err := cmd.Run(); err != nil {
+// gitShow returns the bytes of a `<rev>:<path>` object, and whether it exists.
+func gitShow(repoRoot, revPath string) ([]byte, bool) {
+	out, err := gitProbe(repoRoot, "show", revPath)
+	if err != nil {
 		return nil, false
 	}
-	return stdout.Bytes(), true
+	return out, true
 }
 
 // prevIndexJSON returns the previously committed index.json bytes and a human-readable
@@ -44,7 +44,7 @@ func gitShow(repoRoot, ref string) ([]byte, bool) {
 //
 // The baseline is `origin/main`, because the question this gate asks is "did content
 // already published on main change under an unchanged version". `HEAD` is a fallback for a
-// repo with no origin at all (a scratch tree, a test fixture) and is NOT interchangeable:
+// repo with no REMOTE at all (a scratch tree, a test fixture) and is NOT interchangeable:
 // on a `pull_request` checkout HEAD is the PR's own merge commit, whose index.json
 // `build --check` has already forced to agree with the change — so a HEAD baseline
 // compares the change to itself and the gate cannot fail. Measured 2026-09-20
@@ -52,17 +52,31 @@ func gitShow(repoRoot, ref string) ([]byte, bool) {
 // `refs/remotes/pull/N/merge` present, and 7 shared-assets violations once
 // `refs/remotes/origin/main` was fetched into the identical tree.
 func prevIndexJSON(repoRoot string) (data []byte, ref string, ok bool) {
-	// An `origin` remote means this is a clone of something, so the baseline MUST be
-	// reachable. `actions/checkout@v4` configures origin but, on a pull_request event at
-	// its default depth, fetches only `refs/pull/N/merge` and no remote-tracking branch —
-	// exactly the shape that has to refuse instead of falling through to HEAD.
-	hasOrigin := gitOK(repoRoot, "remote", "get-url", "origin")
-	mainResolves := gitOK(repoRoot, "rev-parse", "--verify", "--quiet", "origin/main^{commit}")
-
-	if hasOrigin && !mainResolves {
-		return nil, "", false
+	// Ask git where the repository is FIRST, because every probe below reports failure the
+	// same way and the two reasons are NOT the same. "There is no repository here" (an
+	// export, a fixture) is a genuine no-baseline that must still run. "git could not
+	// answer" — not on PATH, `detected dubious ownership` under a container or a foreign
+	// uid, a corrupt object store — is a BROKEN probe, and reading it as "no remote
+	// configured" walks straight back into the STARK-8161 silent pass one layer down:
+	// every probe false, `git show HEAD:index.json` false too, and the gate prints
+	// `OK: no un-bumped source changes` having read no baseline at all.
+	//
+	// Discriminated WITHOUT matching git's message text, which is translated: a `.git`
+	// sitting right there that git still will not open is the broken case. (A repoRoot
+	// that is merely a subdirectory of a checkout has no `.git` of its own, but git
+	// discovers the repo upward, so it never reaches this branch.)
+	if _, err := gitProbe(repoRoot, "rev-parse", "--git-dir"); err != nil {
+		if _, statErr := os.Stat(filepath.Join(repoRoot, ".git")); statErr == nil {
+			return nil, "git cannot read this checkout: " + gitFailure(err), false
+		}
+		return nil, "none (not a git checkout)", true
 	}
-	if mainResolves {
+
+	// The baseline ref itself. `actions/checkout@v4` configures a remote but, on a
+	// pull_request event at its default depth, fetches only `refs/pull/N/merge` and no
+	// remote-tracking branch — exactly the shape that has to refuse below instead of
+	// falling through to HEAD.
+	if _, err := gitProbe(repoRoot, "rev-parse", "--verify", "--quiet", "origin/main^{commit}"); err == nil {
 		// The ref is there. index.json may not be, on a repo that has never published —
 		// that is a real "nothing to compare against", unlike a missing ref.
 		if b, found := gitShow(repoRoot, "origin/main:index.json"); found {
@@ -70,8 +84,17 @@ func prevIndexJSON(repoRoot string) (data []byte, ref string, ok bool) {
 		}
 		return nil, "origin/main (carries no index.json yet)", true
 	}
+
+	// No baseline ref. A configured remote means this is a clone of something, so the
+	// baseline MUST have been reachable — refuse. Keyed on "any remote at all" rather than
+	// on the name `origin`: a clone made with `-o upstream`, or one whose remote was
+	// renamed, is just as much a clone, and keying on the name sends exactly those down
+	// the dead HEAD path this gate exists to close.
+	if remotes, err := gitProbe(repoRoot, "remote"); err == nil && len(bytes.TrimSpace(remotes)) > 0 {
+		return nil, "this clone has a remote but no `origin/main` to compare against", false
+	}
 	if b, found := gitShow(repoRoot, "HEAD:index.json"); found {
-		return b, "HEAD (no origin remote)", true
+		return b, "HEAD (no remote configured)", true
 	}
 	return nil, "none (no committed index.json)", true
 }
@@ -164,10 +187,10 @@ func runCheckBumps(catalogDir, repoRoot string) int {
 		// Fail closed, and say what to do. A gate that cannot find the thing it
 		// compares against must never print OK — that is how this one spent its whole
 		// life green in CI while catching nothing (STARK-8161).
-		fmt.Println("check-bumps: this clone has an `origin` remote but no `origin/main` to compare against.")
-		fmt.Println("check-bumps: without that baseline the only other committed index.json is this very")
+		fmt.Println("check-bumps: no baseline —", baseRef)
+		fmt.Println("check-bumps: without one the only other committed index.json is this very")
 		fmt.Println("check-bumps: change's own, so the gate would compare the change to itself and pass.")
-		fmt.Println("check-bumps: fetch it first — `git fetch --no-tags --depth=1 origin +refs/heads/main:refs/remotes/origin/main`")
+		fmt.Println("check-bumps: if the ref is merely unfetched — `git fetch --no-tags --depth=1 origin +refs/heads/main:refs/remotes/origin/main`")
 		return 1
 	}
 	// Say which baseline was used, every run. `stark sync` prints its source for the same

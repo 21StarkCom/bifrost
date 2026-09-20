@@ -43,6 +43,13 @@ jobs:
       # fetch had run (STARK-8161). Depth 1 is enough — a shallow commit carries its
       # whole tree. Keep this step: `prevIndexJSON` now refuses rather than passing when
       # the ref is missing, so dropping it turns the job red rather than quiet.
+      #
+      # This arms the `pull_request` run. The `push: [main]` run of this same job stays
+      # vacuous and always will be: after a merge, HEAD and `origin/main` are the same
+      # commit, so previous == current for every row no matter what the change did. That
+      # is correct — the question "did this change publish content under an unchanged
+      # version" can only be answered before it lands — but do not read a green
+      # `check-bumps` on a `main` push as evidence of anything.
       - name: fetch main (the check-bumps baseline)
         run: git fetch --no-tags --depth=1 origin +refs/heads/main:refs/remotes/origin/main
         working-directory: .

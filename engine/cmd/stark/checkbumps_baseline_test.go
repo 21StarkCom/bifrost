@@ -71,6 +71,34 @@ func TestCheckBumpsRefusesWhenOriginMainIsUnfetched(t *testing.T) {
 	}
 }
 
+// The probe coming back empty is not the same as there being nothing to compare against.
+// A real checkout whose git cannot ANSWER — not on PATH, `detected dubious ownership`
+// under a container or a foreign uid, a corrupt object store — must refuse too: read as
+// "no remote configured" it takes the HEAD path, finds nothing there either, and prints
+// `OK` having measured no baseline at all, which is STARK-8161 one layer down. Only git's
+// ability to answer is removed here; the `.git` is still on disk.
+func TestCheckBumpsRefusesWhenGitCannotAnswer(t *testing.T) {
+	root := seedBaselineRepo(t) // seeds through git, so do this BEFORE PATH loses it
+	t.Setenv("PATH", t.TempDir())
+
+	if _, ref, ok := prevIndexJSON(root); ok {
+		t.Fatalf("a checkout git cannot read must yield no baseline; got ref=%q", ref)
+	}
+
+	var code int
+	out := captureStdout(t, func() { code = runCheckBumps(filepath.Join(root, "catalog"), root) })
+	if code == 0 {
+		t.Fatalf("want a refusal (nonzero), got 0 with output:\n%s", out)
+	}
+	if strings.Contains(out, "OK:") {
+		t.Fatalf("a gate whose baseline probe failed must not report OK; output:\n%s", out)
+	}
+	// Name git's OWN reason, not a bare "it failed" — the operator cannot act on the latter.
+	if !strings.Contains(out, "git not found on PATH") {
+		t.Fatalf("the refusal must carry git's own reason; output:\n%s", out)
+	}
+}
+
 // With `origin/main` present the same repo must go back to really measuring: the stale
 // committed digest is a violation and has to be reported.
 func TestCheckBumpsReadsOriginMainWhenItResolves(t *testing.T) {
@@ -88,6 +116,12 @@ func TestCheckBumpsReadsOriginMainWhenItResolves(t *testing.T) {
 	out := captureStdout(t, func() { code = runCheckBumps(filepath.Join(root, "catalog"), root) })
 	if code == 0 {
 		t.Fatalf("stale committed digest at an unchanged version must violate; got 0:\n%s", out)
+	}
+	// Name the violation, not just a nonzero exit: runCheckBumps also returns 1 for a load
+	// error, an unparseable index and a digest error, so "exit != 0" alone would keep this
+	// green on a run that never reached bumps.Check at all.
+	if !strings.Contains(out, "demo/command/hello") {
+		t.Fatalf("want the stale artifact reported as the violation; output:\n%s", out)
 	}
 	if !strings.Contains(out, "baseline origin/main") {
 		t.Fatalf("every run must name the baseline it used; output:\n%s", out)
@@ -110,6 +144,9 @@ func TestCheckBumpsStillFallsBackToHeadWithNoOrigin(t *testing.T) {
 	if code == 0 {
 		t.Fatalf("stale committed digest at an unchanged version must violate; got 0:\n%s", out)
 	}
+	if !strings.Contains(out, "demo/command/hello") {
+		t.Fatalf("want the stale artifact reported as the violation, not some other exit-1 path; output:\n%s", out)
+	}
 }
 
 // The fix has two halves and each is useless alone: the engine refuses without a baseline,
@@ -121,17 +158,47 @@ func TestCIFetchesTheCheckBumpsBaseline(t *testing.T) {
 		t.Fatalf("read ci.yml: %v", err)
 	}
 	ci := string(b)
+	// Scoped to the ONE job, not the whole file: each job gets its own runner and its own
+	// checkout, so a fetch parked in `secrets` or `actionlint` writes the ref into a tree
+	// the gate never sees while a whole-file ordering check still reads as satisfied —
+	// green test, dead gate, which is the exact failure mode this file exists to pin.
+	job := workflowJob(t, ci, "engine")
 	// The refspec, not just the word "fetch": a fetch that does not write
 	// refs/remotes/origin/main leaves the gate exactly as dead as no fetch at all.
-	if !strings.Contains(ci, "refs/heads/main:refs/remotes/origin/main") {
-		t.Fatalf("ci.yml must fetch main into refs/remotes/origin/main before check-bumps runs; got:\n%s", ci)
+	fetchAt := strings.Index(job, "refs/heads/main:refs/remotes/origin/main")
+	if fetchAt < 0 {
+		t.Fatalf("ci.yml's `engine` job must fetch main into refs/remotes/origin/main; job:\n%s", job)
 	}
-	fetchAt := strings.Index(ci, "refs/heads/main:refs/remotes/origin/main")
-	gateAt := strings.Index(ci, "check-bumps ../catalog")
+	gateAt := strings.Index(job, "check-bumps ../catalog")
 	if gateAt < 0 {
-		t.Fatal("ci.yml no longer runs check-bumps")
+		t.Fatal("ci.yml's `engine` job no longer runs check-bumps")
 	}
 	if fetchAt > gateAt {
 		t.Fatal("the baseline fetch must come BEFORE the check-bumps step")
 	}
+}
+
+// workflowJob returns the body of one `jobs:` entry — everything from `  <name>:` up to
+// the next key at that same two-space indent. Indentation rather than a YAML parse keeps
+// this test free of a dependency, and the engine has no workflow reader to reuse.
+func workflowJob(t *testing.T, workflow, name string) string {
+	t.Helper()
+	lines := strings.Split(workflow, "\n")
+	start := -1
+	for i, ln := range lines {
+		if ln == "  "+name+":" {
+			start = i + 1
+			break
+		}
+	}
+	if start < 0 {
+		t.Fatalf("ci.yml has no `%s` job", name)
+	}
+	for i := start; i < len(lines); i++ {
+		ln := lines[i]
+		if len(ln) > 2 && ln[0] == ' ' && ln[1] == ' ' && ln[2] != ' ' && strings.HasSuffix(strings.TrimSpace(ln), ":") {
+			return strings.Join(lines[start:i], "\n")
+		}
+	}
+	return strings.Join(lines[start:], "\n")
 }
