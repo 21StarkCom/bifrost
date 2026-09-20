@@ -297,17 +297,30 @@ func newSyncCmd() *cobra.Command {
 	var check bool
 	cmd := &cobra.Command{
 		Use:   "sync [catalog-dir]",
-		Short: "Regenerate catalog artifacts + vendor/ snapshot from a stark-skills checkout (--check = drift gate)",
+		Short: "Regenerate catalog artifacts + vendor/ snapshot from the source tree (--check = drift gate)",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if from == "" {
-				return fmt.Errorf("--from <stark-skills checkout> is required")
-			}
 			catalogDir := "catalog"
 			if len(args) == 1 {
 				catalogDir = args[0]
 			}
-			code := runSync(from, catalogDir, filepath.Dir(filepath.Clean(catalogDir)), check)
+			repoRoot := filepath.Dir(filepath.Clean(catalogDir))
+			// `--from` defaults to this repo's own root. Since STARK-8249 the source
+			// tree sync reads (skill/, tools/, standards/, global/, scripts/, data/,
+			// runtime-overrides/) lives HERE, not in a sibling stark-skills checkout,
+			// so the common invocation carries no --from at all. The flag survives
+			// because the sunset is staged: while stark-skills still exists, a regen
+			// from that tree has to stay expressible, and `publish.sh` still passes
+			// $STARK_SKILLS explicitly. An explicit --from always wins.
+			//
+			// Defaulting rather than erroring is what lets `sync --check` run as a
+			// bifrost CI gate with no checkout of another repo — the whole point of
+			// the epic, and the gate that catches source/catalog drift once both
+			// live in one tree.
+			if from == "" {
+				from = repoRoot
+			}
+			code := runSync(from, catalogDir, repoRoot, check)
 			switch code {
 			case 0:
 				return nil
@@ -318,7 +331,7 @@ func newSyncCmd() *cobra.Command {
 			}
 		},
 	}
-	cmd.Flags().StringVar(&from, "from", "", "path to a stark-skills checkout (source of truth)")
+	cmd.Flags().StringVar(&from, "from", "", "path to the source tree (default: the repo root holding the catalog)")
 	cmd.Flags().BoolVar(&check, "check", false, "verify committed catalog+vendor match a fresh sync (CI drift gate)")
 	return cmd
 }

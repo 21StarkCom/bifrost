@@ -125,3 +125,73 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: rhysd/actionlint@03d0035246f3e81f36aed592ffb4bebf33a03106 # v1.7.7
+
+  # ── The TypeScript suite, arriving with tools/ (STARK-8249) ─────────────────
+  #
+  # `tools/` moved here from stark-skills, where these two jobs were `tests.yml`
+  # and both were REQUIRED contexts. Nothing ran them in the gap between the two
+  # repos, so they come over in the same change that brings the code.
+  #
+  # NOT required contexts here yet: phase 1 adds the jobs, phase 2 (STARK-8250)
+  # appends them to the ruleset. They report on every PR meanwhile, so a red one
+  # is visible before it is blocking.
+  #
+  # Neither job sets a job-level `name:`, deliberately — that leaves the reported
+  # contexts as the bare job ids `test` and `typecheck`, the same strings
+  # stark-skills' ruleset required. Adding a `name:` later renames the context and
+  # orphans the requirement, which blocks every merge on "Expected — waiting for
+  # status" until someone edits the ruleset back.
+  #
+  # Do NOT add `if:`, a draft guard, or a `paths:` filter to either job. A guarded
+  # job reports `skipped`, GitHub counts `skipped` as SATISFYING a required check
+  # and renders it identically to a pass, and only a new commit clears it. That is
+  # how stark-skills#877 merged with its suite never having executed.
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          # Type-stripping runs `.ts` with no build step but is only ON by default
+          # from Node 23.6; `node:sqlite` (tools/stark_persona_lib.ts) also needs a
+          # recent runtime. 24 is the oldest LTS carrying both, and matches the
+          # `engines.node` floor in tools/package.json.
+          node-version: '24'
+      # No `npm ci` on this path: every import in the suite is a `node:` builtin.
+      # tools/'s only devDependencies (typescript, @types/node) belong to the
+      # typecheck job below. `npm test` = ./check-rest-only.sh && node --test *.test.ts.
+      - name: npm test (tools/)
+        working-directory: tools
+        run: npm test
+
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: tools/package-lock.json
+      - name: install typecheck deps
+        working-directory: tools
+        run: npm ci
+      # Its own job because `node --test` does NOT typecheck: the suite runs `.ts`
+      # through Node's type-stripping, which ERASES annotations rather than checking
+      # them. A wrong generic or an unsound cast passes every test in `test`.
+      #
+      # NEVER put `continue-on-error: true` on this step. It carried that flag in
+      # stark-skills while the check was advisory, which made the CHECK report
+      # SUCCESS whether or not `tsc` passed — errors visible only in the step log.
+      # That is why the check could not simply be added to a ruleset: requiring a
+      # `continue-on-error` step satisfies the gate unconditionally.
+      #
+      # `npm run typecheck`, NOT `npx tsc -p .`: with no TTY on stdin, `npx`
+      # downloads a missing package from the registry instead of failing, so a
+      # dropped devDependency would move this gate onto an unpinned latest
+      # TypeScript without a word. `npm run` resolves the locked local binary or errors.
+      - name: npm run typecheck (tools/)
+        working-directory: tools
+        run: npm run typecheck

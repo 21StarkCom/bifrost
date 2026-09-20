@@ -1,0 +1,570 @@
+// Tests for `tools/self_healer_lib.ts` — port of `scripts/self_healer.py`
+// (which had ZERO tests for a module that auto-applies fixes to files).
+// Coverage focuses on the gate ladder: auto-mode allowlist (effective-mode
+// downgrade) → refresh_token refusal → guard → session cap → circuit breaker →
+// suggest/auto branch → execute → outcome recorded → circuit updated → alerts
+// on critical transitions.
+
+import { strict as assert } from "node:assert";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+
+import {
+  type CircuitState,
+  type HealerPattern,
+  isCircuitTripped,
+  loadCircuits,
+  readSession,
+  recordCircuitFailure,
+  recordCircuitSuccess,
+  runHeal,
+  sessionCount,
+  sessionIncrement,
+  writeCircuits,
+  writeSession,
+} from "./self_healer_lib.ts";
+
+function tmp(): string {
+  return fs.mkdtempSync(path.join(os.tmpdir(), "self-healer-test-"));
+}
+
+interface TestCtx {
+  dir: string;
+  patternsPath: string;
+  circuitsPath: string;
+  sessionPath: string;
+  logPath: string;
+  /** alert_delivery_lib base dir — sibling of the healer state files. */
+  alertsBaseDir: string;
+  env: NodeJS.ProcessEnv;
+}
+
+function ctx(): TestCtx {
+  const dir = tmp();
+  const alertsBaseDir = path.join(dir, "alerts");
+  return {
+    dir,
+    patternsPath: path.join(dir, "healer_patterns.json"),
+    circuitsPath: path.join(dir, "healer-circuits.json"),
+    sessionPath: path.join(dir, "healer-session.json"),
+    logPath: path.join(dir, "healer.jsonl"),
+    alertsBaseDir,
+    env: {
+      ...process.env,
+      CLAUDE_SESSION_ID: "self-healer-test",
+    },
+  };
+}
+
+function pattern(overrides: Partial<HealerPattern> = {}): HealerPattern {
+  return {
+    id: "test-pattern",
+    action: "release_stale_lock",
+    requires_confirmation: false,
+    ...overrides,
+  };
+}
+
+function writePatterns(c: TestCtx, patterns: HealerPattern[]): void {
+  fs.writeFileSync(c.patternsPath, JSON.stringify(patterns));
+}
+
+function logLines(c: TestCtx): Array<Record<string, unknown>> {
+  if (!fs.existsSync(c.logPath)) return [];
+  return fs
+    .readFileSync(c.logPath, "utf8")
+    .split("\n")
+    .filter((l) => l.length > 0)
+    .map((l) => JSON.parse(l));
+}
+
+function alertMarkers(c: TestCtx): string[] {
+  if (!fs.existsSync(c.alertsBaseDir)) return [];
+  return fs
+    .readdirSync(c.alertsBaseDir)
+    .filter((n) => n.startsWith("alert-") && n.endsWith(".marker"))
+    .sort();
+}
+
+// ---------------------------------------------------------------------------
+// Session-counter helpers
+// ---------------------------------------------------------------------------
+
+test("readSession: returns {} when file missing", () => {
+  assert.deepEqual(readSession(path.join(tmp(), "missing.json")), {});
+});
+
+test("writeSession + readSession: roundtrip", () => {
+  const c = ctx();
+  writeSession({ p1: 3 }, c.sessionPath);
+  assert.deepEqual(readSession(c.sessionPath), { p1: 3 });
+});
+
+test("sessionCount: returns 0 for unseen pattern", () => {
+  const c = ctx();
+  assert.equal(sessionCount("nope", c.sessionPath), 0);
+});
+
+test("sessionIncrement: increments and persists", () => {
+  const c = ctx();
+  sessionIncrement("p1", c.sessionPath);
+  sessionIncrement("p1", c.sessionPath);
+  sessionIncrement("p2", c.sessionPath);
+  assert.equal(sessionCount("p1", c.sessionPath), 2);
+  assert.equal(sessionCount("p2", c.sessionPath), 1);
+});
+
+test("writeSession: leaves no .tmp behind (atomic)", () => {
+  const c = ctx();
+  writeSession({ p1: 1 }, c.sessionPath);
+  const dir = path.dirname(c.sessionPath);
+  const leftovers = fs.readdirSync(dir).filter((n) => n.includes(".tmp"));
+  assert.deepEqual(leftovers, []);
+});
+
+// ---------------------------------------------------------------------------
+// Circuit-breaker helpers
+// ---------------------------------------------------------------------------
+
+test("loadCircuits: returns {} when file missing", () => {
+  assert.deepEqual(loadCircuits(path.join(tmp(), "missing.json")), {});
+});
+
+test("writeCircuits: roundtrips state with last_reset_at preserved", () => {
+  const c = ctx();
+  const state: Record<string, CircuitState> = {
+    p1: {
+      consecutive_failures: 2,
+      tripped_at: "2026-05-18T10:00:00Z",
+      ever_tripped: true,
+      last_reset_at: "2026-05-17T08:00:00Z",
+    },
+  };
+  writeCircuits(state, c.circuitsPath);
+  assert.deepEqual(loadCircuits(c.circuitsPath), state);
+});
+
+test("writeCircuits: leaves no .tmp behind (atomic)", () => {
+  const c = ctx();
+  writeCircuits({ p1: {} }, c.circuitsPath);
+  const dir = path.dirname(c.circuitsPath);
+  const leftovers = fs.readdirSync(dir).filter((n) => n.includes(".tmp"));
+  assert.deepEqual(leftovers, []);
+});
+
+test("isCircuitTripped: true when tripped within 24h", () => {
+  const c = ctx();
+  const now = new Date("2026-05-18T12:00:00Z");
+  writeCircuits(
+    { p1: { tripped_at: "2026-05-18T11:00:00Z" } },
+    c.circuitsPath,
+  );
+  assert.equal(isCircuitTripped("p1", 3, { now, circuitsPath: c.circuitsPath }), true);
+});
+
+test("isCircuitTripped: false when trip was > 24h ago", () => {
+  const c = ctx();
+  const now = new Date("2026-05-18T12:00:00Z");
+  writeCircuits(
+    { p1: { tripped_at: "2026-05-15T11:00:00Z" } },
+    c.circuitsPath,
+  );
+  assert.equal(isCircuitTripped("p1", 3, { now, circuitsPath: c.circuitsPath }), false);
+});
+
+test("isCircuitTripped: true when consecutive_failures >= threshold, even without tripped_at", () => {
+  const c = ctx();
+  writeCircuits({ p1: { consecutive_failures: 3 } }, c.circuitsPath);
+  assert.equal(
+    isCircuitTripped("p1", 3, { now: new Date(), circuitsPath: c.circuitsPath }),
+    true,
+  );
+});
+
+test("isCircuitTripped: false for unseen pattern", () => {
+  const c = ctx();
+  assert.equal(
+    isCircuitTripped("unseen", 3, { now: new Date(), circuitsPath: c.circuitsPath }),
+    false,
+  );
+});
+
+test("recordCircuitFailure: increments and sets tripped_at on threshold", () => {
+  const c = ctx();
+  const now = new Date("2026-05-18T12:00:00Z");
+  // 1st: increment, not tripped
+  assert.equal(
+    recordCircuitFailure("p1", 3, { now, circuitsPath: c.circuitsPath }),
+    false,
+  );
+  assert.equal(loadCircuits(c.circuitsPath).p1.consecutive_failures, 1);
+  // 2nd: still not
+  recordCircuitFailure("p1", 3, { now, circuitsPath: c.circuitsPath });
+  // 3rd: trips
+  assert.equal(
+    recordCircuitFailure("p1", 3, { now, circuitsPath: c.circuitsPath }),
+    true,
+  );
+  const state = loadCircuits(c.circuitsPath).p1;
+  assert.equal(state.consecutive_failures, 3);
+  assert.equal(state.tripped_at, "2026-05-18T12:00:00Z");
+  assert.equal(state.ever_tripped, true);
+});
+
+test("recordCircuitFailure: does NOT re-trip an already-tripped circuit", () => {
+  const c = ctx();
+  const now = new Date("2026-05-18T12:00:00Z");
+  writeCircuits(
+    {
+      p1: {
+        consecutive_failures: 3,
+        tripped_at: "2026-05-18T10:00:00Z",
+        ever_tripped: true,
+      },
+    },
+    c.circuitsPath,
+  );
+  // Already tripped — newly_tripped must be false even though we cross threshold again.
+  assert.equal(
+    recordCircuitFailure("p1", 3, { now, circuitsPath: c.circuitsPath }),
+    false,
+  );
+});
+
+test("recordCircuitSuccess: clears tripped_at + failures, stamps last_reset_at", () => {
+  const c = ctx();
+  const now = new Date("2026-05-18T12:00:00Z");
+  writeCircuits(
+    {
+      p1: {
+        consecutive_failures: 3,
+        tripped_at: "2026-05-18T10:00:00Z",
+        ever_tripped: true,
+      },
+    },
+    c.circuitsPath,
+  );
+  recordCircuitSuccess("p1", { now, circuitsPath: c.circuitsPath });
+  const state = loadCircuits(c.circuitsPath).p1;
+  assert.equal(state.consecutive_failures, 0);
+  assert.equal(state.tripped_at, null);
+  assert.equal(state.last_reset_at, "2026-05-18T12:00:00Z");
+  // ever_tripped is historical — preserved.
+  assert.equal(state.ever_tripped, true);
+});
+
+// ---------------------------------------------------------------------------
+// runHeal — full flow tests, one per gate
+// ---------------------------------------------------------------------------
+
+function baseOpts(c: TestCtx) {
+  return {
+    patternsPath: c.patternsPath,
+    sessionPath: c.sessionPath,
+    circuitsPath: c.circuitsPath,
+    logPath: c.logPath,
+    alertsBaseDir: c.alertsBaseDir,
+    env: c.env,
+    now: new Date("2026-05-18T12:00:00Z"),
+  };
+}
+
+test("runHeal: missing pattern id returns error result with code 1", () => {
+  const c = ctx();
+  writePatterns(c, [pattern({ id: "p1" })]);
+  fs.writeFileSync(path.join(c.dir, "stderr.log"), "some error");
+  const r = runHeal({
+    ...baseOpts(c),
+    patternId: "nope",
+    stderrFile: path.join(c.dir, "stderr.log"),
+    mode: "suggest",
+  });
+  assert.equal(r.exit, 1);
+  assert.ok(r.result.error);
+});
+
+test("runHeal: missing stderr-file returns error result with code 1", () => {
+  const c = ctx();
+  writePatterns(c, [pattern()]);
+  const r = runHeal({
+    ...baseOpts(c),
+    patternId: "test-pattern",
+    stderrFile: "/does/not/exist",
+    mode: "suggest",
+  });
+  assert.equal(r.exit, 1);
+  assert.ok(r.result.error);
+});
+
+// NOTE the mode: this case pins the AUTO refusal only. Since the refusal was narrowed to
+// the effective mode, suggest mode no longer short-circuits — it runs the guard and reads
+// the session budget like any other pattern. The next test pins that widened surface; an
+// unqualified title here would read as a claim this file no longer makes.
+test("runHeal: an AUTO-mode authentication action skips commands, budgets, and circuit accounting", t => {
+  const c = ctx();
+  t.after(() => fs.rmSync(c.dir, { recursive: true, force: true }));
+  const marker = path.join(c.dir, "auth-verification-ran");
+  const command = `touch '${marker.replace(/'/g, "'\\''")}'`;
+  writePatterns(c, [pattern({ action: "refresh_token", guard: command, verify_command: command, max_per_session: 1 })]);
+  fs.writeFileSync(path.join(c.dir, "stderr.log"), "err");
+  for (let i = 0; i < 3; i++) {
+    const result = runHeal({ ...baseOpts(c), patternId: "test-pattern", stderrFile: path.join(c.dir, "stderr.log"),
+      mode: "auto", autoPatterns: ["test-pattern"] });
+    assert.equal(result.result.status, "skipped");
+    assert.equal(result.result.reason, "operator_action_required");
+    assert.equal(result.result.verify_passed, false);
+  }
+  assert.equal(fs.existsSync(marker), false);
+  assert.equal(sessionCount("test-pattern", c.sessionPath), 0);
+  assert.equal(fs.existsSync(c.circuitsPath), false);
+  assert.equal(alertMarkers(c).length, 0);
+  assert.deepEqual(logLines(c).map(row => row.status), ["skipped", "skipped", "skipped"]);
+});
+
+test("runHeal: an authentication action still SUGGESTS, so its canary history is not always empty", t => {
+  const c = ctx();
+  t.after(() => fs.rmSync(c.dir, { recursive: true, force: true }));
+  // The guard and verify_command are the SAME shape as the auto-mode case above, so the
+  // two markers separate what suggest mode now does from what it still must not do.
+  const guardMarker = path.join(c.dir, "guard-ran");
+  const verifyMarker = path.join(c.dir, "verify-ran");
+  const touch = (p: string) => `touch '${p.replace(/'/g, "'\\''")}'`;
+  writePatterns(c, [pattern({ action: "refresh_token", requires_confirmation: true,
+    guard: touch(guardMarker), verify_command: touch(verifyMarker) })]);
+  fs.writeFileSync(path.join(c.dir, "stderr.log"), "err");
+  const opts = { ...baseOpts(c), patternId: "test-pattern", stderrFile: path.join(c.dir, "stderr.log") };
+
+  // Explicit suggest mode.
+  const suggested = runHeal({ ...opts, mode: "suggest" });
+  assert.equal(suggested.result.status, "suggested");
+  assert.equal(suggested.result.requires_confirmation, true);
+
+  // And auto mode DOWNGRADED to suggest, because the pattern is not in auto_patterns.
+  // The gate keyed on the raw action, so both of these returned {status: "skipped"} and
+  // wrote a `skipped` row. computeStats counts only `suggested` rows as successful_suggests,
+  // so the pattern's suggest history stayed permanently empty and it could never be
+  // evaluated for promotion at all — the promotion pipeline had a hole, not a guard.
+  const downgraded = runHeal({ ...opts, mode: "auto", autoPatterns: ["some-other-pattern"] });
+  assert.equal(downgraded.result.status, "suggested");
+
+  // The auto refusal is unchanged: an authentication repair is never applied automatically.
+  const refused = runHeal({ ...opts, mode: "auto", autoPatterns: ["test-pattern"] });
+  assert.equal(refused.result.status, "skipped");
+  assert.equal(refused.result.reason, "operator_action_required");
+
+  assert.deepEqual(logLines(c).map((e) => e.status), ["suggested", "suggested", "skipped"]);
+  // Two rows the canary can actually count.
+  assert.equal(logLines(c).filter((e) => e.status === "suggested").length, 2);
+
+  // The widened surface, stated out loud: taking the ordinary suggest path means the
+  // pattern's own guard predicate now RUNS for an authentication pattern, where the old
+  // blanket refusal returned before it. That is the price of a real suggest history and is
+  // safe because a guard is a precondition check — but the repair itself still never runs,
+  // which is the invariant that actually matters.
+  assert.equal(fs.existsSync(guardMarker), true, "suggest mode evaluates the pattern's guard");
+  assert.equal(fs.existsSync(verifyMarker), false, "an authentication repair is never executed");
+});
+
+test("runHeal: guard command failure → aborted with reason=guard_failed", () => {
+  const c = ctx();
+  writePatterns(c, [pattern({ guard: "false" })]); // always exit 1
+  fs.writeFileSync(path.join(c.dir, "stderr.log"), "err");
+  const r = runHeal({
+    ...baseOpts(c),
+    patternId: "test-pattern",
+    stderrFile: path.join(c.dir, "stderr.log"),
+    mode: "auto",
+  });
+  assert.equal(r.exit, 0);
+  assert.equal(r.result.status, "aborted");
+  assert.equal(r.result.reason, "guard_failed");
+  // Logged with status=aborted.
+  const aborted = logLines(c).filter((e) => e.status === "aborted");
+  assert.equal(aborted.length, 1);
+});
+
+test("runHeal: max_per_session reached → aborted with reason=max_per_session_reached", () => {
+  const c = ctx();
+  writePatterns(c, [pattern({ max_per_session: 2 })]);
+  fs.writeFileSync(path.join(c.dir, "stderr.log"), "err");
+  writeSession({ "test-pattern": 2 }, c.sessionPath);
+  const r = runHeal({
+    ...baseOpts(c),
+    patternId: "test-pattern",
+    stderrFile: path.join(c.dir, "stderr.log"),
+    mode: "auto",
+    autoPatterns: ["test-pattern"],
+  });
+  assert.equal(r.exit, 0);
+  assert.equal(r.result.status, "aborted");
+  assert.equal(r.result.reason, "max_per_session_reached");
+});
+
+test("runHeal: --mode auto downgrades to suggest when pattern not in auto_patterns", () => {
+  const c = ctx();
+  writePatterns(c, [pattern()]);
+  fs.writeFileSync(path.join(c.dir, "stderr.log"), "err");
+  const r = runHeal({
+    ...baseOpts(c),
+    patternId: "test-pattern",
+    stderrFile: path.join(c.dir, "stderr.log"),
+    mode: "auto",
+    autoPatterns: [], // pattern NOT promoted
+  });
+  assert.equal(r.exit, 0);
+  assert.equal(r.result.status, "suggested");
+  // Log entry confirms the downgrade.
+  const logged = logLines(c).find((e) => e.status === "suggested");
+  assert.equal(logged?.mode, "suggest");
+});
+
+test("runHeal: --mode auto + tripped circuit → skipped with reason=circuit_open + emits warning alert", () => {
+  const c = ctx();
+  writePatterns(c, [pattern()]);
+  fs.writeFileSync(path.join(c.dir, "stderr.log"), "err");
+  writeCircuits(
+    { "test-pattern": { tripped_at: "2026-05-18T11:00:00Z" } },
+    c.circuitsPath,
+  );
+  const r = runHeal({
+    ...baseOpts(c),
+    patternId: "test-pattern",
+    stderrFile: path.join(c.dir, "stderr.log"),
+    mode: "auto",
+    autoPatterns: ["test-pattern"],
+  });
+  assert.equal(r.exit, 0);
+  assert.equal(r.result.status, "skipped");
+  assert.equal(r.result.reason, "circuit_open");
+  // A warning-level alert was emitted — JSONL entry exists in alerts/
+  const alertsLog = path.join(c.alertsBaseDir, "alerts.jsonl");
+  assert.ok(fs.existsSync(alertsLog));
+  const lastAlert = JSON.parse(fs.readFileSync(alertsLog, "utf8").trim().split("\n").pop()!);
+  assert.equal(lastAlert.level, "warning");
+  assert.equal(lastAlert.source, "self_healer");
+  // Warning level should NOT create a marker file.
+  assert.equal(alertMarkers(c).length, 0);
+});
+
+test("runHeal: --mode suggest → emits a 'suggested' result + log", () => {
+  const c = ctx();
+  writePatterns(c, [pattern()]);
+  fs.writeFileSync(path.join(c.dir, "stderr.log"), "err");
+  const r = runHeal({
+    ...baseOpts(c),
+    patternId: "test-pattern",
+    stderrFile: path.join(c.dir, "stderr.log"),
+    mode: "suggest",
+  });
+  assert.equal(r.exit, 0);
+  assert.equal(r.result.status, "suggested");
+});
+
+test("runHeal: --mode auto + requires_confirmation → skipped (won't auto-apply)", () => {
+  const c = ctx();
+  writePatterns(c, [pattern({ requires_confirmation: true })]);
+  fs.writeFileSync(path.join(c.dir, "stderr.log"), "err");
+  const r = runHeal({
+    ...baseOpts(c),
+    patternId: "test-pattern",
+    stderrFile: path.join(c.dir, "stderr.log"),
+    mode: "auto",
+    autoPatterns: ["test-pattern"],
+  });
+  assert.equal(r.exit, 0);
+  assert.equal(r.result.status, "skipped");
+});
+
+test("runHeal: --mode auto + applied → success path records circuit success", () => {
+  const c = ctx();
+  // The default 'release_stale_lock' action always returns success in
+  // the Python; verify the TS preserves that quirk.
+  writePatterns(c, [pattern({ action: "release_stale_lock", verify_command: "true" })]);
+  fs.writeFileSync(path.join(c.dir, "stderr.log"), "err");
+  // Plant some prior failures so we can verify they get cleared.
+  writeCircuits(
+    { "test-pattern": { consecutive_failures: 2 } },
+    c.circuitsPath,
+  );
+  const r = runHeal({
+    ...baseOpts(c),
+    patternId: "test-pattern",
+    stderrFile: path.join(c.dir, "stderr.log"),
+    mode: "auto",
+    autoPatterns: ["test-pattern"],
+  });
+  assert.equal(r.exit, 0);
+  assert.equal(r.result.status, "applied");
+  assert.equal(r.result.verify_passed, true);
+  // Circuit reset.
+  const state = loadCircuits(c.circuitsPath)["test-pattern"];
+  assert.equal(state.consecutive_failures, 0);
+  assert.equal(state.tripped_at, null);
+});
+
+test("runHeal: --mode auto + verify fails → records circuit failure, no trip yet", () => {
+  const c = ctx();
+  writePatterns(c, [pattern({ action: "release_stale_lock", verify_command: "false" })]);
+  fs.writeFileSync(path.join(c.dir, "stderr.log"), "err");
+  const r = runHeal({
+    ...baseOpts(c),
+    patternId: "test-pattern",
+    stderrFile: path.join(c.dir, "stderr.log"),
+    mode: "auto",
+    autoPatterns: ["test-pattern"],
+    threshold: 3,
+  });
+  assert.equal(r.exit, 0);
+  assert.equal(r.result.status, "applied");
+  assert.equal(r.result.verify_passed, false);
+  const state = loadCircuits(c.circuitsPath)["test-pattern"];
+  assert.equal(state.consecutive_failures, 1);
+});
+
+test("runHeal: third consecutive verify-fail trips the circuit AND emits a CRITICAL alert (marker)", () => {
+  const c = ctx();
+  writePatterns(c, [pattern({ action: "release_stale_lock", verify_command: "false" })]);
+  fs.writeFileSync(path.join(c.dir, "stderr.log"), "err");
+  for (let i = 0; i < 3; i++) {
+    runHeal({
+      ...baseOpts(c),
+      patternId: "test-pattern",
+      stderrFile: path.join(c.dir, "stderr.log"),
+      mode: "auto",
+      autoPatterns: ["test-pattern"],
+      threshold: 3,
+    });
+  }
+  // After the 3rd failure the circuit trips; alert delivery dropped a marker.
+  assert.equal(alertMarkers(c).length, 1);
+  // And the alerts.jsonl log carries the critical-level entry.
+  const alertsLog = path.join(c.alertsBaseDir, "alerts.jsonl");
+  const lines = fs.readFileSync(alertsLog, "utf8").trim().split("\n");
+  const lastAlert = JSON.parse(lines[lines.length - 1]);
+  assert.equal(lastAlert.level, "critical");
+});
+
+test("runHeal: max_per_session counter bumps on every auto execution, pass or fail", () => {
+  // The counter tracks ATTEMPTS, not outcomes. The Python gated it on an
+  // `execution.success` flag, but every action it could reach returned true
+  // unconditionally, so the gate never fired; the flag was deleted rather than
+  // ported as decoration. A failing verify still spends budget — the circuit
+  // breaker, not the session cap, is what stops a broken pattern.
+  const c = ctx();
+  writePatterns(c, [
+    pattern({ action: "release_stale_lock", verify_command: "false", max_per_session: 2 }),
+  ]);
+  fs.writeFileSync(path.join(c.dir, "stderr.log"), "err");
+  runHeal({
+    ...baseOpts(c),
+    patternId: "test-pattern",
+    stderrFile: path.join(c.dir, "stderr.log"),
+    mode: "auto",
+    autoPatterns: ["test-pattern"],
+    threshold: 99, // prevent circuit trip from interfering
+  });
+  // `verify_command: "false"` → verify_passed is false, and the counter still bumps.
+  assert.equal(sessionCount("test-pattern", c.sessionPath), 1);
+});

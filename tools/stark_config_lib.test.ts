@@ -1,0 +1,417 @@
+// Tests for `tools/stark_config_lib.ts` — the minimal config-loader
+// subset preflight depends on. Covers the security model (locked-fields
+// and the deep-merge semantics.
+
+import { strict as assert } from "node:assert";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+import test from "node:test";
+
+import {
+  DEFAULT_MODELS,
+  DEFAULT_MODEL_LIMITS,
+  DEFAULT_MODEL_RATES,
+  DEFAULT_RUNTIME,
+  discoverConfig,
+  getContextCompactionConfig,
+  getCostConfig,
+  getModelId,
+  getModelLimit,
+  getModelLimits,
+  getModelRates,
+  getModelsConfig,
+  getRuntimeConfig,
+  getSelfHealConfig,
+  getSkillActivationConfig,
+  getValidationGateConfig,
+  isAgentEnabled,
+  loadGlobalConfig,
+} from "./stark_config_lib.ts";
+
+async function withScratchHome<T>(fn: (home: string) => Promise<T> | T): Promise<T> {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "stark-config-test-"));
+  const prev = process.env["HOME"];
+  process.env["HOME"] = scratch;
+  try {
+    return await fn(scratch);
+  } finally {
+    if (prev === undefined) delete process.env["HOME"];
+    else process.env["HOME"] = prev;
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+function writeGlobalConfig(home: string, config: unknown): void {
+  const file = path.join(home, ".claude", "code-review", "config.json");
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(config));
+}
+
+// ---------------------------------------------------------------------------
+// loadGlobalConfig
+// ---------------------------------------------------------------------------
+
+test("loadGlobalConfig: returns {} when config file is absent", async () => {
+  await withScratchHome(() => {
+    assert.deepEqual(loadGlobalConfig(), {});
+  });
+});
+
+test("loadGlobalConfig: returns {} on parse error (and warns)", async () => {
+  await withScratchHome((home) => {
+    const file = path.join(home, ".claude", "code-review", "config.json");
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, "not-json{");
+    assert.deepEqual(loadGlobalConfig(), {});
+  });
+});
+
+test("loadGlobalConfig: returns {} when top-level value isn't an object", async () => {
+  await withScratchHome((home) => {
+    writeGlobalConfig(home, ["array", "not", "object"]);
+    assert.deepEqual(loadGlobalConfig(), {});
+  });
+});
+
+test("loadGlobalConfig: returns the parsed object when valid", async () => {
+  await withScratchHome((home) => {
+    writeGlobalConfig(home, { foo: 1, bar: { baz: 2 } });
+    assert.deepEqual(loadGlobalConfig(), { foo: 1, bar: { baz: 2 } });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getModelsConfig + isAgentEnabled
+// ---------------------------------------------------------------------------
+
+test("getModelsConfig: returns DEFAULT_MODELS when no global override", async () => {
+  await withScratchHome(() => {
+    const models = getModelsConfig();
+    assert.deepEqual(models, DEFAULT_MODELS);
+  });
+});
+
+test("getModelsConfig: partial override merges nested keys (preserves model_id)", async () => {
+  await withScratchHome((home) => {
+    writeGlobalConfig(home, {
+      models: { gemini: { enabled: false } },
+    });
+    const models = getModelsConfig();
+    assert.equal(models["gemini"]!.enabled, false);
+    // model_id from DEFAULT_MODELS must survive partial override.
+    assert.equal(models["gemini"]!.model_id, "gemini-3.1-pro-preview");
+    // Other agents untouched.
+    assert.equal(models["claude"]!.enabled, true);
+    assert.equal(models["codex"]!.enabled, true);
+  });
+});
+
+test("isAgentEnabled: returns false for unknown agent (defensive)", async () => {
+  await withScratchHome(() => {
+    assert.equal(isAgentEnabled("nonexistent"), false);
+  });
+});
+
+test("isAgentEnabled: reflects override", async () => {
+  await withScratchHome((home) => {
+    writeGlobalConfig(home, { models: { gemini: { enabled: false } } });
+    assert.equal(isAgentEnabled("gemini"), false);
+    assert.equal(isAgentEnabled("claude"), true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getModelRates
+// ---------------------------------------------------------------------------
+
+test("getModelRates: returns DEFAULT_MODEL_RATES when no override", async () => {
+  await withScratchHome(() => {
+    assert.deepEqual(getModelRates(), DEFAULT_MODEL_RATES);
+  });
+});
+
+test("getModelRates: extra entries from global config are merged in", async () => {
+  await withScratchHome((home) => {
+    writeGlobalConfig(home, {
+      model_rates: {
+        "custom-model": { input_per_1m_usd: 7, output_per_1m_usd: 21 },
+      },
+    });
+    const rates = getModelRates();
+    assert.deepEqual(rates["custom-model"], {
+      input_per_1m_usd: 7,
+      output_per_1m_usd: 21,
+    });
+    // Defaults survive.
+    assert.deepEqual(rates["gpt-5.5-pro"], {
+      input_per_1m_usd: 25,
+      output_per_1m_usd: 100,
+    });
+  });
+});
+
+test("getModelLimit: gpt-5.5-pro returns its verified 128k/1.05M limits", async () => {
+  await withScratchHome(() => {
+    assert.deepEqual(getModelLimit("gpt-5.5-pro"), {
+      max_output_tokens: 128_000,
+      context_window: 1_050_000,
+    });
+  });
+});
+
+test("getModelLimit: unknown model falls back to the conservative floor", async () => {
+  await withScratchHome(() => {
+    assert.deepEqual(getModelLimit("no-such-model"), DEFAULT_MODEL_LIMITS._fallback);
+  });
+});
+
+test("getModelLimits: global config override merges over defaults", async () => {
+  await withScratchHome((home) => {
+    writeGlobalConfig(home, {
+      model_limits: {
+        "custom-model": { max_output_tokens: 4096, context_window: 32000 },
+      },
+    });
+    const limits = getModelLimits();
+    assert.deepEqual(limits["custom-model"], {
+      max_output_tokens: 4096,
+      context_window: 32000,
+    });
+    // Verified default survives the merge.
+    assert.deepEqual(limits["gpt-5.5-pro"], {
+      max_output_tokens: 128_000,
+      context_window: 1_050_000,
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// discoverConfig — preflight only reads `agents`, so that's what we test
+// ---------------------------------------------------------------------------
+
+test("discoverConfig: returns empty when no config files anywhere", async () => {
+  await withScratchHome(async (home) => {
+    const prevCwd = process.cwd();
+    const sub = path.join(home, "empty-repo");
+    fs.mkdirSync(sub, { recursive: true });
+    process.chdir(sub);
+    try {
+      assert.deepEqual(discoverConfig(), {});
+    } finally {
+      process.chdir(prevCwd);
+    }
+  });
+});
+
+test("discoverConfig: repo .code-review/config.json wins over global", async () => {
+  await withScratchHome(async (home) => {
+    writeGlobalConfig(home, { agents: ["claude", "codex"] });
+    const repoDir = path.join(home, "fake-repo");
+    fs.mkdirSync(path.join(repoDir, ".code-review"), { recursive: true });
+    fs.writeFileSync(
+      path.join(repoDir, ".code-review", "config.json"),
+      JSON.stringify({ agents: ["codex"] }),
+    );
+    const prevCwd = process.cwd();
+    process.chdir(repoDir);
+    try {
+      const cfg = discoverConfig();
+      // Repo-level array replaces global (REPLACE field semantics).
+      assert.deepEqual(cfg["agents"], ["codex"]);
+    } finally {
+      process.chdir(prevCwd);
+    }
+  });
+});
+
+test("discoverConfig: keys not present at the more-specific layer fall through to global", async () => {
+  await withScratchHome(async (home) => {
+    writeGlobalConfig(home, { agents: ["claude"], other_key: "from-global" });
+    const repoDir = path.join(home, "fake-repo");
+    fs.mkdirSync(path.join(repoDir, ".code-review"), { recursive: true });
+    fs.writeFileSync(
+      path.join(repoDir, ".code-review", "config.json"),
+      JSON.stringify({ agents: ["codex"] }),
+    );
+    const prevCwd = process.cwd();
+    process.chdir(repoDir);
+    try {
+      const cfg = discoverConfig();
+      assert.equal(cfg["other_key"], "from-global");
+      assert.deepEqual(cfg["agents"], ["codex"]);
+    } finally {
+      process.chdir(prevCwd);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 3a — section accessors + getModelId (full config_loader.py port)
+// ---------------------------------------------------------------------------
+
+test("getModelId: returns the configured model id, null for unknown agent", async () => {
+  await withScratchHome(() => {
+    assert.equal(getModelId("claude"), "claude-opus-5[1m]");
+    assert.equal(getModelId("nonexistent"), null);
+  });
+});
+
+test("getModelId: reflects a global override", async () => {
+  await withScratchHome((home) => {
+    writeGlobalConfig(home, { models: { codex: { model_id: "gpt-9" } } });
+    assert.equal(getModelId("codex"), "gpt-9");
+  });
+});
+
+test("section accessors: return their DEFAULT_* when no override", async () => {
+  await withScratchHome(() => {
+    assert.deepEqual(getRuntimeConfig(), DEFAULT_RUNTIME);
+    assert.equal(getSelfHealConfig().mode, "suggest");
+    assert.equal(getValidationGateConfig().timeout_seconds, 60);
+    assert.equal(getSkillActivationConfig().max_suggestions, 2);
+    assert.equal(getContextCompactionConfig().checkpoint_interval_minutes, 15);
+    assert.equal(getCostConfig().hard_stop_usd, 100);
+  });
+});
+
+test("getRuntimeConfig: partial override merges, sibling defaults survive", async () => {
+  await withScratchHome((home) => {
+    writeGlobalConfig(home, { runtime: { max_concurrent_agents: 8 } });
+    const cfg = getRuntimeConfig();
+    assert.equal(cfg.max_concurrent_agents, 8);
+    // Untouched defaults survive the partial override.
+    assert.equal(cfg.lock_ttl_minutes, 30);
+    assert.equal(cfg.temp_dir_prefix, "stark-env");
+  });
+});
+
+test("getValidationGateConfig: surfaces extra keys like per_repo_commands", async () => {
+  await withScratchHome((home) => {
+    writeGlobalConfig(home, {
+      validation_gate: { per_repo_commands: { _default: { test_cmd: "npm test" } } },
+    });
+    const cfg = getValidationGateConfig() as Record<string, unknown>;
+    assert.deepEqual(cfg["per_repo_commands"], {
+      _default: { test_cmd: "npm test" },
+    });
+    // Default fields still present.
+    assert.equal((cfg as { timeout_seconds: number }).timeout_seconds, 60);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CLI — `--model <agent>` (was consumed by the retired stark-phase-execute goal loop)
+// ---------------------------------------------------------------------------
+
+test("CLI: --model prints the resolved id; unknown agent exits 1 with no stdout", () => {
+  const cli = path.join(import.meta.dirname, "stark_config_lib.ts");
+  const pluginRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cfg-cli-"));
+  fs.writeFileSync(
+    path.join(pluginRoot, "config.json"),
+    JSON.stringify({ models: { claude: { enabled: true, model_id: "test-model-id" } } }),
+  );
+  const run = (args: string[]) =>
+    spawnSync(process.execPath, ["--no-warnings", cli, ...args], {
+      encoding: "utf8",
+      env: { ...process.env, CLAUDE_PLUGIN_ROOT: pluginRoot },
+    });
+
+  const ok = run(["--model", "claude"]);
+  assert.equal(ok.status, 0);
+  assert.equal(ok.stdout.trim(), "test-model-id");
+
+  // Unknown agent → exit 1 and empty stdout, so a caller's
+  // `$(… || echo <fallback>)` guard actually fires.
+  const missing = run(["--model", "nonexistent"]);
+  assert.equal(missing.status, 1);
+  assert.equal(missing.stdout, "");
+
+  // --help stays side-effect-free and exits cleanly (skill smoke-test contract).
+  assert.equal(run(["--help"]).status, 0);
+});
+
+// --- stark-jury (T3) ------------------------------------------------------
+// The default jury panel is validated STRICTLY against BOTH model tables, so
+// a missing row turns the shipped default into a run that cannot start. The
+// gemini seat is the reason T3 adds `gemini-3.1-pro-preview` to each table.
+import { DEFAULT_PANEL_SPEC, validatePanelSpec } from "./jury_panel.ts";
+
+test("the DEFAULT jury panel validates against the shipped model tables", () => {
+  const result = validatePanelSpec(DEFAULT_PANEL_SPEC, {
+    rates: DEFAULT_MODEL_RATES,
+    limits: DEFAULT_MODEL_LIMITS,
+  });
+
+  assert.equal(result.ok, true, `default panel must validate: ${JSON.stringify(result)}`);
+  assert.ok(result.ok);
+  assert.deepEqual(
+    result.panel.seats.map((s) => s.model),
+    ["claude-opus-5", "gpt-5.6-sol", "gemini-3.1-pro-preview"],
+  );
+
+  // Strictness checks both tables, so every default model needs both rows.
+  for (const seat of result.panel.seats) {
+    assert.ok(DEFAULT_MODEL_RATES[seat.model], `${seat.model} missing from DEFAULT_MODEL_RATES`);
+    assert.ok(DEFAULT_MODEL_LIMITS[seat.model], `${seat.model} missing from DEFAULT_MODEL_LIMITS`);
+  }
+});
+
+
+// --- generated_paths (STARK-6095) -------------------------------------------
+// The generated-output glob list `findings_review_post.ts` splits on. It lives
+// in config rather than as a frozen constant in the tool because a repo-agnostic
+// `--repo O/R` tool must not carry ONE repo's tree shape as a hardcoded default.
+import {
+  DEFAULT_GENERATED_PATHS_CONFIG,
+  getGeneratedPathsConfig,
+} from "./stark_config_lib.ts";
+
+test("generated_paths: defaults when nothing is configured", async () => {
+  await withScratchHome(() => {
+    const cfg = getGeneratedPathsConfig();
+    assert.equal(cfg.enabled, true);
+    assert.deepEqual(cfg.default, DEFAULT_GENERATED_PATHS_CONFIG.default);
+  });
+});
+
+test("generated_paths: no catalog glob ships in the defaults, globally or per repo", () => {
+  // `catalog/**` must never reach the global default: it would demote a hand-written
+  // `catalog/` in every other repo. And since STARK-7536 it is not shipped for bifrost
+  // either — bifrost declares its own generated catalog trees, and `catalog/**` was
+  // broader than what is generated, so it also demoted bifrost's CURATED
+  // catalog/*/bundle.yaml and catalog/*/mcp/**. Re-adding it anywhere here silently
+  // stops those findings from opening the inline thread that holds a merge.
+  assert.ok(!DEFAULT_GENERATED_PATHS_CONFIG.default.includes("catalog/**"));
+  assert.deepEqual(DEFAULT_GENERATED_PATHS_CONFIG.repos, {});
+});
+
+test("generated_paths: a repo entry is expressible per repo, from the user layer", async () => {
+  await withScratchHome((home) => {
+    writeGlobalConfig(home, {
+      generated_paths: { repos: { "o/other": { paths: ["gen/**"] } } },
+    });
+    const cfg = getGeneratedPathsConfig();
+    assert.deepEqual(cfg.repos["o/other"], { paths: ["gen/**"] });
+    // No repo entry ships by default since STARK-7536, so the user's is the whole map.
+    // That is why this no longer says "merges in": with an empty base there is nothing to
+    // merge WITH, so it proves only that the user layer is read. `deepMerge`'s actual
+    // map-merge semantics — a user key added without clobbering its siblings — are pinned
+    // on the sections that still ship defaults (`getModelRates`, `getModelLimits`,
+    // `getRuntimeConfig`), and the resolver's own per-repo layering is pinned in
+    // `findings_review_post.test.ts` against an explicit `config`.
+    assert.deepEqual(cfg.repos, { "o/other": { paths: ["gen/**"] } });
+  });
+});
+
+test("generated_paths: enabled:false is expressible, and the default list is replaceable", async () => {
+  await withScratchHome((home) => {
+    writeGlobalConfig(home, {
+      generated_paths: { enabled: false, default: ["only/**"] },
+    });
+    const cfg = getGeneratedPathsConfig();
+    assert.equal(cfg.enabled, false);
+    assert.deepEqual(cfg.default, ["only/**"], "an array override REPLACES, never unions");
+  });
+});
