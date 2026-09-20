@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -19,9 +18,13 @@ import (
 // prevIndexJSON returns the previously committed index.json bytes, preferring
 // origin/main and falling back to HEAD. Returns nil (skip) when neither ref has
 // the file (first commit / fresh repo).
+//
+// Through gitCommand, not a bare exec: an inherited GIT_DIR wins over `-C repoRoot`, so
+// under a hook or `git rebase --exec` the gate would read some OTHER repo's index as the
+// previous one and pass or fail by accident.
 func prevIndexJSON(repoRoot string) []byte {
 	for _, ref := range []string{"origin/main:index.json", "HEAD:index.json"} {
-		cmd := exec.Command("git", "-C", repoRoot, "show", ref)
+		cmd := gitCommand(repoRoot, "show", ref)
 		var stdout, stderr bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &stdout, &stderr
 		if err := cmd.Run(); err == nil {

@@ -38,6 +38,16 @@ func gitRun(t *testing.T, dir string, args ...string) {
 	}
 }
 
+// seedCommit turns a fixture tree into a one-commit repo, which is what gives check-bumps a
+// `HEAD:index.json` to read as the previous index. One helper, through gitRun, because five
+// fixtures each carried a bare `exec.Command("git", …)` copy of this with the hazard above.
+func seedCommit(t *testing.T, root string) {
+	t.Helper()
+	gitRun(t, root, "init", "-q")
+	gitRun(t, root, "add", ".")
+	gitRun(t, root, "commit", "-q", "-m", "seed")
+}
+
 func gitInit(t *testing.T) string {
 	t.Helper()
 	if _, err := exec.LookPath("git"); err != nil {
