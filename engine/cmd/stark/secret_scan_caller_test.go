@@ -145,9 +145,17 @@ func TestSecretScanCallerHasNoSkipGuard(t *testing.T) {
 	if strings.Contains(body, "draft ==") || regexp.MustCompile(`(?m)^\s+if:`).MatchString(body) {
 		t.Errorf("%s: a job-level `if:` can report `skipped`, which GitHub counts as satisfying a required check", secretScanCallerPath)
 	}
-	for _, trigger := range []string{"\n  pull_request:\n", "\n  push:\n"} {
-		if !strings.Contains(body, trigger) {
-			t.Errorf("%s: lost its %q trigger; the push-to-main run is what produces a check run ON the default branch", secretScanCallerPath, strings.TrimSpace(trigger))
+	// Each trigger is pinned with the reason it is there, because the reason is what a
+	// tidy-up has to argue with. `merge_group` needs it most: bifrost has no merge queue, so
+	// here that trigger never fires and reads as dead code — and deleting it breaks the
+	// byte-identity 21stark's drift check relies on while every gate in this repo stays green.
+	for _, trigger := range []struct{ key, why string }{
+		{"pull_request", "the PR run is the scan that happens BEFORE a secret reaches main"},
+		{"push", "the push-to-main run is what produces a check run ON the default branch"},
+		{"merge_group", "it never fires here (bifrost has no merge queue), but it is part of the fleet render this file must stay byte-identical to"},
+	} {
+		if !strings.Contains(body, "\n  "+trigger.key+":\n") {
+			t.Errorf("%s: lost its `%s` trigger; %s", secretScanCallerPath, trigger.key, trigger.why)
 		}
 	}
 }

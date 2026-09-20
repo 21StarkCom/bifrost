@@ -41,7 +41,7 @@ the workflow file:
 gh pr checks <PR#> --repo 21StarkCom/bifrost --json name,state
 ```
 
-### The sixth check that reports and is not required *today*
+### The fourth check that reports and is not required *today*
 
 `.github/workflows/secret-scan.yml` is the second `pull_request` workflow in this
 repo (it also fires on push to `main`). It produces **`secret-scan / secret-scan`**,
