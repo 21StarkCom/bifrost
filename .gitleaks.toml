@@ -72,7 +72,7 @@ regexes = [
   #
   # Deliberately value-scoped and anchored rather than a `tools/.*\.test\.ts$`
   # entry in an [allowlist].paths array — this config deliberately has none at all.
-  # tools/ carries 76 test files (measured on the tracked tree); keeping them all
+  # tools/ carries 78 test files (measured on the tracked tree); keeping them all
   # under the scanner is worth more than one line of config, and this way a real
   # credential pasted into a test still fires.
   # The cost is that a NEW fake-credential fixture reddens CI until it is added

@@ -123,12 +123,15 @@ at all.
   that one is not.** Sibling jobs share triggers and look interchangeable, so a
   new one silently reports a check nobody gates on. `typecheck` sat unrequired
   next to `test` for five weeks that way. The defence is a test that reads the
-  real workflow file and fails when the job set moves; **this repo has none
-  today** — the job-set pin (`tools/typecheck_gate.test.ts`) was not carried over
-  when the suite moved — so a fifth job added to `ci.yml` reports a check nobody
-  gates on and nothing goes red. Until one exists, adding or renaming a job means
-  editing the branch ruleset in the same change
-  (`docs/operations/branch-protection.md` §1, §3).
+  real workflow file and fails when the job set moves, and in this repo that is
+  **`tools/workflow_shape.test.ts`** — it pins the exact four-job set of
+  `.github/workflows/ci.yml` (`secrets`, `actionlint`, `test`, `typecheck`) and
+  the check context each one reports under, so a fifth job fails the suite until
+  someone decides out loud whether its check is required. It replaces
+  stark-skills' `tools/typecheck_gate.test.ts`, which pinned `tests.yml` and was
+  deliberately not carried over. The test does not edit the ruleset for you:
+  adding or renaming a job still means PUTting the branch ruleset in the same
+  change (`docs/operations/branch-protection.md` §1, §3).
 - **`if:` is not the only way to lose a run.** A *step*-level `if:` leaves the
   job concluding SUCCESS with nothing executed; a job-level `name:` renames the
   check-run so the required context never reports; a narrowed `types:` or a

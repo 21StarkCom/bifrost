@@ -22,10 +22,18 @@ env:
 # GitHub counts a CANCELLED required check as FAILING, and `main` has already
 # carried commits with `engine: cancelled` from back-to-back merges sharing the
 # `ci-refs/heads/main` group. With `test` and `typecheck` becoming required
-# contexts, a cancelled run is a blocked merge that only a new commit clears —
-# so runs are scoped per PR and never cancelled.
+# contexts, a cancelled run is a blocked merge that only a new commit clears.
+#
+# `cancel-in-progress: false` alone does NOT buy "never cancelled": GitHub also
+# cancels a run that is merely PENDING in the group when a newer one queues
+# behind it. Keying the non-PR half on `github.sha` rather than `github.ref` is
+# what actually retires the measured failure — every push to `main` lands in its
+# own group, so no merge can ever queue behind (and therefore cancel) another
+# merge's run. The PR half stays keyed on the PR number so a PR's runs still
+# serialize; a superseded pending run there is on a sha that is no longer the
+# head, which no required context is read against.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: false
 
 jobs:

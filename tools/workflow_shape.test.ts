@@ -357,9 +357,35 @@ test("ci runs are scoped per PR and never cancelled", () => {
  */
 const REFUSED_WITH_SLURP = ["--jq", "-q", "--template", "-t"];
 
-/** Directories that can carry a `gh` invocation, and the extensions that can hold one. */
-const SCAN_SCOPES = [".github/workflows", "tools", "skill", "scripts", "global", "runtime-overrides"];
+/**
+ * Directories that can carry a `gh` invocation, and the extensions that can hold
+ * one. This is EVERY top-level dir holding a scannable file, not a shortlist of
+ * the ones that happen to call `gh` today: `config/` ships eight `.sh` files
+ * (the statusline + cmux-autoname hooks `config/settings.json` wires into a live
+ * session) and `standards/` ships three `.yml` workflow/site templates that are
+ * copied verbatim into other repos, so a fatal invocation written there would be
+ * exactly as broken and exactly as unreported.
+ */
+const SCAN_SCOPES = [
+  ".github/workflows",
+  "tools",
+  "skill",
+  "scripts",
+  "global",
+  "standards",
+  "config",
+  "runtime-overrides",
+];
 const SCAN_EXTENSIONS = new Set([".sh", ".ts", ".yml", ".yaml"]);
+
+/**
+ * Never descended into. `tools/node_modules` appears the moment anyone runs the
+ * `typecheck` job's `npm ci` locally, and `@types/node` + `typescript` alone add
+ * 217 `.d.ts` files — `path.extname("index.d.ts")` is `".ts"`, so every one of
+ * them would enter the scan. Vendored third-party code is not this gate's to
+ * police, and a hit there is unfixable where it is reported.
+ */
+const SCAN_SKIP_DIRS = new Set(["node_modules", ".git"]);
 
 /**
  * The one exemption: this file, whose self-test below carries the fatal command
@@ -376,8 +402,9 @@ function collectScannableFiles(): string[] {
   const walk = (dir: string): void => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const abs = path.join(dir, entry.name);
-      if (entry.isDirectory()) walk(abs);
-      else if (SCAN_EXTENSIONS.has(path.extname(entry.name)) && !SCAN_EXEMPT.has(abs)) files.push(abs);
+      if (entry.isDirectory()) {
+        if (!SCAN_SKIP_DIRS.has(entry.name)) walk(abs);
+      } else if (SCAN_EXTENSIONS.has(path.extname(entry.name)) && !SCAN_EXEMPT.has(abs)) files.push(abs);
     }
   };
   for (const scope of SCAN_SCOPES) {
@@ -437,11 +464,19 @@ function blankWholeLineComments(text: string): string {
 /** The shell form: a joined command line carrying `gh api`, `--slurp` and a refused flag. */
 function shellFormHits(text: string): string[] {
   const hits: string[] = [];
+  // Whole-line comments go first, in BOTH syntaxes — the same blanking
+  // `argvFormHits` uses. A `#` skip alone left the shell form blind to `//`,
+  // which is the comment marker of the `.ts` half of the scan scope: a line like
+  // `// gh api repos/o/r --slurp --jq '.x'` in any tool's header is prose, and
+  // reporting it would redden the required `test` check over a comment nobody
+  // can fix by editing code. Blanking (not dropping) keeps `\`-continuation
+  // folding below aligned with the physical lines.
+  const code = blankWholeLineComments(text);
   // One invocation may span continuation lines — the broken call had `--slurp`
   // and `--jq` on different physical lines — so fold them before looking. CRLF is
   // normalized by the caller, or a file checked out with CRLF endings leaves
   // `\`+`\r\n` unjoined and splits the pair back apart.
-  for (const line of text.replace(/\\\n/g, " ").split("\n")) {
+  for (const line of code.replace(/\\\n/g, " ").split("\n")) {
     if (line.trimStart().startsWith("#")) continue;
     if (!ghApiHasFlag(line, ["--slurp"])) continue;
     if (!ghApiHasFlag(line, REFUSED_WITH_SLURP)) continue;
@@ -545,6 +580,11 @@ test("the --slurp detector catches every live call shape when mutated", () => {
   const mustIgnore: Record<string, string> = {
     "prose in a // comment": `// never combine ["api", "--slurp", "--jq"] in one call`,
     "prose in a # comment": `  # gh api ... --slurp --jq is refused outright`,
+    // The SHELL form spelled out in a `//` comment — the half a `#`-only skip
+    // missed. `.ts` is in the scan scope and `//` is its comment marker, so this
+    // is the realistic false positive, not a hypothetical one.
+    "shell form in a // comment": `  // gh api repos/o/r --slurp --jq '.x' is refused`,
+    "shell form in a /* block comment": `   * gh api repos/o/r --slurp --template '{{.x}}'`,
     "--slurp alone (findings_review_post.ts today)": `run("gh", ["api", "x", "--paginate", "--slurp"]),`,
     "--jq alone (findings_review_post.ts today)": `run("gh", ["api", "x", "--jq", ".head.sha"]),`,
     "--slurp piped to a separate jq": `          gh api repos/o/r --slurp | jq -r '.[].number'`,
