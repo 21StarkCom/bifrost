@@ -30,8 +30,9 @@ import (
 // It is also the same class as every other engine-driven re-render (an adapter edit
 // re-renders every skill body under unchanged bundle versions). Spec §7.7 hands ADAPTER
 // re-renders to the adapter target version; `internal/marketplace` is not an adapter target,
-// so no target version covers the manifest either (bifrost#294 moved none). What should move
-// is the root VERSION, and nothing forces it to: that gap is STARK-7998.
+// so no target version covers the manifest either (bifrost#294 moved none). Nothing forces the
+// root VERSION to move, and nothing needs to (STARK-7998, measured): a Codex consumer
+// re-installs from the marketplace git ref; `version` only names its cache directory.
 
 const codexFixtureBundle = "stark-ops"
 
