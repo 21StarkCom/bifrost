@@ -49,13 +49,12 @@ MCP `command` values must be on the positive allowlist in
 `engine/internal/validate/toolsallow.go`. Every entry in `allowlist.go` widens the set of
 binaries an MCP server may spawn on a developer's machine, so additions are explicitly
 gated (spec §15.4): both files have a dedicated, last-match-wins **CODEOWNERS** entry
-(`@21-Stark-AI/stark-maintainers @aryeh-stark`) on top of the `engine/**` rule. To add an
+(`@aryeh-stark`) on top of the `engine/**` rule. To add an
 entry:
 
 - Open a PR touching only the allowlist file with a one-paragraph justification
   (what the binary/tool does, why it is needed, who maintains it).
-- Requires **maintainer approval** (`@21-Stark-AI/stark-maintainers`) **and**
-  `@aryeh-stark` — CODEOWNERS marks both required on
+- Requires **maintainer approval** (`@aryeh-stark`) — CODEOWNERS marks it on
   `engine/internal/validate/allowlist.go` and `engine/internal/validate/toolsallow.go`.
 - Keep the list minimal; prefer pinned, well-known binaries (`node`, `uvx`) and
   first-party `stark-*-mcp` servers over ad-hoc tools.
@@ -78,8 +77,17 @@ merge on a single approval, which is insufficient for instruction-text/code-exec
 The count is repo-wide (GitHub has no per-path count), so every PR clears 2 approvals; the
 strictest path governs.
 
-Prerequisite: the org teams `@21-Stark-AI/stark-maintainers` and
-`@21-Stark-AI/stark-reviewers` must exist with write access for CODEOWNERS to bind.
+> **These CODEOWNERS entries name `@aryeh-stark`, not a team, and they are not an
+> enforced merge gate.** An earlier draft of this section required org teams
+> `stark-maintainers` / `stark-reviewers`; neither was ever created (`gh api
+> orgs/21StarkCom/teams` lists only `ent:enterprise-owners`, measured 2026-09-20)
+> and `CODEOWNERS` never referenced them. Per §5's measured state,
+> `required_approving_review_count` is **0** and `require_code_owner_reviews` is
+> **false**, so a CODEOWNERS match assigns a reviewer and blocks nothing. What
+> actually holds these paths is the mandatory `/code-review xhigh --fix` round
+> plus the operator attestation `publish-sync-pr` requires before it will publish.
+> Read the requirement above as the process for the day a second maintainer
+> exists, not as a live gate.
 
 ## 4. CI gates (required, non-bypassable)
 

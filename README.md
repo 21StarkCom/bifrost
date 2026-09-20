@@ -48,7 +48,7 @@ See [`docs/native-install-loop.md`](docs/native-install-loop.md) for the full in
 
 ## Develop
 
-**Source of truth is the [stark-skills](https://github.com/21-Stark-AI/stark-skills) repo**, not this one. The catalog's `skills/` + `commands/`, `catalog/standards/` (the link target for the `../../standards/*.md` references in every skill body), the shared vendor snapshot, and the Codex-only runtime-overlay snapshot are **generated** from a stark-skills checkout — never hand-edit them, either generated runtime package tree, `index.json`, or `bundles/*.json`. What you DO edit here: each `catalog/<bundle>/bundle.yaml` (metadata + the `skills:`/`commands:` membership manifest) and curated `catalog/<bundle>/mcp/` artifacts.
+**Source of truth is the [stark-skills](https://github.com/21StarkCom/stark-skills) repo**, not this one. The catalog's `skills/` + `commands/`, `catalog/standards/` (the link target for the `../../standards/*.md` references in every skill body), the shared vendor snapshot, and the Codex-only runtime-overlay snapshot are **generated** from a stark-skills checkout — never hand-edit them, either generated runtime package tree, `index.json`, or `bundles/*.json`. What you DO edit here: each `catalog/<bundle>/bundle.yaml` (metadata + the `skills:`/`commands:` membership manifest) and curated `catalog/<bundle>/mcp/` artifacts.
 
 Standard loop:
 
