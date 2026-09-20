@@ -53,7 +53,7 @@ CI (`.github/workflows/ci.yml`) runs the same steps plus `gitleaks`. Anything bl
 
 - `command` values must be present in `engine/internal/validate/allowlist.go`.
 - `agent.tools` entries must be present in `engine/internal/validate/toolsallow.go`.
-- To widen either list: PR touching **only** the allowlist file with a one-paragraph justification (what the binary/tool does, why it is needed, who maintains it). Requires `@aryeh-stark` **and** `@aryeh-stark` approval (CODEOWNERS-enforced).
+- To widen either list: PR touching **only** the allowlist file with a one-paragraph justification (what the binary/tool does, why it is needed, who maintains it). `CODEOWNERS` assigns `@aryeh-stark` as the reviewer; it is not an enforced merge gate today (`docs/SECURITY.md` §3).
 - Prefer pinned, well-known binaries (`node`, `uvx`) and first-party `stark-*-mcp` servers over ad-hoc tools.
 
 ## Adapters & schemas
@@ -74,7 +74,7 @@ CI (`.github/workflows/ci.yml`) runs the same steps plus `gitleaks`. Anything bl
 
 ## Branch protection & merging
 
-`main` is protected: linear history, no force-push, no admin bypass, 2 approvals required on high-trust paths (artifact bodies, `mcp/`, schema, signing). Squash-merge. Merging triggers `sign-manifest.yml`, which signs the build manifest via GitHub OIDC → sigstore/cosign keyless (Fulcio + Rekor). See [`docs/SECURITY.md`](docs/SECURITY.md) §1.
+`main` is protected: linear history, no force-push, no admin bypass, and the required CI contexts in the `Required CI on main` ruleset. Approval counts are **0** and code-owner review is **off** on this one-operator repo — the gate on high-trust paths (artifact bodies, `mcp/`, schema, signing) is the mandatory `/code-review xhigh --fix` round, not an approval count; see [`docs/SECURITY.md`](docs/SECURITY.md) §3 and §5. Squash-merge. Merging triggers `sign-manifest.yml`, which signs the build manifest via GitHub OIDC → sigstore/cosign keyless (Fulcio + Rekor). See [`docs/SECURITY.md`](docs/SECURITY.md) §1.
 
 ## Reporting security issues
 

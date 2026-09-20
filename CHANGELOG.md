@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to `stark-marketplace`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/spec/v2.0.0.html). Bumping `VERSION` on `main` triggers a tag + signed release.
+All notable changes to `bifrost`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/spec/v2.0.0.html). Bumping `VERSION` on `main` triggers a tag + signed release.
 
 ## [Unreleased]
 
@@ -8,6 +8,8 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 - **The web registry is gone (STARK-7972).** Deleted the `web/` React SPA, the `server/` Go static origin, the `Dockerfile`, the `web-deploy` workflow, `docs/scripts/deploy-web.sh` and `docs/web-hosting.md`. Nothing in the install or publish path read `marketplace.21stark.com`: Claude Code installs from `.claude-plugin/marketplace.json` + `dist/claude/` on GitHub, `stark install/search/info` load `index.json` from disk, and `sign-manifest` signs the committed `index.json` regardless of hosting. `index.json` / `bundles/*.json` stay. `ci.yml` drops the `web build` and `server (static origin)` jobs, so the required contexts on `main` go **five → three**; **this is a merge blocker, not a same-PR step** — narrowing the ruleset is an operator-only `gh api .../rulesets` mutation (`docs/operations/branch-protection.md`; SECURITY.md §5 forbids running it from an agent, skill, hook, or CI), so it must land *before* this change merges or every subsequent PR to `main` sits blocked waiting on two checks that no longer report (tracked live on STARK-7972). `publish.sh` loses `--deploy`. Codex plugin `homepage` / `websiteURL` now fall back to the GitHub repo URL. The GCP teardown in `ev-infra-group` is tracked separately.
 
 ### Added
+<!-- idun:pr-merge pr=298 runId=298 sha=14de9477 -->
+- Removed the unused private-repo GitHub Contents API fetcher and corrected stale organization links and governance claims in the docs.
 <!-- stark-gh:pr-merge pr=297 runId=1e0c38e3-1b5b-4ed8-9289-fc231458cd5b -->
 - Document Codex marketplace refresh behavior and clarify why native package changes do not require a root version bump.
 <!-- idun:pr-merge pr=296 runId=296 sha=82dcc084 -->
@@ -566,11 +568,11 @@ First tagged release. Spec slices 1–8 complete (catalog → engine → web →
 - Cosign-keyless signed build manifest via GitHub OIDC → Fulcio + Rekor.
 - Top-level docs: `CLAUDE.md`, `AGENTS.md`, `README.md`, `CONTRIBUTING.md`, `docs/SECURITY.md`, `docs/native-install-loop.md`, `docs/web-hosting.md`.
 
-[Unreleased]: https://github.com/21-Stark-AI/stark-marketplace/compare/v0.1.6...HEAD
-[0.1.6]: https://github.com/21-Stark-AI/stark-marketplace/releases/tag/v0.1.6
-[0.1.5]: https://github.com/21-Stark-AI/stark-marketplace/releases/tag/v0.1.5
-[0.1.4]: https://github.com/21-Stark-AI/stark-marketplace/releases/tag/v0.1.4
-[0.1.3]: https://github.com/21-Stark-AI/stark-marketplace/releases/tag/v0.1.3
-[0.1.2]: https://github.com/21-Stark-AI/stark-marketplace/releases/tag/v0.1.2
-[0.1.1]: https://github.com/21-Stark-AI/stark-marketplace/releases/tag/v0.1.1
-[0.1.0]: https://github.com/21-Stark-AI/stark-marketplace/releases/tag/v0.1.0
+[Unreleased]: https://github.com/21StarkCom/bifrost/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/21StarkCom/bifrost/releases/tag/v0.1.6
+[0.1.5]: https://github.com/21StarkCom/bifrost/releases/tag/v0.1.5
+[0.1.4]: https://github.com/21StarkCom/bifrost/releases/tag/v0.1.4
+[0.1.3]: https://github.com/21StarkCom/bifrost/releases/tag/v0.1.3
+[0.1.2]: https://github.com/21StarkCom/bifrost/releases/tag/v0.1.2
+[0.1.1]: https://github.com/21StarkCom/bifrost/releases/tag/v0.1.1
+[0.1.0]: https://github.com/21StarkCom/bifrost/releases/tag/v0.1.0

@@ -1,4 +1,4 @@
-# stark-marketplace — Security & Governance
+# bifrost — Security & Governance
 
 This is a **code-distribution system**, not just config. Every artifact body is
 instruction text injected into a developer's agent, and every `mcp/` entry is a
@@ -47,39 +47,55 @@ as install blockers.
 MCP `command` values must be on the positive allowlist in
 `engine/internal/validate/allowlist.go`; `agent.tools` against the allowlist in
 `engine/internal/validate/toolsallow.go`. Every entry in `allowlist.go` widens the set of
-binaries an MCP server may spawn on a developer's machine, so additions are explicitly
-gated (spec §15.4): both files have a dedicated, last-match-wins **CODEOWNERS** entry
-(`@21-Stark-AI/stark-maintainers @aryeh-stark`) on top of the `engine/**` rule. To add an
-entry:
+binaries an MCP server may spawn on a developer's machine, so additions carry an explicit
+process (spec §15.4): both files have a dedicated, last-match-wins **CODEOWNERS** entry
+(`@aryeh-stark`) on top of the `engine/**` rule. That entry names the owner; it is **not**
+a merge gate today — see the note in §3. To add an entry:
 
 - Open a PR touching only the allowlist file with a one-paragraph justification
   (what the binary/tool does, why it is needed, who maintains it).
-- Requires **maintainer approval** (`@21-Stark-AI/stark-maintainers`) **and**
-  `@aryeh-stark` — CODEOWNERS marks both required on
+- Requires **maintainer review** (`@aryeh-stark`) — CODEOWNERS marks it on
   `engine/internal/validate/allowlist.go` and `engine/internal/validate/toolsallow.go`.
 - Keep the list minimal; prefer pinned, well-known binaries (`node`, `uvx`) and
   first-party `stark-*-mcp` servers over ad-hoc tools.
 
 ## 3. Review requirements (CODEOWNERS)
 
-| Path | Required reviewers | Min approvals |
-|------|--------------------|---------------|
+> **The table below is POLICY, not the live setting.** Every owner in `CODEOWNERS`
+> is `@aryeh-stark`, and per §5's measured state
+> `required_approving_review_count` is **0** and `require_code_owner_reviews` is
+> **false** — so a CODEOWNERS match assigns a reviewer and blocks nothing, and no
+> path clears two approvals today. What actually holds these paths is the
+> mandatory `/code-review xhigh --fix` round on every PR; on the
+> `auto/marketplace-sync` PR specifically, `publish-sync-pr` additionally refuses
+> to merge without the operator's review attestation (that workflow is scoped to
+> that one head ref and does not run on hand-authored PRs). Read the table as the
+> process for the day a second maintainer exists. §5 is the authority on what is
+> enforced; re-measure there before trusting any of it.
+>
+> An earlier draft named org teams `stark-maintainers` / `stark-reviewers` as a
+> prerequisite. `CODEOWNERS` *did* carry `@GetEvinced/stark-maintainers` and
+> `@GetEvinced/stark-reviewers` from the Slice 8 governance commit until
+> `f84916f7` replaced every team slug with `@aryeh-stark`; neither team was ever
+> created (`gh api orgs/GetEvinced/teams` and `gh api orgs/21StarkCom/teams` both
+> show no `stark-*` team, measured 2026-09-20), so the entries never bound to
+> anyone.
+
+| Path | Policy reviewers | Policy min approvals |
+|------|------------------|----------------------|
 | `catalog/**/skills/**`, `catalog/**/commands/**`, `catalog/**/agents/**` (bodies) | maintainer **+ second reviewer** | **2** |
 | `**/mcp/**` (code execution) | maintainer + reviewer **+ Aryeh** | **2** |
 | `engine/internal/validate/allowlist.go`, `engine/internal/validate/toolsallow.go` (command/tool allowlists) | maintainer + Aryeh | 2 |
 | `engine/**`, `schema/**`, `dist/claude/**`, `index.json`, `bundles/**` | maintainer + Aryeh | 2 |
 | `.github/workflows/**`, `CODEOWNERS`, `.gitleaks.toml`, this file | maintainer + Aryeh | 2 |
 
-**Two approvals, not one:** a CODEOWNERS entry only guarantees *who* must review; it does
-not raise the *count*. The high-trust body and `**/mcp/**` paths require **TWO** distinct
-approvals — the CODEOWNERS reviewer requirement **plus** repo-wide
-`required_approving_review_count = 2` (set in §5). One CODEOWNERS reviewer alone would still
-merge on a single approval, which is insufficient for instruction-text/code-exec surfaces.
-The count is repo-wide (GitHub has no per-path count), so every PR clears 2 approvals; the
-strictest path governs.
-
-Prerequisite: the org teams `@21-Stark-AI/stark-maintainers` and
-`@21-Stark-AI/stark-reviewers` must exist with write access for CODEOWNERS to bind.
+**Why the policy says two approvals, not one:** a CODEOWNERS entry only guarantees *who*
+must review; it does not raise the *count*. The high-trust body and `**/mcp/**` paths would
+need **TWO** distinct approvals — the CODEOWNERS reviewer requirement **plus** repo-wide
+`required_approving_review_count = 2`. One CODEOWNERS reviewer alone still merges on a
+single approval, which is insufficient for instruction-text/code-exec surfaces. The count is
+repo-wide (GitHub has no per-path count), so the strictest path would govern every PR — which
+is exactly why it is not set on a one-human repo (§5).
 
 ## 4. CI gates (required, non-bypassable)
 
@@ -131,8 +147,8 @@ artifact's canonical-source digest changed without a `version` bump),
 
 > These commands MUTATE repo settings. Run them once as a repo admin AFTER the
 > required-status contexts have appeared at least once (push a PR so the job names
-> register). **Do not run as part of automated plan execution.** Replace the
-> team slugs as needed.
+> register). **Do not run as part of automated plan execution.** Every owner in
+> `CODEOWNERS` is `@aryeh-stark`; no team slug is referenced anywhere in this repo.
 >
 > **Why the block below sets `required_approving_review_count = 2`, and why it is
 > NOT applied:** GitHub's review count is repo-wide — there is no per-path count. A
