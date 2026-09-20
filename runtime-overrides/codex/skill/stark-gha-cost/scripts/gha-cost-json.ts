@@ -107,9 +107,20 @@ async function readStdin(): Promise<unknown> {
 
 async function main(): Promise<void> {
   const mode = process.argv[2];
+  const usage = "usage: gha-cost-json.ts jobs|billing (JSON on stdin)\n";
   if (process.argv.length !== 3 || !["jobs", "billing"].includes(mode)) {
-    console.log("usage: gha-cost-json.ts jobs|billing (JSON on stdin)");
-    process.exit(["help", "--help", "-h"].includes(mode) ? 0 : 2);
+    // A refusal goes to stderr, not stdout: this tool sits in a `gh … | … | jq`
+    // pipeline, and a usage line on stdout is a parse failure downstream.
+    if (["help", "--help", "-h"].includes(mode)) {
+      process.stdout.write(usage);
+      process.exit(0);
+    }
+    process.stderr.write(
+      process.argv.length !== 3
+        ? `unsupported arguments: expected exactly one of jobs|billing\n${usage}`
+        : `unsupported argument: ${mode}\n${usage}`,
+    );
+    process.exit(2);
   }
   const input = await readStdin();
   if (mode === "jobs") {

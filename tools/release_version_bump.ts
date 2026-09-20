@@ -11,7 +11,7 @@
 // rewriting the file would either be silently ignored or fight with the
 // scm tool.
 
-import { parseCli } from "./cli_args_lib.ts";
+import { precheckCli } from "./cli_args_lib.ts";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -288,6 +288,9 @@ export function bumpAll(
 
 // ── CLI ─────────────────────────────────────────────────────────
 
+const USAGE =
+  "usage: release_version_bump.ts --version X.Y.Z [--repo PATH] [--json] [--dry-run]";
+
 function parseArgs(argv: string[]): {
   version: string | null;
   repo: string;
@@ -298,18 +301,14 @@ function parseArgs(argv: string[]): {
   let repo = process.cwd();
   let asJson = false;
   let dryRun = false;
+  // Help and bad arguments are already handled by `precheckCli` in `main`, so
+  // this loop only has to read a validated argv.
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--version") version = argv[++i] ?? null;
     else if (arg === "--repo") repo = argv[++i] ?? repo;
     else if (arg === "--json") asJson = true;
     else if (arg === "--dry-run") dryRun = true;
-    else if (arg === "-h" || arg === "--help") {
-      console.log(
-        "Usage: release_version_bump --version X.Y.Z [--repo PATH] [--json] [--dry-run]",
-      );
-      process.exit(0);
-    }
   }
   return { version, repo: path.resolve(repo), asJson, dryRun };
 }
@@ -333,11 +332,13 @@ function formatText(result: BumpResult): string {
 }
 
 function main(): void {
-  const cli = parseCli(process.argv.slice(2), {
+  // Help and argument validation, before any version file is read or written.
+  // A refusal must not reach stdout: callers run this inside `$(…)` and parse
+  // the result as JSON.
+  precheckCli(process.argv.slice(2), {
     values: ["--version", "--repo"],
     switches: ["--json", "--dry-run"],
-  });
-  if (cli.help) { console.log("usage: release_version_bump.ts --version VALUE --repo VALUE --json --dry-run [help|--help|-h]"); return; }
+  }, USAGE);
   const opts = parseArgs(process.argv.slice(2));
   if (!opts.version) {
     console.error("--version is required");

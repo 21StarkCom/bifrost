@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { parseCli } from "./cli_args_lib.ts";
+import { precheckCli } from "./cli_args_lib.ts";
 import {
   collectSharedRefs,
   discoverSkillBundles,
@@ -8,10 +8,9 @@ import {
   hasBrokenRefs,
 } from "./skill_lib.ts";
 
-  const cli = parseCli(process.argv.slice(2), {
-    switches: ["--json", "--validate"],
-  });
-  if (cli.help) { console.log("usage: skill_audit.ts --json --validate [help|--help|-h]"); process.exit(0); }
+// Help and argument validation, before the repo walk below.
+precheckCli(process.argv.slice(2), { switches: ["--json", "--validate"] },
+  "usage: skill_audit.ts [--json] [--validate]");
 
 // findRepoRoot returns null when no ancestor .git/ exists. The narrowed
 // return type forces this check, so we can't accidentally audit a tree

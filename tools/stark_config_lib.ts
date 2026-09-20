@@ -511,7 +511,16 @@ export function discoverConfig(opts: DiscoverConfigOpts = {}): DiscoveredConfig 
 const USAGE = "usage: stark_config_lib.ts --model <agent>\n";
 
 function main(argv: string[]): number {
-  const args = parseCli(argv, { values: ["--model"] });
+  let args: ReturnType<typeof parseCli>;
+  try {
+    args = parseCli(argv, { values: ["--model"] });
+  } catch (err) {
+    // The entrypoint below only sets `process.exitCode`, so an escaped throw
+    // here is an uncaught stack trace, not the usage refusal the contract
+    // promises. `main` returns the code; don't reach for `process.exit`.
+    process.stderr.write(`${(err as Error).message}\n${USAGE}`);
+    return 2;
+  }
   if (args.help) {
     process.stdout.write(USAGE);
     return 0;

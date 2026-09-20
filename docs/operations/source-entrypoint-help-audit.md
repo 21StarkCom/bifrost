@@ -33,20 +33,36 @@ declared boolean/value arity and rejects unknown/extra arguments. Strict
 existing parsers retain their dispatch and validation seams. `cliValue` refuses
 a following flag as a missing value; `hasCliHelp` skips declared values and
 stops at `--`. The permissive parsers retain `--value=TEXT` for explicit
-leading-dash literals. Other parsers retain their existing syntax; unsupported
+leading-dash literals, and `copilot_land.ts` gained the same form: refusing a
+leading-dash value in the space form is only safe where `--key=VALUE` still
+expresses one, and its `--title`/`--body` carry free text that may legitimately
+begin with a dash. Other parsers retain their existing syntax; unsupported
 equals forms are refused rather than silently ignored. No CLI gains a child
 command interface. The shared tokenizer preserves a `--` tail for callers that
 declare positionals; current operational callers reject unsupported tails.
+
+The entrypoints using `precheckCli` answer malformed arguments with their own
+usage on stderr and exit 2. `refactor_planner.ts` preserves its returned-error
+contract, and `stark_handover.ts` preserves its JSON error on stdout and exit 2.
+Other tools retain their existing nonzero refusal codes; the safety contract
+requires a precise refusal and no backend effects, not a uniform exit code.
+Where a pre-pass sits in front of an existing parser, its declared shape must
+stay in step with that parser: a flag added to one and not the other is refused
+as unknown before the real parser ever sees it.
 
 ## Executable inventory
 
 Every row below is source-owned. `tools/source_help.test.ts` is the executable
 route inventory and runs under the existing `tools/*.test.ts` CI gate. It also
-checks the source tree for added TypeScript entrypoints absent from its inventory.
+checks the source tree for added entrypoints absent from its inventory — the
+TypeScript CLIs under `tools/`, every non-test `.sh`, and the executable Codex
+overrides, so none of the three hand-written lists can silently go stale.
 For each listed route the sweep runs bare help, both flag aliases, flags before
 and after help, and malformed options. Recognizable usage or a precise refusal
 **and zero recorded backend effects** are required. Exit zero or nonempty
-output alone is insufficient.
+output alone is insufficient: for the shell rows the exit STATUS is asserted
+too, because a guard whose `case` subject is wrong still prints "unsupported
+argument: …" — wording alone cannot tell a working help from a broken one.
 
 | Source under `tools/` | Routes / selectors |
 | --- | --- |

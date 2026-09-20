@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { parseCli } from "./cli_args_lib.ts";
+import { precheckCli } from "./cli_args_lib.ts";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -75,11 +75,15 @@ type BundleFile = {
   summary: string;
 };
 
-  const cli = parseCli(process.argv.slice(2), {
-    values: ["--skill", "--output", "--out-dir", "--model", "--reasoning-effort", "--api-timeout-ms", "--poll-interval-ms", "--max-output-tokens"],
-    switches: ["--reuse-proposal", "--diff"],
-  });
-  if (cli.help) { console.log("usage: skill_autopilot.ts --skill VALUE --output VALUE --out-dir VALUE --model VALUE --reasoning-effort VALUE --api-timeout-ms VALUE --poll-interval-ms VALUE --max-output-tokens VALUE --reuse-proposal --diff [help|--help|-h]"); process.exit(0); }
+// Help and argument validation, before the optimizer subprocess below. The
+// shape must stay in step with `parseArgs`: a flag added there and not here is
+// refused as unknown before `parseArgs` ever sees it.
+precheckCli(process.argv.slice(2), {
+  values: ["--skill", "--output", "--out-dir", "--model", "--reasoning-effort", "--api-timeout-ms", "--poll-interval-ms", "--max-output-tokens"],
+  switches: ["--reuse-proposal", "--diff"],
+}, "usage: skill_autopilot.ts --skill PATH [--output PATH] [--out-dir DIR] [--model ID]\n" +
+   "       [--reasoning-effort E] [--api-timeout-ms N] [--poll-interval-ms N]\n" +
+   "       [--max-output-tokens N] [--reuse-proposal] [--diff]");
 
 const scriptPath = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(scriptPath), "..");

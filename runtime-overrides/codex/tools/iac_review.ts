@@ -93,20 +93,20 @@ function parseArgs(argv: string[]): {
     switch (a) {
       case "help": case "--help": case "-h": o.help = true; break;
       case "--kind": o.kind = next() as Kind; break;
-      case "--agents": o.agents = String(next() ?? "").split(",").map((s) => s.trim()).filter(Boolean); break;
+      case "--agents": o.agents = next().split(",").map((s) => s.trim()).filter(Boolean); break;
       case "--changed": o.changed = true; break;
       case "--no-tools": o.noTools = true; break;
       case "--allow-agent-dispatch": o.allowAgentDispatch = true; break;
       case "--include-tfvars": o.includeTfvars = true; break;
       case "--trust-source": o.trustSource = true; break;
       case "--min-severity": {
-        const v = String(next() ?? "").toLowerCase();
+        const v = next().toLowerCase();
         if (!isSeverity(v)) throw new Error(`--min-severity must be one of critical|high|medium|low (got '${v}')`);
         o.minSeverity = v;
         break;
       }
       case "--pr": o.pr = Number(next()); break;
-      case "--repo": o.repo = next() ?? null; break;
+      case "--repo": o.repo = next(); break;
       case "--timeout": o.timeout = Number(next()); break;
       case "--dry-run": o.dryRun = true; break;
       case "--json": o.json = true; break;

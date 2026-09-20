@@ -132,7 +132,11 @@ function main(argv: string[]): number {
     process.stdout.write("usage: session_state.ts [--session-id ID] [--json] | set --field FIELD --value VALUE\n");
     return 0;
   }
-  if (args.positionals.some((p) => p !== "set")) throw new Error("unknown session_state subcommand");
+  // `set` is the only subcommand, and the shape caps positionals at one — so
+  // this is a single token to check, and the refusal names it.
+  if (args.positionals.length > 0 && args.positionals[0] !== "set") {
+    throw new Error(`unknown subcommand: ${args.positionals[0]}`);
+  }
   // Subcommand form: `session_state.ts set --field … --value …`
   if (args.positionals[0] === "set") {
     return cmdSet(args);

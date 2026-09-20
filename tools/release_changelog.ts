@@ -10,7 +10,7 @@
 // Output is a structured JSON receipt the skill can render and act on, so the
 // SKILL.md doesn't have to inline 60 lines of bash + parsing rules.
 
-import { parseCli } from "./cli_args_lib.ts";
+import { precheckCli } from "./cli_args_lib.ts";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -325,35 +325,36 @@ function formatText(changes: GatheredChanges): string {
   return out.join("\n");
 }
 
+const USAGE =
+  "usage: release_changelog.ts [--json] [--repo PATH]\n" +
+  "\n" +
+  "Reads CHANGELOG.md and (when [Unreleased] is empty) git log\n" +
+  "since the last tag, and emits the categorized unreleased changes.";
+
 function parseArgs(argv: string[]): {
   asJson: boolean;
   repo: string;
 } {
   let asJson = false;
   let repo = process.cwd();
+  // Help and bad arguments are already handled by `precheckCli` in `main`, so
+  // this loop only has to read a validated argv.
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--json") asJson = true;
     else if (arg === "--repo") repo = argv[++i] ?? repo;
-    else if (arg === "-h" || arg === "--help") {
-      console.log(
-        "Usage: release_changelog [--json] [--repo PATH]\n" +
-          "\n" +
-          "Reads CHANGELOG.md and (when [Unreleased] is empty) git log\n" +
-          "since the last tag, and emits the categorized unreleased changes.",
-      );
-      process.exit(0);
-    }
   }
   return { asJson, repo: path.resolve(repo) };
 }
 
 function main(): void {
-  const cli = parseCli(process.argv.slice(2), {
+  // Help and argument validation, before CHANGELOG.md and `git log` are read.
+  // A refusal must not reach stdout: callers run this inside `$(…)` and parse
+  // the result as JSON.
+  precheckCli(process.argv.slice(2), {
     values: ["--repo"],
     switches: ["--json"],
-  });
-  if (cli.help) { console.log("usage: release_changelog.ts --repo VALUE --json [help|--help|-h]"); return; }
+  }, USAGE);
   const opts = parseArgs(process.argv.slice(2));
   let changelogContent: string;
   try {

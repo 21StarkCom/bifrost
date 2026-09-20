@@ -229,12 +229,24 @@ function cmdList(root: string, ctx: GitContext, all: boolean): void {
 }
 
 if (isMainModule(import.meta.url)) {
-  const args = parseArgs(process.argv.slice(2));
+  // `parseArgs` throws on an unknown flag or a missing value. Uncaught, that is
+  // a Node stack trace on stderr with exit 1 — outside this tool's contract,
+  // which is one `{"error": …}` JSON line on stdout and exit 2. Every caller
+  // parses that JSON, so an escaped throw leaves them with nothing to read.
+  const args: Args = ((): Args => {
+    try {
+      return parseArgs(process.argv.slice(2));
+    } catch (err) {
+      return fail(err instanceof Error ? err.message : String(err));
+    }
+  })();
   if (args.help || args.cmd === null) {
     process.stdout.write(`${USAGE}\n`);
     process.exit(args.help ? 0 : 2);
   }
 
+  // Refuse before `deriveGitContext()` shells out to git — which is why this
+  // replaces the switch's old `default:` arm rather than sitting beside it.
   if (!["resolve", "save", "resume", "list"].includes(args.cmd)) fail(`unknown subcommand: ${args.cmd}`);
   const root = resolveRoot({ configRoot: getHandoverConfig().root });
   const ctx = deriveGitContext();
@@ -253,9 +265,6 @@ if (isMainModule(import.meta.url)) {
       case "list":
         cmdList(root, ctx, args.all);
         break;
-      default:
-        process.stderr.write(`unknown subcommand: ${args.cmd}\n${USAGE}\n`);
-        process.exit(2);
     }
   } catch (err) {
     fail(err instanceof Error ? err.message : String(err));

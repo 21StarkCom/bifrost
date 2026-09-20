@@ -42,7 +42,7 @@ Skills are edited **HERE** and they take effect **HERE**. There is no build step
 ## Repo Layout
 
 - `skill/` — all skills (`skill/*/SKILL.md`, **25** skills across 25 dirs: 22 `stark-*` plus `agnes`, `gru`, `minion`), served as the seven marketplace plugins by the root manifest's per-plugin `skills:` partition. There is no `skill/evals/` any more.
-- `tools/` — **all** TypeScript tooling (170 tracked files): dispatchers, agent utilities, session/state, GitHub transport, skill meta-tooling. The only executable surface, and the subject of `ci`'s required `test` + `typecheck` contexts.
+- `tools/` — **all** TypeScript tooling (176 tracked files): dispatchers, agent utilities, session/state, GitHub transport, skill meta-tooling. The only executable surface, and the subject of `ci`'s required `test` + `typecheck` contexts.
 - `global/` — global config + prompts (`config.json`, `forge_heuristics.json`, `config-reference.md`, `prompts/`). Skills reach it through `assetRoot()`, never by a hardcoded path.
 - `standards/` — org-wide doc templates and workflows; skill bodies link them as `../../standards/*.md`.
 - `scripts/` — shell helpers + JSON (`healer_patterns.json`).

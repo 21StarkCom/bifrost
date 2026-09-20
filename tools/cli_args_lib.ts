@@ -49,6 +49,36 @@ export function parseCli(argv: string[], shape: CliShape) {
   return { flags, positionals, help };
 }
 
+/** `parseCli` as a help/validation pre-pass in front of a CLI's own parser,
+ * for the entrypoints that run it at module scope or at the head of `main`.
+ * A raw `parseCli` throw there is an UNCAUGHT exception: a Node stack trace on
+ * stderr and exit 1 — neither the precise usage refusal the operational-help
+ * contract promises, nor the exit 2 these CLIs reserve for a usage error (they
+ * use 1 for a failed operation, and the JSON-receipt tools print nothing a
+ * caller can parse). So a bad argument answers with the caller's own usage and
+ * exit 2, a help token prints that usage and exits 0, and a clean argv returns.
+ * Pass the tool's real usage text: the shape here is not the whole grammar.
+ */
+export function precheckCli(
+  argv: string[],
+  shape: CliShape,
+  usage: string,
+): ReturnType<typeof parseCli> {
+  const text = usage.endsWith("\n") ? usage : `${usage}\n`;
+  let parsed: ReturnType<typeof parseCli>;
+  try {
+    parsed = parseCli(argv, shape);
+  } catch (err) {
+    process.stderr.write(`${(err as Error).message}\n${text}`);
+    return process.exit(2);
+  }
+  if (parsed.help) {
+    process.stdout.write(text);
+    return process.exit(0);
+  }
+  return parsed;
+}
+
 /** Arity-aware help check for CLIs whose existing parser owns validation.
  * Unknown arguments remain that parser's responsibility. No scan of stdin,
  * free text, an explicit flag value, or the literal tail after `--`.

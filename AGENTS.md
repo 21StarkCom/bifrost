@@ -45,7 +45,7 @@ This is a **personal playground**, not production. No customers depend on it; th
 
 ## Repo Layout
 
-- `tools/` — **all** TypeScript tooling (170 tracked files): dispatchers, agent utilities, session/state, GitHub transport, skill meta-tooling. The only executable surface, and the subject of `ci`'s required `test` + `typecheck` contexts.
+- `tools/` — **all** TypeScript tooling (176 tracked files): dispatchers, agent utilities, session/state, GitHub transport, skill meta-tooling. The only executable surface, and the subject of `ci`'s required `test` + `typecheck` contexts.
 - `skill/` — all skills (`skill/*/SKILL.md`, **25** skills across 25 dirs: 22 `stark-*` plus `agnes`, `gru`, `minion`), served as the seven marketplace plugins by the root manifest's per-plugin `skills:` partition. There is no `skill/evals/` any more.
 - `global/` — global config + prompts (`config.json`, `forge_heuristics.json`, `prompts/`)
 - `scripts/` — shell helpers + JSON only (`healer_patterns.json`). **No Python lives here any more.**

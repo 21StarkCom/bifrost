@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { parseCli } from "./cli_args_lib.ts";
+import { precheckCli } from "./cli_args_lib.ts";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -106,11 +106,15 @@ type RunState = {
 };
 
 async function main(): Promise<void> {
-  const cli = parseCli(process.argv.slice(2), {
+  // Help and argument validation, before the repo walk and the API calls. The
+  // shape must stay in step with `parseArgs`: a flag added there and not here
+  // is refused as unknown before `parseArgs` ever sees it.
+  precheckCli(process.argv.slice(2), {
     values: ["--api-timeout-ms", "--mode", "--skill", "--skills", "--model", "--out-dir", "--poll-interval-ms", "--reasoning-effort", "--max-output-tokens"],
     switches: ["--apply", "--diff", "--reuse-proposal"],
-  });
-  if (cli.help) { console.log("usage: skill_optimize.ts --api-timeout-ms VALUE --mode VALUE --skill VALUE --skills VALUE --model VALUE --out-dir VALUE --poll-interval-ms VALUE --reasoning-effort VALUE --max-output-tokens VALUE --apply --diff --reuse-proposal [help|--help|-h]"); return; }
+  }, "usage: skill_optimize.ts [--mode plan|api] [--skill TARGET] [--skills A,B]\n" +
+     "       [--model ID] [--out-dir DIR] [--reasoning-effort E] [--api-timeout-ms N]\n" +
+     "       [--poll-interval-ms N] [--max-output-tokens N] [--apply] [--diff] [--reuse-proposal]");
   // findRepoRoot returns null when no ancestor has .git/, so the type
   // system forces an explicit guard here instead of relying on a follow-up
   // existsSync check that could drift out of sync with the resolver.

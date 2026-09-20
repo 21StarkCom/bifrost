@@ -54,13 +54,13 @@ function main(argv: string[]): number {
       mode = "reset";
     } else if (arg === "--enable") {
       mode = "enable";
-      ids = cliValue(argv, ++i, argv[i - 1]) ?? "";
+      ids = cliValue(argv, ++i, argv[i - 1]);
     } else if (arg.startsWith("--enable=")) {
       mode = "enable";
       ids = arg.slice("--enable=".length);
     } else if (arg === "--disable") {
       mode = "disable";
-      ids = cliValue(argv, ++i, argv[i - 1]) ?? "";
+      ids = cliValue(argv, ++i, argv[i - 1]);
     } else if (arg.startsWith("--disable=")) {
       mode = "disable";
       ids = arg.slice("--disable=".length);

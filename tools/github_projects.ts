@@ -67,7 +67,6 @@ on success, 1 on operation failure, 2 on usage error.
 // ---------------------------------------------------------------------------
 
 interface Parsed {
-  positional: string[];
   options: Map<string, string>;
   multi: Map<string, string[]>;
   flags: Set<string>;
@@ -75,10 +74,15 @@ interface Parsed {
 
 const KNOWN_FLAGS = new Set(["no-validate", "help"]);
 const MULTI_OPTS = new Set(["filter"]);
+// The value-taking options `run()` reads. Unknown flags are a hard error, so a
+// renamed or typo'd option can never parse to a silently-ignored no-op.
+const VALUE_OPTS = new Set([
+  "org", "name", "project", "issue", "item", "value",
+  "fields", "repo", "status", "from", "to", "repo-root", "filter",
+]);
 
 function parseArgs(argv: string[]): Parsed {
   const out: Parsed = {
-    positional: [],
     options: new Map(),
     multi: new Map(),
     flags: new Set(),
@@ -98,7 +102,7 @@ function parseArgs(argv: string[]): Parsed {
         i++;
         continue;
       }
-      if (!["org","name","project","issue","item","value","fields","repo","status","from","to","repo-root","filter"].includes(name)) throw new Error(`unknown flag: --${name}`);
+      if (!VALUE_OPTS.has(name)) throw new Error(`unknown flag: --${name}`);
       const value = argv[i + 1];
       if (value === undefined || /^--|^-h$/.test(value)) {
         throw new Error(`Missing value for --${name}`);
@@ -118,9 +122,12 @@ function parseArgs(argv: string[]): Parsed {
   return out;
 }
 
+// `parseArgs` already refuses a leading-dash value, so absence is the only case
+// left here; re-testing the shape would report "Missing required flag" for a
+// flag that was in fact supplied.
 function requireOpt(parsed: Parsed, key: string): string {
   const v = parsed.options.get(key);
-  if (v === undefined || /^--|^-h$/.test(v)) throw new Error(`Missing required flag: --${key}`);
+  if (v === undefined) throw new Error(`Missing required flag: --${key}`);
   return v;
 }
 

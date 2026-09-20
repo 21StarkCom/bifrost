@@ -25,10 +25,16 @@ for (const name of ['writeFile', 'appendFile', 'mkdir', 'mkdtemp', 'rm', 'rmdir'
   for (const suffix of ['', 'Sync']) if (fs[name + suffix]) fs[name + suffix] = deny('write:' + name + suffix);
   if (fs.promises[name]) fs.promises[name] = deny('write:promises.' + name);
 }
-for (const name of ['open', 'openSync']) {
-  const original = fs[name].bind(fs);
-  fs[name] = function (file, flags, ...rest) {
-    if (flags !== 'r' && flags !== 0) return deny('write:' + name)();
+// `flags` defaults to 'r' when omitted, and in the callback form the second
+// argument IS the callback — reading either as a write would record a phantom
+// effect for an ordinary read, which is a false red no reviewer can act on.
+// fs.promises.open is wrapped too: it is a write door the list above misses.
+const readOnlyOpen = (flags) => flags === undefined || typeof flags === 'function' || flags === 'r' || flags === 0;
+for (const [object, name, label] of [[fs, 'open', 'open'], [fs, 'openSync', 'openSync'], [fs.promises, 'open', 'promises.open']]) {
+  if (typeof object[name] !== 'function') continue;
+  const original = object[name].bind(object);
+  object[name] = function (file, flags, ...rest) {
+    if (!readOnlyOpen(flags)) return deny('write:' + label)();
     return original(file, flags, ...rest);
   };
 }

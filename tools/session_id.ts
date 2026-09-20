@@ -7,13 +7,14 @@
  * substitution in SKILL.md keeps working.
  */
 
-import { parseCli } from "./cli_args_lib.ts";
+import { precheckCli } from "./cli_args_lib.ts";
 import { resolveSessionId } from "./session_id_lib.ts";
 import { isMainModule } from "./main_module_lib.ts";
 
 if (isMainModule(import.meta.url)) {
-  const cli = parseCli(process.argv.slice(2), {});
-  if (cli.help) { console.log("usage: session_id.ts  [help|--help|-h]"); process.exit(0); }
-
+  // Help and argument validation, before the projects-dir scan the resolver
+  // falls back to. This CLI takes no arguments at all.
+  precheckCli(process.argv.slice(2), {},
+    "usage: session_id.ts (no arguments; prints the resolved session id)");
   process.stdout.write(`${resolveSessionId()}\n`);
 }

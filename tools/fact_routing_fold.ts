@@ -11,15 +11,15 @@
  * while you are reading survives (the queue's whole point is not losing facts),
  * and malformed lines in the consumed prefix are cleared too (self-heals).
  */
-import { parseCli } from "./cli_args_lib.ts";
+import { precheckCli } from "./cli_args_lib.ts";
 import fs from "node:fs";
 import { defaultQueuePath, type QueueEntry } from "./fact_routing_hook_lib.ts";
 
 function main(): void {
-  const cli = parseCli(process.argv.slice(2), {
-    switches: ["--clear"],
-  });
-  if (cli.help) { console.log("usage: fact_routing_fold.ts --clear [help|--help|-h]"); return; }
+  // Help and argument validation, before the queue is read — and well before
+  // `--clear` rewrites it.
+  precheckCli(process.argv.slice(2), { switches: ["--clear"] },
+    "usage: fact_routing_fold.ts [--clear]");
   const queue = defaultQueuePath();
   let buf: Buffer;
   try {

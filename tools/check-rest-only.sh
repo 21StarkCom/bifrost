@@ -1,10 +1,8 @@
 #!/bin/sh
 # CLI help is separate from the hook's stdin payload.
 if [ "$#" -gt 0 ]; then
-  case "#!/bin/sh
-" in help|--help|-h) printf 'usage: %s (no arguments; protocol input on stdin where applicable)\n' "$0"; exit 0 ;; esac
-  printf 'unsupported argument: %s\n' "#!/bin/sh
-" >&2; exit 2
+  case "$1" in help|--help|-h) printf 'usage: %s (no arguments; protocol input on stdin where applicable)\n' "$0"; exit 0 ;; esac
+  printf 'unsupported argument: %s\n' "$1" >&2; exit 2
 fi
 # REST-only contract guard for the PR-posting path.
 #
@@ -29,7 +27,7 @@ cd "$(dirname "$0")"
 # guard-reports-pass-over-nothing failure this repo keeps re-learning. Only the
 # `agent_*.ts` glob is allowed to expand to whatever is there.
 files=""
-for f in review_post_lib.ts findings_review_post.ts finding_lib.ts child_termination_lib.ts bounded_spawn_lib.ts; do
+for f in review_post_lib.ts findings_review_post.ts finding_lib.ts child_termination_lib.ts bounded_spawn_lib.ts cli_args_lib.ts; do
   if [ ! -f "$f" ]; then
     echo "check-rest-only: required file $f is missing — update this script's list" >&2
     exit 1

@@ -33,6 +33,9 @@ const shells = [
     p + "stark-build/references/hooks/protect-paths.sh", p + "stark-build/references/hooks/stop-gate.sh",
   ]),
 ];
+// The executable Codex overrides. Pinned by the inventory test below, so an
+// override that grows an argv route cannot be added without a row here.
+const codexEntrypoints = ["copilot_land", "iac_review", "jury", "self_healer"];
 const refusal = /usage:|stark-session CLI|unknown (?:argument|option|flag|subcommand)|unexpected (?:positional )?argument|unsupported (?:argument|option)|requires a value|needs a value|Missing value|expected owner\/repo/i;
 
 function fixture() {
@@ -72,12 +75,17 @@ test("tripwires actually deny process, network, writes and credential/config rea
       process: 'require("node:child_process").spawnSync("gh", ["api", "user"])',
       network: 'fetch("https://example.invalid")',
       write: 'require("node:fs").writeFileSync(process.env.HOME + "/sentinel", "bad")',
+      "write:promises.open": 'require("node:fs").promises.open(process.env.HOME + "/sentinel", "w")',
       "home-read": 'require("node:fs").readFileSync(process.env.HOME + "/credentials")',
     })) {
       const file = path.join(f.dir, "calibrate.cjs"); fs.writeFileSync(file, source);
       const r = f.run(file, []);
       assert.equal(r.status, 91, r.output); assert.match(r.effects, new RegExp(kind));
     }
+    const readProbe = path.join(f.dir, "read-probe.cjs");
+    fs.writeFileSync(readProbe, 'const fs = require("node:fs"); fs.closeSync(fs.openSync(__filename)); fs.open(__filename, (err, fd) => { if (err) throw err; fs.closeSync(fd); }); fs.promises.open(__filename).then(file => file.close());');
+    const read = f.run(readProbe, []);
+    assert.equal(read.status, 0, read.output); assert.equal(read.effects, "");
     assert.deepEqual(fs.readdirSync(f.home), []);
   } finally { fs.rmSync(f.dir, { recursive: true, force: true }); }
 });
@@ -86,7 +94,7 @@ test("every source CLI route exits help or precisely refuses before backend effe
   const f = fixture(); let count = 0;
   try {
     const entries: [string, string[]][] = Object.entries(routes).map(([name, commands]) => [path.join(root, "tools", name + ".ts"), commands]);
-    for (const name of ["copilot_land", "iac_review", "jury", "self_healer"]) entries.push([path.join(f.composed, "tools", name + ".ts"), routes[name]]);
+    for (const name of codexEntrypoints) entries.push([path.join(f.composed, "tools", name + ".ts"), routes[name]]);
     entries.push([path.join(root, "runtime-overrides/codex/skill/stark-gha-cost/scripts/gha-cost-json.ts"), ["", "jobs", "billing"]]);
     for (const [file, commands] of entries) for (const command of commands) {
       const prefix = command ? command.split(" ") : [];
@@ -101,11 +109,25 @@ test("every source CLI route exits help or precisely refuses before backend effe
         assert.ok(r.status !== 0 || /usage:|\bCLI\b/i.test(r.output), label);
       }
     }
+    // The exit STATUS is asserted here, not just the wording: a mangled guard
+    // whose `case` subject is not `$1` still prints "unsupported argument: …"
+    // and so still satisfies `refusal` while help never works. Leading help is
+    // syntax and must exit 0; anything else must refuse nonzero.
     for (const file of shells) for (const args of [["help"], ["--help"], ["-h"], ["--dry-run", "help"], ["help", "--dry-run"]]) {
       const r = f.run(path.join(root, file), args, true); count++;
-      assert.equal(r.effects, "", `${file}: ${r.output}`);
-      assert.equal(r.signal, null, `${file}: ${r.output}`);
-      assert.match(r.output, refusal, file);
+      const label = `${file} ${args.join(" ")}: ${r.output}`;
+      assert.equal(r.effects, "", label);
+      assert.equal(r.signal, null, label);
+      assert.match(r.output, refusal, label);
+      if (["help", "--help", "-h"].includes(args[0]!)) {
+        assert.equal(r.status, 0, label);
+        assert.match(r.output, /usage:/i, label);
+        // Line-anchored: a checkout path echoed inside a usage line must not
+        // read as the refusal branch having fired.
+        assert.doesNotMatch(r.output, /^unsupported /im, label);
+      } else {
+        assert.notEqual(r.status, 0, label);
+      }
     }
     assert.deepEqual(fs.readdirSync(f.home), []);
     console.log(`source help audit: ${count} real entrypoint processes, zero backend effects`);
@@ -124,6 +146,15 @@ test("real CLI literal values and later safety flags survive parsing", () => {
       const bad = f.run(tool, ["land", "--title", "--dry-run"]);
       assert.notEqual(bad.status, 0); assert.equal(bad.effects, "");
       assert.match(bad.output, /requires a value/);
+      // Refusing a leading-dash value in the space form is only safe because
+      // `--key=VALUE` still expresses one. Without it a PR title or body that
+      // begins with a dash — a markdown rule, say — is unrepresentable here,
+      // and this parser has no other escape.
+      const dashy = f.run(tool, ["land", "--repo", "audit/repo", "--branch", "audit", "--title=--fix the guard", "--body", "b", "--dry-run", "--json"]);
+      assert.equal(dashy.status, 0, dashy.output); assert.equal(dashy.effects, "");
+      assert.equal(JSON.parse(dashy.stdout).title, "--fix the guard");
+      const eqBool = f.run(tool, ["land", "--dry-run=yes"]);
+      assert.notEqual(eqBool.status, 0); assert.match(eqBool.output, /takes no value/);
     }
     const findings = path.join(root, "tools/findings_review_post.ts");
     // "help" is a literal filename here. Invalid JSON proves the real main
@@ -158,6 +189,31 @@ test("operational entrypoint inventory cannot silently omit new source CLIs", ()
     .filter(name => /process\.argv|^#!/m.test(fs.readFileSync(path.join(root, "tools", name), "utf8")))
     .map(name => name.slice(0, -3)).sort();
   assert.deepEqual(found, Object.keys(routes).sort());
+});
+
+test("shell and Codex entrypoint inventories cannot silently omit an executable", () => {
+  // The `shells` and `codexEntrypoints` lists are hand-written, so without this
+  // they are the same silent-omission hole the TypeScript inventory closes: a
+  // new hook script or Codex override CLI would never be probed.
+  const skip = new Set(["node_modules", ".git", ".worktrees"]);
+  const walk = (dir: string, rel = ""): string[] =>
+    fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      if (skip.has(entry.name)) return [];
+      const next = rel ? `${rel}/${entry.name}` : entry.name;
+      return entry.isDirectory() ? walk(path.join(dir, entry.name), next) : [next];
+    });
+  const all = walk(root);
+  assert.deepEqual(
+    all.filter((p) => p.endsWith(".sh") && !p.endsWith(".test.sh")).sort(),
+    [...shells].sort(),
+  );
+  assert.deepEqual(
+    all
+      .filter((p) => p.startsWith("runtime-overrides/codex/tools/") && p.endsWith(".ts") && !p.endsWith(".test.ts"))
+      .filter((p) => /process\.argv|^#!/m.test(fs.readFileSync(path.join(root, p), "utf8")))
+      .map((p) => path.basename(p, ".ts")).sort(),
+    [...codexEntrypoints].sort(),
+  );
 });
 
 test("macOS OS confinement is calibrated independently of JavaScript tripwires", { skip: process.env.HELP_AUDIT_OS !== "1" }, () => {
