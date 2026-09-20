@@ -4,6 +4,9 @@ All notable changes to `stark-marketplace`. The format follows [Keep a Changelog
 
 ## [Unreleased]
 
+### Removed
+- **The web registry is gone (STARK-7972).** Deleted the `web/` React SPA, the `server/` Go static origin, the `Dockerfile`, the `web-deploy` workflow, `docs/scripts/deploy-web.sh` and `docs/web-hosting.md`. Nothing in the install or publish path read `marketplace.21stark.com`: Claude Code installs from `.claude-plugin/marketplace.json` + `dist/claude/` on GitHub, `stark install/search/info` load `index.json` from disk, and `sign-manifest` signs the committed `index.json` regardless of hosting. `index.json` / `bundles/*.json` stay. `ci.yml` drops the `web build` and `server (static origin)` jobs, so the required contexts on `main` go **five → three**; the ruleset must be narrowed by the operator in the same change (`docs/operations/branch-protection.md`). `publish.sh` loses `--deploy`. Codex plugin `homepage` / `websiteURL` now fall back to the GitHub repo URL. The GCP teardown in `ev-infra-group` is tracked separately.
+
 ### Added
 <!-- idun:pr-merge pr=291 runId=291 sha=dfc329da -->
 - `stark`'s help output now renders in the shared 21Stark fleet look (colorized title, usage, headings, commands, and flags) via a pinned stark-tui snapshot.

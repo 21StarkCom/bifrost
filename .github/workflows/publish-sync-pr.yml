@@ -193,7 +193,7 @@ jobs:
           # HEAD commit exactly as a `pull_request` run does, so THIS job shows up
           # in `gh pr checks` as a permanently in-progress check. Watching the
           # unfiltered set makes the step wait on itself until the job timeout and
-          # publication can never happen. The required set is the ruleset's five
+          # publication can never happen. The required set is the ruleset's three
           # `ci` contexts, which is also the gate `main` actually enforces.
           #
           # Wait for those checks to EXIST — a positive assertion on the count,

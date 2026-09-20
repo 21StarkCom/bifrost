@@ -21,7 +21,7 @@ A plain `require github.com/21StarkCom/stark-tui/go` breaks in two places:
 - **CI.** `.github/workflows/ci.yml` carries only `secrets.GITHUB_TOKEN`, which
   is scoped to this repository and cannot read another private repo in the org.
   `go test ./...` could not fetch the module, so `engine (validate + drift +
-  tests)` — one of `main`'s five required contexts — would go red and stay red.
+  tests)` — one of `main`'s three required contexts — would go red and stay red.
 - **Anyone who clones this repo.** It is public; the module is not fetchable
   without org credentials, so `go build ./cmd/stark` would fail for everyone
   outside the fleet.

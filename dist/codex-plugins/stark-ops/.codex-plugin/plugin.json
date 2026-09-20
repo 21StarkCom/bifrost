@@ -7,7 +7,7 @@
     "email": "engineering@21stark.com",
     "url": "https://github.com/21StarkCom"
   },
-  "homepage": "https://marketplace.21stark.com/",
+  "homepage": "https://github.com/21StarkCom/bifrost",
   "repository": "https://github.com/21StarkCom/bifrost",
   "keywords": [
     "release",
@@ -28,7 +28,7 @@
       "Read",
       "Write"
     ],
-    "websiteURL": "https://marketplace.21stark.com/",
+    "websiteURL": "https://github.com/21StarkCom/bifrost",
     "defaultPrompt": [
       "Use Stark Ops for this task."
     ]

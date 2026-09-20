@@ -184,8 +184,7 @@ func runSync(from, catalogDir, repoRoot string, check bool) int {
 	// (STARK-6357). Every skill body carries links like `../../standards/help.md`; from
 	// catalog/<bundle>/skills/<name>.md that resolves to catalog/standards/<file>, a
 	// directory that did not exist — so all 68 were dead when the catalog was browsed on
-	// GitHub, which is where it IS browsed: the web SPA renders only metadata from
-	// index.json/bundles/*.json, never a skill body, and the origin serves no catalog/.
+	// GitHub, which is where it IS browsed.
 	// The same links are already correct under dist/**, where standards/ sits beside
 	// skills/. Making the target exist is deliberately preferred over rewriting the
 	// links: a retarget rule would re-render every bundle's catalog bytes and force a
