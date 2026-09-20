@@ -27,24 +27,10 @@ func TestCheckBumpsCleanRepoExitsZero(t *testing.T) {
 // keying → exit 1): a previous index.json committed with a STALE digest but the
 // SAME version as the current source is a version-bump-gate violation.
 func TestCheckBumpsDetectsViolation(t *testing.T) {
-	root := t.TempDir()
-	must := func(err error) {
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-	cmdDir := filepath.Join(root, "catalog", "demo", "commands")
-	must(os.MkdirAll(cmdDir, 0o755))
-	must(os.WriteFile(filepath.Join(root, "catalog", "demo", "bundle.yaml"),
-		[]byte("name: demo\nversion: 0.1.0\ndescription: d\nowner: { name: E }\nruntimes: [claude]\n"), 0o644))
-	must(os.WriteFile(filepath.Join(cmdDir, "hello.md"),
-		[]byte("---\nname: hello\ntype: command\ndescription: d\nversion: 0.1.0\n---\nbody\n"), 0o644))
-	// previous index.json: same version, stale digest → must trip the gate. The real index
-	// always carries `type` (it is part of the per-artifact identity / bump key), so the fixture does too.
-	must(os.WriteFile(filepath.Join(root, "index.json"),
-		[]byte(`{"schemaVersion":1,"artifacts":[{"name":"hello","type":"command","bundle":"demo","version":"0.1.0","digest":"sha256:stale"}]}`+"\n"), 0o644))
-
-	seedCommit(t, root)
+	// One fixture, shared with the baseline tests: same bundle, same command, same
+	// deliberately stale committed digest. Two copies drifted independently, and a
+	// fixture that stops violating makes a gate test pass for the wrong reason.
+	root := seedBaselineRepo(t)
 
 	if code := runCheckBumps(filepath.Join(root, "catalog"), root); code != 1 {
 		t.Fatalf("want exit 1 on un-bumped source change, got %d", code)
@@ -115,7 +101,11 @@ func TestPrevIndexJSONIgnoresAnInheritedGitDir(t *testing.T) {
 	t.Setenv("GIT_DIR", filepath.Join(other, ".git"))
 	t.Setenv("GIT_WORK_TREE", other)
 
-	if got := string(prevIndexJSON(root)); got != `{"mine":true}`+"\n" {
+	data, _, ok := prevIndexJSON(root)
+	if !ok {
+		t.Fatal("no baseline: neither fixture has an origin remote, so the HEAD fallback must apply")
+	}
+	if got := string(data); got != `{"mine":true}`+"\n" {
 		t.Fatalf("an inherited GIT_DIR retargeted the previous index: %q", got)
 	}
 }

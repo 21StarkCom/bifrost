@@ -33,6 +33,26 @@ jobs:
         working-directory: engine
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      # `check-bumps` asks "did content already published on main change under an
+      # unchanged version", so it needs main's index.json. On a `pull_request` event
+      # actions/checkout fetches ONLY `refs/pull/N/merge` — no remote-tracking branch —
+      # and the gate then fell back to `HEAD:index.json`, which IS this PR's own index
+      # (the drift gate forces it to be regenerated in the same commit). It therefore
+      # compared the change to itself and could not fail. Measured 2026-09-20 on one
+      # violating commit: `OK` with only the merge ref present, 7 violations once this
+      # fetch had run (STARK-8161). Depth 1 is enough — a shallow commit carries its
+      # whole tree. Keep this step: `prevIndexJSON` now refuses rather than passing when
+      # the ref is missing, so dropping it turns the job red rather than quiet.
+      #
+      # This arms the `pull_request` run. The `push: [main]` run of this same job stays
+      # vacuous and always will be: after a merge, HEAD and `origin/main` are the same
+      # commit, so previous == current for every row no matter what the change did. That
+      # is correct — the question "did this change publish content under an unchanged
+      # version" can only be answered before it lands — but do not read a green
+      # `check-bumps` on a `main` push as evidence of anything.
+      - name: fetch main (the check-bumps baseline)
+        run: git fetch --no-tags --depth=1 origin +refs/heads/main:refs/remotes/origin/main
+        working-directory: .
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: engine/go.mod   # pinned toolchain (spec §7.6)

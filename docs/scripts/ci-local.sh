@@ -20,8 +20,15 @@ fi
 # `ci` gates every PR — run this before pushing when you want the gate without
 # waiting on CI (a fast local pre-flight), not because CI is off.
 #
-# Mirrors ci.yml exactly: engine (fmt/vet/test/validate/drift/bumps/lint/
+# Runs the same steps as ci.yml: engine (fmt/vet/test/validate/drift/bumps/lint/
 # allowlist), gitleaks secret scan, and actionlint. Any failure exits non-zero.
+#
+# ONE deliberate difference, and it matters for `check-bumps`. CI fetches `origin/main`
+# first, so it measures against the tip; this script does NOT fetch anything — running
+# `git fetch` inside somebody's working clone is not a pre-flight's business — so it
+# measures against whatever `origin/main` you last pulled. A stale one can report a clean
+# gate for content `main` has since bumped past. Fetch first if that matters:
+#   git fetch origin main
 #
 # Usage:  docs/scripts/ci-local.sh
 
