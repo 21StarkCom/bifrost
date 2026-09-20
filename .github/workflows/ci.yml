@@ -99,53 +99,6 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: gitleaks git . --config .gitleaks.toml --redact --exit-code 1 --log-opts "${BASE_SHA}..${HEAD_SHA}"
 
-  web:
-    name: web build
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: web
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - run: npm ci
-      - name: typecheck (tsc --noEmit, strict)
-        run: npm run typecheck
-      - name: eslint
-        run: npm run lint
-      - name: vitest
-        run: npm test
-      - run: npm run build
-
-  server:
-    name: server (static origin)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: server
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
-        with:
-          go-version-file: server/go.mod
-          cache: true
-      - name: gofmt (blocks unformatted Go)
-        run: |
-          out=$(gofmt -l .)
-          if [ -n "$out" ]; then
-            echo "::error::gofmt found unformatted files:"
-            echo "$out"
-            exit 1
-          fi
-      - name: go vet
-        run: go vet ./...
-      - name: unit tests
-        run: go test ./... -count=1
-
   actionlint:
     name: actionlint
     runs-on: ubuntu-latest

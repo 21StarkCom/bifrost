@@ -7,8 +7,8 @@ import (
 
 // signerIdentity is the EXACT keyless signer identity that may produce a valid build
 // manifest: the sign-manifest workflow running on the main ref. It is matched exactly
-// (not by a prefix regexp) so that NO other workflow in this repo — e.g. web-deploy.yml,
-// which also holds id-token: write — and no non-main ref can mint an accepted signature.
+// (not by a prefix regexp) so that NO other workflow in this repo — should one ever hold
+// id-token: write — and no non-main ref can mint an accepted signature.
 // The OIDC issuer additionally pins GitHub Actions as the token source.
 const (
 	signerIdentity = "https://github.com/21StarkCom/bifrost/.github/workflows/sign-manifest.yml@refs/heads/main"

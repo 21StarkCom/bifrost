@@ -11,18 +11,16 @@ admin commands that put it there. Read [`SECURITY.md`](../SECURITY.md) §5 for
 
 ---
 
-## 1. The contract — five required contexts
+## 1. The contract — three required contexts
 
-`.github/workflows/ci.yml` defines exactly five jobs, and every PR to `main` gets
-all five. These are the required contexts, spelled exactly as GitHub reports them
+`.github/workflows/ci.yml` defines exactly three jobs, and every PR to `main` gets
+all three. These are the required contexts, spelled exactly as GitHub reports them
 in the PR status rollup:
 
 | Required context                   | ci.yml job | Gates |
 | ---------------------------------- | ---------- | ----- |
 | `engine (validate + drift + tests)` | `engine`     | gofmt · `go vet` · `go test` · `stark validate` · **`stark build --check` (drift)** · `check-bumps` · `lint --strict` · `allowlist --check` |
 | `secret scan (catalog)`             | `secrets`    | gitleaks over the working tree **and** the PR commit range |
-| `web build`                         | `web`        | `tsc --noEmit` · eslint · vitest · `vite build` |
-| `server (static origin)`            | `server`     | gofmt · `go vet` · `go test` |
 | `actionlint`                        | `actionlint` | workflow lint |
 
 **The context string is the job's `name:`, not its YAML key.** Renaming a job's
@@ -183,8 +181,6 @@ gh api -X POST repos/21StarkCom/bifrost/rulesets \
         "required_status_checks": [
           { "context": "engine (validate + drift + tests)", "integration_id": 15368 },
           { "context": "secret scan (catalog)",             "integration_id": 15368 },
-          { "context": "web build",                          "integration_id": 15368 },
-          { "context": "server (static origin)",             "integration_id": 15368 },
           { "context": "actionlint",                         "integration_id": 15368 }
         ]
       }
@@ -257,7 +253,7 @@ The vacuous-pass failure mode is that everything *looks* green because nothing
 was ever required. Three checks, in order:
 
 ```bash
-# 1. The ruleset exists, is active, and names all five contexts.
+# 1. The ruleset exists, is active, and names all three contexts.
 gh api repos/21StarkCom/bifrost/rulesets
 
 # 2. GitHub marks them required ON A PR — this is the ruleset-aware view, and

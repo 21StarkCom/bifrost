@@ -21,7 +21,6 @@ const CodexManifestRelPath = ".agents/plugins/marketplace.json"
 const (
 	defaultCodexCategory = "Productivity"
 	defaultCodexOwner    = "21 Stark AI"
-	defaultCodexWebsite  = "https://marketplace.21stark.com/"
 	codexRepositoryURL   = "https://github.com/21StarkCom/bifrost"
 )
 
@@ -121,7 +120,7 @@ func GenerateCodexPlugin(b *model.Bundle, version string) (CodexPluginManifest, 
 	}
 	homepage := strings.TrimSpace(b.Homepage)
 	if homepage == "" {
-		homepage = defaultCodexWebsite
+		homepage = codexRepositoryURL
 	}
 	category := codexCategory(b.Category)
 	displayName := displayCodexName(b.Name)

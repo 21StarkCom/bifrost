@@ -1,6 +1,6 @@
 # Bifröst
 
-The bridge between the realms. Canonical, multi-runtime marketplace for **stark** bundles — one source of truth (`catalog/`) renders into per-runtime trees for **Claude Code**, **Codex**, and **Gemini CLI**, plus a signed web registry served at [marketplace.21stark.com](https://marketplace.21stark.com). GitHub slug: `21StarkCom/bifrost`.
+The bridge between the realms. Canonical, multi-runtime marketplace for **stark** bundles — one source of truth (`catalog/`) renders into per-runtime trees for **Claude Code**, **Codex**, and **Gemini CLI**, plus a signed registry (`index.json` / `bundles/*.json`). GitHub slug: `21StarkCom/bifrost`.
 
 The repo is also a native marketplace for both hosts. Claude Code reads `.claude-plugin/marketplace.json`; Codex prefers `.agents/plugins/marketplace.json`. Each manifest points at a separate generated package tree, so Codex compatibility cannot alter Claude's installed workflows.
 
@@ -70,19 +70,6 @@ To publish a skill change: edit it in **stark-skills**, bump the affected bundle
 
 Adding a **new** skill is different, and the order is load-bearing: stark-skills' `tests.yml` and `marketplace-sync.yml` both run this repo's `docs/scripts/coverage-gate.sh` out of a checkout of bifrost's default branch, so a skill that reaches stark-skills `main` with no `bundle.yaml` membership here stops marketplace publication outright. Land the membership here first (generated from the unmerged stark-skills branch — `stark sync` hard-errors on a declared member with no source), then merge the upstream skill immediately after; the reverse order, and the gap between the two, are both red. See `CLAUDE.md` → "Coverage gate".
 
-Web SPA (`web/`):
-
-```bash
-cd web
-npm install
-npm run dev        # local
-npm run build      # tsc --noEmit && vite build
-npm test
-```
-
-Static origin (`server/`) is the Cloud Run image fronting the registry behind the
-`ev-infra-group` platform load balancer.
-
 ## Architecture, in one paragraph
 
 `internal/load` parses `catalog/` into a `model.Catalog`. Per-runtime adapters in `internal/adapter/{claude,codex,gemini}` render bundles into runtime-specific file trees. `internal/build` independently generates committed Claude packages in `dist/claude/` and native marketplace Codex packages in `dist/codex-plugins/`; `internal/install` still produces standalone/project-local runtime installs. `cmd/stark` wires these. Determinism is load-bearing: `build --check` is the drift gate and `check-bumps` enforces canonical version-bump immutability. `dist/codex/` and `dist/gemini/` remain ignored standalone install outputs.
@@ -110,8 +97,6 @@ Full threat model and controls: [`docs/SECURITY.md`](docs/SECURITY.md).
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — how to add or change a bundle/artifact.
 - [`docs/native-install-loop.md`](docs/native-install-loop.md) — end-to-end install via CC native marketplace.
 - [`docs/SECURITY.md`](docs/SECURITY.md) — trust model, signing, allowlist process, branch protection.
-- [`docs/web-hosting.md`](docs/web-hosting.md) — Cloud Run + LB wiring for `marketplace.21stark.com`.
-- [`web/README.md`](web/README.md) — SPA-specific dev notes.
 
 ## License & ownership
 

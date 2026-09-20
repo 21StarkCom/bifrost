@@ -87,7 +87,7 @@ Prerequisite: the org teams `@21-Stark-AI/stark-maintainers` and
 `stark validate`, `stark build --check` (drift — non-bypassable gate),
 `stark check-bumps` (version-bump immutability — non-bypassable gate; errors when an
 artifact's canonical-source digest changed without a `version` bump),
-`go test ./...` (golden + determinism + integration), gitleaks, web build, actionlint.
+`go test ./...` (golden + determinism + integration), gitleaks, actionlint.
 **Non-blocking** (surfaced only): `stark lint` body scan, capability/array warnings.
 
 ## 5. Branch protection — APPLY (manual admin step)
@@ -101,7 +101,7 @@ artifact's canonical-source digest changed without a `version` bump),
 > trusting any of it; that command existed here before and was never run, which
 > is how the gap below survived.
 >
-> **Live and enforcing:** the `Required CI on main` ruleset (five contexts,
+> **Live and enforcing:** the `Required CI on main` ruleset (three contexts,
 > `enforcement: active`), `required_linear_history: true`, `enforce_admins: true`,
 > `allow_force_pushes: false`, `allow_deletions: false`,
 > `required_conversation_resolution: true`.
@@ -126,8 +126,7 @@ artifact's canonical-source digest changed without a `version` bump),
 > misleading — it can look configured while no check is required. See
 > [`operations/branch-protection.md`](operations/branch-protection.md) §2–§3 for
 > the ruleset that mirrors `21StarkCom/stark-skills`' `Required CI on main`, and
-> the **five** (not four) contexts it must name — the list below omits
-> `server (static origin)`. The classic-protection command below remains the
+> the three contexts it must name. The classic-protection command below remains the
 > source for the review / linear-history half only.
 
 > These commands MUTATE repo settings. Run them once as a repo admin AFTER the
@@ -154,8 +153,6 @@ gh api -X PUT repos/21StarkCom/bifrost/branches/main/protection \
     "contexts": [
       "engine (validate + drift + tests)",
       "secret scan (catalog)",
-      "web build",
-      "server (static origin)",
       "actionlint"
     ]
   },
@@ -181,7 +178,7 @@ gh api repos/21StarkCom/bifrost/branches/main/protection | \
 ```
 
 Expected verify output: `linear: true`, `force: false`, `admins: true`,
-`codeowners: true`, `approvals: 2`, and the five required contexts listed.
+`codeowners: true`, `approvals: 2`, and the three required contexts listed.
 (If the contexts live in the ruleset instead — the current plan — `checks` reads
 `null` here and you verify them with `gh api repos/21StarkCom/bifrost/rulesets`.)
 

@@ -5,7 +5,6 @@ This repo distributes code that runs inside developer agents (and, for `mcp/` en
 ## Prerequisites
 
 - Go 1.24 (pinned via `engine/go.mod`)
-- Node 20+ (for `web/`)
 - Repo access to `21StarkCom/bifrost`
 
 ## The standard loop
@@ -60,21 +59,7 @@ CI (`.github/workflows/ci.yml`) runs the same steps plus `gitleaks`. Anything bl
 ## Adapters & schemas
 
 - Per-runtime adapters live under `engine/internal/adapter/{claude,codex,gemini}` with golden tests. If you change adapter output, expect goldens to update and `stark build --check` to drift — regenerate and commit.
-- Schemas in `schema/` are versioned. Breaking changes need a `schemaVersion` bump and a migration note in the PR description; the web SPA degrades gracefully on skew (see `web/src/data/schema.ts`) but the engine fails closed.
-
-## Web SPA
-
-```bash
-cd web
-npm install
-npm run dev
-npm test
-npm run lint
-npm run typecheck
-npm run build
-```
-
-Data contract: `web/src/types/registry.ts` mirrors the engine's emitted JSON. Unknown fields are ignored (forward compatible).
+- Schemas in `schema/` are versioned. Breaking changes need a `schemaVersion` bump and a migration note in the PR description; the engine fails closed on skew.
 
 ## PR checklist
 
@@ -82,7 +67,6 @@ Data contract: `web/src/types/registry.ts` mirrors the engine's emitted JSON. Un
 - [ ] `stark build --check` clean (regenerated outputs committed)
 - [ ] `stark check-bumps` clean (versions bumped where content changed)
 - [ ] `go test ./...` and `go vet ./...` pass
-- [ ] `web` tests + lint + typecheck pass if web touched
 - [ ] If `mcp/` or allowlist changed: justification in PR body, second reviewer assigned
 - [ ] If schema changed: migration note + `schemaVersion` bump
 - [ ] No hand edits to `dist/`, `index.json`, or `bundles/*.json`

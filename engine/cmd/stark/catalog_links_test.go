@@ -16,8 +16,7 @@ import (
 // catalog/<bundle>/skills/<name>.md that resolves to catalog/standards/<file> — a
 // directory that did not exist, so all 68 of them were dead. They are correct under
 // dist/**, where standards/ sits beside skills/, and were wrong only in the flattened
-// catalog, which IS browsed (on GitHub: the web SPA renders only metadata from
-// index.json/bundles/*.json and the origin serves no catalog/ at all).
+// catalog, which IS browsed (on GitHub).
 //
 // The fix makes the target exist rather than rewriting the links, so this test guards
 // the emit in `stark sync`: delete catalog/standards/ and every one of these goes dead

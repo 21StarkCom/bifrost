@@ -16,26 +16,26 @@ set -euo pipefail
 #     bundle. The root VERSION also takes a MINOR.
 #   - Any other content change (a stark-skills edit that re-renders artifacts)
 #     -> PATCH bump of each affected bundle (default). Root VERSION takes PATCH.
-# So a deploy never ships un-bumped content, and add/remove is signalled as minor.
+# So a publish never ships un-bumped content, and add/remove is signalled as minor.
 #
 # Usage:
 #   docs/scripts/publish.sh                                     # sync + patch-bump changed
 #   docs/scripts/publish.sh --add-skill stark-gha-cost --bundle stark-ops
 #   docs/scripts/publish.sh --remove-skill stark-foo --bundle stark-ops
-#   docs/scripts/publish.sh --add-skill X --bundle Y --ci --deploy
+#   docs/scripts/publish.sh --add-skill X --bundle Y --ci
 #
 # Env:
 #   STARK_SKILLS   path to the stark-skills checkout (default: ../../stark-skills
 #                  relative to this repo, i.e. a sibling clone)
 #
 # It does NOT commit, push, or open a PR — that stays a deliberate human step
-# (the script prints the next commands). --deploy runs deploy-web.sh at the end.
+# (the script prints the next commands).
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
 STARK_SKILLS="${STARK_SKILLS:-$REPO_ROOT/../stark-skills}"
-ADD_SKILL="" REMOVE_SKILL="" BUNDLE="" RUN_CI=0 RUN_DEPLOY=0
+ADD_SKILL="" REMOVE_SKILL="" BUNDLE="" RUN_CI=0
 MEMBERSHIP_CHANGED=0
 
 while [ $# -gt 0 ]; do
@@ -44,7 +44,6 @@ while [ $# -gt 0 ]; do
     --remove-skill) REMOVE_SKILL="${2:?}"; shift 2 ;;
     --bundle)       BUNDLE="${2:?}"; shift 2 ;;
     --ci)           RUN_CI=1; shift ;;
-    --deploy)       RUN_DEPLOY=1; shift ;;
     -h|--help)      sed -n '3,33p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
@@ -211,9 +210,3 @@ echo
 echo "✅ regeneration complete + drift-clean."
 echo "   Review + commit EVERYTHING (catalog + vendor + dist + golden + VERSION):"
 echo "     git add -A && git commit && git push && gh pr create ..."
-if [ "$RUN_DEPLOY" -eq 1 ]; then
-  echo "→ deploy-web.sh"
-  docs/scripts/deploy-web.sh
-else
-  echo "   Then deploy the web origin when ready:  docs/scripts/deploy-web.sh"
-fi
