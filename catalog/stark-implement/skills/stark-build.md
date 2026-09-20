@@ -2,7 +2,7 @@
 name: stark-build
 type: skill
 description: 'Stage 2 — autonomous implementation from an accepted stark-author spec: one fresh headless session per task, gated by checks the agent cannot edit (PreToolUse path-deny + Stop-hook gate), evidence per task, commit per green task, held-out e2e gate, one cross-vendor advisory review, ONE bounded fix round for medium+ findings, draft PR. No LLM review loops. Use for build, implement a spec.'
-version: 0.4.68
+version: 0.4.69
 maturity: beta
 runtimes:
   - claude
@@ -174,6 +174,14 @@ overrides:
          then `copilot_land.ts land --repo <owner/repo> --branch "build/<slug>"
          --title "build: <slug>" --body "<spec path + run id>" --repo-dir "<wt>"`
          (draft by default). Prevents F6-class base ambiguity.
+
+         `land` also stamps the ticket's `pr_url` + `pr_state=open` through
+         `alfred task edit --field` (STARK-6108). **Pass `--ticket STARK-n` when the
+         spec names its ticket** — `build/<slug>` carries no handle, so without the
+         flag the ticket comes from `alfred repo info --json` run in `<wt>`, i.e.
+         whatever session record that worktree resolves to. The write never changes
+         this command's exit code: every failure is one `ticket fields: skipped (…)`
+         line in the report.
       3. **Harness files:** copy this skill's
          [references/hooks/protect-paths.sh](references/hooks/protect-paths.sh) and
          [references/hooks/stop-gate.sh](references/hooks/stop-gate.sh) into
@@ -713,6 +721,14 @@ State lives OUTSIDE the repo:
    then `copilot_land.ts land --repo <owner/repo> --branch "build/<slug>"
    --title "build: <slug>" --body "<spec path + run id>" --repo-dir "<wt>"`
    (draft by default). Prevents base ambiguity.
+
+   `land` also stamps the ticket's `pr_url` + `pr_state=open` through
+   `alfred task edit --field` (STARK-6108). **Pass `--ticket STARK-n` when the
+   spec names its ticket** — `build/<slug>` carries no handle, so without the
+   flag the ticket comes from `alfred repo info --json` run in `<wt>`, i.e.
+   whatever session record that worktree resolves to. The write never changes
+   this command's exit code: every failure is one `ticket fields: skipped (…)`
+   line in the report.
 3. **Harness files:** copy this skill's
    [references/hooks/protect-paths.sh](references/hooks/protect-paths.sh) and
    [references/hooks/stop-gate.sh](references/hooks/stop-gate.sh) into

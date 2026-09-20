@@ -2,7 +2,7 @@
 name: stark-author
 type: skill
 description: 'Stage 1 — spec+plan authoring in one session, the operator decides: tier check, time-boxed recon, plain-language interview (only what only they know), one self-contained doc, one zero-context advisory pass, plain-language sign-off, commit-pinned handoff. No LLM review loops. Use for author, spec, plan a change.'
-version: 0.5.15
+version: 0.5.16
 maturity: beta
 runtimes:
   - claude
@@ -372,6 +372,51 @@ overrides:
         --body "Stage-1 authored spec+plan (stark-author). Sign-off: accepted by operator."
       ```
 
+      4. **Stamp the ticket** with the PR you just opened — alfred owns the ticket
+         field schema, and the path that opens a PR is the one authority for `pr_url`
+         and `pr_state` (alfred spec STARK-6093). `spec/<slug>` carries no ticket
+         handle, so the ticket is the one bound to this session:
+
+      ```bash
+      url="<the URL gh printed>"
+      t=$(alfred repo info --json 2>/dev/null | jq -r '.ticket // empty')
+      if [ -z "$t" ]; then
+        echo "ticket fields: skipped (no bound ticket) — pr_url, pr_state"
+      elif out=$(alfred task edit --field "pr_url=$url" --field pr_state=open --json "$t" 2>&1); then
+        case "$out" in
+          *'fields: skipped'*|*'"fields_skipped"'*)
+            # Pull the reason out of the blob — the contract below is ONE line.
+            why=$(printf '%s' "$out" | sed -n 's/.*fields: skipped (\([^)]*\)).*/\1/p' | head -1)
+            echo "ticket fields: skipped (alfred wrote nothing: ${why:-see alfred output}) — pr_url, pr_state on $t" ;;
+          *) echo "ticket fields: wrote pr_url=$url pr_state=open on $t (ticket from repo-info)" ;;
+        esac
+      else
+        echo "ticket fields: skipped ($(printf '%s' "$out" | head -1)) — pr_url, pr_state on $t"
+      fi
+      ```
+
+         **Write the branches out; do NOT collapse them to `A && B || C`.** That form
+         runs the `||` arm when the *write* fails, so a real ladder refusal prints
+         "skipped (no bound ticket)" — a ticket was found, and the line names the
+         wrong cause. It also prints no `ticket fields:` line at all on success,
+         dumping alfred's raw `--json` instead, which breaks the one-line contract
+         below.
+
+         **Exit 0 is not a write.** With `clickup.space_id` unset alfred prints
+         `fields: skipped (…)` and exits 0 — hence the `case`. Claiming "wrote" there
+         is the silent skip with a voice.
+
+         **This never fails Phase 6.** A skip, a missing `alfred`, an unset
+         `clickup.space_id`, or a ladder refusal costs one `ticket fields:` line and
+         nothing else — the PR is already open, and reporting it is what matters.
+         If the machine.s `alfred` binary predates the field work (spec nodes T0–T5,
+         on alfred `main` since `e5c403a`) it rejects the flag and this prints
+         `skipped (… unknown flag --field)` every time — reinstall alfred; the flag
+         itself is landed, and either way Phase 6 is unaffected.
+         The canonical form of this rule (the explicit → branch → bound-ticket ladder,
+         and every degrade) is `tools/ticket_fields_lib.ts`; `tools/copilot_land.ts`
+         runs it for `stark-build`'s impl PR.
+
       ## Phase 7 — Handoff
 
       Print, as the final report: the doc path · PR number · `accepted-base` hash ·
@@ -684,6 +729,51 @@ gh pr create --head "spec/<slug>" --base main --draft \
   --title "spec: <slug>" \
   --body "Stage-1 authored spec+plan (stark-author). Sign-off: accepted by operator."
 ```
+
+4. **Stamp the ticket** with the PR you just opened — alfred owns the ticket
+   field schema, and the path that opens a PR is the one authority for `pr_url`
+   and `pr_state` (alfred spec STARK-6093). `spec/<slug>` carries no ticket
+   handle, so the ticket is the one bound to this session:
+
+```bash
+url="<the URL gh printed>"
+t=$(alfred repo info --json 2>/dev/null | jq -r '.ticket // empty')
+if [ -z "$t" ]; then
+  echo "ticket fields: skipped (no bound ticket) — pr_url, pr_state"
+elif out=$(alfred task edit --field "pr_url=$url" --field pr_state=open --json "$t" 2>&1); then
+  case "$out" in
+    *'fields: skipped'*|*'"fields_skipped"'*)
+      # Pull the reason out of the blob — the contract below is ONE line.
+      why=$(printf '%s' "$out" | sed -n 's/.*fields: skipped (\([^)]*\)).*/\1/p' | head -1)
+      echo "ticket fields: skipped (alfred wrote nothing: ${why:-see alfred output}) — pr_url, pr_state on $t" ;;
+    *) echo "ticket fields: wrote pr_url=$url pr_state=open on $t (ticket from repo-info)" ;;
+  esac
+else
+  echo "ticket fields: skipped ($(printf '%s' "$out" | head -1)) — pr_url, pr_state on $t"
+fi
+```
+
+   **Write the branches out; do NOT collapse them to `A && B || C`.** That form
+   runs the `||` arm when the *write* fails, so a real ladder refusal prints
+   "skipped (no bound ticket)" — a ticket was found, and the line names the
+   wrong cause. It also prints no `ticket fields:` line at all on success,
+   dumping alfred's raw `--json` instead, which breaks the one-line contract
+   below.
+
+   **Exit 0 is not a write.** With `clickup.space_id` unset alfred prints
+   `fields: skipped (…)` and exits 0 — hence the `case`. Claiming "wrote" there
+   is the silent skip with a voice.
+
+   **This never fails Phase 6.** A skip, a missing `alfred`, an unset
+   `clickup.space_id`, or a ladder refusal costs one `ticket fields:` line and
+   nothing else — the PR is already open, and reporting it is what matters.
+   If the machine.s `alfred` binary predates the field work (spec nodes T0–T5,
+   on alfred `main` since `e5c403a`) it rejects the flag and this prints
+   `skipped (… unknown flag --field)` every time — reinstall alfred; the flag
+   itself is landed, and either way Phase 6 is unaffected.
+   The canonical form of this rule (the explicit → branch → bound-ticket ladder,
+   and every degrade) is `tools/ticket_fields_lib.ts`; `tools/copilot_land.ts`
+   runs it for `/stark-build`'s impl PR.
 
 ## Phase 7 — Handoff
 

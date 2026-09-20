@@ -2,7 +2,7 @@
 name: agnes
 type: skill
 description: 'Run one ticket solo and unattended, with no Gru: carry it end to end through the repo''s ticket → PR → review → merge → close spine, confirm the merge and the close yourself, comment the evidence on the ticket, and tear your own tab down.'
-version: 0.17.3
+version: 0.17.4
 maturity: beta
 runtimes:
   - claude
