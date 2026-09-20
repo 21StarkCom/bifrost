@@ -57,14 +57,92 @@ func writeEvilCatalog(t *testing.T) string {
 	return dir
 }
 
+// unloadableCatalog seeds a catalog dir whose one bundle has unparseable YAML, so
+// `load.Load` fails and NOTHING is scanned. A missing directory would do too, but this is
+// the shape a real tree reaches: a file edited into invalidity, not a path typo.
+func unloadableCatalog(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	bundle := filepath.Join(dir, "demo")
+	if err := os.MkdirAll(bundle, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bundle, "bundle.yaml"), []byte("name: [unclosed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// `lint --strict` is a blocking CI gate. A gate that could not READ what it scans must not
+// report success — the same "passes by finding nothing to measure" shape as check-bumps'
+// missing baseline (STARK-8161). It printed `load error: …` and then exit 0 for the life
+// of the repo.
+//
+// Its exposure in `ci.yml` today is nil, but only because `validate`, `build --check` and
+// `check-bumps` all run earlier in the same job over the same `load.Load` and all three
+// are fail-closed. That is step ordering, not a property of this gate: reorder the steps,
+// or call `lint --strict` from anywhere else, and the fail-open is live again — which is
+// why it is pinned here rather than argued away (STARK-8165).
+func TestLintStrictRefusesACatalogItCannotRead(t *testing.T) {
+	dir := unloadableCatalog(t)
+	var code int
+	out := captureStdout(t, func() { code = runLint(dir, true) })
+	if code == 0 {
+		t.Fatalf("lint --strict must not report success over a catalog it could not read; output:\n%s", out)
+	}
+	// Spec §9.8 reserves 2 for drift; a catalog that will not parse is a validation
+	// error, which is what every other `load.Load` caller in this binary returns.
+	if code != ExitValidation {
+		t.Fatalf("a load failure must exit %d (spec §9.8 validation error), got %d; output:\n%s", ExitValidation, code, out)
+	}
+	if !strings.Contains(out, "load error") {
+		t.Fatalf("the refusal must say what went wrong; output:\n%s", out)
+	}
+	// A summary here would be a lie: nothing was scanned, so "0 findings" measures nothing.
+	if strings.Contains(out, "LINT-SUMMARY") {
+		t.Fatalf("a load failure must not be reported as a finding count; output:\n%s", out)
+	}
+}
+
+// Non-strict is surfacing-only — `--strict` is the flag that opts into blocking — and it
+// keeps its exit-0 contract even here: a caller that opted out of blocking opted out of
+// this too. Pinned so the fix above cannot quietly turn plain `stark lint` into a blocking
+// command. "Surfacing-only" is only worth anything if it actually surfaces, so the load
+// error itself is asserted rather than just the exit code.
+func TestLintNonStrictStillExitsZeroOnALoadError(t *testing.T) {
+	dir := unloadableCatalog(t)
+	var code int
+	out := captureStdout(t, func() { code = runLint(dir, false) })
+	if code != 0 {
+		t.Fatalf("non-strict lint must stay informational: got exit %d\n%s", code, out)
+	}
+	if !strings.Contains(out, "load error") {
+		t.Fatalf("non-strict lint must still surface the load error; output:\n%s", out)
+	}
+	// Same reason as the strict case: nothing was scanned, so a count would measure nothing.
+	if strings.Contains(out, "LINT-SUMMARY") {
+		t.Fatalf("a load failure must not be reported as a finding count; output:\n%s", out)
+	}
+}
+
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
 	old := os.Stdout
-	rf, wf, _ := os.Pipe()
+	rf, wf, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Deferred, not straight-line: a panic in fn used to leave os.Stdout pointed at this
+	// pipe for the rest of the test binary, so every later test's output vanished into a
+	// buffer nobody reads (and a big enough write blocks forever).
+	defer func() {
+		os.Stdout = old
+		_ = wf.Close() // no-op on the happy path; closes the writer when fn panicked
+		_ = rf.Close()
+	}()
 	os.Stdout = wf
 	fn()
 	_ = wf.Close()
-	os.Stdout = old
 	buf := make([]byte, 4096)
 	n, _ := rf.Read(buf)
 	return string(buf[:n])
