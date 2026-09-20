@@ -80,13 +80,13 @@ More detail in [`CLAUDE.md`](CLAUDE.md).
 
 This distributes code that runs inside developer agents and, for `mcp/` entries, spawns commands on developer machines. Integrity rests on:
 
-1. Protected, linear `main` (no force-push, no bypass).
+1. Protected, linear `main` (no force-push, no deletions, `enforce_admins` on). The required CI contexts are the exception: they live in a ruleset that a repository admin bypasses always — see [`docs/SECURITY.md`](docs/SECURITY.md) §1.
 2. CI-signed build manifest (GitHub OIDC → sigstore/cosign keyless, signer `repo:21StarkCom/bifrost@refs/heads/main`).
 3. Commit SHA, which the manifest binds digests to.
 
 `stark verify-manifest` checks all three. Self-computed digests alone are only an anti-drift signal.
 
-MCP `command` values and `agent.tools` must be on positive allowlists (`engine/internal/validate/{allowlist,toolsallow}.go`). Adding an entry requires a CODEOWNERS-gated PR with maintainer + `@aryeh-stark` approval.
+MCP `command` values and `agent.tools` must be on positive allowlists (`engine/internal/validate/{allowlist,toolsallow}.go`). Adding an entry takes a PR touching only the allowlist file, with a written justification. `CODEOWNERS` names `@aryeh-stark` as its reviewer but is **not** an enforced merge gate today (`require_code_owner_reviews` is `false`, approvals are `0`) — see [`docs/SECURITY.md`](docs/SECURITY.md) §2, §3.
 
 Full threat model and controls: [`docs/SECURITY.md`](docs/SECURITY.md).
 

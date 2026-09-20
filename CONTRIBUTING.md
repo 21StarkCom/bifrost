@@ -23,9 +23,9 @@ go vet ./...
 # 3. Commit BOTH the catalog change AND the regenerated dist/index/bundles.
 ```
 
-`go run ./cmd/stark lint ../catalog` runs the body suspicious-pattern scan. It's non-blocking but worth reading before opening a PR.
+`go run ./cmd/stark lint ../catalog` runs the body suspicious-pattern scan. Plain `lint` surfaces findings and exits 0; **CI runs `lint --strict`, which blocks** — so read it before opening a PR.
 
-CI (`.github/workflows/ci.yml`) runs the same steps plus `gitleaks`. Anything blocking locally will block in CI.
+CI (`.github/workflows/ci.yml`) runs the steps above plus `gofmt`, `lint --strict`, `stark allowlist --check`, `gitleaks` and `actionlint`, all blocking. `docs/scripts/ci-local.sh` runs the same list locally. The authoritative per-job list is [`docs/SECURITY.md`](docs/SECURITY.md) §4.
 
 ## Adding or changing an artifact
 
@@ -74,7 +74,7 @@ CI (`.github/workflows/ci.yml`) runs the same steps plus `gitleaks`. Anything bl
 
 ## Branch protection & merging
 
-`main` is protected: linear history, no force-push, no admin bypass, and the required CI contexts in the `Required CI on main` ruleset. Approval counts are **0** and code-owner review is **off** on this one-operator repo — the gate on high-trust paths (artifact bodies, `mcp/`, schema, signing) is the mandatory `/code-review xhigh --fix` round, not an approval count; see [`docs/SECURITY.md`](docs/SECURITY.md) §3 and §5. Squash-merge. Merging triggers `sign-manifest.yml`, which signs the build manifest via GitHub OIDC → sigstore/cosign keyless (Fulcio + Rekor). See [`docs/SECURITY.md`](docs/SECURITY.md) §1.
+`main` is protected: linear history, no force-push, no deletions, `enforce_admins` on — those bind every merge. The required CI contexts are the exception: they live **only** in the `Required CI on main` ruleset, which grants repository admin `bypass_mode: "always"`, so the operator can merge red (deliberately, as an unblock path when CI itself is broken — `idun gh pr-merge` still refuses a red or skipped required check). Approval counts are **0** and code-owner review is **off** on this one-operator repo — the gate on high-trust paths (artifact bodies, `mcp/`, schema, signing) is the mandatory `/code-review xhigh --fix` round, not an approval count; see [`docs/SECURITY.md`](docs/SECURITY.md) §3 and §5. Squash-merge. Merging triggers `sign-manifest.yml`, which signs the build manifest via GitHub OIDC → sigstore/cosign keyless (Fulcio + Rekor). See [`docs/SECURITY.md`](docs/SECURITY.md) §1.
 
 ## Reporting security issues
 
