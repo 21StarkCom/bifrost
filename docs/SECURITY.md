@@ -9,7 +9,18 @@ highest-trust surfaces (design spec §7.4, §7.5, §11, §14).
 
 Integrity rests on **three things together**, not on self-computed digests:
 
-1. **Protected, linear `main`** — no force-push, no admin bypass, no deletions.
+1. **Protected, linear `main`** — no force-push, no deletions, linear history,
+   `enforce_admins` on. **Those hold for everyone; the required CI contexts do
+   not.** Classic branch protection carries no `required_status_checks` key at
+   all — the three contexts live only in the `Required CI on main` **ruleset**,
+   and that ruleset grants repository admin `bypass_mode: "always"`. So the
+   operator *can* merge red, by design, to keep an unblock path when CI itself
+   is what is broken. `required_approving_review_count` is `0` and
+   `require_code_owner_reviews` is `false` (§3). Measured 2026-09-20;
+   [`operations/branch-protection.md`](operations/branch-protection.md) §2–§3 is
+   the authority on both surfaces and costs out dropping the bypass actor.
+   What actually holds a change here is the mandatory `/code-review xhigh --fix`
+   round, not the ruleset.
 2. **A CI-signed build manifest** — produced on merge by `sign-manifest.yml` via
    GitHub OIDC → sigstore/cosign **keyless** (Fulcio cert + Rekor transparency log).
    The signer identity is `repo:21StarkCom/bifrost` on the `main` ref.
@@ -97,14 +108,32 @@ single approval, which is insufficient for instruction-text/code-exec surfaces. 
 repo-wide (GitHub has no per-path count), so the strictest path would govern every PR — which
 is exactly why it is not set on a one-human repo (§5).
 
-## 4. CI gates (required, non-bypassable)
+## 4. CI gates (required — on who can bypass them, see §1)
 
-`ci.yml` runs on every PR. **Blocking** (errors fail the job):
-`stark validate`, `stark build --check` (drift — non-bypassable gate),
-`stark check-bumps` (version-bump immutability — non-bypassable gate; errors when an
-artifact's canonical-source digest changed without a `version` bump),
-`go test ./...` (golden + determinism + integration), gitleaks, actionlint.
-**Non-blocking** (surfaced only): `stark lint` body scan, capability/array warnings.
+`ci.yml` runs on every PR. **Blocking** (errors fail the job): `gofmt`, `go vet`,
+`go test ./...` (golden + determinism + integration), `stark validate`,
+`stark build --check` (drift), `stark check-bumps` (version-bump immutability;
+errors when an artifact's canonical-source digest changed without a `version`
+bump), `stark lint --strict` (body suspicious-pattern scan),
+`stark allowlist --check`, gitleaks, actionlint.
+
+**Non-blocking** (surfaced only): `stark lint` *without* `--strict` — the
+informational mode, which CI does not use — and capability/array warnings from
+`stark validate`.
+
+Two things this section deliberately no longer claims.
+
+**Not "non-bypassable".** A repository admin bypasses the ruleset that requires
+these (§1). On a one-human repo that is the only human.
+
+**A green gate is not automatically a gate that measured something.** Three of
+these have been caught reporting success over content they never inspected:
+`check-bumps` had no `origin/main` baseline in a `pull_request` checkout and
+compared each PR to itself (STARK-8161); `lint --strict` returned 0 when it
+could not read the catalog at all (STARK-8165); and both `validate` and
+`lint --strict` still pass over a catalog holding zero bundles (STARK-8243,
+open). When one of these matters to a decision, check what it inspected —
+`check-bumps` now prints its baseline on every run for exactly this reason.
 
 ## 5. Branch protection — APPLY (manual admin step)
 
