@@ -10,17 +10,23 @@ highest-trust surfaces (design spec §7.4, §7.5, §11, §14).
 Integrity rests on **three things together**, not on self-computed digests:
 
 1. **Protected, linear `main`** — no force-push, no deletions, linear history,
-   `enforce_admins` on. **Those hold for everyone; the required CI contexts do
-   not.** Classic branch protection carries no `required_status_checks` key at
-   all — the three contexts live only in the `Required CI on main` **ruleset**,
-   and that ruleset grants repository admin `bypass_mode: "always"`. So the
-   operator *can* merge red, by design, to keep an unblock path when CI itself
-   is what is broken. `required_approving_review_count` is `0` and
-   `require_code_owner_reviews` is `false` (§3). Measured 2026-09-20;
+   `enforce_admins` on. **Those bind every merge, an admin's included; the
+   required CI contexts do not.** Classic branch protection carries no
+   `required_status_checks` key at all — the three contexts live only in the
+   `Required CI on main` **ruleset**, and that ruleset grants repository admin
+   `bypass_mode: "always"`. So the operator *can* merge red, by design, to keep
+   an unblock path when CI itself is what is broken.
+   `required_approving_review_count` is `0` and `require_code_owner_reviews` is
+   `false` (§5 is the authority on both). Measured 2026-09-20;
    [`operations/branch-protection.md`](operations/branch-protection.md) §2–§3 is
    the authority on both surfaces and costs out dropping the bypass actor.
-   What actually holds a change here is the mandatory `/code-review xhigh --fix`
-   round, not the ruleset.
+   Neither half binds an admin who **rewrites** the settings: `enforce_admins`
+   stops an admin *using* a bypass, not one who PUTs `enforce_admins: false` or
+   deletes the ruleset, and nothing in this repo detects that — §5's re-measure
+   commands are the only control. What holds a change here in practice is the
+   mandatory `/code-review xhigh --fix` round **plus `idun gh pr-merge`, which
+   refuses a red or skipped required check whatever the ruleset allows**
+   (`operations/branch-protection.md` §3) — not the ruleset.
 2. **A CI-signed build manifest** — produced on merge by `sign-manifest.yml` via
    GitHub OIDC → sigstore/cosign **keyless** (Fulcio cert + Rekor transparency log).
    The signer identity is `repo:21StarkCom/bifrost` on the `main` ref.
@@ -110,12 +116,25 @@ is exactly why it is not set on a one-human repo (§5).
 
 ## 4. CI gates (required — on who can bypass them, see §1)
 
-`ci.yml` runs on every PR. **Blocking** (errors fail the job): `gofmt`, `go vet`,
-`go test ./...` (golden + determinism + integration), `stark validate`,
-`stark build --check` (drift), `stark check-bumps` (version-bump immutability;
-errors when an artifact's canonical-source digest changed without a `version`
-bump), `stark lint --strict` (body suspicious-pattern scan),
-`stark allowlist --check`, gitleaks, actionlint.
+`ci.yml` runs on every PR (and on every push to `main` that starts a workflow run
+at all — the auto-published sync merge starts none; see
+[`operations/branch-protection.md`](operations/branch-protection.md) §1). Its
+three jobs are the three required contexts, and **every** step in each is
+blocking — a failing step fails its job, which fails its context:
+
+- **`engine (validate + drift + tests)`** — `gofmt`, `go vet`, `go test ./...`
+  (golden + determinism + integration), `stark validate`, `stark build --check`
+  (drift), `stark check-bumps` (version-bump immutability; errors when an
+  artifact's canonical-source digest changed without a `version` bump),
+  `stark lint --strict` (body suspicious-pattern scan), `stark allowlist --check`.
+- **`secret scan (catalog)`** — gitleaks over the working tree *and* the PR
+  commit range.
+- **`actionlint`** — workflow lint.
+
+This list is the one in `ci.yml` and in `docs/scripts/ci-local.sh`; it is pinned
+against the workflow by `engine/cmd/stark/security_doc_test.go`, because the
+previous copy silently drifted (it still called `stark lint` non-blocking two
+gate-additions later).
 
 **Non-blocking** (surfaced only): `stark lint` *without* `--strict` — the
 informational mode, which CI does not use — and capability/array warnings from
@@ -126,14 +145,19 @@ Two things this section deliberately no longer claims.
 **Not "non-bypassable".** A repository admin bypasses the ruleset that requires
 these (§1). On a one-human repo that is the only human.
 
-**A green gate is not automatically a gate that measured something.** Three of
-these have been caught reporting success over content they never inspected:
-`check-bumps` had no `origin/main` baseline in a `pull_request` checkout and
-compared each PR to itself (STARK-8161); `lint --strict` returned 0 when it
-could not read the catalog at all (STARK-8165); and both `validate` and
-`lint --strict` still pass over a catalog holding zero bundles (STARK-8243,
-open). When one of these matters to a decision, check what it inspected —
-`check-bumps` now prints its baseline on every run for exactly this reason.
+**A green gate is not automatically a gate that measured something.** Four of
+these have been found green over content they never inspected.
+Fixed: `check-bumps` had no `origin/main` baseline in a `pull_request` checkout
+and compared each PR to itself (STARK-8161); `lint --strict` returned 0 when it
+could not read the catalog at all (STARK-8165). Still live: both `validate` and
+`lint --strict` pass over a catalog holding zero bundles (STARK-8243, open); and
+`check-bumps` on the **`push: [main]`** run is vacuous by construction — after a
+merge HEAD and `origin/main` are the same commit, so previous equals current for
+every row. That last one is not a bug and will not be fixed: the question can
+only be answered before the change lands, so read a green `check-bumps` on a
+`main` push as evidence of nothing (`ci.yml` says so at the step). When one of
+these matters to a decision, check what it inspected — `check-bumps` now prints
+its baseline on every run for exactly this reason.
 
 ## 5. Branch protection — APPLY (manual admin step)
 
@@ -141,15 +165,24 @@ open). When one of these matters to a decision, check what it inspected —
 > That file carries the authoritative required-context list, the ruleset APPLY
 > command, and the verification steps. This section states the policy; read both.
 
-> **MEASURED 2026-09-16, and this block is the authority — not the prose above
-> it (STARK-4989, STARK-4991).** Re-measure with the command in §5.3 before
-> trusting any of it; that command existed here before and was never run, which
-> is how the gap below survived.
+> **MEASURED 2026-09-20 (STARK-4989, STARK-4991, STARK-8166). This block and §1
+> state the same measurement; if they ever disagree, re-measure rather than
+> believing either.** Re-measure with the two `gh api` commands in
+> [`operations/branch-protection.md`](operations/branch-protection.md) §2 (both
+> surfaces) before trusting any of it — they existed here before and were never
+> run, which is how the gap below survived.
 >
-> **Live and enforcing:** the `Required CI on main` ruleset (three contexts,
-> `enforcement: active`), `required_linear_history: true`, `enforce_admins: true`,
-> `allow_force_pushes: false`, `allow_deletions: false`,
+> **Live and enforcing for everyone** (classic branch protection, which carries
+> **no** `required_status_checks` key at all): `required_linear_history: true`,
+> `enforce_admins: true`, `allow_force_pushes: false`, `allow_deletions: false`,
 > `required_conversation_resolution: true`.
+>
+> **Live, and bypassable:** the `Required CI on main` ruleset — three contexts,
+> `enforcement: active`, `bypass_actors:
+> [{actor_id: 5, actor_type: RepositoryRole, bypass_mode: "always"}]`. That is
+> repository admin, which on this repo is the only human, so the three required
+> CI contexts are the one control here an operator can merge past (§1;
+> `operations/branch-protection.md` §3 costs out dropping the actor).
 >
 > **Deliberately NOT live:** `required_approving_review_count` is **0** and
 > `require_code_owner_reviews` is **false**. This is now a decision, not a gap.
@@ -163,7 +196,7 @@ open). When one of these matters to a decision, check what it inspected —
 > unchanged) — both of which are exercised per PR and neither of which a second
 > rubber-stamp would strengthen.
 >
-> If bifrost ever gains a second maintainer, revisit: the §4 trust model's
+> If bifrost ever gains a second maintainer, revisit: §3's two-approval
 > reasoning holds, it just has no one to spend a second approval.
 
 > **Required status checks now belong in a RULESET, not in the classic
@@ -189,7 +222,10 @@ open). When one of these matters to a decision, check what it inspected —
 > maintainer exists; see the measured block above for what is actually enforced.
 
 ```bash
-# Require the CI status checks + linear history + code-owner review + 2 approvals, no bypass.
+# NOT the live config — the recipe for the day a second maintainer exists.
+# Note it writes the status checks into CLASSIC protection; today they live only in
+# the ruleset (§1), and `enforce_admins` below binds admins to THIS payload only —
+# it does not revoke the ruleset's `bypass_mode: "always"` actor.
 gh api -X PUT repos/21StarkCom/bifrost/branches/main/protection \
   --input - <<'JSON'
 {
@@ -228,10 +264,11 @@ Expected verify output: `linear: true`, `force: false`, `admins: true`,
 `null` here and you verify them with `gh api repos/21StarkCom/bifrost/rulesets`.)
 
 > **Note on the `engine` required context:** the job name is
-> `engine (validate + drift + tests)` regardless of the added `check-bumps` /
-> `check-bumps`-blocking steps — required-status matching is by **job name**, not step.
-> The `check-bumps` step (and `build --check` drift step) being non-bypassable is a
-> property of the job exiting non-zero, already covered by requiring the `engine` context.
+> `engine (validate + drift + tests)` regardless of which steps it grows —
+> required-status matching is by **job name**, not step. A failing `check-bumps`
+> or `build --check` step fails the whole job, so requiring the `engine` context
+> is all it takes to require them. **That is "required", not "non-bypassable"** —
+> a repository admin still bypasses the ruleset that requires the context (§1).
 
 ## 6. Reporting
 
