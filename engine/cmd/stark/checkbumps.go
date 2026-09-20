@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -19,9 +18,13 @@ import (
 // prevIndexJSON returns the previously committed index.json bytes, preferring
 // origin/main and falling back to HEAD. Returns nil (skip) when neither ref has
 // the file (first commit / fresh repo).
+//
+// Through gitCommand, not a bare exec: an inherited GIT_DIR wins over `-C repoRoot`, so
+// under a hook or `git rebase --exec` the gate would read some OTHER repo's index as the
+// previous one and pass or fail by accident.
 func prevIndexJSON(repoRoot string) []byte {
 	for _, ref := range []string{"origin/main:index.json", "HEAD:index.json"} {
-		cmd := exec.Command("git", "-C", repoRoot, "show", ref)
+		cmd := gitCommand(repoRoot, "show", ref)
 		var stdout, stderr bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &stdout, &stderr
 		if err := cmd.Run(); err == nil {
@@ -87,6 +90,11 @@ func sharedAssetKey(bundle string) string { return bundle + "/shared-assets/" + 
 
 // codexAssetKey namespaces a bundle's source-owned Codex-overlay row. Same collision and
 // line-shape contract as sharedAssetKey; "codex-assets" is not an artifact type.
+//
+// There is deliberately no row for the engine-rendered `.codex-plugin/plugin.json`
+// (STARK-7977): it is display metadata the spec exempts, and it carries the root VERSION,
+// which a bundle bump does not move. See checkbumps_codex_manifest_test.go and CLAUDE.md
+// "Version-bump immutability"; the root-VERSION gap is STARK-7998.
 func codexAssetKey(bundle string) string { return bundle + "/codex-assets/" + bundle }
 
 // emptyDirDigest is `digest.Files` over no files — the value a bundle without a

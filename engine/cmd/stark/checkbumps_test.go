@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -45,16 +44,7 @@ func TestCheckBumpsDetectsViolation(t *testing.T) {
 	must(os.WriteFile(filepath.Join(root, "index.json"),
 		[]byte(`{"schemaVersion":1,"artifacts":[{"name":"hello","type":"command","bundle":"demo","version":"0.1.0","digest":"sha256:stale"}]}`+"\n"), 0o644))
 
-	git := func(args ...string) {
-		cmd := exec.Command("git", args...)
-		cmd.Dir = root
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-	git("init")
-	git("add", ".")
-	git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", "seed")
+	seedCommit(t, root)
 
 	if code := runCheckBumps(filepath.Join(root, "catalog"), root); code != 1 {
 		t.Fatalf("want exit 1 on un-bumped source change, got %d", code)
@@ -105,19 +95,28 @@ func TestCheckBumpsKeysByArtifactType(t *testing.T) {
 		`]}`
 	write(filepath.Join(root, "index.json"), prev+"\n")
 
-	git := func(args ...string) {
-		cmd := exec.Command("git", args...)
-		cmd.Dir = root
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-	git("init")
-	git("add", ".")
-	git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", "seed")
+	seedCommit(t, root)
 
 	if code := runCheckBumps(filepath.Join(root, "catalog"), root); code != 1 {
 		t.Fatalf("same-name/different-type: stale command/x must trip the gate (exit 1), got %d", code)
+	}
+}
+
+// Hooks and `git rebase --exec` export an absolute GIT_DIR, which beats `-C repoRoot`.
+// Unscrubbed, the gate read the ENCLOSING repo's index.json as the previous one — so every
+// fixture test in this package passed or failed by accident when run under one (STARK-7977).
+func TestPrevIndexJSONIgnoresAnInheritedGitDir(t *testing.T) {
+	root, other := t.TempDir(), t.TempDir()
+	writeFile(t, filepath.Join(root, "index.json"), `{"mine":true}`+"\n")
+	writeFile(t, filepath.Join(other, "index.json"), `{"someOtherRepo":true}`+"\n")
+	seedCommit(t, root)
+	seedCommit(t, other)
+
+	t.Setenv("GIT_DIR", filepath.Join(other, ".git"))
+	t.Setenv("GIT_WORK_TREE", other)
+
+	if got := string(prevIndexJSON(root)); got != `{"mine":true}`+"\n" {
+		t.Fatalf("an inherited GIT_DIR retargeted the previous index: %q", got)
 	}
 }
 

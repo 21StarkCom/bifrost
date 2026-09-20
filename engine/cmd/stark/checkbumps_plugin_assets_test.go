@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -158,16 +157,7 @@ func seedPluginAssetRepo(t *testing.T, bundleVersion, prevVersion, prevDigest st
 	}
 	writeFile(t, filepath.Join(root, "index.json"), string(b)+"\n")
 
-	git := func(args ...string) {
-		cmd := exec.Command("git", args...)
-		cmd.Dir = root
-		if out, gitErr := cmd.CombinedOutput(); gitErr != nil {
-			t.Fatalf("git %v: %v\n%s", args, gitErr, out)
-		}
-	}
-	git("init")
-	git("add", ".")
-	git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", "seed")
+	seedCommit(t, root)
 	return root
 }
 
