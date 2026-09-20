@@ -87,6 +87,11 @@ func sharedAssetKey(bundle string) string { return bundle + "/shared-assets/" + 
 
 // codexAssetKey namespaces a bundle's source-owned Codex-overlay row. Same collision and
 // line-shape contract as sharedAssetKey; "codex-assets" is not an artifact type.
+//
+// There is deliberately no row for the engine-rendered `.codex-plugin/plugin.json`
+// (STARK-7977): it is display metadata the spec exempts, and it carries the root VERSION,
+// which a bundle bump does not move. See checkbumps_codex_manifest_test.go and CLAUDE.md
+// "Version-bump immutability"; the root-VERSION gap is STARK-7998.
 func codexAssetKey(bundle string) string { return bundle + "/codex-assets/" + bundle }
 
 // emptyDirDigest is `digest.Files` over no files — the value a bundle without a
