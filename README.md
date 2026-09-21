@@ -163,7 +163,7 @@ bifrost/
 ├── global/                       ← config + prompts the skills read at runtime
 │   ├── config.json               ← global defaults
 │   └── prompts/{iac-review,refactor-planner}/  ← per-dispatcher rubrics
-├── config/                       ← operator machine config (statusline, hooks, output styles)
+├── config/                       ← operator Claude Code assets (statusline, hooks, output styles)
 ├── scripts/                      ← healer_patterns.json
 ├── data/persona/                 ← persona roster
 ├── standards/                    ← org-wide doc templates and workflows
