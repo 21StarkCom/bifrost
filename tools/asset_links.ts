@@ -18,7 +18,14 @@
 
 import { precheckCli, type CliShape } from "./cli_args_lib.ts";
 import { isMainModule } from "./main_module_lib.ts";
-import { checkLinks, installLinks, renderReport, reportToJson } from "./asset_links_lib.ts";
+import {
+  checkLinks,
+  defaultRepoRoot,
+  installLinks,
+  linkedWorktreeMainCheckout,
+  renderReport,
+  reportToJson,
+} from "./asset_links_lib.ts";
 
 const USAGE = `Provision and heal the ~/.claude asset links into this checkout.
 
@@ -31,7 +38,8 @@ Options:
   --help      Show this help
 
 Never replaces a path that holds a real file or directory, and never deletes a
-link whose target is missing from the repo — both are reported instead.
+link whose target is missing from the repo — both are reported instead. These
+links are global, so --install refuses to run from a linked git worktree.
 `;
 
 const SHAPE: CliShape = { switches: ["--check", "--install", "--json"] };
@@ -49,6 +57,27 @@ function main(argv: string[]): number {
   if (!check && !install) {
     process.stderr.write(`usage: one of --check or --install is required\n${USAGE}`);
     return 2;
+  }
+
+  // These links are GLOBAL — `~/.claude` holds exactly one of each — and the
+  // repo root is wherever this file was loaded from. Installing from a linked
+  // worktree therefore repoints the whole machine at a tree that exists to be
+  // deleted; `git worktree remove` then leaves all nine dangling with nothing
+  // on the machine that knows where they should have pointed.
+  const worktreeMain = linkedWorktreeMainCheckout(defaultRepoRoot());
+  if (worktreeMain !== null) {
+    if (install) {
+      process.stderr.write(
+        `refusing to --install from a linked git worktree (${defaultRepoRoot()}).\n` +
+          `~/.claude has one copy of each of these links, so this would point the whole ` +
+          `machine at a tree meant to be thrown away. Run it from the main checkout: ${worktreeMain}\n`,
+      );
+      return 2;
+    }
+    process.stderr.write(
+      `note: reporting against a linked git worktree (${defaultRepoRoot()}); ` +
+        `the machine's links are expected to point at ${worktreeMain}\n`,
+    );
   }
 
   const report = install ? installLinks() : checkLinks();

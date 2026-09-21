@@ -59,6 +59,37 @@ export function defaultRepoRoot(): string {
   return path.resolve(import.meta.dirname, "..");
 }
 
+/**
+ * The MAIN checkout's path when `repoRoot` is a linked git WORKTREE, else `null`.
+ *
+ * `defaultRepoRoot()` is "whatever tree this file was loaded from", and these
+ * links are GLOBAL — `~/.claude` has exactly one of each. So an `--install` run
+ * from a worktree silently repoints the whole machine at a directory that is
+ * meant to be thrown away, and every skill loses `${CLAUDE_PLUGIN_ROOT}/tools`
+ * the moment `git worktree remove` runs. That is the same silent-repoint class
+ * this tool exists to end, reached from the other side, and agents work in
+ * worktrees by default — so the CLI refuses `--install` when this is non-null.
+ *
+ * A linked worktree's `.git` is a FILE reading `gitdir: <main>/.git/worktrees/<name>`;
+ * a main checkout's is a directory. A submodule's `.git` is a file too, but its
+ * gitdir carries `/.git/modules/`, so it is correctly not a worktree.
+ */
+export function linkedWorktreeMainCheckout(repoRoot: string): string | null {
+  let contents: string;
+  try {
+    const dotGit = path.join(repoRoot, ".git");
+    if (!fs.statSync(dotGit).isFile()) return null;
+    contents = fs.readFileSync(dotGit, "utf8");
+  } catch {
+    return null;
+  }
+  const match = /^gitdir:\s*(.+)$/m.exec(contents);
+  if (match === null) return null;
+  const marker = `${path.sep}.git${path.sep}worktrees${path.sep}`;
+  const at = match[1]!.trim().indexOf(marker);
+  return at < 0 ? null : match[1]!.trim().slice(0, at);
+}
+
 // ---------------------------------------------------------------------------
 // The table — the single source of truth
 // ---------------------------------------------------------------------------
@@ -346,7 +377,23 @@ export function checkRetired(row: RetiredLink, opts?: Paths): RetiredState {
   } catch {
     return { row, linkPath, present: false, detail: "absent, as it should be" };
   }
-  const actual = stat.isSymbolicLink() ? fs.readlinkSync(linkPath) : undefined;
+  // Guarded exactly as `checkLink`'s readlink is: an entry removed between the
+  // lstat and here, or a symlink the kernel refuses to read, would otherwise
+  // throw out of `checkLinks` and take `asset_links --check` down with an
+  // uncaught stack trace — the gate failing OPEN on the one call that is
+  // supposed to be pure observation.
+  let actual: string | undefined;
+  if (stat.isSymbolicLink()) {
+    try {
+      actual = fs.readlinkSync(linkPath);
+    } catch {
+      actual = undefined;
+    }
+  }
+  // `rm` is right for a file or a link and wrong for a directory; name the one
+  // that matches what is actually there rather than handing over a command that
+  // fails.
+  const removal = stat.isDirectory() ? `rm -r ${linkPath}` : `rm ${linkPath}`;
   return {
     row,
     linkPath,
@@ -354,7 +401,7 @@ export function checkRetired(row: RetiredLink, opts?: Paths): RetiredState {
     actual,
     detail:
       `still present${actual ? ` (-> ${actual})` : ""} — retired: ${row.why}. ` +
-      `Remove it by hand: rm ${linkPath}`,
+      `Remove it by hand: ${removal}`,
   };
 }
 
@@ -497,7 +544,14 @@ function pad(s: string, w: number): string {
 export function renderReport(report: CheckReport | InstallReport): string {
   const lines: string[] = [`home: ${report.home}`, `repo: ${report.repoRoot}`, ""];
   const actions = (report as InstallReport).actions;
-  const width = Math.max(...report.links.map((l) => l.row.link.length));
+  // Retired rows are rendered in the same column block, and the retired link is
+  // the LONGEST name in either table — left out of the width it is the one row
+  // whose columns do not line up, and it is the only row that asks the operator
+  // to do something.
+  const width = Math.max(
+    ...report.links.map((l) => l.row.link.length),
+    ...report.retired.filter((r) => r.present).map((r) => r.row.link.length),
+  );
 
   for (const [i, state] of report.links.entries()) {
     const action = actions?.[i];

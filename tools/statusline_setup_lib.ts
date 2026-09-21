@@ -149,10 +149,23 @@ export function installStatusline(): string[] {
   } else if (action.outcome === "refused") {
     actions.push(`REFUSED: ${path.basename(installedSh)} ${action.detail}`);
   } else {
-    actions.push(`Linked ${path.basename(installedSh)} -> ${statuslineSh}`);
+    // Name the action that actually happened: a repoint means the link had been
+    // aimed at another checkout, which is the one event an operator most needs
+    // to see spelled out rather than folded into "Linked".
+    const verb = action.outcome === "repointed" ? "Repointed" : "Linked";
+    actions.push(`${verb} ${path.basename(installedSh)} -> ${statuslineSh}`);
   }
 
-  // 2. Patch settings.json
+  // 2. Patch settings.json — but only once the script is really in place.
+  //    `statusLine.command` is `bash <installedSh>`, so wiring it at a path that
+  //    holds nothing buys a dead statusline on every session and hides the
+  //    REFUSED line above behind a "Patched settings.json" that reads like
+  //    success. (A refusal over a hand-placed real script still patches: that
+  //    path does hold something bash can run.)
+  if (!fs.existsSync(installedSh)) {
+    actions.push(`Skipped settings.json — ${installedSh} is not in place`);
+    return actions;
+  }
   const entry = { type: "command", command: `bash ${installedSh}` };
   const settingsPath = installedSettingsPath();
   let settings: Record<string, unknown> = {};

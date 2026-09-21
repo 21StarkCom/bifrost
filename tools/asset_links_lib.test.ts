@@ -24,10 +24,12 @@ import {
   RETIRED_LINKS,
   checkLink,
   checkLinks,
+  checkRetired,
   defaultRepoRoot,
   installLink,
   installLinks,
   linkPathFor,
+  linkedWorktreeMainCheckout,
   renderReport,
   reportToJson,
   requireManagedLink,
@@ -165,6 +167,45 @@ test("a retired link that still exists on a machine is reported, not silently re
   // Report-only: removing it would be this tool touching a ~/.claude/code-review
   // entry it does not manage.
   assert.ok(isLink(linkPath), "the retired link was deleted — this tool removes nothing it does not manage");
+});
+
+test("a retired path that is a DIRECTORY is reported without throwing and with the right rm", () => {
+  const home = synthHome();
+  const row = RETIRED_LINKS[0]!;
+  const linkPath = linkPathFor(row, home);
+  fs.mkdirSync(linkPath, { recursive: true });
+
+  const state = checkRetired(row, { home });
+  assert.equal(state.present, true);
+  assert.equal(state.actual, undefined, "a directory has no readlink target to report");
+  assert.match(state.detail, /rm -r /, "`rm` alone fails on a directory — the report must not hand over a dead command");
+});
+
+// ---------------------------------------------------------------------------
+// The repo root these links are aimed at
+// ---------------------------------------------------------------------------
+
+// `defaultRepoRoot()` is "whatever tree this file was loaded from", and ~/.claude
+// holds exactly ONE of each link — so an --install from a worktree repoints the
+// whole machine at a tree that exists to be deleted. Agents work in worktrees by
+// default, which makes this the likely accident, not the exotic one.
+test("a linked git worktree is recognised, and a main checkout / submodule is not", () => {
+  const main = tmp("main-checkout");
+  fs.mkdirSync(path.join(main, ".git"), { recursive: true });
+  assert.equal(linkedWorktreeMainCheckout(main), null, "a main checkout must not be refused");
+
+  const wt = tmp("worktree");
+  fs.writeFileSync(path.join(wt, ".git"), `gitdir: ${path.join(main, ".git", "worktrees", "feature")}\n`);
+  assert.equal(linkedWorktreeMainCheckout(wt), main);
+
+  const sub = tmp("submodule");
+  fs.writeFileSync(path.join(sub, ".git"), `gitdir: ${path.join(main, ".git", "modules", "vendored")}\n`);
+  assert.equal(linkedWorktreeMainCheckout(sub), null, "a submodule is not a worktree");
+
+  assert.equal(linkedWorktreeMainCheckout(tmp("no-git")), null, "no .git at all is not a worktree");
+
+  // The real checkout this suite runs in is the main one, so the CLI is usable.
+  assert.equal(linkedWorktreeMainCheckout(REPO_ROOT), null);
 });
 
 // ---------------------------------------------------------------------------
@@ -471,9 +512,65 @@ test("installStatusline refuses a hand-placed real script instead of deleting it
     const actions = installStatusline();
     assert.ok(actions.some((a) => a.startsWith("REFUSED:")), actions.join(" | "));
     assert.equal(fs.readFileSync(linkPath, "utf8"), "#!/bin/sh\necho mine\n");
+    // The settings wiring still lands HERE, deliberately: the path holds a real
+    // script, so `bash <path>` runs. What must not happen is the next test's case.
+    assert.ok(actions.includes("Patched settings.json"), actions.join(" | "));
   } finally {
     if (prev === undefined) delete process.env.HOME;
     else process.env.HOME = prev;
+  }
+});
+
+// `settings.json`'s `statusLine.command` is `bash <link>`. Wiring it at a path
+// that holds NOTHING is a dead statusline on every session, and "Patched
+// settings.json" in the output reads like success — which is how a refusal that
+// the delegate newly made possible would get buried.
+test("installStatusline does not wire settings.json at a script it could not install", (t) => {
+  if (typeof process.getuid === "function" && process.getuid() === 0) {
+    t.skip("root ignores the mode bits this test uses to force a write failure");
+    return;
+  }
+  const home = synthHome();
+  const prev = process.env.HOME;
+  process.env.HOME = home;
+  const claudeDir = path.join(home, ".claude");
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.chmodSync(claudeDir, 0o555);
+  try {
+    const actions = installStatusline();
+    assert.ok(actions.some((a) => a.startsWith("REFUSED:")), actions.join(" | "));
+    assert.ok(
+      actions.some((a) => a.startsWith("Skipped settings.json")),
+      `settings.json was wired at a path holding nothing: ${actions.join(" | ")}`,
+    );
+    assert.ok(!actions.includes("Patched settings.json"), actions.join(" | "));
+  } finally {
+    fs.chmodSync(claudeDir, 0o755);
+    if (prev === undefined) delete process.env.HOME;
+    else process.env.HOME = prev;
+  }
+});
+
+test("statusline_setup --install exits non-zero when the link was refused", (t) => {
+  if (typeof process.getuid === "function" && process.getuid() === 0) {
+    t.skip("root ignores the mode bits this test uses to force a write failure");
+    return;
+  }
+  const home = synthHome();
+  const claudeDir = path.join(home, ".claude");
+  fs.mkdirSync(claudeDir, { recursive: true });
+  fs.chmodSync(claudeDir, 0o555);
+  try {
+    const r = spawnSync(process.execPath, [path.join(REPO_ROOT, "tools", "statusline_setup.ts"), "--install"], {
+      encoding: "utf8",
+      env: { ...process.env, HOME: home, NO_COLOR: "1" },
+    });
+    // Before the delegation this path could only succeed or throw, so exit 0 meant
+    // "installed". It must not now also mean "reported a dead statusline".
+    assert.equal(r.status, 1, `${r.stdout ?? ""}${r.stderr ?? ""}`);
+    assert.match(r.stdout ?? "", /REFUSED:/);
+  } finally {
+    fs.chmodSync(claudeDir, 0o755);
   }
 });
 
@@ -489,6 +586,31 @@ test("renderReport names the failing row and what breaks without it", () => {
   assert.match(text, /\.claude\/code-review\/tools/);
   assert.match(text, /needed for:/);
   assert.match(renderReport(installLinks({ home, repoRoot })), /OK: every managed link resolves/);
+});
+
+test("renderReport keeps its columns aligned when a retired row is present", () => {
+  const home = synthHome();
+  const repoRoot = synthRepo();
+  const row = RETIRED_LINKS[0]!;
+  const linkPath = linkPathFor(row, home);
+  fs.mkdirSync(path.dirname(linkPath), { recursive: true });
+  fs.symlinkSync("/nowhere/orchestrator.md", linkPath);
+
+  // The retired link is the LONGEST name in either table, so a width taken from
+  // the managed rows alone leaves the one row asking for action as the one row
+  // whose status column is out of line.
+  const rows = renderReport(installLinks({ home, repoRoot }))
+    .split("\n")
+    .filter((l) => l.startsWith("  .claude/"));
+  assert.ok(rows.length >= MANAGED_LINKS.length + 1, rows.join("\n"));
+  const columns = new Set(
+    rows.map((l) => {
+      const m = /^ {2}\S+ +(\S+)/.exec(l);
+      assert.ok(m, `unparseable row: ${l}`);
+      return m[0].length - m[1]!.length;
+    }),
+  );
+  assert.equal(columns.size, 1, `status column is ragged:\n${rows.join("\n")}`);
 });
 
 test("reportToJson carries status, outcome and the retired rows", () => {

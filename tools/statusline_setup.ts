@@ -93,10 +93,15 @@ function main(argv: string[]): number {
     return 0;
   }
   if (mode === "install") {
-    for (const action of installStatusline()) {
+    const actions = installStatusline();
+    for (const action of actions) {
       process.stdout.write(`  ${action}\n`);
     }
-    return 0;
+    // `installStatusline` can now REFUSE (it delegates to `installLink`, which
+    // never destroys real content); the inline implementation it replaced could
+    // only succeed or throw. Exit 0 over a refusal would report "installed" for
+    // a statusline that will not run.
+    return actions.some((a) => a.startsWith("REFUSED:") || a.startsWith("Skipped ")) ? 1 : 0;
   }
 
   // No arguments — the Python original opened a curses TUI here; the TS
