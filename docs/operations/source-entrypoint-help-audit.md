@@ -14,9 +14,10 @@ at all. Its rows are gone from the inventory below; what that does and does not
 cost this audit is recorded under the shell table rather than left as an
 unexplained shortfall. `tools/source_help.test.ts` holds its own copy of both
 inventories and walks the live tree on every CI run, so an entrypoint missing
-from the test's lists reddens the required `test` context. It does not read
-this document: a row here that outlives its file stays green, so edit the two
-together.
+from the test's lists reddens the required `test` context. It also reads the
+two tables below and requires them to name exactly the entrypoints its lists
+do, so a row that outlives its file, or a new entrypoint with no row, reddens
+the same context.
 
 ## Contract and defects
 
@@ -82,6 +83,7 @@ argument: …" — wording alone cannot tell a working help from a broken one.
 | --- | --- |
 | `alert_delivery.ts` | default/check, JSON |
 | `approach_contract.ts` | plan-file, force-confirm, JSON |
+| `asset_links.ts` | check, install, JSON |
 | `context_compactor.ts` | default, session-id, JSON |
 | `copilot_land.ts` | branch-name, prepare-branch, land |
 | `fact_routing_fold.ts` | default, clear |
@@ -124,16 +126,15 @@ Those five rows cover all five non-test `.sh` files in the tree, which is the
 whole executable non-TypeScript surface — the shape `source_help.test.ts`
 asserts by walking for `.sh` and comparing against its list.
 
-Three sets of rows here are no longer in this tree: the cmux auto-rename
-`SessionStart` hook (`config/cmux-autoname.sh`), the statusline
-(`config/statusline-command.sh`, its prompt and stop hooks, and
+Three sets of rows are gone from these tables because their files left this
+tree: the cmux auto-rename `SessionStart` hook (`config/cmux-autoname.sh`), the
+statusline (`config/statusline-command.sh`, its prompt and stop hooks, and
 `statusline_setup.ts`) and `gcp_scope.ts` all **moved** to the stark-workspace
 repo, which owns machine setup. Their help guards went with them and are that
 repo's to keep covered; this audit no longer probes them. Nothing here invokes
-them.
-The Claude Code settings template that wires it is gone from this tree too, and
-with it the inline hooks the exclusions below used to list: that template is
-machine configuration, owned by the stark-workspace repo.
+them. The Claude Code settings template that wired them is gone from this tree
+too, and with it the inline hooks the exclusions below used to list: that
+template is machine configuration, owned by the stark-workspace repo.
 
 The Codex counterparts those rows used to carry are gone with
 `runtime-overrides/codex/`, along with the four executable tool replacements it
