@@ -45,11 +45,11 @@ This is a **personal playground**, not production. No customers depend on it; th
 
 ## Repo Layout
 
-- `tools/` — **all** TypeScript tooling (175 tracked files): dispatchers, agent utilities, session/state, GitHub transport, skill meta-tooling. The only executable surface, and the subject of `ci`'s required `test` + `typecheck` contexts.
+- `tools/` — **all** TypeScript tooling (177 tracked files): dispatchers, agent utilities, session/state, GitHub transport, skill meta-tooling. The only executable surface, and the subject of `ci`'s required `test` + `typecheck` contexts.
 - `skill/` — all skills (`skill/*/SKILL.md`, **25** skills across 25 dirs: 22 `stark-*` plus `agnes`, `gru`, `minion`), served as the seven marketplace plugins by the root manifest's per-plugin `skills:` partition. There is no `skill/evals/` any more.
 - `global/` — global config + prompts (`config.json`, `forge_heuristics.json`, `prompts/`)
 - `scripts/` — shell helpers + JSON only (`healer_patterns.json`). **No Python lives here any more.**
-- `config/` — the operator's own Claude Code assets (11 files): `settings.json`, statusline scripts + hooks, `cmux-autoname.sh`, `output-styles/`, `wif-identities.json`. Installed into `~/.claude` by hand, never shipped by a plugin.
+- `config/` — the operator's own Claude Code assets (9 files): `settings.json`, statusline scripts + hooks, `output-styles/`, `wif-identities.json`. Installed into `~/.claude` by hand, never shipped by a plugin. The cmux auto-rename hook (`cmux-autoname.sh`) and its regression test moved to the stark-workspace repo, which owns machine setup; `settings.json` still wires it by its installed path, `$HOME/.config/cmux/cmux-autoname.sh`.
 - `data/persona/` — persona roster
 - `standards/` — org-wide doc templates and workflows
 - `.claude-plugin/marketplace.json` — the marketplace manifest: seven plugins, each `"source": "./"` plus its own `skills:` partition. Hand-curated, must stay at the repo root.
