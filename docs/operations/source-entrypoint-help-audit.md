@@ -129,8 +129,10 @@ asserts by walking for `.sh` and comparing against its list.
 The cmux auto-rename `SessionStart` hook (`config/cmux-autoname.sh`) had a row
 here and is no longer in this tree: it **moved** to the stark-workspace repo,
 which owns machine setup. Its help guard went with it and is that repo's to
-keep covered; this audit no longer probes it. Nothing here invokes the script —
-`config/settings.json` names only its installed path, which is data.
+keep covered; this audit no longer probes it. Nothing here invokes the script.
+The Claude Code settings template that wires it is gone from this tree too, and
+with it the inline hooks the exclusions below used to list: that template is
+machine configuration, owned by the stark-workspace repo.
 
 The Codex counterparts those rows used to carry are gone with
 `runtime-overrides/codex/`, along with the four executable tool replacements it
@@ -163,8 +165,6 @@ Their normal zero-argument protocol and stdin fields are unchanged.
   operator routes. They are exercised by the suite, not treated as help CLIs.
 - `scripts/healer_patterns.json`, config JSON, prompts, skill Markdown,
   reference documents, workflows and package scripts are data/declarations.
-  The inline hooks in `config/settings.json` receive event context, not a
-  user-facing positional grammar. They were inspected, not executed as probes.
 - Stdin JSON, free-text fields, protected-list contents and check-script
   contents are protocol/data boundaries. Searching them for help would corrupt
   their contract. No LLM skill or real agent was invoked to test help.

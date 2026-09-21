@@ -1,8 +1,8 @@
 # ── Agent + session scratch ───────────────────────────────────────────
 .claude/
 .superpowers/
-# config/settings.json's first SessionStart hook runs
-# `mkdir -p "${CLAUDE_PROJECT_DIR:-.}/.remember/logs"` in every repo it applies to.
+# Created in every repo by a machine-level Claude Code SessionStart hook
+# (machine configuration, owned by the stark-workspace repo).
 .remember/
 
 # ── Dependencies ──────────────────────────────────────────────────────
