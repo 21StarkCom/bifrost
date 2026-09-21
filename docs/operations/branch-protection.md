@@ -11,10 +11,11 @@ surviving content is §6 here, and `CLAUDE.md` / `AGENTS.md` point at this file.
 > gate**: run them by hand as a repo admin. **Do not run them from an agent, a
 > skill, a hook, or CI.**
 
-Every measured value below was re-read live on **2026-09-20** with the commands
-in §2. Settings are changed through an API, not through this file, and **nothing
-in this repo detects a change to them** — re-measure before trusting any number
-here, and fix the file when it is wrong.
+Every measured value below was re-read live on **2026-09-21** with the commands
+in §2 — both protection surfaces, both repos named here, and the check runs on
+the newest merged PR (#308). Settings are changed through an API, not through
+this file, and **nothing in this repo detects a change to them** — re-measure
+before trusting any number here, and fix the file when it is wrong.
 
 ---
 
@@ -28,7 +29,7 @@ in the PR status rollup:
 | ------------------- | ----------- | ------------------ |
 | `test`              | `test`      | `npm test` in `tools/` — `./check-rest-only.sh`, then `node --test *.test.ts`. With the Go engine deleted this is the repo's whole functional suite, over the tools every skill body shells out to. |
 | `typecheck`         | `typecheck` | `npm run typecheck` in `tools/` — a real `tsc` pass. **`node --test` does not typecheck**: it runs `.ts` through Node's type stripping, which *erases* annotations rather than checking them, so a wrong generic or an unsound cast passes every test in `test`. The two jobs do not overlap. |
-| `secret scan (tree)`| `secrets`   | A pinned gitleaks CLI over the **whole working tree**, fail-closed, plus a second pass over the PR's commit range (`base..head`) that catches a secret added and then removed inside the PR. |
+| `secret scan (tree)`| `secrets`   | Three steps, in this order: a **self-test** that writes a `GOCSPX-` probe outside the checkout and fails the job unless the `google-oauth-client-secret` rule id comes back in gitleaks' JSON report; a pinned gitleaks CLI over the **whole working tree**, fail-closed; and a second pass over the PR's commit range (`base..head`) that catches a secret added and then removed inside the PR. The self-test runs first on purpose — a clean scan is not evidence until you have watched the scanner fire. |
 | `actionlint`        | `actionlint`| Workflow lint over `.github/workflows/`. |
 
 **A context string is the job's `name:` when it has one, and its job id
@@ -78,7 +79,7 @@ workflow that did that (`publish-sync-pr.yml`) is deleted, so every push to
 describes machinery that no longer exists here; close it against this file rather
 than implementing it.
 
-### The fourth check that reports and is not required
+### The fifth check that reports and is not required
 
 `.github/workflows/secret-scan.yml` is the second `pull_request` workflow in this
 repo (it also fires on push to `main` and on `merge_group`). It produces
@@ -106,7 +107,7 @@ reasons that now point the same way:
    apply; a 52nd had already been deleted outside Terraform). That ticket's own
    verification recorded "repos still carrying require-secret-scan: 0" and left
    bifrost's and stark-skills' `Required CI on main` as the only *branch*
-   rulesets in the org. Spot-checked again here on 2026-09-20: `tyr`, `frigg`,
+   rulesets in the org. Spot-checked again here on 2026-09-21: `tyr`, `frigg`,
    `alfred`, `idun` and `plume` each return an empty ruleset list. Requiring the
    context here would reinstate on one repo a control deliberately removed from
    all of them. **STARK-7635**, which owned the enrol-or-not decision for the two
@@ -122,28 +123,51 @@ reasons that now point the same way:
    silently orphans it and blocks every merge on "Expected — waiting for status".
    Enrolment belongs in 21stark, not in `gh api ... /rulesets` from here.
 
+**The self-test `ci.yml` now carries does not move that answer.** It exists
+*because* `secret-scan / secret-scan` reports here without being required — a
+proof that cannot block a merge belongs next to one that can — and it requires no
+new context, substitutes for no fleet control, and settles nothing about
+enrolment. If the fleet control is ever restored, enrolling bifrost is still a
+change in 21stark.
+
 **Neither scan dominates the other**, which is why the in-repo one is the
 blocking gate and the fleet caller is not:
 
 | | scope | assurance |
 | --- | --- | --- |
-| `secret scan (tree)` (in-repo) | **wider** — whole working tree *plus* the PR commit range | **weaker** — no checksum on the binary it downloads, the `secrets` job self-tests nothing, and it sits outside `local.secret_scan_pin`, so a fleet gitleaks bump never reaches it |
+| `secret scan (tree)` (in-repo) | **wider** — whole working tree *plus* the PR commit range | **weaker, though no longer unproven** — it self-tests its own rule now (below), but it still downloads its binary with **no checksum**, and still sits outside `local.secret_scan_pin`, so a fleet gitleaks bump never reaches it |
 | `secret-scan / secret-scan` (fleet caller) | narrower — incoming commits only | **stronger** — pinned binary + published checksum, and it refuses a clean scan until it has watched the scanner fire |
 
-**The fleet caller is now the only thing proving this repo's gitleaks rules
-fire.** `engine/cmd/stark/gitleaks_config_test.go` ran the pinned binary over
-`.gitleaks.toml` and failed if the `google-oauth-client-secret` rule stopped
-firing; it went with `engine/`. What replaced it is the reusable workflow's own
-self-test, which writes a fresh `GOCSPX-` probe through **this repo's config**
+**Two checks prove this repo's gitleaks rules actually fire, and only one of them
+can block a merge.** `engine/cmd/stark/gitleaks_config_test.go` ran the pinned
+binary over `.gitleaks.toml` and failed if the `google-oauth-client-secret` rule
+stopped firing; it went with `engine/`. The reusable workflow's own self-test
+took that over — it writes a fresh `GOCSPX-` probe through **this repo's config**
 and fails the job unless that rule id appears in the report. Observed firing on
 PR #306 (run `35528023774`, `self-test OK: the scanner fires with the caller's
 config`), with `selftest_rule_id: google-oauth-client-secret` — which is the
 reusable workflow's *default*, taken because bifrost's caller passes no inputs.
-**So the `google-oauth-client-secret` rule in `.gitleaks.toml` is load-bearing:**
-removing or renaming it turns a reporting check RED on a repo with no secrets in
-it, and carrying it is what lets bifrost run the fleet's default caller with no
-`selftest_rule_id` override. Keeping that check reporting — even unrequired — is
-therefore worth more than its status column suggests.
+
+But that proof rides a check that **reports here and is not required**, so its red
+blocks nothing. That is why `ci.yml`'s `secrets` job now runs a self-test of its
+own ahead of its two scans: a proof that can only advise is not a gate, and this
+one sits behind a required context. It asserts the **rule id** in gitleaks' JSON
+report rather than "something was found", and pins `--exit-code 0` because a
+finding is its success path — gitleaks exits non-zero when it finds something, so
+under a bare `set -e` the step would abort exactly when the rule works. It also
+separates "the rule did not fire" from "the report could not be evaluated", and
+fails on both. The static half is `tools/repo_contracts.test.ts`, which asserts
+`.gitleaks.toml` still *defines* the id — a commented-out rule or a drifted regex
+satisfies that while matching nothing, which is the gap the dynamic probe closes.
+
+**So the `google-oauth-client-secret` rule in `.gitleaks.toml` is load-bearing
+twice over:** removing or renaming it now reddens a **required** check here, and
+independently reddens the fleet caller on a repo with no secrets in it, since
+carrying the rule verbatim is what lets bifrost run the fleet's default caller
+with no `selftest_rule_id` override. Keeping the fleet caller reporting — even
+unrequired — is still worth more than its status column suggests: it is the half
+with the checksummed binary and the fleet pin, and adding a self-test in `ci.yml`
+bought neither of those.
 
 ## 2. Enforcement lives in a RULESET — and *also* in classic protection
 
@@ -160,14 +184,18 @@ gh api repos/21StarkCom/bifrost/rulesets
 gh api repos/21StarkCom/bifrost/rulesets/23544063
 ```
 
-Measured 2026-09-20:
+Measured 2026-09-21:
 
 **Ruleset `23544063` — "Required CI on main".** `target: branch`,
 `enforcement: active`, condition `ref_name.include: ["~DEFAULT_BRANCH"]`,
 `strict_required_status_checks_policy: false`, `do_not_enforce_on_create: false`,
-and one rule of type `required_status_checks` holding the §1 contexts. Bypass
-actors: exactly one — `{actor_id: 5, actor_type: RepositoryRole, bypass_mode:
-"always"}`, i.e. repository admin, which on this repo is the only human.
+and one rule of type `required_status_checks` holding **exactly** §1's four
+contexts — `test`, `typecheck`, `secret scan (tree)`, `actionlint` — each pinned
+to `integration_id: 15368`. `created_at` 2026-09-16, `updated_at`
+`2026-09-20T22:46:48+03:00`: that timestamp is §3's PUT, which is what put the
+current four in place. Bypass actors: exactly one — `{actor_id: 5, actor_type:
+RepositoryRole, bypass_mode: "always"}`, i.e. repository admin, which on this
+repo is the only human.
 
 **Classic protection on `main`** carries **no `required_status_checks` key at
 all**. Reading that endpoint alone is therefore actively misleading: it returns a
@@ -207,20 +235,29 @@ returns `404 Branch not protected`. bifrost is the stricter of the two on
 everything classic protection covers. Do not infer either repo's settings from
 the other.
 
-## 3. APPLY — the `Required CI on main` ruleset (operator, once)
+## 3. APPLY — the `Required CI on main` ruleset (operator-only; already applied)
 
 `integration_id: 15368` is the GitHub Actions app; pinning it means a check of
 the same name reported by a *different* app cannot satisfy the requirement.
-Confirm it against a real head with the §1 command before running (every check
-run on PR #306 reported `app_id=15368`, `slug=github-actions`).
+Confirm it against a real head with the §1 command before running (all five
+check runs on PR #308's head reported `app_id=15368`, `slug=github-actions`;
+measured 2026-09-21).
 
-**Sequence matters, and getting it wrong hangs the merge box.** The PUT names
-context strings; a context only exists once a job has reported it on some head.
-`test` and `typecheck` already report — they were added to `ci.yml` before the
-engine job was removed — but `secret scan (tree)` does not exist until the commit
-that renames the `secrets` job is **pushed**. So: push the `ci.yml` rewrite, let
-CI report the new names on that head, then run the PUT, then merge. Run the PUT
-first and `secret scan (tree)` is an orphan the whole time (§5).
+**This PUT has already been made.** The ruleset's `updated_at` is
+`2026-09-20T22:46:48+03:00`, and §2's re-measure on 2026-09-21 finds it holding
+exactly the four contexts below; §5's orphan check over PR #308's head comes back
+empty, so every one of them is a context a job really reports. Nothing here is an
+outstanding step — the payload is kept as the recorded state, and as the recipe
+for changing or restoring it.
+
+**The ordering rule that produced it still binds, for the next rename.** The PUT
+names context strings, and a context only exists once a job has reported it on
+some head: `secret scan (tree)` did not exist until the commit naming `ci.yml`'s
+`secrets` job was **pushed** and CI reported it. So the order is always — push
+the workflow change, let CI report the new names on that head, *then* run the
+PUT, then merge. Run the PUT first and the new context is an orphan until a job
+reports it (§5), with the merge box stuck on "Expected — waiting for status" in
+the meantime.
 
 ```bash
 gh api -X PUT repos/21StarkCom/bifrost/rulesets/23544063 \
@@ -261,7 +298,7 @@ unchanged" versus "clear" — a full payload makes the resulting state readable 
 the command instead of off merge semantics. In particular, do not omit
 `bypass_actors` unless you mean to decide the question below.
 
-Verify it took, then confirm §5:
+Re-read what it holds — after a PUT, and as §2's re-measure — then confirm §5:
 
 ```bash
 gh api repos/21StarkCom/bifrost/rulesets/23544063 \
@@ -318,15 +355,21 @@ filter, and **both** `pull_request` triggers use the default event types
 ready` fires nothing extra that `cancel-in-progress` could cancel out from under
 the head SHA.
 
-`ci.yml` sets `cancel-in-progress: false` with a per-PR concurrency group, and
-that is deliberate: **GitHub counts a CANCELLED required check as FAILING**, and
-`main` has already carried commits with `engine: cancelled` from back-to-back
-merges sharing one `ci-refs/heads/main` group. With `test` and `typecheck`
-required, a cancelled run is a blocked merge that only a new commit clears.
+`ci.yml` sets `cancel-in-progress: false`, and keys its concurrency group on
+`github.event.pull_request.number || github.sha` — per PR on a PR event, per
+commit on every other event. Both halves are deliberate: **GitHub counts a
+CANCELLED required check as FAILING**, and `main` has already carried commits
+with `engine: cancelled` from back-to-back merges sharing one
+`ci-refs/heads/main` group. `cancel-in-progress: false` alone does not buy "never
+cancelled" — GitHub also cancels a run still PENDING in a group when a newer one
+queues behind it — so it is the `github.sha` half that actually retires that
+failure: every push to `main` lands in a group of its own and can never queue
+behind another merge's run. With `test` and `typecheck` required, a cancelled run
+is a blocked merge that only a new commit clears.
 `secret-scan.yml` cancels in progress **on PR events only**
 (`cancel-in-progress: ${{ github.event_name == 'pull_request' }}`) — never on a
 push or a merge_group run, each of which scans its own commit range. Keep both as
-they are; `secret-scan.yml`'s bytes are not this repo's to design (§1b).
+they are; `secret-scan.yml`'s bytes are not this repo's to design (§1).
 
 The one `if:` in `ci.yml` is step-level and correct: the second gitleaks pass
 carries `if: github.event_name == 'pull_request'` because a push has no
@@ -380,11 +423,13 @@ required context — one named by the ruleset that no job reports — is invisib
 `gh pr checks --required`.** The status rollup contains a node per check run that
 actually *reported*; a context with no run contributes no node at all, so the
 command most likely to be reached for to diagnose a hung merge box cannot see the
-thing hanging it. Measured on PR #306: the rollup carried exactly the six check
-runs that had reported (`isRequired` true for three of them), and
-`gh pr checks 306 --required` printed those three and nothing else. Only a direct
-comparison of the ruleset's strings against the head's reported names — step 2 —
-finds an orphan.
+thing hanging it. Measured on PR #308, 2026-09-21: the rollup carried exactly the
+five check runs that had reported — `isRequired` true for §1's four and false for
+`secret-scan / secret-scan` — and `gh pr checks 308 --required` printed those four
+and nothing else. Step 2 over the same head printed an empty left column, which is
+what "no orphans" looks like, and it is the only one of these steps that could
+have printed a non-empty one. Only a direct comparison of the ruleset's strings
+against the head's reported names — step 2 — finds an orphan.
 
 An orphan is also **not a red check you can re-run**: nothing ever ran. Re-running
 replays nothing, a `workflow_dispatch` run never joins the rollup (§4), and the
@@ -429,7 +474,7 @@ no drift gate left, the review round *is* the control.
 
 **Reporting a vulnerability.** Private vulnerability reporting is **disabled** on
 this repo (`gh api repos/21StarkCom/bifrost/private-vulnerability-reporting` →
-`{"enabled": false}`, measured 2026-09-20), so GitHub shows no "Report a
+`{"enabled": false}`, measured 2026-09-21), so GitHub shows no "Report a
 vulnerability" button and an outside reporter has no private channel here.
 Contact `@aryeh-stark` directly. To open one, an operator runs:
 

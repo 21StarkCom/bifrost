@@ -31,45 +31,24 @@ import { strict as assert } from "node:assert";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 
-// Resolved from `import.meta.url`, never from cwd. ci.yml runs `npm test` with
-// `working-directory: tools`, so cwd is `tools/` under CI but the repo root when
-// someone runs `node --test tools/repo_contracts.test.ts` by hand. A cwd-relative
-// path would resolve in exactly one of those two.
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-
-/**
- * Reads a repo file, normalizing CRLF. A missing file is an assertion FAILURE
- * naming what the gate was for — never a skip. `why` is what the reader needs in
- * order to decide between "move this test" and "put the file back".
- */
-function readRepoFile(rel: string, why: string): string {
-  try {
-    return fs.readFileSync(path.join(REPO_ROOT, rel), "utf8").replace(/\r\n/g, "\n");
-  } catch (err) {
-    return assert.fail(`${rel} is unreadable (${(err as Error).message}). ${why}`);
-  }
-}
-
-/**
- * Blanks whole-line comments while preserving line count and indentation, so
- * prose that spells a banned construction out is neither a hit nor a way to
- * satisfy a scan. `.gitleaks.toml` needs this in both directions: its header
- * argues at length for having no `[allowlist].paths`, and writes the phrase out
- * to do so. Only WHOLE-line comments go — stripping mid-line would truncate a
- * line at a trailing `#` marker and could drop the very token being pinned.
- *
- * §3 deliberately does NOT route `secret-scan.yml` through this, even though its
- * header spells out `name:`, `paths:` and `if:` while explaining why none may be
- * used. Every regex there anchors a YAML key to the start of an indented line
- * (`/^\s+if:/m`), and a comment line's first non-space character is `#`, so it
- * can never produce a match. Leaving that file read verbatim keeps the byte the
- * assertions see identical to the byte 21stark's drift check compares.
- */
-function blankComments(text: string): string[] {
-  return text.split("\n").map((line) => (line.trimStart().startsWith("#") ? "" : line));
-}
+// `REPO_ROOT` (resolved from `import.meta.url`, never from cwd), the
+// fail-loudly-on-ENOENT reader and the comment blanker are shared with
+// `workflow_shape.test.ts`, which needs all three for the same reasons. They
+// lived here AND there until STARK-8249's cleanup, and the two blankers had
+// already diverged over `//`.
+//
+// `.gitleaks.toml` needs the blanking in both directions: its header argues at
+// length for having no `[allowlist].paths`, and writes the phrase out to do so.
+//
+// §3 deliberately does NOT route `secret-scan.yml` through the blanker, even
+// though its header spells out `name:`, `paths:` and `if:` while explaining why
+// none may be used. Every regex there anchors a YAML key to the start of an
+// indented line (`/^\s+if:/m`), and a comment line's first non-space character
+// is `#`, so it can never produce a match. Leaving that file read verbatim keeps
+// the byte the assertions see identical to the byte 21stark's drift check
+// compares.
+import { REPO_ROOT, blankWholeLineComments, readRepoFile } from "./repo_files_lib.ts";
 
 // ────────────────────────────────────────────────────────────────────────────
 // §1  `.claude-plugin/marketplace.json` — the install manifest
@@ -296,13 +275,13 @@ const FLEET_SELFTEST_RULE_ID = "google-oauth-client-secret";
 const INLINE_CREDENTIAL_RULE_ID = "stark-inline-credential";
 
 function readGitleaksConfig(): string[] {
-  return blankComments(
+  return blankWholeLineComments(
     readRepoFile(
       GITLEAKS_REL,
       "Both secret scanners load it by path and gitleaks exits non-zero on a config it cannot read, so " +
         "losing it reddens the required `secret scan (tree)` context on every PR.",
     ),
-  );
+  ).split("\n");
 }
 
 test(".gitleaks.toml extends the default ruleset rather than replacing it", () => {

@@ -53,6 +53,74 @@ jobs:
           tar -xzf gitleaks.tar.gz gitleaks
           sudo install gitleaks /usr/local/bin/gitleaks
           gitleaks version
+      # ── Self-test: prove the load-bearing rule actually FIRES ────────────────
+      #
+      # Runs BEFORE the two scans below, for the reason the fleet caller runs its
+      # own copy first: a clean scan is not evidence until you have watched the
+      # scanner fire. `tools/repo_contracts.test.ts` asserts only that
+      # `.gitleaks.toml` CONTAINS the id `google-oauth-client-secret` — a
+      # substring check over a config file. A commented-out rule, a regex whose
+      # quantifier drifted, or an entropy floor raised past the probe all leave
+      # that id spelled in the file while the rule matches nothing, and the
+      # whole-tree scan below still reports clean. This step is the dynamic half
+      # the deleted Go `TestGitleaksConfigContract` used to carry.
+      #
+      # It lives HERE and not only in `.github/workflows/secret-scan.yml`'s fleet
+      # caller — which does run the same probe — because that caller is not a
+      # required context on this repo, so its red does not block a merge. This
+      # job (`secret scan (tree)`) is required. Put the proof behind the gate.
+      #
+      # Why the rule is load-bearing: the fleet's reusable workflow refuses to
+      # trust a clean scan until it has watched this exact id fire, so dropping
+      # or renaming the rule turns `secret-scan / secret-scan` RED on a repo with
+      # no secrets in it — and carrying it verbatim is what lets bifrost run the
+      # fleet's default caller with no per-repo `selftest_rule_id` override.
+      - name: gitleaks — self-test (google-oauth-client-secret must fire)
+        env:
+          SELFTEST_RULE: google-oauth-client-secret
+        run: |
+          set -euo pipefail
+          # OUTSIDE the checkout on both counts: the fail-closed whole-tree scan
+          # below walks `.` and would flag the probe as a real leak, and a file
+          # under /tmp can never be committed by accident.
+          probe_dir="$(mktemp -d)"
+          report="$(mktemp -d)/selftest.json"
+          # Assembled from a prefix + a separate variable so THIS file never holds
+          # a literal the rule matches: ci.yml is inside the tree that scan walks.
+          suffix='0f1e2d3c4b5a69788796a5b4c3d2'
+          printf 'note: GOCSPX-%s\n' "$suffix" > "$probe_dir/probe.txt"
+
+          # `--exit-code 0` is deliberate. gitleaks exits NON-ZERO when it finds
+          # something, and a finding is this step's SUCCESS path — under a bare
+          # `set -e` the step would abort exactly when the rule works. Pinned to
+          # 0, a non-zero exit means one thing only: the scanner could not run.
+          if ! gitleaks dir "$probe_dir" --config .gitleaks.toml --redact --no-banner \
+              --exit-code 0 --report-format json --report-path "$report"; then
+            echo "::error::gitleaks could not run against .gitleaks.toml (unreadable or invalid config). The required secret gate is not scanning anything."
+            exit 1
+          fi
+
+          # Parse the JSON report, never human output, and assert the RULE ID —
+          # "something was found" would pass on an unrelated rule matching the probe.
+          rc=0
+          jq -e 'any(.[]?; .RuleID == env.SELFTEST_RULE)' "$report" >/dev/null || rc=$?
+          case "$rc" in
+            0)
+              echo "ok: rule '${SELFTEST_RULE}' fired on the probe"
+              ;;
+            1)
+              echo "::error::.gitleaks.toml no longer fires rule '${SELFTEST_RULE}' on a bare GOCSPX- token. That rule is load-bearing: the fleet's reusable secret scan refuses to trust a clean scan until it has watched this exact id fire, so this turns secret-scan RED fleet-side on a repo with no secrets in it. Restore the rule (id, regex and entropy floor) in .gitleaks.toml."
+              echo "rule ids found on the probe: $(jq -r 'if length == 0 then "(none — the scan matched nothing at all)" else ([.[].RuleID] | unique | join(", ")) end' "$report")"
+              exit 1
+              ;;
+            *)
+              # jq exits 1 for a false result but 2/3/4/5 for usage, compile, no-result
+              # and runtime errors. Returning that status raw would make a broken
+              # predicate indistinguishable from "the rule did not fire".
+              echo "::error::could not evaluate the gitleaks report (jq exit ${rc}) — treat as NOT proven, not as a pass."
+              exit 1
+              ;;
+          esac
       - name: gitleaks — working tree (fail-closed)
         run: gitleaks dir . --config .gitleaks.toml --redact --exit-code 1 --verbose
       - name: gitleaks — PR commit history (catches a secret added then removed within the PR)

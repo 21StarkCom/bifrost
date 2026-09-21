@@ -5,7 +5,6 @@
 
 *                                @aryeh-stark
 skill/**                         @aryeh-stark
-runtime-overrides/codex/skill/** @aryeh-stark
 tools/**                         @aryeh-stark
 config/**                        @aryeh-stark
 .claude-plugin/**                @aryeh-stark

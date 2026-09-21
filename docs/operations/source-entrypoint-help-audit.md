@@ -3,7 +3,13 @@
 Source baseline: `dbb27c1c6967`, independently
 matched to `origin/main` on 2026-09-21. This audit covers the source tree after
 the marketplace engine's retirement. It does not inherit the deleted engine's
-STARK-8083 audit or claim that retained Codex source is installed anywhere.
+STARK-8083 audit.
+
+`runtime-overrides/codex/` has since been **deleted** — 56 tracked files of
+source that nothing rendered — so the tree audited here holds no Codex-specific
+entrypoint at all. Its rows are gone from the inventory below; what that does
+and does not cost this audit is recorded under the shell table rather than left
+as an unexplained shortfall.
 
 ## Contract and defects
 
@@ -55,8 +61,9 @@ as unknown before the real parser ever sees it.
 Every row below is source-owned. `tools/source_help.test.ts` is the executable
 route inventory and runs under the existing `tools/*.test.ts` CI gate. It also
 checks the source tree for added entrypoints absent from its inventory — the
-TypeScript CLIs under `tools/`, every non-test `.sh`, and the executable Codex
-overrides, so none of the three hand-written lists can silently go stale.
+TypeScript CLIs under `tools/`, and every non-test `.sh` anywhere in the tree,
+so neither hand-written list can silently go stale. A third list, for the
+executable Codex overrides, went with the tree it indexed.
 For each listed route the sweep runs bare help, both flag aliases, flags before
 and after help, and malformed options. Recognizable usage or a precise refusal
 **and zero recorded backend effects** are required. Exit zero or nonempty
@@ -100,23 +107,36 @@ argument: …" — wording alone cannot tell a working help from a broken one.
 | `statusline_setup.ts` | list, enable, disable, install, reset |
 | `validation_gate.ts` | configured validation, repo-root, timeout |
 
-The four executable `runtime-overrides/codex/tools/` replacements are
-`copilot_land.ts`, `iac_review.ts`, `jury.ts` and `self_healer.ts`. They are tested
-in a disposable composition of canonical tools plus overrides, as the existing
-overlay regression tests do. The other override tools are imported libraries.
-This composition is a test fixture, not a renderer or an installed package.
-
 | Shell / other executable | Boundary |
 | --- | --- |
 | `config/cmux-autoname.sh` | no argv; SessionStart stdin; help before cmux/git |
 | `config/statusline-command.sh` | no argv; JSON stdin; help before rendering/writes |
 | `config/statusline-prompt-hook.sh`, `config/statusline-stop-hook.sh` | no argv; JSON stdin; help before timestamps |
 | `tools/check-rest-only.sh` | no argv; help before directory change/scanner |
-| `skill/stark-gha-cost/scripts/gha-cost-breakdown.sh` and Codex counterpart | enterprise/org options; help before token check or gh; missing values refused |
-| `skill/stark-gha-cost/scripts/gha-repo-actions-drill.sh` and Codex counterpart | owner/repo, optional date; surplus args/unsupported flags refused before date/credentials/gh |
-| `skill/stark-build/references/hooks/protect-paths.sh` and Codex counterpart | leading help; exact positional arity, then list/task data and stdin protocol |
-| `skill/stark-build/references/hooks/stop-gate.sh` and Codex counterpart | leading help; bounded positional arity before running the check; later task/path words are literal data |
-| `runtime-overrides/codex/skill/stark-gha-cost/scripts/gha-cost-json.ts` | jobs/billing; argv validated before reading stdin; JSON containing `help` stays data |
+| `skill/stark-gha-cost/scripts/gha-cost-breakdown.sh` | enterprise/org options; help before token check or gh; missing values refused |
+| `skill/stark-gha-cost/scripts/gha-repo-actions-drill.sh` | owner/repo, optional date; surplus args/unsupported flags refused before date/credentials/gh |
+| `skill/stark-build/references/hooks/protect-paths.sh` | leading help; exact positional arity, then list/task data and stdin protocol |
+| `skill/stark-build/references/hooks/stop-gate.sh` | leading help; bounded positional arity before running the check; later task/path words are literal data |
+
+Those eight rows cover all nine non-test `.sh` files in the tree, which is the
+whole executable non-TypeScript surface — the shape `source_help.test.ts`
+asserts by walking for `.sh` and comparing against its list.
+
+The Codex counterparts those rows used to carry are gone with
+`runtime-overrides/codex/`, along with the four executable tool replacements it
+held (`copilot_land.ts`, `iac_review.ts`, `jury.ts`, `self_healer.ts`) and the
+disposable canonical-plus-overlay composition they were probed in. Each of those
+was a variant of a canonical entrypoint that still has its own row above, so the
+audited surface loses duplicates rather than coverage. The one overlay row with
+no canonical twin was
+`runtime-overrides/codex/skill/stark-gha-cost/scripts/gha-cost-json.ts`, which
+existed **only** under the overlay: it is gone with the tree, not moved
+anywhere. It takes no capability with it. Measured at the baseline commit, that
+helper's only callers were the overlay's own `gha-cost-breakdown.sh` and
+`gha-repo-actions-drill.sh`; the canonical `skill/stark-gha-cost/scripts/` pair
+never named it, and both parse in process — the breakdown through an inline
+`python3` heredoc, the drill through `gh --jq` — so neither reaches for an
+in-repo helper of any kind.
 
 Hook positional filenames named `help` must use an explicit path such as
 `./help`; later path/task arguments are data, not subcommands. For no-argument
