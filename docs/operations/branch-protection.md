@@ -29,7 +29,7 @@ in the PR status rollup:
 | ------------------- | ----------- | ------------------ |
 | `test`              | `test`      | `npm test` in `tools/` — `./check-rest-only.sh`, then `node --test *.test.ts`. With the Go engine deleted this is the repo's whole functional suite, over the tools every skill body shells out to. |
 | `typecheck`         | `typecheck` | `npm run typecheck` in `tools/` — a real `tsc` pass. **`node --test` does not typecheck**: it runs `.ts` through Node's type stripping, which *erases* annotations rather than checking them, so a wrong generic or an unsound cast passes every test in `test`. The two jobs do not overlap. |
-| `secret scan (tree)`| `secrets`   | Three steps, in this order: a **self-test** that writes a `GOCSPX-` probe outside the checkout and fails the job unless the `google-oauth-client-secret` rule id comes back in gitleaks' JSON report; a pinned gitleaks CLI over the **whole working tree**, fail-closed; and a second pass over the PR's commit range (`base..head`) that catches a secret added and then removed inside the PR. The self-test runs first on purpose — a clean scan is not evidence until you have watched the scanner fire. |
+| `secret scan (tree)`| `secrets`   | Three steps, in this order: a **self-test** that writes a two-line probe outside the checkout (a bare `GOCSPX-` token and an `api_key = <literal>` line) and fails the job unless **both** rule ids this repo defines — `google-oauth-client-secret` and `stark-inline-credential` — come back in gitleaks' JSON report; a pinned gitleaks CLI over the **whole working tree**, fail-closed; and a second pass over the PR's commit range (`base..head`) that catches a secret added and then removed inside the PR. The self-test runs first on purpose — a clean scan is not evidence until you have watched the scanner fire. |
 | `actionlint`        | `actionlint`| Workflow lint over `.github/workflows/`. |
 
 **A context string is the job's `name:` when it has one, and its job id
@@ -149,16 +149,26 @@ config`), with `selftest_rule_id: google-oauth-client-secret` — which is the
 reusable workflow's *default*, taken because bifrost's caller passes no inputs.
 
 But that proof rides a check that **reports here and is not required**, so its red
-blocks nothing. That is why `ci.yml`'s `secrets` job now runs a self-test of its
-own ahead of its two scans: a proof that can only advise is not a gate, and this
-one sits behind a required context. It asserts the **rule id** in gitleaks' JSON
-report rather than "something was found", and pins `--exit-code 0` because a
-finding is its success path — gitleaks exits non-zero when it finds something, so
-under a bare `set -e` the step would abort exactly when the rule works. It also
-separates "the rule did not fire" from "the report could not be evaluated", and
-fails on both. The static half is `tools/repo_contracts.test.ts`, which asserts
-`.gitleaks.toml` still *defines* the id — a commented-out rule or a drifted regex
-satisfies that while matching nothing, which is the gap the dynamic probe closes.
+blocks nothing — and it covers only **one** of the two rules this config defines.
+The fleet caller's probe is its own self-test input, `google-oauth-client-secret`;
+it never exercises `stark-inline-credential`, the repo-wide
+`token/password/secret/api_key = <literal>` detector that the stock ruleset does
+not cover and that is this repo's own inline-credential control.
+
+That is why `ci.yml`'s `secrets` job now runs a self-test of its own ahead of its
+two scans: a proof that can only advise is not a gate, this one sits behind a
+required context, and it asserts **both** ids. It reads the **rule ids** out of
+gitleaks' JSON report rather than "something was found" — measured, that
+distinction is load-bearing: neutering `stark-inline-credential`'s quantifier
+still yields a finding on the same probe, from the stock `generic-api-key` rule.
+It pins `--exit-code 0` because a finding is its success path — gitleaks exits
+non-zero when it finds something, so under a bare `set -e` the step would abort
+exactly when the rule works. It also separates "the rule did not fire" from "the
+report could not be evaluated", and fails on both. The static half is
+`tools/repo_contracts.test.ts`, which asserts `.gitleaks.toml` still *defines*
+both ids — a commented-out rule, a drifted regex or an `[allowlist]` entry that
+swallows the probe value satisfies that while matching nothing, which is the gap
+the dynamic probe closes.
 
 **So the `google-oauth-client-secret` rule in `.gitleaks.toml` is load-bearing
 twice over:** removing or renaming it now reddens a **required** check here, and

@@ -506,6 +506,49 @@ function argvFormHits(text: string): string[] {
   return hits;
 }
 
+/**
+ * Every scannable file in the tree, reached WITHOUT `SCAN_SCOPES` — the walk the
+ * completeness check below compares that hand-written list against. Same skip
+ * set as the scoped walk, plus `.worktrees/` (a linked worktree is a second
+ * checkout of this repo and its copies are not this run's to police) and
+ * `.git`-adjacent dot-dirs holding session scratch rather than source.
+ */
+function collectEveryScannableFile(): string[] {
+  const skip = new Set([...SCAN_SKIP_DIRS, ".worktrees", ".claude", ".remember"]);
+  const files: string[] = [];
+  const walk = (dir: string): void => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (skip.has(entry.name)) continue;
+      const abs = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(abs);
+      else if (SCAN_EXTENSIONS.has(path.extname(entry.name))) files.push(abs);
+    }
+  };
+  walk(REPO_ROOT);
+  return files;
+}
+
+test("`SCAN_SCOPES` still names every directory that holds a scannable file", () => {
+  // `SCAN_SCOPES` is hand-written and its own comment claims to be EVERY
+  // top-level dir holding a scannable file — a claim nothing checked, so a new
+  // top-level directory (or a `gh` call parked in `docs/`) leaves the gate
+  // reporting clean over a file it never opened. The entry deleted for
+  // `runtime-overrides/` was removed by hand for exactly that reason; this is
+  // what makes the next such edit visible. Fix a failure by ADDING the scope,
+  // never by narrowing this walk.
+  const scoped = new Set(collectScannableFiles());
+  const missed = collectEveryScannableFile()
+    .filter((abs) => !scoped.has(abs) && !SCAN_EXEMPT.has(abs))
+    .map((abs) => path.relative(REPO_ROOT, abs))
+    .sort();
+  assert.deepEqual(
+    missed,
+    [],
+    `these scannable files are outside every entry of SCAN_SCOPES, so the \`gh api --slurp\` gate ` +
+      `never reads them:\n  ${missed.join("\n  ")}\nAdd the directory to SCAN_SCOPES.`,
+  );
+});
+
 test("no `gh api` call combines --slurp with --jq/--template, in either the shell or argv form", () => {
   const files = collectScannableFiles();
   // A gate that scanned nothing passes for the wrong reason.

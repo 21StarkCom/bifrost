@@ -1,15 +1,19 @@
 # Source entrypoint help audit — STARK-8286
 
-Source baseline: `dbb27c1c6967`, independently
-matched to `origin/main` on 2026-09-21. This audit covers the source tree after
-the marketplace engine's retirement. It does not inherit the deleted engine's
-STARK-8083 audit.
+First measured against `dbb27c1c6967` (then `origin/main`) on 2026-09-21. The
+inventory below has since been **re-derived against the tree that carries the
+`runtime-overrides/codex/` deletion**, so it describes that tree and no earlier
+one — the baseline commit is the audit's origin, not the state it now records.
+It covers the source tree after the marketplace engine's retirement, and does
+not inherit the deleted engine's STARK-8083 audit.
 
-`runtime-overrides/codex/` has since been **deleted** — 56 tracked files of
-source that nothing rendered — so the tree audited here holds no Codex-specific
-entrypoint at all. Its rows are gone from the inventory below; what that does
-and does not cost this audit is recorded under the shell table rather than left
-as an unexplained shortfall.
+`runtime-overrides/codex/` is **deleted** — 56 tracked files of source that
+nothing rendered — so the tree audited here holds no Codex-specific entrypoint
+at all. Its rows are gone from the inventory below; what that does and does not
+cost this audit is recorded under the shell table rather than left as an
+unexplained shortfall. The lists are not trusted on this prose alone:
+`tools/source_help.test.ts` re-derives both inventories from the live tree on
+every CI run, so a row that stops matching reddens the required `test` context.
 
 ## Contract and defects
 

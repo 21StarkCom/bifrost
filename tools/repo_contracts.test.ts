@@ -259,20 +259,35 @@ test("the seven skills: lists partition the skill/ tree — no unclaimed skill, 
 // commented-out rule, a drifted regex or an entropy floor raised past the probe
 // would satisfy every assertion below.
 //
-// That dynamic half is NOT lost, and this is why no probe belongs in `ci.yml`:
-// the fleet caller above already runs exactly it, against this very file, on
-// every PR — observed passing on the restructure head. Re-adding one here would
-// be two copies of one gate, which is how a gate ends up enforced in one place
-// and not the other. What IS true is that the fleet caller is not a REQUIRED
-// context here (STARK-7635 owns that, and enrolment belongs in 21stark's
-// Terraform, never a hand `gh api .../rulesets` from this repo), so its red is
-// visible rather than blocking. Treat the assertions below as bookkeeping, not
-// proof, and re-measure with the real binary before touching a rule's body:
+// That dynamic half lives in `ci.yml`'s own `secrets` job — the
+// `gitleaks — self-test (both repo rules must fire)` step, which writes a probe
+// outside the checkout and asserts BOTH rule ids out of gitleaks' JSON report.
+// It is there rather than only in the fleet caller because the fleet caller
+// `secret-scan / secret-scan` is not a REQUIRED context here and never will be:
+// STARK-7967 withdrew that requirement from every repo in the org on 2026-09-20
+// (`local.secret_scan_enforced` is `toset([])`), and STARK-7635, which owned the
+// enrol-or-not decision for the two hand-PR'd repos, was cancelled the same day.
+// A proof that can only advise is not a gate. The fleet caller also probes only
+// `google-oauth-client-secret`, its own self-test input, so it never covers
+// `stark-inline-credential` at all — see `docs/operations/branch-protection.md`
+// §1, the one place to change any of this.
+//
+// So: treat the assertions below as the STATIC half — they prove the ids are
+// still spelled in the file, nothing more — and re-measure with the real binary
+// before touching a rule's body:
 //   gitleaks dir <tmp> --config .gitleaks.toml --exit-code 0 --report-format json --report-path /tmp/r.json
 
 const GITLEAKS_REL = ".gitleaks.toml";
 const FLEET_SELFTEST_RULE_ID = "google-oauth-client-secret";
 const INLINE_CREDENTIAL_RULE_ID = "stark-inline-credential";
+
+// `#` ALONE, not the shared `.ts`-aware default set, for the same reason
+// `workflow_shape.test.ts` narrows to it: TOML gives `//`, `*` and `/*` no
+// comment meaning, and a value line that happens to start with one of them — a
+// glob or a regex continuation inside a `'''…'''` literal — would be BLANKED,
+// which is a false negative on a gate that scans for `paths =` and rule `id =`.
+// The default set exists for the `.ts` half of the tree, not for this file.
+const TOML_COMMENT_MARKERS = ["#"];
 
 function readGitleaksConfig(): string[] {
   return blankWholeLineComments(
@@ -281,6 +296,7 @@ function readGitleaksConfig(): string[] {
       "Both secret scanners load it by path and gitleaks exits non-zero on a config it cannot read, so " +
         "losing it reddens the required `secret scan (tree)` context on every PR.",
     ),
+    TOML_COMMENT_MARKERS,
   ).split("\n");
 }
 
@@ -416,9 +432,10 @@ test("the secret-scan caller reports under the fleet context `secret-scan / secr
   assert.ok(
     body.includes("\njobs:\n  secret-scan:\n"),
     `${SECRET_SCAN_REL}: the single job must be keyed \`secret-scan\` — it is the left half of the ` +
-      `\`secret-scan / secret-scan\` context that 21stark's rulesets require on 63 repos. bifrost is not ` +
-      `enrolled today (STARK-7635 owns that decision), but a context that silently renames itself is what ` +
-      `makes enrolling it later look like a broken gate.`,
+      `\`secret-scan / secret-scan\` context 21stark's rulesets used to require fleet-wide. No repo in the ` +
+      `org requires it today (STARK-7967 withdrew it on 2026-09-20 and STARK-7635 was cancelled with it), ` +
+      `but a context that silently renames itself is what makes restoring that control later look like a ` +
+      `broken gate — and the name is part of the byte-identity 21stark's drift check compares.`,
   );
   const at = body.indexOf("\njobs:\n");
   assert.notEqual(at, -1, `${SECRET_SCAN_REL}: no top-level \`jobs:\` block — there is no calling job to name`);
