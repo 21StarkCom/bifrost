@@ -35,8 +35,8 @@
  *      repaired.
  *   3. Repointing is ATOMIC — symlink at a temp name in the same directory, then
  *      `rename` over. `unlink` followed by `symlink` leaves the path ABSENT in
- *      between, and these are load-bearing: a failure in that window leaves the
- *      statusline dead and every skill's `~/.claude/code-review/tools` gone.
+ *      between, and these are load-bearing: a failure in that window leaves
+ *      every skill's `~/.claude/code-review/tools` gone.
  *   4. Idempotent. A link already resolving to the right target is a no-op on
  *      the FIRST run, not just the second.
  */
@@ -104,14 +104,18 @@ export interface ManagedLink {
 }
 
 /**
- * Every `~/.claude` path this repo owns. This is the SINGLE source of truth:
- * `statusline_setup_lib.ts`'s `installStatusline()` reads the
- * `.claude/statusline-command.sh` row from here rather than keeping a second
- * copy of the path and a second symlink implementation — two copies of one rule
- * is how it ends up enforced in one place and not the other.
+ * Every `~/.claude` path this repo owns, and the SINGLE source of truth for
+ * them. Order is display order.
  *
- * Order is display order: the `code-review` asset tree first, then the
- * `~/.claude` root files.
+ * It is deliberately the `code-review` asset tree and nothing else. The
+ * statusline scripts, their `UserPromptSubmit`/`Stop` hooks and the Concrete
+ * output style used to be rows here; they are machine configuration, and the
+ * stark-workspace repo owns them now — the files, the links to them and the
+ * settings that run them. They are NOT in `RETIRED_LINKS` either, because they
+ * are not retired: on a provisioned machine those paths are correctly
+ * installed links into stark-workspace, and a retired row would make `--check`
+ * report every one of them as a problem. This repo neither creates, repairs
+ * nor reports them.
  */
 export const MANAGED_LINKS: readonly ManagedLink[] = [
   {
@@ -138,26 +142,6 @@ export const MANAGED_LINKS: readonly ManagedLink[] = [
     link: ".claude/code-review/config.json",
     target: "global/config.json",
     why: "`assetConfigPath()`'s flat layout — the shipped global config every tool reads",
-  },
-  {
-    link: ".claude/statusline-command.sh",
-    target: "config/statusline-command.sh",
-    why: "`settings.json`'s `statusLine.command` runs `bash` on this path; a broken link is a dead statusline on every session",
-  },
-  {
-    link: ".claude/statusline-prompt-hook.sh",
-    target: "config/statusline-prompt-hook.sh",
-    why: "the UserPromptSubmit hook that stamps the statusline's since-enter clock",
-  },
-  {
-    link: ".claude/statusline-stop-hook.sh",
-    target: "config/statusline-stop-hook.sh",
-    why: "the Stop hook that stamps the statusline's since-reply clock",
-  },
-  {
-    link: ".claude/output-styles/concrete.md",
-    target: "config/output-styles/concrete.md",
-    why: "the Concrete output style is selectable only when Claude Code can read it out of `~/.claude/output-styles/`",
   },
 ];
 
@@ -540,7 +524,8 @@ function pad(s: string, w: number): string {
 }
 
 /** Human report. Every non-`ok` row names what breaks, so the operator can tell
- * a cosmetic finding from a dead statusline without reading this file. */
+ * a cosmetic finding from a skill that cannot find its tools without reading
+ * this file. */
 export function renderReport(report: CheckReport | InstallReport): string {
   const lines: string[] = [`home: ${report.home}`, `repo: ${report.repoRoot}`, ""];
   const actions = (report as InstallReport).actions;
