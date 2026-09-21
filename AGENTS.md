@@ -49,7 +49,7 @@ This is a **personal playground**, not production. No customers depend on it; th
 - `skill/` — all skills (`skill/*/SKILL.md`, **25** skills across 25 dirs: 22 `stark-*` plus `agnes`, `gru`, `minion`), served as the seven marketplace plugins by the root manifest's per-plugin `skills:` partition. There is no `skill/evals/` any more.
 - `global/` — global config + prompts (`config.json`, `forge_heuristics.json`, `prompts/`)
 - `scripts/` — shell helpers + JSON only (`healer_patterns.json`). **No Python lives here any more.**
-- `config/` — the operator's own Claude Code assets (8 files): statusline scripts + hooks, `output-styles/`, `wif-identities.json`. No plugin installs them (under `"source": "./"` every plugin cache carries an inert copy): `wif-identities.json` is installed by hand, while the statusline scripts + hooks and `output-styles/concrete.md` are symlinked into `~/.claude` by `tools/asset_links.ts --install`. The Claude Code settings template is not here: it is machine configuration, owned by the stark-workspace repo, as are the cmux auto-rename hook (`cmux-autoname.sh`) and its regression test.
+- **No `config/` directory.** Everything that was in it was machine or infrastructure configuration, not skills: the statusline scripts, output style and settings template are owned by the stark-workspace repo, and the WIF identity registry by 21stark. bifrost owns only the `~/.claude/code-review/*` links, via `tools/asset_links.ts`.
 - `data/persona/` — persona roster
 - `standards/` — org-wide doc templates and workflows
 - `.claude-plugin/marketplace.json` — the marketplace manifest: seven plugins, each `"source": "./"` plus its own `skills:` partition. Hand-curated, must stay at the repo root.
