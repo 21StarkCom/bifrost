@@ -11,7 +11,8 @@
 // `./check-rest-only.sh && node --test *.test.ts` — non-recursive and .ts-only —
 // so a `.test.sh` with no `.ts` driver is a gate nobody executes, which is worse
 // than no gate: the file advertises coverage the suite does not have. The three
-// statusline harnesses and cmux-autoname are wired the same way.
+// statusline harnesses are wired the same way (statusline_parse.test.ts,
+// statusline_render.test.ts, statusline_prompt_hook.test.ts).
 //
 // Deliberately NOT guarded by existsSync: if the script is moved or deleted,
 // bash exits 127 and this fails loudly, rather than passing over a vanished

@@ -359,11 +359,12 @@ const REFUSED_WITH_SLURP = ["--jq", "-q", "--template", "-t"];
 /**
  * Directories that can carry a `gh` invocation, and the extensions that can hold
  * one. This is EVERY top-level dir holding a scannable file, not a shortlist of
- * the ones that happen to call `gh` today: `config/` ships eight `.sh` files
- * (the statusline + cmux-autoname hooks `config/settings.json` wires into a live
- * session) and `standards/` ships three `.yml` workflow/site templates that are
- * copied verbatim into other repos, so a fatal invocation written there would be
- * exactly as broken and exactly as unreported.
+ * the ones that happen to call `gh` today: `config/` ships six `.sh` files
+ * (the three statusline scripts `tools/asset_links.ts` links into a live
+ * `~/.claude`, and their three test harnesses) and `standards/` ships three
+ * `.yml` workflow/site templates that are copied verbatim into other repos, so
+ * a fatal invocation written there would be exactly as broken and exactly as
+ * unreported.
  */
 const SCAN_SCOPES = [
   ".github/workflows",

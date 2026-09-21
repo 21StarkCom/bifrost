@@ -26,7 +26,7 @@ const routes: Record<string, string[]> = {
   statusline_setup: ["", "--list", "--enable model", "--disable model", "--install", "--reset"], validation_gate: [""],
 };
 const shells = [
-  "config/cmux-autoname.sh", "config/statusline-command.sh", "config/statusline-prompt-hook.sh",
+  "config/statusline-command.sh", "config/statusline-prompt-hook.sh",
   "config/statusline-stop-hook.sh", "tools/check-rest-only.sh",
   "skill/stark-gha-cost/scripts/gha-cost-breakdown.sh", "skill/stark-gha-cost/scripts/gha-repo-actions-drill.sh",
   "skill/stark-build/references/hooks/protect-paths.sh", "skill/stark-build/references/hooks/stop-gate.sh",

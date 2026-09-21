@@ -2,10 +2,11 @@
 
 First measured against `dbb27c1c6967` (then `origin/main`) on 2026-09-21. The
 inventory below has since been **re-derived against the tree that carries the
-`runtime-overrides/codex/` deletion**, so it describes that tree and no earlier
-one — the baseline commit is the audit's origin, not the state it now records.
-It covers the source tree after the marketplace engine's retirement, and does
-not inherit the deleted engine's STARK-8083 audit.
+`runtime-overrides/codex/` deletion and the cmux hook's move out**, so it
+describes that tree and no earlier one — the baseline commit is the audit's
+origin, not the state it now records. It covers the source tree after the
+marketplace engine's retirement, and does not inherit the deleted engine's
+STARK-8083 audit.
 
 `runtime-overrides/codex/` is **deleted** — 56 tracked files of source that
 nothing rendered — so the tree audited here holds no Codex-specific entrypoint
@@ -113,7 +114,6 @@ argument: …" — wording alone cannot tell a working help from a broken one.
 
 | Shell / other executable | Boundary |
 | --- | --- |
-| `config/cmux-autoname.sh` | no argv; SessionStart stdin; help before cmux/git |
 | `config/statusline-command.sh` | no argv; JSON stdin; help before rendering/writes |
 | `config/statusline-prompt-hook.sh`, `config/statusline-stop-hook.sh` | no argv; JSON stdin; help before timestamps |
 | `tools/check-rest-only.sh` | no argv; help before directory change/scanner |
@@ -122,9 +122,15 @@ argument: …" — wording alone cannot tell a working help from a broken one.
 | `skill/stark-build/references/hooks/protect-paths.sh` | leading help; exact positional arity, then list/task data and stdin protocol |
 | `skill/stark-build/references/hooks/stop-gate.sh` | leading help; bounded positional arity before running the check; later task/path words are literal data |
 
-Those eight rows cover all nine non-test `.sh` files in the tree, which is the
+Those seven rows cover all eight non-test `.sh` files in the tree, which is the
 whole executable non-TypeScript surface — the shape `source_help.test.ts`
 asserts by walking for `.sh` and comparing against its list.
+
+The cmux auto-rename `SessionStart` hook (`config/cmux-autoname.sh`) had a row
+here and is no longer in this tree: it **moved** to the stark-workspace repo,
+which owns machine setup. Its help guard went with it and is that repo's to
+keep covered; this audit no longer probes it. Nothing here invokes the script —
+`config/settings.json` names only its installed path, which is data.
 
 The Codex counterparts those rows used to carry are gone with
 `runtime-overrides/codex/`, along with the four executable tool replacements it
