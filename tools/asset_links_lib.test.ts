@@ -35,7 +35,6 @@ import {
   requireManagedLink,
   targetPathFor,
 } from "./asset_links_lib.ts";
-import { installStatusline, statuslineShPath } from "./statusline_setup_lib.ts";
 
 const REPO_ROOT = defaultRepoRoot();
 const CLI = path.join(REPO_ROOT, "tools", "asset_links.ts");
@@ -84,7 +83,7 @@ const TOOLS_ROW = requireManagedLink(".claude/code-review/tools");
 
 test("MANAGED_LINKS is a well-formed table of home-relative links into the repo", () => {
   assert.ok(MANAGED_LINKS.length > 0, "an empty table would make every gate below pass vacuously");
-  assert.equal(MANAGED_LINKS.length, 9, "nine links are managed; adding or dropping one is a real decision");
+  assert.equal(MANAGED_LINKS.length, 5, "five links are managed; adding or dropping one is a real decision");
 
   const links = MANAGED_LINKS.map((r) => r.link);
   assert.deepEqual([...new Set(links)].sort(), [...links].sort(), "two rows claim the same link path");
@@ -398,8 +397,9 @@ test("RULE: a link whose corrected target is missing is reported, never deleted"
 });
 
 // A repoint that dies between `unlink` and `symlink` leaves the path ABSENT, and
-// `settings.json` runs `bash ~/.claude/statusline-command.sh` — so the failure
-// mode is a dead statusline on every session until someone reruns this by hand.
+// a direct invocation resolves every skill's tools through
+// `~/.claude/code-review/tools` — so the failure mode is every tool missing
+// until someone reruns this by hand.
 // The fault seam makes that window observable: throw where the crash would land
 // and assert the OLD link is still there and still points where it did.
 test("RULE: a repoint is atomic — a crash mid-write leaves the old link intact", () => {
@@ -468,110 +468,44 @@ test("stateRoot()'s audit/, history/ and locks/ are untouched and the dir is nev
 });
 
 // ---------------------------------------------------------------------------
-// The statusline fold — one table, one implementation
+// Paths another repo owns — left strictly alone
 // ---------------------------------------------------------------------------
 
-test("statusline_setup reads its path from the managed table, not a second copy", () => {
-  const row = requireManagedLink(".claude/statusline-command.sh");
-  assert.equal(row.target, "config/statusline-command.sh");
-  assert.equal(statuslineShPath(), targetPathFor(row, REPO_ROOT));
-  assert.ok(fs.existsSync(statuslineShPath()));
-});
-
-test("installStatusline delegates the symlink half and keeps its settings.json wiring", () => {
+// The statusline scripts, their prompt/stop hooks and the Concrete output style
+// used to be rows here. They moved to the stark-workspace repo, which links them
+// into `~/.claude` itself, so they are neither managed NOR retired: a managed row
+// would repoint a correctly installed link back at this checkout, and a retired
+// one would make `--check` report it as a problem on every provisioned machine.
+// Pinned by behaviour rather than by grepping the tables, so it holds whichever
+// table the next edit reaches for.
+test("links another repo owns are neither managed nor retired — check passes and install leaves them alone", () => {
   const home = synthHome();
-  const prev = process.env.HOME;
-  process.env.HOME = home;
-  try {
-    const first = installStatusline();
-    assert.ok(first.some((a) => a.startsWith("Linked")), first.join(" | "));
-    assert.ok(first.includes("Patched settings.json"));
-
-    const linkPath = linkPathFor(requireManagedLink(".claude/statusline-command.sh"), home);
-    assert.ok(isLink(linkPath), "the statusline link was not created through the shared helper");
-    assert.equal(fs.realpathSync(linkPath), fs.realpathSync(statuslineShPath()));
-
-    const settings = JSON.parse(fs.readFileSync(path.join(home, ".claude", "settings.json"), "utf8"));
-    assert.equal(settings.statusLine.command, `bash ${linkPath}`, "settings must point at the LINK, not the checkout");
-
-    assert.deepEqual(installStatusline(), ["Script symlink OK", "settings.json OK"]);
-  } finally {
-    if (prev === undefined) delete process.env.HOME;
-    else process.env.HOME = prev;
+  const repoRoot = synthRepo();
+  const otherRepo = tmp("other-repo");
+  const foreign = [
+    ".claude/statusline-command.sh",
+    ".claude/statusline-prompt-hook.sh",
+    ".claude/statusline-stop-hook.sh",
+    ".claude/output-styles/concrete.md",
+  ];
+  for (const rel of foreign) {
+    const target = path.join(otherRepo, path.basename(rel));
+    fs.writeFileSync(target, rel);
+    fs.mkdirSync(path.dirname(path.join(home, rel)), { recursive: true });
+    fs.symlinkSync(target, path.join(home, rel));
   }
-});
-
-test("installStatusline refuses a hand-placed real script instead of deleting it", () => {
-  const home = synthHome();
-  const prev = process.env.HOME;
-  process.env.HOME = home;
-  try {
-    const linkPath = path.join(home, ".claude", "statusline-command.sh");
-    fs.mkdirSync(path.dirname(linkPath), { recursive: true });
-    fs.writeFileSync(linkPath, "#!/bin/sh\necho mine\n");
-    const actions = installStatusline();
-    assert.ok(actions.some((a) => a.startsWith("REFUSED:")), actions.join(" | "));
-    assert.equal(fs.readFileSync(linkPath, "utf8"), "#!/bin/sh\necho mine\n");
-    // The settings wiring still lands HERE, deliberately: the path holds a real
-    // script, so `bash <path>` runs. What must not happen is the next test's case.
-    assert.ok(actions.includes("Patched settings.json"), actions.join(" | "));
-  } finally {
-    if (prev === undefined) delete process.env.HOME;
-    else process.env.HOME = prev;
-  }
-});
-
-// `settings.json`'s `statusLine.command` is `bash <link>`. Wiring it at a path
-// that holds NOTHING is a dead statusline on every session, and "Patched
-// settings.json" in the output reads like success — which is how a refusal that
-// the delegate newly made possible would get buried.
-test("installStatusline does not wire settings.json at a script it could not install", (t) => {
-  if (typeof process.getuid === "function" && process.getuid() === 0) {
-    t.skip("root ignores the mode bits this test uses to force a write failure");
-    return;
-  }
-  const home = synthHome();
-  const prev = process.env.HOME;
-  process.env.HOME = home;
-  const claudeDir = path.join(home, ".claude");
-  fs.mkdirSync(claudeDir, { recursive: true });
-  fs.chmodSync(claudeDir, 0o555);
-  try {
-    const actions = installStatusline();
-    assert.ok(actions.some((a) => a.startsWith("REFUSED:")), actions.join(" | "));
-    assert.ok(
-      actions.some((a) => a.startsWith("Skipped settings.json")),
-      `settings.json was wired at a path holding nothing: ${actions.join(" | ")}`,
-    );
-    assert.ok(!actions.includes("Patched settings.json"), actions.join(" | "));
-  } finally {
-    fs.chmodSync(claudeDir, 0o755);
-    if (prev === undefined) delete process.env.HOME;
-    else process.env.HOME = prev;
-  }
-});
-
-test("statusline_setup --install exits non-zero when the link was refused", (t) => {
-  if (typeof process.getuid === "function" && process.getuid() === 0) {
-    t.skip("root ignores the mode bits this test uses to force a write failure");
-    return;
-  }
-  const home = synthHome();
-  const claudeDir = path.join(home, ".claude");
-  fs.mkdirSync(claudeDir, { recursive: true });
-  fs.chmodSync(claudeDir, 0o555);
-  try {
-    const r = spawnSync(process.execPath, [path.join(REPO_ROOT, "tools", "statusline_setup.ts"), "--install"], {
-      encoding: "utf8",
-      env: { ...process.env, HOME: home, NO_COLOR: "1" },
+  const snapshot = () =>
+    foreign.map((rel) => {
+      const p = path.join(home, rel);
+      return `${rel} ino=${fs.lstatSync(p).ino} -> ${fs.readlinkSync(p)}`;
     });
-    // Before the delegation this path could only succeed or throw, so exit 0 meant
-    // "installed". It must not now also mean "reported a dead statusline".
-    assert.equal(r.status, 1, `${r.stdout ?? ""}${r.stderr ?? ""}`);
-    assert.match(r.stdout ?? "", /REFUSED:/);
-  } finally {
-    fs.chmodSync(claudeDir, 0o755);
-  }
+  const before = snapshot();
+
+  const report = installLinks({ home, repoRoot });
+  assert.equal(report.ok, true, renderReport(report));
+  assert.deepEqual(snapshot(), before, "install touched a link this repo does not own");
+  const check = checkLinks({ home, repoRoot });
+  assert.equal(check.ok, true, `a correctly installed foreign link was reported:\n${renderReport(check)}`);
 });
 
 // ---------------------------------------------------------------------------

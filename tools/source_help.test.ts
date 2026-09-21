@@ -12,7 +12,7 @@ const routes: Record<string, string[]> = {
   alert_delivery: [""], approach_contract: [""], asset_links: [""], context_compactor: [""],
   copilot_land: ["", "branch-name", "prepare-branch", "land"],
   fact_routing_fold: [""], fact_routing_hook: [""], failure_classifier: [""],
-  findings_review_post: [""], gcp_scope: ["", "init", "install", "check", "list"],
+  findings_review_post: [""],
   github_projects: ["", "find-project", "add-issue", "get-field-ids", "get-items", "get-item-fields", "set-field", "set-fields", "find-item", "get-issue-node-id", "transition-status", "is-legal-transition", "check-spec-completeness", "load-config"],
   healer_canary: ["", "--status", "--check", "--promote audit", "--demote audit", "--explain audit", "--close-circuit audit"],
   iac_review: ["", "--kind terraform", "--kind terragrunt"], jury: ["", "run", "list", "show"],
@@ -22,12 +22,10 @@ const routes: Record<string, string[]> = {
   skill_audit: [""], skill_autopilot: [""], skill_diet: [""], skill_optimize: [""],
   skill_router: [""], stark_config_lib: [""], stark_handover: ["", "resolve", "save", "resume", "list"],
   stark_persona: ["", "select", "deactivate", "rate", "survey", "survey-answer", "add", "stats", "history", "print-roster", "print-weights", "session-end"],
-  stark_session: ["", "start", "end"],
-  statusline_setup: ["", "--list", "--enable model", "--disable model", "--install", "--reset"], validation_gate: [""],
+  stark_session: ["", "start", "end"], validation_gate: [""],
 };
 const shells = [
-  "config/statusline-command.sh", "config/statusline-prompt-hook.sh",
-  "config/statusline-stop-hook.sh", "tools/check-rest-only.sh",
+  "tools/check-rest-only.sh",
   "skill/stark-gha-cost/scripts/gha-cost-breakdown.sh", "skill/stark-gha-cost/scripts/gha-repo-actions-drill.sh",
   "skill/stark-build/references/hooks/protect-paths.sh", "skill/stark-build/references/hooks/stop-gate.sh",
 ];

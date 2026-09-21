@@ -62,7 +62,7 @@ function main(argv: string[]): number {
   // These links are GLOBAL — `~/.claude` holds exactly one of each — and the
   // repo root is wherever this file was loaded from. Installing from a linked
   // worktree therefore repoints the whole machine at a tree that exists to be
-  // deleted; `git worktree remove` then leaves all nine dangling with nothing
+  // deleted; `git worktree remove` then leaves every one dangling with nothing
   // on the machine that knows where they should have pointed.
   const worktreeMain = linkedWorktreeMainCheckout(defaultRepoRoot());
   if (worktreeMain !== null) {

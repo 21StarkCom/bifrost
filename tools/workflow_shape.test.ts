@@ -358,13 +358,20 @@ const REFUSED_WITH_SLURP = ["--jq", "-q", "--template", "-t"];
 
 /**
  * Directories that can carry a `gh` invocation, and the extensions that can hold
- * one. This is EVERY top-level dir holding a scannable file, not a shortlist of
- * the ones that happen to call `gh` today: `config/` ships six `.sh` files
- * (the three statusline scripts `tools/asset_links.ts` links into a live
- * `~/.claude`, and their three test harnesses) and `standards/` ships three
- * `.yml` workflow/site templates that are copied verbatim into other repos, so
- * a fatal invocation written there would be exactly as broken and exactly as
- * unreported.
+ * one. This covers EVERY top-level dir holding a scannable file, not a shortlist
+ * of the ones that happen to call `gh` today: `standards/` ships three `.yml`
+ * workflow/site templates that are copied verbatim into other repos, so a fatal
+ * invocation written there would be exactly as broken and exactly as unreported.
+ *
+ * `config/` stays a scope although it now holds no scannable file — its six
+ * `.sh` files (the statusline scripts and their harnesses) moved to the
+ * stark-workspace repo, leaving only `wif-identities.json`. That is the standing
+ * `scripts/` and `global/` already have: the directory is live, a script written
+ * there next is scanned with no edit here, and an empty scope costs nothing.
+ * Dropping it would be safe only because the completeness test below reddens on
+ * a scannable file outside every scope; keeping it does not lean on that. If
+ * `config/` itself is ever deleted, the existence check reddens and the entry
+ * goes then, deliberately.
  */
 const SCAN_SCOPES = [
   ".github/workflows",
@@ -408,9 +415,9 @@ function collectScannableFiles(): string[] {
   };
   for (const scope of SCAN_SCOPES) {
     const abs = path.join(REPO_ROOT, scope);
-    // A moved directory must redden rather than go quiet. `scripts/` and
-    // `global/` legitimately hold no scannable file today, so emptiness is fine;
-    // absence is not.
+    // A moved directory must redden rather than go quiet. `scripts/`, `global/`
+    // and `config/` legitimately hold no scannable file today, so emptiness is
+    // fine; absence is not.
     assert.ok(
       fs.existsSync(abs),
       `scan scope ${scope}/ is gone. Point this list at wherever it moved — a scope that ` +

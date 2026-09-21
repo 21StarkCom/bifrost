@@ -167,9 +167,11 @@ test("returns true through a SYMLINK whose target path contains a SPACE", () => 
   });
 });
 
-// Every entrypoint that carried the broken hand-rolled guard. Listed, not
-// discovered: discovering them by "imports isMainModule" would pass vacuously
-// against the very build this exists to fail on.
+// Every entrypoint still in this repo that carried the broken hand-rolled guard
+// (`statusline_setup.ts` did too, and left with the statusline for the
+// stark-workspace repo). Listed, not discovered: discovering them by "imports
+// isMainModule" would pass vacuously against the very build this exists to
+// fail on.
 const FORMERLY_HAND_ROLLED = [
   "alert_delivery.ts",
   "approach_contract.ts",
@@ -184,7 +186,6 @@ const FORMERLY_HAND_ROLLED = [
   "session_state.ts",
   "skill_router.ts",
   "stark_handover.ts",
-  "statusline_setup.ts",
   "validation_gate.ts",
 ];
 
