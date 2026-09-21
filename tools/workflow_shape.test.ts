@@ -363,15 +363,11 @@ const REFUSED_WITH_SLURP = ["--jq", "-q", "--template", "-t"];
  * workflow/site templates that are copied verbatim into other repos, so a fatal
  * invocation written there would be exactly as broken and exactly as unreported.
  *
- * `config/` stays a scope although it now holds no scannable file — its six
- * `.sh` files (the statusline scripts and their harnesses) moved to the
- * stark-workspace repo, leaving only `wif-identities.json`. That is the standing
- * `scripts/` and `global/` already have: the directory is live, a script written
- * there next is scanned with no edit here, and an empty scope costs nothing.
- * Dropping it would be safe only because the completeness test below reddens on
- * a scannable file outside every scope; keeping it does not lean on that. If
- * `config/` itself is ever deleted, the existence check reddens and the entry
- * goes then, deliberately.
+ * `config/` was a scope until its last file left the repo: the statusline scripts
+ * moved to stark-workspace and `wif-identities.json` to 21stark, so the directory
+ * no longer exists. The existence check below would redden on it, which is how
+ * this entry was meant to go. The completeness test still reddens on any
+ * scannable file written outside every remaining scope.
  */
 const SCAN_SCOPES = [
   ".github/workflows",
@@ -380,7 +376,6 @@ const SCAN_SCOPES = [
   "scripts",
   "global",
   "standards",
-  "config",
 ];
 const SCAN_EXTENSIONS = new Set([".sh", ".ts", ".yml", ".yaml"]);
 
