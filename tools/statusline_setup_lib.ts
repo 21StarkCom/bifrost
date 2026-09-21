@@ -12,21 +12,38 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import {
+  defaultRepoRoot,
+  installLink,
+  linkPathFor,
+  requireManagedLink,
+  targetPathFor,
+} from "./asset_links_lib.ts";
+
 // ---------------------------------------------------------------------------
 // Paths
 // ---------------------------------------------------------------------------
 
-/** Repo `config/statusline-command.sh` — resolved relative to this file.
- *  This file lives in `tools/`; the shell script lives in `config/`. */
+/**
+ * The statusline script is one of the nine `~/.claude` paths this repo owns, and
+ * `asset_links_lib.ts`'s `MANAGED_LINKS` is the single source of truth for all
+ * of them — both the link path and the repo target are read from that row here
+ * rather than spelled a second time. `requireManagedLink` throws if the row is
+ * ever dropped, so a table edit that orphans the statusline fails loudly instead
+ * of leaving this file linking a path nothing else manages.
+ */
+const STATUSLINE_LINK = ".claude/statusline-command.sh";
+
+/** Repo `config/statusline-command.sh`, from the managed-link table. */
 export function statuslineShPath(): string {
-  return path.resolve(import.meta.dirname, "..", "config", "statusline-command.sh");
+  return targetPathFor(requireManagedLink(STATUSLINE_LINK), defaultRepoRoot());
 }
 
 function claudeDir(): string {
   return path.join(os.homedir(), ".claude");
 }
 function installedShPath(): string {
-  return path.join(claudeDir(), "statusline-command.sh");
+  return linkPathFor(requireManagedLink(STATUSLINE_LINK), os.homedir());
 }
 function installedSettingsPath(): string {
   return path.join(claudeDir(), "settings.json");
@@ -101,7 +118,23 @@ export function saveConfig(states: SegmentStates): void {
 // Install
 // ---------------------------------------------------------------------------
 
-/** Ensure the statusline is installed. Returns the actions taken. */
+/**
+ * Ensure the statusline is installed. Returns the actions taken.
+ *
+ * The symlink half is DELEGATED to `asset_links_lib.installLink` — this file
+ * used to carry its own copy of that logic, and two implementations of one rule
+ * is how it ends up enforced in one place and not the other. The delegate is
+ * also strictly safer than the copy it replaces: it repoints ATOMICALLY (the old
+ * code did `unlink` then `symlink`, leaving `settings.json`'s `bash <path>`
+ * pointing at nothing if it died in between), and it REFUSES a path holding a
+ * real file instead of deleting it (the old code unlinked whatever it found).
+ * Refusing prints a `REFUSED:` action rather than throwing, so a hand-placed
+ * script is reported, not silently destroyed.
+ *
+ * The `settings.json` half stays here: it is genuinely statusline-specific, and
+ * it deliberately points at the LINK rather than at the checkout, so moving the
+ * clone does not need a settings edit.
+ */
 export function installStatusline(): string[] {
   const actions: string[] = [];
   fs.mkdirSync(claudeDir(), { recursive: true });
@@ -110,28 +143,29 @@ export function installStatusline(): string[] {
   const installedSh = installedShPath();
 
   // 1. Script symlink
-  let symlinkOk = false;
-  try {
-    if (fs.lstatSync(installedSh).isSymbolicLink()) {
-      symlinkOk = fs.realpathSync(installedSh) === fs.realpathSync(statuslineSh);
-    }
-  } catch {
-    symlinkOk = false;
-  }
-  if (symlinkOk) {
+  const action = installLink(requireManagedLink(STATUSLINE_LINK));
+  if (action.outcome === "ok") {
     actions.push("Script symlink OK");
+  } else if (action.outcome === "refused") {
+    actions.push(`REFUSED: ${path.basename(installedSh)} ${action.detail}`);
   } else {
-    try {
-      fs.lstatSync(installedSh);
-      fs.unlinkSync(installedSh);
-    } catch {
-      // nothing to remove
-    }
-    fs.symlinkSync(statuslineSh, installedSh);
-    actions.push(`Linked ${path.basename(installedSh)} -> ${statuslineSh}`);
+    // Name the action that actually happened: a repoint means the link had been
+    // aimed at another checkout, which is the one event an operator most needs
+    // to see spelled out rather than folded into "Linked".
+    const verb = action.outcome === "repointed" ? "Repointed" : "Linked";
+    actions.push(`${verb} ${path.basename(installedSh)} -> ${statuslineSh}`);
   }
 
-  // 2. Patch settings.json
+  // 2. Patch settings.json — but only once the script is really in place.
+  //    `statusLine.command` is `bash <installedSh>`, so wiring it at a path that
+  //    holds nothing buys a dead statusline on every session and hides the
+  //    REFUSED line above behind a "Patched settings.json" that reads like
+  //    success. (A refusal over a hand-placed real script still patches: that
+  //    path does hold something bash can run.)
+  if (!fs.existsSync(installedSh)) {
+    actions.push(`Skipped settings.json — ${installedSh} is not in place`);
+    return actions;
+  }
   const entry = { type: "command", command: `bash ${installedSh}` };
   const settingsPath = installedSettingsPath();
   let settings: Record<string, unknown> = {};
