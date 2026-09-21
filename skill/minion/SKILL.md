@@ -166,7 +166,11 @@ nothing. At the gate you are stuck at, raise a blocker with
 raise and never clear is exactly what the operator is looking for, so raise it
 the moment you are stuck rather than at the end — and a `blocked` or
 `follow-up … stopping` exit raises one too, carrying the reason you send Gru,
-since a Minion that has stopped must not read as one still working.
+since a Minion that has stopped must not read as one still working. Name
+`--needs` on those two: an unnamed one defaults to `agent`, which reads as
+"another agent has this" for the exits that mean nobody does — `operator` for a
+`blocked` exit, `dependency` when what you wait on is another ticket and for a
+`follow-up … stopping` one.
 
 Keep `--note` plain prose starting with a word: it is a double-quoted shell
 argument, so a `$`, a quote or a backtick in it is expanded, mangled or
@@ -220,12 +224,16 @@ Do not stay silent for more than 30 minutes; send a one-line progress note.
 
 On a `done` exit, run [the stand-down contract](../../standards/stand-down.md)
 — the scope that bounds it, the subagent hard stop, its four rules about when,
-`hermod poison-pill --json`, `armed:true`, and the `partial` outcomes. One of
-its terms is filled in here:
+`hermod poison-pill --json`, `armed:true`, and the `partial` outcomes. Two of
+its terms are filled in here:
 
 - **Your report** is the `hermod msg send` line in [Reporting](#reporting),
   sent and completed *before* you arm. Anything you see go wrong in the
   poison-pill foreground goes to Gru in one more line before you stop.
+- **Your last houston line** is the `closed` report in [Tell
+  houston](#tell-houston), sent *before* you arm exactly as the report above
+  is: the stand-down ends the session, so one left for afterwards is never
+  sent.
 
 **A `blocked` or `follow-up … stopping` exit does NOT stand down.** Gru or the
 operator may still need your worktree, your tab and your scrollback to see what
