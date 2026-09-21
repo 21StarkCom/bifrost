@@ -30,12 +30,11 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-// Resolved from `import.meta.url`, never from cwd. `tools/package.json`'s test
-// script is `./check-rest-only.sh && node --test *.test.ts` and ci.yml runs it
-// with `working-directory: tools`, so cwd here is `tools/` under CI but the repo
-// root when someone runs `node --test tools/workflow_shape.test.ts` by hand. A
-// cwd-relative path would resolve in exactly one of those two.
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+// `REPO_ROOT` (resolved from `import.meta.url`, never from cwd), the
+// fail-loudly-on-ENOENT reader and the comment blanker are shared with
+// `repo_contracts.test.ts` — one copy, because the two hand-rolled blankers had
+// already diverged over whether `//` starts a comment.
+import { REPO_ROOT, blankWholeLineComments, readRepoFile } from "./repo_files_lib.ts";
 
 const CI_REL = ".github/workflows/ci.yml";
 
@@ -66,20 +65,13 @@ const EXPECTED_CONTEXTS: Record<string, string> = {
 };
 
 function readCi(): string {
-  const abs = path.join(REPO_ROOT, CI_REL);
-  let body: string;
-  try {
-    body = fs.readFileSync(abs, "utf8");
-  } catch (err) {
-    // Loudly, never a skip. A gate that passes because its target vanished is
-    // the same false green as a gate whose job reports `skipped`.
-    return assert.fail(
-      `${CI_REL} is unreadable (${(err as Error).message}). This test pins the four ` +
-        `required check contexts; if the workflow moved, move this test and PUT the ruleset ` +
-        `in the same change rather than letting the gate pass over nothing.`,
-    );
-  }
-  return body.replace(/\r\n/g, "\n");
+  // Loudly on ENOENT, never a skip. A gate that passes because its target
+  // vanished is the same false green as a gate whose job reports `skipped`.
+  return readRepoFile(
+    CI_REL,
+    "This test pins the four required check contexts; if the workflow moved, move this test " +
+      "and PUT the ruleset in the same change rather than letting the gate pass over nothing.",
+  );
 }
 
 // Comment lines are blanked rather than dropped, so indentation parsing is
@@ -90,8 +82,15 @@ function readCi(): string {
 // whole-line comments go — a trailing `# v4` on a `uses:` line is left alone,
 // and every assertion below keys off a line's KEY, which a trailing comment
 // cannot forge.
+//
+// `#` ALONE, not the shared default set: YAML reads a leading `*` as an ALIAS,
+// so blanking it would delete a real node from a gate that reads keys by
+// indentation — a false negative on a required check. The `.ts`-aware markers
+// belong to the `--slurp` scan below, which reads `.ts` as well as `.yml`.
+const YAML_COMMENT_MARKERS = ["#"];
+
 function codeLines(yaml: string): string[] {
-  return yaml.split("\n").map((line) => (line.trimStart().startsWith("#") ? "" : line));
+  return blankWholeLineComments(yaml, YAML_COMMENT_MARKERS).split("\n");
 }
 
 // -1 for a blank line, which belongs to whatever block surrounds it.
@@ -374,7 +373,6 @@ const SCAN_SCOPES = [
   "global",
   "standards",
   "config",
-  "runtime-overrides",
 ];
 const SCAN_EXTENSIONS = new Set([".sh", ".ts", ".yml", ".yaml"]);
 
@@ -444,23 +442,6 @@ function ghApiHasFlag(line: string, names: string[]): boolean {
   return false;
 }
 
-/**
- * Blanks whole-line comments in either syntax, so a comment that spells the
- * banned combination out — this file's own header does — is neither a hit nor a
- * way to satisfy the scan. Only whole-line comments: stripping `//` mid-line
- * would truncate any line holding a URL and could drop a flag that follows it,
- * which is a false NEGATIVE and the one outcome a gate may not have.
- */
-function blankWholeLineComments(text: string): string {
-  return text
-    .split("\n")
-    .map((line) => {
-      const t = line.trimStart();
-      return t.startsWith("#") || t.startsWith("//") || t.startsWith("*") || t.startsWith("/*") ? "" : line;
-    })
-    .join("\n");
-}
-
 /** The shell form: a joined command line carrying `gh api`, `--slurp` and a refused flag. */
 function shellFormHits(text: string): string[] {
   const hits: string[] = [];
@@ -524,6 +505,49 @@ function argvFormHits(text: string): string[] {
   }
   return hits;
 }
+
+/**
+ * Every scannable file in the tree, reached WITHOUT `SCAN_SCOPES` — the walk the
+ * completeness check below compares that hand-written list against. Same skip
+ * set as the scoped walk, plus `.worktrees/` (a linked worktree is a second
+ * checkout of this repo and its copies are not this run's to police) and
+ * `.git`-adjacent dot-dirs holding session scratch rather than source.
+ */
+function collectEveryScannableFile(): string[] {
+  const skip = new Set([...SCAN_SKIP_DIRS, ".worktrees", ".claude", ".remember"]);
+  const files: string[] = [];
+  const walk = (dir: string): void => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (skip.has(entry.name)) continue;
+      const abs = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(abs);
+      else if (SCAN_EXTENSIONS.has(path.extname(entry.name))) files.push(abs);
+    }
+  };
+  walk(REPO_ROOT);
+  return files;
+}
+
+test("`SCAN_SCOPES` still names every directory that holds a scannable file", () => {
+  // `SCAN_SCOPES` is hand-written and its own comment claims to be EVERY
+  // top-level dir holding a scannable file — a claim nothing checked, so a new
+  // top-level directory (or a `gh` call parked in `docs/`) leaves the gate
+  // reporting clean over a file it never opened. The entry deleted for
+  // `runtime-overrides/` was removed by hand for exactly that reason; this is
+  // what makes the next such edit visible. Fix a failure by ADDING the scope,
+  // never by narrowing this walk.
+  const scoped = new Set(collectScannableFiles());
+  const missed = collectEveryScannableFile()
+    .filter((abs) => !scoped.has(abs) && !SCAN_EXEMPT.has(abs))
+    .map((abs) => path.relative(REPO_ROOT, abs))
+    .sort();
+  assert.deepEqual(
+    missed,
+    [],
+    `these scannable files are outside every entry of SCAN_SCOPES, so the \`gh api --slurp\` gate ` +
+      `never reads them:\n  ${missed.join("\n  ")}\nAdd the directory to SCAN_SCOPES.`,
+  );
+});
 
 test("no `gh api` call combines --slurp with --jq/--template, in either the shell or argv form", () => {
   const files = collectScannableFiles();

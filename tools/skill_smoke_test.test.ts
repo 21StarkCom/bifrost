@@ -343,28 +343,24 @@ for (const name of SKILLS) {
 // Minion transcripts resolve to `stark-ops:minion`). A review that reads
 // "auto-merges and poison-pills" and reaches for `disable-model-invocation`
 // would leave that session forbidden to enter the skill it was launched to run
-// — so the flag is pinned OFF here, in both runtime trees, and a change to that
-// decision has to change this test first.
+// — so the flag is pinned OFF here, and a change to that decision has to change
+// this test first.
 // ---------------------------------------------------------------------------
 
 const WORKER_SKILLS = ["agnes", "gru", "minion"] as const;
 
 for (const name of WORKER_SKILLS) {
-  for (const [tree, file] of [
-    ["claude", path.join(SKILLS_ROOT, name, "SKILL.md")],
-    ["codex", path.join(REPO_ROOT, "runtime-overrides", "codex", "skill", name, "SKILL.md")],
-  ] as const) {
-    test(`skill smoke: ${name} [${tree}] — stays model-invocable (STARK-6471)`, () => {
-      assert.ok(fs.existsSync(file), `${name}: no ${tree} SKILL.md at ${file}`);
-      const block = fs.readFileSync(file, "utf8").match(/^---\n([\s\S]*?)\n---/);
-      assert.ok(block, `${name} [${tree}]: SKILL.md has no frontmatter block`);
-      assert.doesNotMatch(
-        block![1],
-        /^disable-model-invocation:\s*(true|yes|on|1)\s*$/im,
-        `${name} [${tree}] carries disable-model-invocation — an unattended launch could then never enter the skill it was launched to run (STARK-6471)`,
-      );
-    });
-  }
+  test(`skill smoke: ${name} — stays model-invocable (STARK-6471)`, () => {
+    const file = path.join(SKILLS_ROOT, name, "SKILL.md");
+    assert.ok(fs.existsSync(file), `${name}: no SKILL.md at ${file}`);
+    const block = fs.readFileSync(file, "utf8").match(/^---\n([\s\S]*?)\n---/);
+    assert.ok(block, `${name}: SKILL.md has no frontmatter block`);
+    assert.doesNotMatch(
+      block![1],
+      /^disable-model-invocation:\s*(true|yes|on|1)\s*$/im,
+      `${name} carries disable-model-invocation — an unattended launch could then never enter the skill it was launched to run (STARK-6471)`,
+    );
+  });
 }
 
 // The shared help protocol every skill points at must exist.
@@ -427,14 +423,10 @@ for (const name of SKILLS) {
 //     `../minion/SKILL.md` from `/agnes`. Renaming a standards doc would
 //     otherwise break every pointer silently: nothing else reads these links.
 //
-//     Three trees, not one. The Codex overlay under runtime-overrides/codex/
-//     carries its OWN copy of every link — `../../standards/stand-down.md`
-//     from `runtime-overrides/codex/skill/agnes/` resolves inside the overlay,
-//     not into the canonical tree — so a standards doc added to `standards/`
-//     and forgotten in the mirror leaves the Codex worker pointing at nothing.
-//     And the shared docs link each OTHER (`stand-down.md` → `worker-spine.md`
+//     The shared docs also link each OTHER (`stand-down.md` → `worker-spine.md`
 //     for gaps), which is the one link the two-workers-cannot-drift claim
-//     actually rests on, in the one file no per-skill check ever reads.
+//     actually rests on, in the one file no per-skill check ever reads — so
+//     they are link sources here too, not only link targets.
 // ---------------------------------------------------------------------------
 
 // Inline markdown links whose destination is explicitly relative (`./` or
@@ -444,11 +436,10 @@ for (const name of SKILLS) {
 // The explicit `./`/`../` prefix is the scope, not a shortcut, and dropping it
 // was measured to produce only false positives: a SKILL.md writes prose
 // placeholders (`[title](file.md)` in /stark-memory) that are not links to
-// anything, and a Codex overlay ships ONLY its SKILL.md, so its bare
-// `references/foo.md` resolves against the canonical tree bifrost merges it
-// over, never against this repo's overlay dir. What a `../` prefix always
-// means is "another directory of THIS tree", which is exactly the class no
-// other check reads.
+// anything, and check 6 above already resolves the bare `references/foo.md`
+// form against the skill's own dir. What a `../` prefix always means is
+// "another directory of THIS tree", which is exactly the class no other check
+// reads.
 const RELATIVE_MD_LINK_RE = /\]\((\.{1,2}\/[^)\s#]+\.md)(#[^)\s]*)?\)/g;
 
 // The standards docs point at each other as bare siblings (`worker-spine.md`),
@@ -469,12 +460,11 @@ function brokenMdLinks(file: string, res: RegExp[]): string[] {
   return broken;
 }
 
-const CODEX_SKILL_ROOT = path.join(REPO_ROOT, "runtime-overrides", "codex", "skill");
 const SHARED_WORKER_DOCS = ["stand-down.md", "worker-spine.md"];
-// Every tree that ships a copy of the shared worker docs. One list, because the
-// link check and the pane-count guard below both walk it — a runtime tree added
-// to one and not the other is a copy nothing reads.
-const SHARED_DOC_DIRS = ["standards", "runtime-overrides/codex/standards"];
+// The one directory that ships the shared worker docs. One list, because the
+// link check and the pane-count guard below both walk it — a doc dir added to
+// one and not the other is a copy nothing reads.
+const SHARED_DOC_DIRS = ["standards"];
 
 const LINK_SOURCES: { label: string; file: string; res: RegExp[] }[] = [
   ...SKILLS.map((name) => ({
@@ -482,14 +472,6 @@ const LINK_SOURCES: { label: string; file: string; res: RegExp[] }[] = [
     file: path.join(SKILLS_ROOT, name, "SKILL.md"),
     res: [RELATIVE_MD_LINK_RE],
   })),
-  ...fs
-    .readdirSync(CODEX_SKILL_ROOT, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => ({
-      label: `runtime-overrides/codex/skill/${entry.name}`,
-      file: path.join(CODEX_SKILL_ROOT, entry.name, "SKILL.md"),
-      res: [RELATIVE_MD_LINK_RE],
-    })),
   ...SHARED_DOC_DIRS.flatMap((dir) =>
     SHARED_WORKER_DOCS.map((name) => ({
       label: `${dir}/${name}`,
@@ -499,13 +481,23 @@ const LINK_SOURCES: { label: string; file: string; res: RegExp[] }[] = [
   ),
 ].filter((source) => fs.existsSync(source.file));
 
-// Both trees' copies of both shared docs, or the mirror silently stopped being
-// checked. `SUPPORT_FILES` in runtime_overrides.test.ts guards that they EXIST;
-// nothing else guards that their links do.
-test("skill smoke: the shared worker docs are link-checked in both trees", () => {
+// The `existsSync` filter above is what lets a per-file link test disappear
+// instead of failing, so the count is pinned here: every shared worker doc must
+// still be a link SOURCE. A deleted or renamed `standards/*.md` drops out of
+// LINK_SOURCES and reddens here rather than silently going unchecked.
+test("skill smoke: every shared worker doc is link-checked", () => {
+  // Both lists non-empty FIRST. The expected count is derived from the same two
+  // lists that build LINK_SOURCES, so emptying either one moves both sides of
+  // the comparison together and `0 === 0` passes — with every per-file link test
+  // and the pane-count guard below silently gone with them (each is generated by
+  // iterating these lists). That is the vacuous-gate failure the count exists to
+  // prevent, one level up.
+  assert.ok(SHARED_DOC_DIRS.length > 0, "SHARED_DOC_DIRS is empty — nothing is link-checked at all");
+  assert.ok(SHARED_WORKER_DOCS.length > 0, "SHARED_WORKER_DOCS is empty — nothing is link-checked at all");
   assert.equal(
     LINK_SOURCES.filter((s) => s.res.includes(SIBLING_MD_LINK_RE)).length,
-    2 * SHARED_WORKER_DOCS.length,
+    SHARED_DOC_DIRS.length * SHARED_WORKER_DOCS.length,
+    `a shared worker doc is missing from ${SHARED_DOC_DIRS.join(", ")} — its links stopped being checked`,
   );
 });
 
@@ -591,57 +583,27 @@ for (const dir of SHARED_DOC_DIRS) {
   });
 }
 
-// The worker family's launch lines (STARK-7122, STARK-7540). Two rules a tidy-up
-// can drop without anything else going red:
-//
-// - A Codex override passes `--agent` on EVERY `hermod ticket` line. Hermod's
-//   own default is claude, so a Codex launcher that leaves it off launches the
-//   other runtime — with a `$skill` first message Claude does not read as a
-//   skill invocation, behind a normal exit 0.
-// - Gru is never launched on the id of a ticket it will work. The id names
-//   Gru's own worktree, and Gru's step 2 reads a live peer whose cwd ends in a
-//   ticket id as the Minion that owns it — so it would read ITSELF as that
-//   ticket's Minion and never launch it.
+// Gru's launch lines (STARK-7122, STARK-7540). The rule a tidy-up can drop
+// without anything else going red: Gru is never launched on the id of a ticket
+// it will work. The id names Gru's own worktree, and Gru's step 2 reads a live
+// peer whose cwd ends in a ticket id as the Minion that owns it — so it would
+// read ITSELF as that ticket's Minion and never launch it.
 const hermodTicketLines = (file: string): string[] =>
   fencedLines(fs.readFileSync(file, "utf8")).filter((line) => /^\s*hermod ticket\b/.test(line));
 
-// A launch spelled as inline code is a launch line too — Gru's step-3 Minion
-// launch, the one a Gru runs most, is one — so the fence filter alone left it
-// unchecked. A span counts when a ticket slot follows `hermod ticket`, so
-// `hermod ticket --help` and a bare `hermod ticket` in prose do not.
-const INLINE_LAUNCH_RE = /`(hermod ticket (?:\[?STARK-|<)[^`]*)`/g;
-const inlineTicketLaunches = (file: string): string[] =>
-  [...fs.readFileSync(file, "utf8").matchAll(INLINE_LAUNCH_RE)].map((m) => m[1]);
-
-for (const name of WORKER_SKILLS) {
-  test(`skill smoke: codex ${name} — every hermod ticket launch line passes --agent`, () => {
-    const file = path.join(CODEX_SKILL_ROOT, name, "SKILL.md");
-    const lines = [...hermodTicketLines(file), ...inlineTicketLaunches(file)];
-    assert.ok(lines.length > 0, "no `hermod ticket` launch line found");
-    for (const line of lines) {
-      assert.match(line, / --agent /, `launch line without --agent: ${line.trim()}`);
-      assert.doesNotMatch(line, /\[--agent\b/, `--agent is optional on: ${line.trim()}`);
-    }
-  });
-}
-
-for (const file of [
-  path.join(SKILLS_ROOT, "gru", "SKILL.md"),
-  path.join(CODEX_SKILL_ROOT, "gru", "SKILL.md"),
-]) {
-  test(`skill smoke: ${path.relative(REPO_ROOT, file)} — Gru is never launched on a ticket it works`, () => {
-    const lines = hermodTicketLines(file);
-    assert.equal(lines.length, 2, "expected the --gru form and the --prompt-file form");
-    for (const line of lines) {
-      assert.match(
-        line,
-        /^\s*hermod ticket (STARK-<epic>|<STARK-epic, or GRU-n>) /,
-        `Gru launched on something other than the epic or GRU-n: ${line.trim()}`,
-      );
-    }
-    assert.match(fs.readFileSync(file, "utf8"), /Never the id of a ticket Gru will work/);
-  });
-}
+test("skill smoke: skill/gru — Gru is never launched on a ticket it works", () => {
+  const file = path.join(SKILLS_ROOT, "gru", "SKILL.md");
+  const lines = hermodTicketLines(file);
+  assert.equal(lines.length, 2, "expected the --gru form and the --prompt-file form");
+  for (const line of lines) {
+    assert.match(
+      line,
+      /^\s*hermod ticket (STARK-<epic>|<STARK-epic, or GRU-n>) /,
+      `Gru launched on something other than the epic or GRU-n: ${line.trim()}`,
+    );
+  }
+  assert.match(fs.readFileSync(file, "utf8"), /Never the id of a ticket Gru will work/);
+});
 
 // ---------------------------------------------------------------------------
 // 5. Every distinct in-repo `tools/*.ts` CLI mentioned by any skill exits

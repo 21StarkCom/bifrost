@@ -233,21 +233,6 @@ test("every formerly hand-rolled CLI still runs main() from a path containing a 
   });
 });
 
-test("the codex self_healer overlay runs main() from a path containing a SPACE", () => {
-  // Bifrost overlays `runtime-overrides/codex/tools/` onto the canonical tree,
-  // so the mirror is exercised the way it ships: canonical first, overlay on top.
-  withTempDir((dir) => {
-    const spacedTools = path.join(dir, SPACED, "tools");
-    copyToolSources(HERE, spacedTools);
-    copyToolSources(path.join(REPO_ROOT, "runtime-overrides", "codex", "tools"), spacedTools);
-    const r = run(path.join(spacedTools, "self_healer.ts"), ["--help"]);
-    // Exit 0 first: an overlay lib missing from the merged tree crashes on
-    // import, and that stderr would otherwise pass for main() having run.
-    assert.equal(r.status, 0, r.stderr);
-    assert.notEqual((r.stdout + r.stderr).trim(), "", "silent no-op from a spaced path");
-  });
-});
-
 test("skill_optimize.ts runs main() when reached through a symlink", () => {
   // The one converted guard that was broken by a SYMLINK rather than a space:
   // it compared `pathToFileURL(process.argv[1]).href` to `import.meta.url`
@@ -271,14 +256,15 @@ test("no tool hand-rolls its run-as-main guard", () => {
   // mention in a tool source is a private guard, and every private guard so far
   // has mishandled a symlink, a space, or both.
   const offenders: string[] = [];
-  for (const dir of [HERE, path.join(REPO_ROOT, "runtime-overrides", "codex", "tools")]) {
-    for (const name of fs.readdirSync(dir)) {
-      if (!name.endsWith(".ts") || name.endsWith(".test.ts")) continue;
-      if (name === "main_module_lib.ts") continue;
-      const text = fs.readFileSync(path.join(dir, name), "utf8");
-      if (text.includes("process.argv[1]") || text.includes("new URL(import.meta.url).pathname")) {
-        offenders.push(path.relative(REPO_ROOT, path.join(dir, name)));
-      }
+  const names = fs.readdirSync(HERE).filter((name) => name.endsWith(".ts") && !name.endsWith(".test.ts"));
+  // A scan over an empty (or moved) directory would report clean having read
+  // nothing — the same false green as a skip.
+  assert.ok(names.length > 0, `scanned no tool sources in ${HERE}`);
+  for (const name of names) {
+    if (name === "main_module_lib.ts") continue;
+    const text = fs.readFileSync(path.join(HERE, name), "utf8");
+    if (text.includes("process.argv[1]") || text.includes("new URL(import.meta.url).pathname")) {
+      offenders.push(path.relative(REPO_ROOT, path.join(HERE, name)));
     }
   }
   assert.deepEqual(offenders, []);

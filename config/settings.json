@@ -113,6 +113,11 @@
   "agentPushNotifEnabled": true,
   "skipAutoPermissionPrompt": true,
   "useAutoModeDuringPlan": false,
+  "autoMode": {
+    "allow": [
+      "Pushing branches and opening/merging PRs in repos under ~/Code/21Stark/ is permitted — trusted repos in this workspace, covered by the same review workflow."
+    ]
+  },
   "enableWorkflows": true,
   "deniedMcpServers": [
     {

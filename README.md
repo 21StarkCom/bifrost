@@ -11,7 +11,8 @@ AI-powered development workflow system for Claude Code, covering the full develo
 /plugin marketplace add 21StarkCom/bifrost
 /plugin install stark-analyze@bifrost   # + stark-plan, stark-implement, stark-ops, ...
 
-# Native Codex packaging is retired; the Codex overlay source lives at runtime-overrides/codex/.
+# Claude Code is the only runtime this repo installs into: no Codex or Gemini
+# install path, and no Codex-specific tree. Both are dispatched review agents only.
 
 # Start a work session (context loading, health checks, briefing)
 /stark-session start
@@ -164,7 +165,6 @@ bifrost/
 │   └── prompts/{iac-review,refactor-planner}/  ← per-dispatcher rubrics
 ├── config/                       ← operator machine config (statusline, hooks, settings, output styles)
 ├── scripts/                      ← healer_patterns.json
-├── runtime-overrides/codex/      ← Codex-only artifact + support overlays; source only, shipped nowhere
 ├── data/persona/                 ← persona roster
 ├── standards/                    ← org-wide doc templates and workflows
 ├── docs/operations/              ← branch-protection.md: what `main` gates on
@@ -198,9 +198,14 @@ version never reaches the machine. Changing a skill means bumping the version of
 every bundle that lists it.
 
 Native Codex packaging is **retired** — no `dist/codex-plugins/`, no
-`.agents/plugins/marketplace.json`. `runtime-overrides/codex/` survives as
-source: the Codex-only variants and their changed support files, kept here so
-nothing is lost, shipped nowhere today.
+`.agents/plugins/marketplace.json` — and there is no Codex-specific tree behind
+it either: `runtime-overrides/codex/` is **deleted**. It was source that nothing
+rendered. The Codex adapter and the render step died with the marketplace
+engine, no command turned the overlay into an installable tree, and under
+`source: "./"` every file in it shipped into all seven plugin caches regardless,
+as a second divergent copy of the canonical file beside it. Codex and Gemini
+reach this repo only as dispatched review agents, driven from `tools/` — never
+as install targets.
 
 Immutable assets (tools/prompts/config) resolve from the installed plugin root (`${CLAUDE_PLUGIN_ROOT}`) via `tools/asset_root_lib.ts`; mutable state (`history/`, `sessions/`, `locks/`, …) lives under `~/.claude/code-review/` (`stateRoot()`).
 

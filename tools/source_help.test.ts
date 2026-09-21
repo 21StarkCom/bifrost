@@ -28,14 +28,9 @@ const routes: Record<string, string[]> = {
 const shells = [
   "config/cmux-autoname.sh", "config/statusline-command.sh", "config/statusline-prompt-hook.sh",
   "config/statusline-stop-hook.sh", "tools/check-rest-only.sh",
-  ...["skill/", "runtime-overrides/codex/skill/"].flatMap(p => [
-    p + "stark-gha-cost/scripts/gha-cost-breakdown.sh", p + "stark-gha-cost/scripts/gha-repo-actions-drill.sh",
-    p + "stark-build/references/hooks/protect-paths.sh", p + "stark-build/references/hooks/stop-gate.sh",
-  ]),
+  "skill/stark-gha-cost/scripts/gha-cost-breakdown.sh", "skill/stark-gha-cost/scripts/gha-repo-actions-drill.sh",
+  "skill/stark-build/references/hooks/protect-paths.sh", "skill/stark-build/references/hooks/stop-gate.sh",
 ];
-// The executable Codex overrides. Pinned by the inventory test below, so an
-// override that grows an argv route cannot be added without a row here.
-const codexEntrypoints = ["copilot_land", "iac_review", "jury", "self_healer"];
 const refusal = /usage:|stark-session CLI|unknown (?:argument|option|flag|subcommand)|unexpected (?:positional )?argument|unsupported (?:argument|option)|requires a value|needs a value|Missing value|expected owner\/repo/i;
 
 function fixture() {
@@ -46,10 +41,6 @@ function fixture() {
   for (const name of ["gh", "git", "gcloud", "direnv", "alfred", "hermod", "idun", "claude", "codex", "gemini", "node", "python3", "curl", "osascript", "open", "bash", "sh", "jq", "date", "cat", "dirname", "grep", "sed", "mkdir", "rm", "cp"]) {
     fs.writeFileSync(path.join(bin, name), '#!/bin/sh\nprintf "process:' + name + '\\n" >> "$HELP_AUDIT_LOG"\nexit 91\n', { mode: 0o755 });
   }
-  // Compose retained Codex source the same way its existing regression tests do.
-  const composed = path.join(dir, "codex");
-  fs.cpSync(path.join(root, "tools"), path.join(composed, "tools"), { recursive: true, filter: p => !p.includes("node_modules") });
-  fs.cpSync(path.join(root, "runtime-overrides/codex/tools"), path.join(composed, "tools"), { recursive: true });
   const env = { HOME: home, PATH: bin, TMPDIR: dir, XDG_CONFIG_HOME: home, XDG_STATE_HOME: home,
     STARK_STATE_ROOT: home, STARK_PLUGIN_ROOT: root, CLAUDE_PLUGIN_ROOT: root,
     HELP_AUDIT_LOG: log, NO_COLOR: "1" };
@@ -65,7 +56,7 @@ function fixture() {
       { cwd: dir, env, encoding: "utf8", input: "", timeout: 8000 });
     return { ...result, effects: fs.readFileSync(log, "utf8"), output: result.stdout + result.stderr };
   };
-  return { dir, composed, home, log, env, preload, run };
+  return { dir, home, log, env, preload, run };
 }
 
 test("tripwires actually deny process, network, writes and credential/config reads", () => {
@@ -94,8 +85,6 @@ test("every source CLI route exits help or precisely refuses before backend effe
   const f = fixture(); let count = 0;
   try {
     const entries: [string, string[]][] = Object.entries(routes).map(([name, commands]) => [path.join(root, "tools", name + ".ts"), commands]);
-    for (const name of codexEntrypoints) entries.push([path.join(f.composed, "tools", name + ".ts"), routes[name]]);
-    entries.push([path.join(root, "runtime-overrides/codex/skill/stark-gha-cost/scripts/gha-cost-json.ts"), ["", "jobs", "billing"]]);
     for (const [file, commands] of entries) for (const command of commands) {
       const prefix = command ? command.split(" ") : [];
       for (const suffix of [["help"], ["--help"], ["-h"], ["--json", "help"], ["help", "--json"], ["--invalid-audit-flag", "help"], ["help", "--invalid-audit-flag"]]) {
@@ -137,25 +126,23 @@ test("every source CLI route exits help or precisely refuses before backend effe
 test("real CLI literal values and later safety flags survive parsing", () => {
   const f = fixture();
   try {
-    for (const base of [root, f.composed]) {
-      const tool = path.join(base, "tools/copilot_land.ts");
-      const r = f.run(tool, ["land", "--repo", "audit/repo", "--branch", "audit", "--title", "help", "--body", "please help", "--dry-run", "--json"]);
-      assert.equal(r.status, 0, r.output); assert.equal(r.effects, "");
-      const plan = JSON.parse(r.stdout);
-      assert.equal(plan.title, "help"); assert.equal(plan.dry_run, true);
-      const bad = f.run(tool, ["land", "--title", "--dry-run"]);
-      assert.notEqual(bad.status, 0); assert.equal(bad.effects, "");
-      assert.match(bad.output, /requires a value/);
-      // Refusing a leading-dash value in the space form is only safe because
-      // `--key=VALUE` still expresses one. Without it a PR title or body that
-      // begins with a dash — a markdown rule, say — is unrepresentable here,
-      // and this parser has no other escape.
-      const dashy = f.run(tool, ["land", "--repo", "audit/repo", "--branch", "audit", "--title=--fix the guard", "--body", "b", "--dry-run", "--json"]);
-      assert.equal(dashy.status, 0, dashy.output); assert.equal(dashy.effects, "");
-      assert.equal(JSON.parse(dashy.stdout).title, "--fix the guard");
-      const eqBool = f.run(tool, ["land", "--dry-run=yes"]);
-      assert.notEqual(eqBool.status, 0); assert.match(eqBool.output, /takes no value/);
-    }
+    const tool = path.join(root, "tools/copilot_land.ts");
+    const r0 = f.run(tool, ["land", "--repo", "audit/repo", "--branch", "audit", "--title", "help", "--body", "please help", "--dry-run", "--json"]);
+    assert.equal(r0.status, 0, r0.output); assert.equal(r0.effects, "");
+    const plan = JSON.parse(r0.stdout);
+    assert.equal(plan.title, "help"); assert.equal(plan.dry_run, true);
+    const bad = f.run(tool, ["land", "--title", "--dry-run"]);
+    assert.notEqual(bad.status, 0); assert.equal(bad.effects, "");
+    assert.match(bad.output, /requires a value/);
+    // Refusing a leading-dash value in the space form is only safe because
+    // `--key=VALUE` still expresses one. Without it a PR title or body that
+    // begins with a dash — a markdown rule, say — is unrepresentable here,
+    // and this parser has no other escape.
+    const dashy = f.run(tool, ["land", "--repo", "audit/repo", "--branch", "audit", "--title=--fix the guard", "--body", "b", "--dry-run", "--json"]);
+    assert.equal(dashy.status, 0, dashy.output); assert.equal(dashy.effects, "");
+    assert.equal(JSON.parse(dashy.stdout).title, "--fix the guard");
+    const eqBool = f.run(tool, ["land", "--dry-run=yes"]);
+    assert.notEqual(eqBool.status, 0); assert.match(eqBool.output, /takes no value/);
     const findings = path.join(root, "tools/findings_review_post.ts");
     // "help" is a literal filename here. Invalid JSON proves the real main
     // reached the data read without intercepting it as help or contacting gh.
@@ -176,10 +163,6 @@ test("real CLI literal values and later safety flags survive parsing", () => {
       assert.notEqual(r.status, 0, r.output); assert.equal(r.effects, "", r.output);
       assert.match(r.output, refusal);
     }
-    // The billing JSON helper must not interpret words inside stdin as argv.
-    const jsonTool = path.join(root, "runtime-overrides/codex/skill/stark-gha-cost/scripts/gha-cost-json.ts");
-    const r2 = spawnSync(process.execPath, [jsonTool, "billing"], { cwd: f.dir, env: f.env, encoding: "utf8", input: '{"usageItems":[{"product":"help","netAmount":1}]}' });
-    assert.equal(r2.status, 0, r2.stderr); assert.match(r2.stdout, /TOTAL net \$1.00/); assert.match(r2.stdout, /help/);
   } finally { fs.rmSync(f.dir, { recursive: true, force: true }); }
 });
 
@@ -191,10 +174,10 @@ test("operational entrypoint inventory cannot silently omit new source CLIs", ()
   assert.deepEqual(found, Object.keys(routes).sort());
 });
 
-test("shell and Codex entrypoint inventories cannot silently omit an executable", () => {
-  // The `shells` and `codexEntrypoints` lists are hand-written, so without this
-  // they are the same silent-omission hole the TypeScript inventory closes: a
-  // new hook script or Codex override CLI would never be probed.
+test("the shell entrypoint inventory cannot silently omit an executable", () => {
+  // The `shells` list is hand-written, so without this it is the same
+  // silent-omission hole the TypeScript inventory closes: a new hook script
+  // anywhere in the tree would never be probed.
   const skip = new Set(["node_modules", ".git", ".worktrees"]);
   const walk = (dir: string, rel = ""): string[] =>
     fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -202,21 +185,17 @@ test("shell and Codex entrypoint inventories cannot silently omit an executable"
       const next = rel ? `${rel}/${entry.name}` : entry.name;
       return entry.isDirectory() ? walk(path.join(dir, entry.name), next) : [next];
     });
-  const all = walk(root);
-  assert.deepEqual(
-    all.filter((p) => p.endsWith(".sh") && !p.endsWith(".test.sh")).sort(),
-    [...shells].sort(),
-  );
-  assert.deepEqual(
-    all
-      .filter((p) => p.startsWith("runtime-overrides/codex/tools/") && p.endsWith(".ts") && !p.endsWith(".test.ts"))
-      .filter((p) => /process\.argv|^#!/m.test(fs.readFileSync(path.join(root, p), "utf8")))
-      .map((p) => path.basename(p, ".ts")).sort(),
-    [...codexEntrypoints].sort(),
-  );
+  const found = walk(root).filter((p) => p.endsWith(".sh") && !p.endsWith(".test.sh")).sort();
+  // A walk that found nothing would agree with an emptied list.
+  assert.ok(found.length > 0, "found no shell entrypoints — this inventory would pass vacuously");
+  assert.deepEqual(found, [...shells].sort());
 });
 
-test("macOS OS confinement is calibrated independently of JavaScript tripwires", { skip: process.env.HELP_AUDIT_OS !== "1" }, () => {
+// Runs on every developer Mac and skips honestly elsewhere. It shells
+// `/usr/bin/sandbox-exec`, so it CANNOT run on ubuntu CI — but the gate it used
+// to carry (`HELP_AUDIT_OS !== "1"`) was set by nothing in `.github/` and by no
+// documented local recipe, so it had never executed anywhere at all.
+test("macOS OS confinement is calibrated independently of JavaScript tripwires", { skip: process.platform !== "darwin" }, () => {
   assert.equal(process.platform, "darwin");
   const f = fixture();
   try {
