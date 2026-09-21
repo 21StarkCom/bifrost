@@ -43,7 +43,7 @@
  *     explicit (`--ticket`) → the branch name → alfred's bound ticket → none
  *
  * Each repo owns its own copy of this rule rather than importing a sibling's:
- * stark-skills and idun do not depend on each other, and the spec chose
+ * bifrost and idun do not depend on each other, and the spec chose
  * behavioral equivalence over a shared package.
  */
 

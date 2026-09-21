@@ -230,8 +230,8 @@ test("CLI --check exits 0 when every skill links to the standard", (t) => {
 
 // Regression: under Node type-stripping (Node 25+), the entry-point
 // gate goes silent when the script is invoked through a symlink (e.g.
-// ~/.claude/code-review/tools/ → stark-skills/tools/). See
-// review_setup_worktree for the full root cause. Guard by invoking through
+// ~/.claude/code-review/tools/ → bifrost/tools/). See
+// main_module_lib.ts for the full root cause. Guard by invoking through
 // a real symlink and asserting the CLI parser actually runs.
 test("CLI runs when invoked through a symlink (Node 25 strip-types regression)", (t) => {
   let tmp: string;

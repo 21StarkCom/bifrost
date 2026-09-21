@@ -2,7 +2,7 @@
 
 First measured against `dbb27c1c6967` (then `origin/main`) on 2026-09-21. The
 inventory below has since been **re-derived against the tree that carries the
-`runtime-overrides/codex/` deletion and the cmux hook's move out**, so it
+`runtime-overrides/codex/` deletion and the machine-setup moves out**, so it
 describes that tree and no earlier one — the baseline commit is the audit's
 origin, not the state it now records. It covers the source tree after the
 marketplace engine's retirement, and does not inherit the deleted engine's
@@ -12,9 +12,12 @@ STARK-8083 audit.
 nothing rendered — so the tree audited here holds no Codex-specific entrypoint
 at all. Its rows are gone from the inventory below; what that does and does not
 cost this audit is recorded under the shell table rather than left as an
-unexplained shortfall. The lists are not trusted on this prose alone:
-`tools/source_help.test.ts` re-derives both inventories from the live tree on
-every CI run, so a row that stops matching reddens the required `test` context.
+unexplained shortfall. `tools/source_help.test.ts` holds its own copy of both
+inventories and walks the live tree on every CI run, so an entrypoint missing
+from the test's lists reddens the required `test` context. It also reads the
+two tables below and requires them to name exactly the entrypoints its lists
+do, so a row that outlives its file, or a new entrypoint with no row, reddens
+the same context.
 
 ## Contract and defects
 
@@ -80,13 +83,13 @@ argument: …" — wording alone cannot tell a working help from a broken one.
 | --- | --- |
 | `alert_delivery.ts` | default/check, JSON |
 | `approach_contract.ts` | plan-file, force-confirm, JSON |
+| `asset_links.ts` | check, install, JSON |
 | `context_compactor.ts` | default, session-id, JSON |
 | `copilot_land.ts` | branch-name, prepare-branch, land |
 | `fact_routing_fold.ts` | default, clear |
 | `fact_routing_hook.ts` | PostToolUse stdin protocol; argv help exits first |
 | `failure_classifier.ts` | stderr-file, JSON |
 | `findings_review_post.ts` | findings-file/stdin, dry-run, generated-path options |
-| `gcp_scope.ts` | init, install, check, list |
 | `github_projects.ts` | find-project, add-issue, get-field-ids, get-items, get-item-fields, set-field, set-fields, find-item, get-issue-node-id, transition-status, is-legal-transition, check-spec-completeness, load-config |
 | `healer_canary.ts` | status, check, promote, demote, explain, close-circuit |
 | `iac_review.ts` | terraform and terragrunt |
@@ -109,30 +112,29 @@ argument: …" — wording alone cannot tell a working help from a broken one.
 | `stark_handover.ts` | resolve, save, resume, list |
 | `stark_persona.ts` | select, deactivate, rate, survey, survey-answer, add, stats, history, print-roster, print-weights, session-end |
 | `stark_session.ts` | start, end |
-| `statusline_setup.ts` | list, enable, disable, install, reset |
 | `validation_gate.ts` | configured validation, repo-root, timeout |
 
 | Shell / other executable | Boundary |
 | --- | --- |
-| `config/statusline-command.sh` | no argv; JSON stdin; help before rendering/writes |
-| `config/statusline-prompt-hook.sh`, `config/statusline-stop-hook.sh` | no argv; JSON stdin; help before timestamps |
 | `tools/check-rest-only.sh` | no argv; help before directory change/scanner |
 | `skill/stark-gha-cost/scripts/gha-cost-breakdown.sh` | enterprise/org options; help before token check or gh; missing values refused |
 | `skill/stark-gha-cost/scripts/gha-repo-actions-drill.sh` | owner/repo, optional date; surplus args/unsupported flags refused before date/credentials/gh |
 | `skill/stark-build/references/hooks/protect-paths.sh` | leading help; exact positional arity, then list/task data and stdin protocol |
 | `skill/stark-build/references/hooks/stop-gate.sh` | leading help; bounded positional arity before running the check; later task/path words are literal data |
 
-Those seven rows cover all eight non-test `.sh` files in the tree, which is the
+Those five rows cover all five non-test `.sh` files in the tree, which is the
 whole executable non-TypeScript surface — the shape `source_help.test.ts`
 asserts by walking for `.sh` and comparing against its list.
 
-The cmux auto-rename `SessionStart` hook (`config/cmux-autoname.sh`) had a row
-here and is no longer in this tree: it **moved** to the stark-workspace repo,
-which owns machine setup. Its help guard went with it and is that repo's to
-keep covered; this audit no longer probes it. Nothing here invokes the script.
-The Claude Code settings template that wires it is gone from this tree too, and
-with it the inline hooks the exclusions below used to list: that template is
-machine configuration, owned by the stark-workspace repo.
+Three sets of rows are gone from these tables because their files left this
+tree: the cmux auto-rename `SessionStart` hook (`config/cmux-autoname.sh`), the
+statusline (`config/statusline-command.sh`, its prompt and stop hooks, and
+`statusline_setup.ts`) and `gcp_scope.ts` all **moved** to the stark-workspace
+repo, which owns machine setup. Their help guards went with them and are that
+repo's to keep covered; this audit no longer probes them. Nothing here invokes
+them. The Claude Code settings template that wired them is gone from this tree
+too, and with it the inline hooks the exclusions below used to list: that
+template is machine configuration, owned by the stark-workspace repo.
 
 The Codex counterparts those rows used to carry are gone with
 `runtime-overrides/codex/`, along with the four executable tool replacements it
@@ -175,8 +177,7 @@ Their normal zero-argument protocol and stdin fields are unchanged.
 
 ## Reproduction and evidence
 
-Run from the repository root so local PATH selects the installed modern Bash
-(the statusline suite uses Bash features absent from macOS `/bin/bash`):
+Run from the repository root:
 
 ```sh
 node --test tools/source_help.test.ts

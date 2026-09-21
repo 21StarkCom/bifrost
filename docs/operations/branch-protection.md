@@ -236,15 +236,6 @@ an admin *using* a bypass, not one who PUTs `enforce_admins: false` or deletes
 the ruleset, and nothing here detects that. The re-measure commands above are the
 only control.
 
-**`21StarkCom/stark-skills` is not the same shape, despite the identical ruleset
-name.** It carries ruleset `20607400` "Required CI on main" (same
-`RepositoryRole: 5, always` bypass actor, contexts `Analyze (go)`,
-`Analyze (javascript-typescript)`, `test`, `typecheck`) and **no classic branch
-protection at all** — `gh api repos/21StarkCom/stark-skills/branches/main/protection`
-returns `404 Branch not protected`. bifrost is the stricter of the two on
-everything classic protection covers. Do not infer either repo's settings from
-the other.
-
 ## 3. APPLY — the `Required CI on main` ruleset (operator-only; already applied)
 
 `integration_id: 15368` is the GitHub Actions app; pinning it means a check of

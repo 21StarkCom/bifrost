@@ -10,7 +10,7 @@
       "name": "stark-analyze",
       "source": "./",
       "description": "Zero-context fresh-eyes review of specs and briefs, multi-agent Terraform/Terragrunt (IaC) review, repository refactor planning, and application-logging authoring/review guidance. Maps to spec-kit's analyze phase.",
-      "version": "0.6.11",
+      "version": "0.6.12",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -101,7 +101,7 @@
       "name": "stark-ops",
       "source": "./",
       "description": "Repository operations beyond the spec-driven pipeline — coordinate Minions with Gru, cut releases, run session start/end, hand off work across sessions, and run one ticket solo and unattended with Agnes.",
-      "version": "0.17.9",
+      "version": "0.17.10",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"

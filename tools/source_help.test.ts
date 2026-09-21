@@ -189,6 +189,24 @@ test("the shell entrypoint inventory cannot silently omit an executable", () => 
   assert.deepEqual(found, [...shells].sort());
 });
 
+test("the help-audit doc lists exactly the entrypoints this file probes", () => {
+  // docs/operations/source-entrypoint-help-audit.md is the human-readable copy
+  // of `routes` and `shells`. Nothing compared the two, so rows outlived their
+  // moved files (gcp_scope, the statusline) and a new entrypoint (asset_links)
+  // never got one, with every other test green. Every row that opens with a
+  // backticked path belongs to one of the two inventory tables.
+  const doc = fs.readFileSync(path.join(root, "docs/operations/source-entrypoint-help-audit.md"), "utf8");
+  const named = doc.split("\n")
+    .filter((line) => line.startsWith("| `"))
+    .flatMap((line) => [...(line.split("|")[1] ?? "").matchAll(/`([^`]+)`/g)].map((m) => m[1] ?? ""));
+  const tsRows = named.filter((n) => n.endsWith(".ts")).map((n) => n.slice(0, -3)).sort();
+  const shellRows = named.filter((n) => n.endsWith(".sh")).sort();
+  // A doc whose tables were reformatted away would match nothing and pass.
+  assert.ok(tsRows.length > 0 && shellRows.length > 0, "found no inventory rows in the audit doc — this check would pass vacuously");
+  assert.deepEqual(tsRows, Object.keys(routes).sort(), "the audit doc's tools/ table has drifted from `routes`");
+  assert.deepEqual(shellRows, [...shells].sort(), "the audit doc's shell table has drifted from `shells`");
+});
+
 // Runs on every developer Mac and skips honestly elsewhere. It shells
 // `/usr/bin/sandbox-exec`, so it CANNOT run on ubuntu CI — but the gate it used
 // to carry (`HELP_AUDIT_OS !== "1"`) was set by nothing in `.github/` and by no

@@ -64,7 +64,7 @@ work or hand-authored.
 - `[target-dir]` — optional path to the repo to analyze. Default: the current
   repo. Resolve the root with `git rev-parse --show-toplevel` (fall back to the
   given dir / `pwd` if not a git repo) and run everything from there. Do **not**
-  assume the target is stark-skills — this skill runs against whatever repo the
+  assume the target is bifrost — this skill runs against whatever repo the
   user points it at.
 
 ## Two ways to run this

@@ -252,7 +252,7 @@ standing is the operator's to sweep, not yours.
   Rebase plus required checks serialize concurrent merges only where the base
   ruleset requires up-to-date branches (`gh api repos/O/R/rules/branches/<base>`
   → `strict_required_status_checks_policy`). Where `strict` is false, as on
-  stark-skills `main`, let one Minion per repo run `idun gh pr-merge` at a time:
+  bifrost `main`, let one Minion per repo run `idun gh pr-merge` at a time:
   tell the next to hold its merge until the previous `done` is confirmed. That
   is sequencing, not a grant; the Minion still merges itself.
 - Resolve routine engineering questions from the ticket, spec, and repo rules.
