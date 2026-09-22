@@ -93,6 +93,7 @@ Start and end your work sessions with consistent context loading and cleanup.
 | [`/stark-session start`](skill/stark-session/SKILL.md) | Load context, git state, health checks, briefing | Beginning of every work session. Catches stale branches, failing tests, open PRs. |
 | [`/stark-session end`](skill/stark-session/SKILL.md) | Tests, merge PRs, commit docs, push | End of every work session. Ensures nothing is left dangling. |
 | [`/stark-persona`](skill/stark-persona/SKILL.md) | Session character voices | Adds personality to sessions. Weighted selection, date-aware combos, catchphrases, feedback loop. |
+| [`/lucius`](skill/lucius/SKILL.md) | Opens a Lucius brainstorm in a `LUCIUS` tab of its own with `hermod lucius`, then stops | When you want to think something through with Lucius, the standalone brainstorming app: on a topic, on a `STARK-n` ticket, or resuming a parked session. Lucius never runs inside the invoking session. Needs a hermod that has the `lucius` command. |
 
 **Best practice:** Make `/stark-session start` and `/stark-session end` habitual — like opening and closing a shift. The start briefing catches context you'd otherwise miss (someone pushed to your branch, CI is red, a PR needs your review).
 
@@ -181,8 +182,8 @@ marketplace apparatus this repo used to be was removed under STARK-8248/8249.
 every entry's `source` is the repo root, and each carries a disjoint
 `skills:` list of `./skill/<name>` paths, so the seven entries partition
 `skill/` by path. `skills:` **restricts** discovery rather than adding to it —
-measured on a probe install, where `stark-design` reported `Skills (1)` and
-`stark-ops` `Skills (9)` out of the 25-skill root.
+measured on a probe install when the root held 25 skills, where `stark-design`
+reported `Skills (1)` and `stark-ops` `Skills (9)`.
 
 ```
 /plugin marketplace add 21StarkCom/bifrost
