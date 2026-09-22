@@ -520,8 +520,8 @@ test("the caller passes no selftest_rule_id override while .gitleaks.toml carrie
 //
 // The exemption is the original's: a phrase wrapped in double quotes or a
 // markdown code span is being MENTIONED, not asserted, so a correction can still
-// be written ABOUT the phrase (both CLAUDE.md and AGENTS.md carry
-// `Never write "no bypass" here`, and must keep being able to).
+// be written ABOUT the phrase — `Never write "no bypass" here` must stay
+// writable in any of these docs.
 
 const GOVERNANCE_DOCS = ["docs/operations/branch-protection.md", "README.md", "CLAUDE.md", "AGENTS.md"];
 const BANNED_BYPASS_CLAIMS = ["no admin bypass", "no bypass", "non-bypassable", "nonbypassable"];

@@ -2,21 +2,21 @@
 
 `21StarkCom/bifrost` is the stark skills + tools repo: 26 Claude Code skills under `skill/`, the TypeScript tooling they call under `tools/`, and the marketplace manifest that serves them as seven plugins. It is a personal playground with one user, the author. Nothing here is production.
 
-`AGENTS.md` is the Codex/Cursor entry point; this file is what Claude Code reads and wins on conflict. Keep the two in agreement, in the same PR.
+`AGENTS.md` is the concise Codex/Cursor entry point (Codex loads at most 32 KiB of project instructions, so detail goes here, not there); this file is the detailed reference, is what Claude Code reads, and wins on conflict. Keep the two in agreement, in the same PR. Both describe only current structure, commands, and rules: no incident narratives, migration history, or ticket records.
 
 ## How the repo works
 
 - **Skills are edited here and take effect here.** There is no build step, no generated catalog, no registry, no signing. `skill/<name>/SKILL.md` is the artifact and ships when the PR merges.
 - **The repo is its own marketplace.** `.claude-plugin/marketplace.json` at the root is what `/plugin marketplace add 21StarkCom/bifrost` reads. Every plugin entry has `"source": "./"` (the repo root) plus a `skills:` list of `./skill/<name>` paths. The seven lists are a disjoint partition of the 26 skills, and the `skills:` list *restricts* what a plugin loads — that only holds because there is no `skills/` directory for Claude Code to auto-discover, so **never rename `skill/` to `skills/`**, and re-measure the restriction after a `claude` CLI upgrade: if discovery ever turns out to be additive on top of `skills:`, all 26 skills load into all 7 plugins with no error anywhere. `tools/repo_contracts.test.ts` pins the seven entries and the partition; `claude plugin validate --strict .` gates the file.
 - **Bumping an entry's `version` is the only thing that makes an installed plugin re-fetch.** Installs are keyed by version under `~/.claude/plugins/cache/bifrost/<plugin>/<version>/`, so an edited skill under an unchanged version never reaches the machine and no check notices. Touch a skill → bump the `version` of every plugin whose `skills:` list claims it, in the same PR.
-- **Testing an edit against a real plugin install** is merge → bump → `/plugin update`. Anything that resolves through this checkout (a direct `node tools/…` run, the `~/.claude/code-review` links) is live on save.
+- **Testing an edit against a real plugin install** is bump in the same PR → merge → `/plugin update`. Anything that resolves through this checkout (a direct `node tools/…` run, the `~/.claude/code-review` links) is live on save.
 - **Claude Code is the only install target; the skills are runtime-neutral.** Codex runs the same `skill/` + `tools/` trees (`/agnes` is `$agnes` on Codex; `hermod ticket --agent codex` launches a Codex worker), and Codex and Gemini are also dispatched as review agents. There is no Codex-specific tree and none should be written — fix the canonical file instead. The shared `standards/` worker docs are read by a worker on either runtime off the same file, so they stay runtime-neutral: say "the repo's agent instructions file", not `CLAUDE.md`; declare that a skill written as `/agnes` is `$agnes` on Codex; and name both permission models (Claude's bypass mode / allowlist entry, Codex's sandbox + approval policy) wherever one matters.
 
 ### The plugin-resolution seam
 
-`tools/asset_root_lib.ts::assetRoot()` resolves immutable assets (tools, prompts, config) from `${CLAUDE_PLUGIN_ROOT}` inside an installed plugin, else `~/.claude/code-review`; `stateRoot()` always stays under `$HOME`. Skills mirror this with `${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/code-review}`. **Never hardcode `~/.claude/code-review/{tools,prompts,scripts,standards}` in a skill or tool.**
+`tools/asset_root_lib.ts::assetRoot()` resolves immutable assets (tools, prompts, config) from `STARK_ASSET_ROOT` > `CLAUDE_PLUGIN_ROOT` > `~/.claude/code-review`. Mutable state uses `stateRoot()`: `STARK_STATE_ROOT` > `~/.claude/code-review`, independently of the plugin root. Skills use `${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/code-review}`. **Never hardcode `~/.claude/code-review/{tools,prompts,scripts,standards}` in a skill or tool.**
 
-The five `~/.claude/code-review/{tools,scripts,standards,prompts,config.json}` symlinks into this checkout are provisioned by `tools/asset_links.ts` (`--check` / `--install`) from the `MANAGED_LINKS` table in `tools/asset_links_lib.ts`. That table is the source of truth; retire a link by moving it to `RETIRED_LINKS`, never by deleting the row. Every other machine asset (settings, statusline, output style, hooks, the generated `.envrc` GCP scope block) belongs to the stark-workspace repo. `.worktreeinclude` is tracked here and copies gitignored files into every worktree: stark-workspace's `gcp_scope.ts` writes its `.envrc` row, and never add a credential file or a broad glob to it by hand.
+The five `~/.claude/code-review/{tools,scripts,standards,prompts,config.json}` symlinks into this checkout are provisioned by `tools/asset_links.ts` (`--check` / `--install`) from the `MANAGED_LINKS` table in `tools/asset_links_lib.ts`. That table is the source of truth; retire a link by moving it to `RETIRED_LINKS`, never by deleting the row. Every other machine asset (settings, statusline, output style, hooks, the generated `.envrc` GCP scope block) belongs to the stark-workspace repo. `.worktreeinclude` is tracked here and copies gitignored files into Claude- and Codex-managed worktrees (a plain `git worktree add` does not read it, so a helper that creates one copies the named files itself): stark-workspace's `gcp_scope.ts` writes its `.envrc` row, and never add a credential file or a broad glob to it by hand.
 
 ## Layout
 
@@ -35,7 +35,7 @@ The five `~/.claude/code-review/{tools,scripts,standards,prompts,config.json}` s
 
 - **Every change follows the spine:** alfred ticket → branch → draft PR → `/code-review xhigh --fix` → fix every finding → `idun gh pr-merge` (un-drafts, waits for green, squash-merges) → `alfred task move STARK-<n> done`. Never commit or push to `main`. No soak, canary or rollout ceremony — merge once green.
 - **Every PR action uses `gh` as `aryeh-stark`**, review posting included. Review text names the model; authentication never changes with model choice. Two identity swaps exist, both the operator's and neither ever run by a tool, skill or hook: the rate-limit `gh auth switch` to `aryeh-evinced` from `~/Code/CLAUDE.md` (machine-wide, with its own switch-back timer; `preflight.ts`'s `check_github_user` refuses until it flips back, which is not a broken login), and `export GH_TOKEN=$(idun user --swap)` for one rate-limited command, reverted with `unset GH_TOKEN GITHUB_TOKEN STARK_GH_USER` as soon as that command is done or later PR activity authors as the relief account.
-- **Review findings go on the PR** — inline where anchored, in the review body otherwise — via `tools/findings_review_post.ts`. Don't drop, downgrade or summarize findings away; fix them or reply on the thread saying why not.
+- **Review findings go on the PR** — inline where anchored, in the review body otherwise — via `tools/findings_review_post.ts`. Don't drop, downgrade or summarize findings away; fix them or reply on the thread saying why not. Never resolve another reviewer's thread yourself.
 - **Verify live.** A flow that touches GCP or GitHub is exercised against the real surface. Show the command and its output.
 - **Update the docs in the same change.** Anything that changes behavior, structure, commands, env vars or operations updates this file and `AGENTS.md` alongside.
 - **Language:** TypeScript for tooling; POSIX shell only for the hook and `gh`-wrapper scripts named under Layout. Never add Python.
@@ -57,7 +57,7 @@ It is a byte-identical copy of a Terraform render from `21StarkCom/21stark` (`re
 
 ### Draft PRs
 
-Every PR opens as a draft (`idun gh pr-open`; skills pass `--draft`). Merge paths un-draft first (`gh pr ready`), which fires CI via `ready_for_review`, then wait for green. `idun gh pr-merge` refuses a skipped required check more strictly than GitHub does; `--allow-skipped-checks` opts back in for repos that skip one by design. Details of `pr-open`/`pr-merge`/`cleanup`/`watch` live in the idun repo.
+Every PR opens as a draft (`idun gh pr-open`; skills pass `--draft`). Merge paths un-draft first (`gh pr ready`), which fires CI via `ready_for_review`, then wait for green. `idun gh pr-merge` refuses a skipped required check more strictly than GitHub does; `--allow-skipped-checks` opts back in for repos that skip one by design. A target repo keeps CI off drafts with `standards/workflows/skip-draft-guard.md`, never on a required check. Details of `pr-open`/`pr-merge`/`cleanup`/`watch` live in the idun repo.
 
 ## Conventions every skill and tool follow
 
@@ -65,7 +65,7 @@ Every PR opens as a draft (`idun gh pr-open`; skills pass `--draft`). Merge path
 - **One run-as-main guard:** `tools/main_module_lib.ts::isMainModule(import.meta.url)`. It resolves symlinks and percent-encoded paths (`Application Support`) on both sides; `main_module_lib.test.ts` fails the suite if any other tool source mentions `process.argv[1]`.
 - **Skill smoke test** (`tools/skill_smoke_test.test.ts`, on every `npm test`): every skill's frontmatter parses, `name:` matches its directory, it references `standards/help.md`, every in-repo `tools/*.ts` and `references/*.md` link resolves, every TS CLI a skill mentions exits cleanly on `--help`, and `agnes`/`gru`/`minion` stay model-invocable. Cross-repo references need an entry in its `CROSS_REPO_PREFIXES` allowlist.
 - **Docs layout `/stark-init-docs` scaffolds into target repos:** `docs/adr/NNNN-<topic>.md` (immutable; supersede, don't edit), `docs/specs/YYYY-MM-DD-<topic>-spec.md`, `docs/retros/`. Never a `docs/plans/` — the spec carries the plan. `tools/doc_convention.test.ts` guards the scaffold; this repo itself keeps only `docs/operations/`.
-- Config is JSON; prompts are markdown. `tools/stark_config_lib.ts`'s section accessors read the global `config.json` (through `assetConfigPath()`) with deep merge against its `DEFAULT_*` sections; the org → repo `.code-review/config.json` walk exists only in `discoverConfig` (preflight, `agents` only) and `getRedTeamConfig`, so a per-repo override of any other section is ignored.
+- Config is JSON; prompts are markdown. `tools/stark_config_lib.ts`'s section accessors read the global `config.json` (through `assetConfigPath()`) with deep merge against its `DEFAULT_*` sections; the org → repo `.code-review/config.json` walk exists only in `discoverConfig` (preflight, `agents` only), so a per-repo override of any other section is ignored.
 - **Reuse over reinvent; keep it lean.** No one-off scripts, no dead code, no stale docs.
 
 ## Agents and auth
@@ -120,7 +120,8 @@ Protocol skills over alfred (the board is the state) and hermod (`hermod ticket`
 /plugin install stark-ops@bifrost        # + stark-plan, stark-implement, stark-analyze, …
 /plugin update  stark-ops@bifrost
 
-cd tools && npm test && npm run typecheck
+(cd tools && npm test && npm run typecheck)
 node tools/asset_links.ts --check
 claude plugin validate --strict .
+git diff --check "$(git merge-base origin/main HEAD)"
 ```
