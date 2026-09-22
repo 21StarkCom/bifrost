@@ -1,7 +1,7 @@
 ---
 name: lucius
 description: "Open a Lucius brainstorm in a cmux tab of its own with `hermod lucius`, then stop. Lucius is a standalone app, so this skill only launches him and never runs him in this session."
-argument-hint: "[<topic> | STARK-n | --topic <text> | --resume] [--new-tab]"
+argument-hint: "[--new-tab] [<topic> | STARK-n | --resume | --topic <text>]"
 disable-model-invocation: true
 ---
 
@@ -27,8 +27,9 @@ links his session from it when he ends, and hermod titles his tab.
 - `<topic>` — free text: what the brainstorm is about. It reaches Lucius as
   `--topic <text>`, never bare.
 - `STARK-n` — open the brainstorm on that ticket and its comments.
-- `--topic <text>` — everything after it, taken literally as the topic, even
-  `help`, `resume`, a flag or a ticket id.
+- `--topic <text>` — comes last. Everything after it is taken literally as the
+  topic, even `help`, `resume`, a flag, a ticket id or `--new-tab`, so write
+  `--new-tab` before it.
 - `--resume` — reopen a parked brainstorm. Lucius asks which one, in his tab.
 - `--new-tab` — accepted, and changes nothing. Lucius always opens in a tab of
   his own, so `/lucius --new-tab` does what `/agnes --new-tab` does: launch in a
@@ -44,15 +45,23 @@ only when it is named.
 
 1. Read the arguments as one form. First drop every standalone `--new-tab`
    outside a `--topic` value. Then:
-   - **`--topic` is present**: everything after it, trimmed, is the topic.
-     Nothing but `--new-tab` may come before it.
+   - **`--topic` is present**: everything after it, trimmed, is the topic,
+     a later `--new-tab` included. Nothing but `--new-tab` may come before
+     it; anything else there is a conflict (below). If nothing follows it,
+     stop and ask for the topic: hermod and Lucius both refuse an empty one.
    - **`--resume`** is the resume form.
    - **What is left is exactly `STARK-` and digits**, upper case, and that is
      the ticket form.
-   - **A near miss:** a ticket id in another case (`stark-12`), or `resume`,
-     `version` or `topic` on its own, in any case. **Stop and ask** which was
-     meant. Lucius and hermod both refuse these rather than guess, because
-     either guess opens a paid session.
+   - **A near miss:** a ticket id in another case (`stark-12`), or `help`,
+     `resume`, `version` or `topic` on its own, in any case. **Stop and ask**
+     which was meant. Lucius and hermod both refuse these rather than guess,
+     because either guess opens a paid session.
+   - **Any other word that starts with `-`** is a flag this launcher does not
+     take, whether or not hermod or Lucius has it (`--no-focus`, `--version`,
+     `-v`, a mistyped `--resume`). This skill passes on no flag but the forms
+     above. **Stop and say so**; never let it become part of a topic, which
+     would open a paid session on it. A topic that really has a word starting
+     with a dash goes through `--topic`.
    - **Anything else that is not empty** is the topic. If nothing is left,
      there is no topic.
 

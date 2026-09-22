@@ -152,7 +152,7 @@ Each review identifies its models in the text.
 
 ```
 bifrost/
-├── skill/                        ← one dir per skill (25 × SKILL.md)
+├── skill/                        ← one dir per skill (26 × SKILL.md)
 │   ├── stark-author/SKILL.md
 │   ├── stark-persona/SKILL.md
 │   └── ...
