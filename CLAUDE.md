@@ -2,19 +2,19 @@
 
 `21StarkCom/bifrost` is the stark skills + tools repo: 26 Claude Code skills under `skill/`, the TypeScript tooling they call under `tools/`, and the marketplace manifest that serves them as seven plugins. It is a personal playground with one user, the author. Nothing here is production.
 
-`AGENTS.md` is the Codex/Cursor entry point; this file is what Claude Code reads and wins on conflict. Keep the two in agreement, in the same PR.
+`AGENTS.md` is the concise Codex/Cursor entry point; this file is the detailed reference, is what Claude Code reads, and wins on conflict. Keep the two in agreement, in the same PR. Both describe only current structure, commands, and rules: no incident narratives, migration history, or ticket records.
 
 ## How the repo works
 
 - **Skills are edited here and take effect here.** There is no build step, no generated catalog, no registry, no signing. `skill/<name>/SKILL.md` is the artifact and ships when the PR merges.
 - **The repo is its own marketplace.** `.claude-plugin/marketplace.json` at the root is what `/plugin marketplace add 21StarkCom/bifrost` reads. Every plugin entry has `"source": "./"` (the repo root) plus a `skills:` list of `./skill/<name>` paths. The seven lists are a disjoint partition of the 26 skills, and the `skills:` list *restricts* what a plugin loads — that only holds because there is no `skills/` directory for Claude Code to auto-discover, so **never rename `skill/` to `skills/`**, and re-measure the restriction after a `claude` CLI upgrade: if discovery ever turns out to be additive on top of `skills:`, all 26 skills load into all 7 plugins with no error anywhere. `tools/repo_contracts.test.ts` pins the seven entries and the partition; `claude plugin validate --strict .` gates the file.
 - **Bumping an entry's `version` is the only thing that makes an installed plugin re-fetch.** Installs are keyed by version under `~/.claude/plugins/cache/bifrost/<plugin>/<version>/`, so an edited skill under an unchanged version never reaches the machine and no check notices. Touch a skill → bump the `version` of every plugin whose `skills:` list claims it, in the same PR.
-- **Testing an edit against a real plugin install** is merge → bump → `/plugin update`. Anything that resolves through this checkout (a direct `node tools/…` run, the `~/.claude/code-review` links) is live on save.
+- **Testing an edit against a real plugin install** is bump in the same PR → merge → `/plugin update`. Anything that resolves through this checkout (a direct `node tools/…` run, the `~/.claude/code-review` links) is live on save.
 - **Claude Code is the only install target; the skills are runtime-neutral.** Codex runs the same `skill/` + `tools/` trees (`/agnes` is `$agnes` on Codex; `hermod ticket --agent codex` launches a Codex worker), and Codex and Gemini are also dispatched as review agents. There is no Codex-specific tree and none should be written — fix the canonical file instead. The shared `standards/` worker docs are read by a worker on either runtime off the same file, so they stay runtime-neutral: say "the repo's agent instructions file", not `CLAUDE.md`; declare that a skill written as `/agnes` is `$agnes` on Codex; and name both permission models (Claude's bypass mode / allowlist entry, Codex's sandbox + approval policy) wherever one matters.
 
 ### The plugin-resolution seam
 
-`tools/asset_root_lib.ts::assetRoot()` resolves immutable assets (tools, prompts, config) from `${CLAUDE_PLUGIN_ROOT}` inside an installed plugin, else `~/.claude/code-review`; `stateRoot()` always stays under `$HOME`. Skills mirror this with `${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/code-review}`. **Never hardcode `~/.claude/code-review/{tools,prompts,scripts,standards}` in a skill or tool.**
+`tools/asset_root_lib.ts::assetRoot()` resolves immutable assets (tools, prompts, config) from `STARK_ASSET_ROOT` > `CLAUDE_PLUGIN_ROOT` > `~/.claude/code-review`. Mutable state uses `stateRoot()`: `STARK_STATE_ROOT` > `~/.claude/code-review`, independently of the plugin root. Skills use `${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/code-review}`. **Never hardcode `~/.claude/code-review/{tools,prompts,scripts,standards}` in a skill or tool.**
 
 The five `~/.claude/code-review/{tools,scripts,standards,prompts,config.json}` symlinks into this checkout are provisioned by `tools/asset_links.ts` (`--check` / `--install`) from the `MANAGED_LINKS` table in `tools/asset_links_lib.ts`. That table is the source of truth; retire a link by moving it to `RETIRED_LINKS`, never by deleting the row. Every other machine asset (settings, statusline, output style, hooks, the generated `.envrc` GCP scope block) belongs to the stark-workspace repo. `.worktreeinclude` is tracked here and copies gitignored files into every worktree: stark-workspace's `gcp_scope.ts` writes its `.envrc` row, and never add a credential file or a broad glob to it by hand.
 
@@ -120,7 +120,7 @@ Protocol skills over alfred (the board is the state) and hermod (`hermod ticket`
 /plugin install stark-ops@bifrost        # + stark-plan, stark-implement, stark-analyze, …
 /plugin update  stark-ops@bifrost
 
-cd tools && npm test && npm run typecheck
+(cd tools && npm test && npm run typecheck)
 node tools/asset_links.ts --check
 claude plugin validate --strict .
 ```
