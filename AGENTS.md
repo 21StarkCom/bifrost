@@ -2,7 +2,7 @@
 
 This repo is `21StarkCom/bifrost`: it absorbed `21StarkCom/stark-skills` wholesale under STARK-8248/8249, and the marketplace apparatus bifrost used to be — the Go engine, `catalog/`, `vendor/`, `dist/`, the signed registry and the publish workflows — was deleted in the same change, leaving the skills and tools as the entire repo.
 
-**This is the Codex / Cursor / non-Claude entry point.** Claude Code reads `CLAUDE.md`, not this file — so the two must never disagree. This one is a **routing index**, deliberately kept small; `CLAUDE.md` is the full reference — an order of magnitude longer — and is the source of truth on any conflict. Codex caps its combined instruction chain at 32 KiB, so do not grow this file toward that limit — add depth to `CLAUDE.md` and a pointer here.
+**This is the Codex / Cursor / non-Claude entry point.** Claude Code reads `CLAUDE.md`, not this file — so the two must never disagree. This one is the **routing index**; `CLAUDE.md` is the history-free reference and the source of truth on any conflict. Codex caps its combined instruction chain at 32 KiB, so do not grow this file — put a rule in `CLAUDE.md` and a pointer here.
 
 ## What This Is
 
@@ -37,7 +37,7 @@ This is a **personal playground**, not production. No customers depend on it; th
   - **And never require a check whose step carries `continue-on-error: true`** — it reports SUCCESS regardless of the step, so requiring it satisfies the gate unconditionally. `typecheck` was stuck in that loop until STARK-5008 (left out of the ruleset for being advisory, advisory because of the flag) while `node --test` could never catch a type error anyway — Node strips types instead of checking them. Flag dropped, then context required. **`tools/workflow_shape.test.ts`** pins that shape here (`tools/typecheck_gate.test.ts` was stark-skills' and was not carried over): `ci.yml`'s exact four-job set, the check-run context each job reports under — with `test` and `typecheck` required to carry **no** job-level `name:`, so their contexts stay the bare ids the ruleset requires — the absence of `continue-on-error` at **any** depth (job *or* step), of a job-level `if:`/`paths`/`paths-ignore`, and of a path filter on `on:`, plus a per-PR concurrency group with `cancel-in-progress: false`. A **step**-level `if:` is deliberately allowed (`secrets` guards its PR-range scan with one, and a skipped step does not skip the job). A fifth job in `ci.yml` fails the suite until its check is decided. The step runs `npm run typecheck`, not `npx tsc` — headless `npx` downloads a missing package instead of failing.
 - **Every PR action uses `gh` as `aryeh-stark`.** This includes review posting and release operations. Review text identifies the model; authentication never changes with model choice. The dispatch library strips ambient credentials from Gemini environments while keeping the process-variable floor (`USER` included); reviewer subprocesses also exclude database connection strings. Review Apps are retired. No workflow in this repo holds an App credential or any write permission any more — `marketplace-sync.yml` went with the marketplace apparatus, and `ci.yml` + `secret-scan.yml` are both `permissions: contents: read`.
   - **`idun user` is the other exception, and it is human-invoked only** (moved out of stark-skills in STARK-2215). It moves `gh` to a relief account when `aryeh-stark`'s rate bucket runs dry — `export GH_TOKEN=$(idun user --swap)`. **No tool, skill or hook may invoke it** — it exports `GH_TOKEN`, which overrides `gh`'s keyring for every later call in that shell, so an automated swap silently re-authors whatever runs next.
-- **Language: Go for backend, TypeScript for scripts.** **No new Python.** The repo's tooling is TypeScript-only under `tools/`; the former Python orchestrators and dispatch infra under `scripts/` were migrated out and deleted. If you find a `scripts/*.py` path named in any doc, it is stale — delete the reference, don't recreate the file.
+- **Language: TypeScript for tooling; POSIX shell only for the hook and `gh`-wrapper scripts under `skill/` and `tools/check-rest-only.sh`.** **No new Python.** The repo's tooling is TypeScript-only under `tools/`; the former Python orchestrators and dispatch infra under `scripts/` were migrated out and deleted. If you find a `scripts/*.py` path named in any doc, it is stale — delete the reference, don't recreate the file.
 - **Test live.** Local-only verification is not enough. If a flow touches GCP, exercise the real GCP surface.
 - **Update docs in the same change.** Any change to behavior, structure, commands, env vars or operations updates the relevant docs — **this file and `CLAUDE.md` both**.
 - **GCP worktree scope belongs to stark-workspace.** Its `scripts/gcp_scope.ts install` writes this repo's generated `.envrc` block and the `.envrc` row in `.worktreeinclude`, and its `check` verifies both; leave both to it. `.worktreeinclude` is tracked here and copies gitignored files into every worktree, so never add a credential file or a broad glob to it by hand. Codex-managed worktrees consume the file; plain Git-worktree helpers must copy the explicitly named safe files themselves.
@@ -45,7 +45,7 @@ This is a **personal playground**, not production. No customers depend on it; th
 
 ## Repo Layout
 
-- `tools/` — **all** TypeScript tooling (177 tracked files): dispatchers, agent utilities, session/state, GitHub transport, skill meta-tooling. The only executable surface, and the subject of `ci`'s required `test` + `typecheck` contexts.
+- `tools/` — **all** TypeScript tooling: dispatchers, agent utilities, session/state, GitHub transport, skill meta-tooling. The only executable surface, and the subject of `ci`'s required `test` + `typecheck` contexts.
 - `skill/` — all skills (`skill/*/SKILL.md`, **26** skills across 26 dirs: 22 `stark-*` plus `agnes`, `gru`, `lucius`, `minion`), served as the seven marketplace plugins by the root manifest's per-plugin `skills:` partition. There is no `skill/evals/` any more.
 - `global/` — global config + prompts (`config.json`, `forge_heuristics.json`, `prompts/`)
 - `scripts/` — shell helpers + JSON only (`healer_patterns.json`). **No Python lives here any more.**
@@ -62,7 +62,7 @@ repo, and `org/evinced/` went with `/stark-review`, the only reader of its overr
 
 ## Skills
 
-All skills live in `skill/*/SKILL.md`. Full per-skill detail — arguments, failure modes, the reasons behind each guard — is in `CLAUDE.md § Skills`. This is the index.
+All skills live in `skill/*/SKILL.md`. The plugin → skill map is `CLAUDE.md § Skills`; each skill's arguments, failure modes and the reasons behind its guards are in its own `SKILL.md` and `references/`. This is the index.
 
 **Pipeline (in order)**
 
@@ -130,4 +130,4 @@ The separate `stark-meridian-ci` App serves GitHub Actions only.
 
 ## Where to go deeper
 
-`CLAUDE.md` in this directory. It carries the per-tool reference (every `tools/*.ts`, what it replaced, its gotchas), the full skill documentation with failure modes, the prompt architecture, and the auth SSOTs. When this file and `CLAUDE.md` disagree, **`CLAUDE.md` wins** — and the disagreement is a bug: fix it in the same PR.
+`CLAUDE.md` in this directory: the layout, the shipping spine, what `main` gates on, the agent auth seams, and the tool and skill maps — history-free, every rule as it binds today. When this file and `CLAUDE.md` disagree, **`CLAUDE.md` wins** — and the disagreement is a bug: fix it in the same PR.
