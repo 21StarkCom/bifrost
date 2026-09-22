@@ -219,10 +219,10 @@ Same merge pattern as CLAUDE.md — most specific wins:
 ~/Code/some-repo/.code-review/config.json   ← repo override
 ```
 
-Repos can override the enabled agents and the per-dispatcher sections
-(`iac_review`, `runtime`, `models`, …). The per-agent prompt and per-domain
-override layers are gone: they belonged to `/stark-review`, which was buried in
-STARK-6098. Dispatcher rubrics now live once under
+Repos can override the enabled agents, and nothing else: the walk above lives
+only in `discoverConfig`, which preflight reads for `agents`. Every other
+section (`iac_review`, `runtime`, `models`, …) is read from the global
+`config.json` alone, so a per-repo override of one is ignored. Dispatcher rubrics live under
 `global/prompts/<dispatcher>/` and are shared by every agent that runs them.
 
 ## Prerequisites
@@ -243,4 +243,4 @@ with `--help`.
 ## Manuals
 
 - [`CLAUDE.md`](CLAUDE.md) — orientation for Claude Code / agentic contributors.
-- [`AGENTS.md`](AGENTS.md) — same orientation for Codex / Gemini.
+- [`AGENTS.md`](AGENTS.md) — the concise entry point for Codex / Cursor; defers to `CLAUDE.md`.
