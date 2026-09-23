@@ -100,6 +100,7 @@ argument: …" — wording alone cannot tell a working help from a broken one.
 | `refactor_planner.ts` | dry-run, run, validate |
 | `release_changelog.ts` | default, repo, JSON |
 | `release_version_bump.ts` | version, repo, dry-run, JSON |
+| `rules_audit.ts` | default, repo, JSON, budgets; help before git or the disk walk |
 | `self_healer.ts` | suggest/auto, pattern-id, stderr-file |
 | `session_id.ts` | default resolution |
 | `session_state.ts` | default/show, set |

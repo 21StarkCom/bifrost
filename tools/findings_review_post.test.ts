@@ -85,6 +85,12 @@ describe("bodyFor", () => {
     assert.match(b, /\*\*Outcome:\*\* `fixed`/);
   });
 
+  test("renders a producer's proposed fix when it carries one", () => {
+    const b = bodyFor({ summary: "Unscoped rule.", fix: "Add a quoted `paths:` list." });
+    assert.match(b, /\*\*Fix:\*\* Add a quoted `paths:` list\./);
+    assert.doesNotMatch(bodyFor({ summary: "x" }), /\*\*Fix:\*\*/);
+  });
+
   test("degrades to a placeholder rather than an empty comment body", () => {
     assert.equal(bodyFor({}), "(no detail provided)");
   });
