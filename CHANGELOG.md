@@ -13,6 +13,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=320 runId=320 sha=4cec655e -->
+- Gru detects a repo's GitHub merge queue and runs Minion merges concurrently there instead of one-at-a-time; worker-spine learns exit 38 for queue-contention retries.
 <!-- idun:pr-merge pr=319 runId=319 sha=5a6ac3ea -->
 - docs: rewrite AGENTS.md as a concise, current-state guide and align CLAUDE.md/README on plugin, config, and verification details (STARK-8663)
 <!-- idun:pr-merge pr=318 runId=318 sha=2da4f61c -->
