@@ -249,12 +249,33 @@ standing is the operator's to sweep, not yours.
 ## Authority
 
 - A Minion merges on its own once its review gate is green; you grant nothing.
-  Rebase plus required checks serialize concurrent merges only where the base
-  ruleset requires up-to-date branches (`gh api repos/O/R/rules/branches/<base>`
-  → `strict_required_status_checks_policy`). Where `strict` is false, as on
-  bifrost `main`, let one Minion per repo run `idun gh pr-merge` at a time:
-  tell the next to hold its merge until the previous `done` is confirmed. That
-  is sequencing, not a grant; the Minion still merges itself.
+  How many merge at once depends on one thing per repo: whether its base
+  branch has a GitHub merge queue. Read it before that repo's first Minion
+  reaches its merge:
+
+  ```
+  gh api graphql -f query='query { repository(owner: "<owner>", name: "<repo>") { mergeQueue(branch: "<base>") { id } } }'
+  ```
+
+  Keep the spaces: on Claude, a worktree session's guard refuses the compact
+  `'{repository(owner:"…",name:"…")…}'` form (measured) and passes this one.
+
+  - **A queue** (`mergeQueue` non-null): no sequencing. Every Minion runs
+    `idun gh pr-merge` the moment its review gate is green, all at once. The
+    queue tests each merge against the base itself, pr-merge never rebases
+    there, and it waits for the PR to be MERGED before it stamps the ticket.
+    A Minion the queue drops gets exit 38 and clears it by
+    [the spine's merge-contention rule](../../standards/worker-spine.md#4-the-spine).
+  - **No queue** (`mergeQueue` null), or a read that failed (nonzero exit,
+    `repository` null): let one Minion per repo run `idun gh pr-merge` at a
+    time; tell the next to hold its merge until the previous `done` is
+    confirmed. That holds on every such repo, whatever its branch protection
+    says. pr-merge is strict on its own: it rebases, waits for green, and exits
+    27 BASE_MOVED when the base moved meanwhile, so two concurrent runs keep
+    rebasing each other whether or not the ruleset requires up-to-date
+    branches.
+
+  Holding a merge is sequencing, not a grant; the Minion still merges itself.
 - Resolve routine engineering questions from the ticket, spec, and repo rules.
   Escalate to the operator only a concrete choice you cannot make, with the
   evidence, and keep every other ticket moving meanwhile.

@@ -63,8 +63,9 @@ moment the PR merges — unless the repo's agent instructions file defines done 
 
 **Merge contention is yours to resolve, not to wait out.** If `idun gh pr-merge`
 refuses — a stale base, a merge commit from main, a check that needs a fresh
-head — rebase and rerun it. Never `--force`, and never merge past an open
-finding.
+head, or exit 38 (the merge queue removed the PR) — rebase onto the base, push
+(`--force-with-lease`: the rebase rewrote the branch), and rerun it. Never pass
+pr-merge `--force`, and never merge past an open finding.
 
 ## 5. Re-verify after `--fix`, and post the run on the PR
 
