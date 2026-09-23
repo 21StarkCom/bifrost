@@ -18,6 +18,7 @@ const routes: Record<string, string[]> = {
   iac_review: ["", "--kind terraform", "--kind terragrunt"], jury: ["", "run", "list", "show"],
   memory_tidy: [""], optimize_skill_description: [""], preflight: [""],
   refactor_planner: ["", "--mode run", "--mode validate", "--mode dry-run"], release_changelog: [""], release_version_bump: [""],
+  rules_audit: [""],
   self_healer: [""], session_id: [""], session_state: ["", "set"],
   skill_audit: [""], skill_autopilot: [""], skill_diet: [""], skill_optimize: [""],
   skill_router: [""], stark_config_lib: [""], stark_handover: ["", "resolve", "save", "resume", "list"],
