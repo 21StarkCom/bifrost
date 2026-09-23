@@ -65,6 +65,27 @@ test("nested repos, worktrees and node_modules are pruned from the walk", () => 
   }
 });
 
+test("symlinked rule directories are walked; one pointing outside the repo is reported", () => {
+  const outside = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "rules-audit-ext-")));
+  fs.writeFileSync(path.join(outside, "ext.md"), "external rule\n");
+  const dir = repo({ "shared/team.md": "unscoped shared rule\n", ".claude/rules/local.md": "local\n" });
+  fs.symlinkSync("../../shared", path.join(dir, ".claude/rules/team"));
+  fs.symlinkSync(outside, path.join(dir, ".claude/rules/ext"));
+  try {
+    const r = run(["--repo", dir, "--json"]);
+    assert.equal(r.status, 0, r.stderr);
+    const report = JSON.parse(r.stdout);
+    const rule = report.files.find((f: { path: string }) => f.path === ".claude/rules/team/team.md");
+    assert.ok(rule, "the rule behind the directory link was discovered");
+    assert.equal(rule.claude, "always");
+    assert.ok(report.findings.some((f: { file: string; short_summary: string }) =>
+      f.file === ".claude/rules/ext" && /outside the repo/.test(f.short_summary)));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(outside, { recursive: true, force: true });
+  }
+});
+
 test("the text report names the load model and the findings", () => {
   const dir = repo({ ".claude/rules/big.md": "unscoped\n" });
   try {

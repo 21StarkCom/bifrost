@@ -79,6 +79,18 @@ test("paths: globs — dead, structurally dead, universal and unanchored", () =>
   assert.deepEqual(find(r, /Unanchored glob/).map((f) => f.file), [".claude/rules/md.md"], "configs/** matches only under configs/");
 });
 
+test("a negation glob counts the files it excludes and is never 'matches no file'", () => {
+  const r = audit({
+    ".claude/rules/ts.md": '---\npaths:\n  - "src/**/*.ts"\n  - "!src/**/*.test.ts"\n---\nts rule\n',
+    "src/a.ts": "",
+    "src/a.test.ts": "",
+  });
+  assert.equal(find(r, /matches no file/).length, 0);
+  const scope = r.files.find((f) => f.path === ".claude/rules/ts.md")!.scope!;
+  assert.deepEqual(scope.patterns!.map((p) => p.matches), [2, 1]);
+  assert.equal(scope.matchedFiles, 1, "the set applies the negation");
+});
+
 test("an @import in a scoped rule loads at session start and counts toward the always total", () => {
   const r = audit({
     ".claude/rules/api.md": scoped("api/**", "see @../../docs/api.md\n"),
@@ -105,6 +117,22 @@ test("import defects: trailing punctuation, dead, too deep, directory; mentions 
   assert.deepEqual(r.candidates.filter((c) => c.kind === "import").map((c) => c.text), ["@someone"]);
   assert.ok(!r.totals.alwaysLoaded.includes("d5.md"));
   assert.ok(r.totals.alwaysLoaded.includes("d4.md"));
+});
+
+test("a trailing-slash @import names a directory, never a phantom file", () => {
+  const r = audit({ "CLAUDE.md": "See @docs/ for more.\n", "docs/a.md": "x\n" });
+  assert.equal(find(r, /names a directory/).length, 1);
+  assert.ok(!r.files.some((f) => f.path.startsWith("docs")), JSON.stringify(r.files.map((f) => f.path)));
+});
+
+test("a file too deep on one chain but loaded through a shallower one is not reported", () => {
+  const r = audit({
+    "CLAUDE.md": "Deep @d1.md\n",
+    "d1.md": "@d2.md\n", "d2.md": "@d3.md\n", "d3.md": "@d4.md\n", "d4.md": "@d5.md\n", "d5.md": "deep\n",
+    "pkg/CLAUDE.md": "@../d4.md\n",
+  });
+  assert.equal(find(r, /hops deep/).length, 0);
+  assert.equal(r.files.find((f) => f.path === "d5.md")?.claude, "on-demand");
 });
 
 test("size: per-file and always-loaded budgets measure injected text, not frontmatter or comments", () => {
@@ -139,6 +167,19 @@ test("Codex: the chain is cut where the budget runs out, the cap comes from .cod
   assert.equal(cut[0].file, "pkg/AGENTS.md");
   assert.match(cut[0].summary, /gitignored `\.codex\/config\.toml`/);
   assert.ok(r.files.find((f) => f.path === "AGENTS.md")!.codex);
+});
+
+test("Codex: one cut is one finding, whatever the number of directories behind it", () => {
+  const r = audit({
+    "AGENTS.md": "a".repeat(100),
+    "pkg/AGENTS.md": "b".repeat(100),
+    "pkg/sub/AGENTS.md": "c".repeat(100),
+    ".codex/config.toml": "project_doc_max_bytes = 50\n",
+  });
+  const cut = find(r, /Codex cuts/);
+  assert.equal(cut.length, 1, JSON.stringify(cut));
+  assert.match(cut[0].summary, /\(0\.3 KiB\) for work under `pkg\/sub`.*the same cut applies under 2 other directories/);
+  assert.match(cut[0].failure_scenario, /plus `pkg\/AGENTS\.md`, `pkg\/sub\/AGENTS\.md`/);
 });
 
 test("Codex: an empty AGENTS.override.md hides AGENTS.md; @imports are not expanded", () => {
@@ -197,6 +238,38 @@ test("staleness: dead links and anchored paths are findings; examples, negations
   const soft = r.candidates.filter((c) => c.kind === "path").map((c) => c.text).sort();
   assert.deepEqual(soft, ["docs/plans/", "internal/example/only.go"]);
   assert.deepEqual(r.candidates.filter((c) => c.kind === "identifier").map((c) => c.text), ["ZZZ_UNKNOWN_VAR"]);
+});
+
+test("staleness: call arguments, angle-bracket links and HTML comments are not dead references", () => {
+  const r = audit({
+    "CLAUDE.md": [
+      "- `internal/slackfmt.Render(CardOpts{Title,Body,Code})` is the renderer.",
+      "Read [the guide](<docs/my guide.md>).",
+      "<!--",
+      "Config: `internal/cfg/stale.go`",
+      "-->",
+      "<!-- also `internal/cfg/other.go` -->",
+    ].join("\n"),
+    "internal/slackfmt/render.go": "package slackfmt\nfunc Render() {}\n",
+    "docs/my guide.md": "",
+  });
+  assert.deepEqual(r.findings.filter((f) => f.category === "staleness"), []);
+});
+
+test("duplicates count when one file imports the other", () => {
+  const sentence = "Every write is dry-run by default and needs an explicit confirm flag to apply.";
+  const r = audit({ "CLAUDE.md": `@AGENTS.md\n\n${sentence}\n`, "AGENTS.md": `${sentence}\n` });
+  assert.equal(r.candidates.filter((c) => c.kind === "duplicate").length, 1);
+});
+
+test("a sentence that denies an always-load declares nothing", () => {
+  const r = audit({
+    "CLAUDE.md": "Only `discover.md` is always-loaded. `jfrog.md` must never always-load; scope it.\n",
+    ".claude/rules/discover.md": "d\n",
+    ".claude/rules/jfrog.md": "j\n",
+  });
+  assert.deepEqual(r.declaredAlways.rules, [".claude/rules/discover.md"]);
+  assert.deepEqual(find(r, /Unscoped/).map((f) => [f.file, f.severity]), [[".claude/rules/jfrog.md", "high"]]);
 });
 
 test("duplicates are candidates only where both copies load together", () => {

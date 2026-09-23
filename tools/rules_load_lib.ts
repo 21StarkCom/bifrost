@@ -168,16 +168,36 @@ export function parseYaml(text: string): Yaml {
   let k = 0;
   while (k < content.length) {
     const { l } = content[k];
-    if (/^\s/.test(l)) throw new YamlError("unexpected indentation");
+    // An indented document, or a line continuing an indentless list item: valid
+    // YAML shapes this subset does not model.
+    if (/^\s/.test(l)) throw new Undecidable("indented content outside a key's block");
     const kv = parseKey(l);
     if (!kv) throw new YamlError("expected a key");
     k++;
+    const hasValue = kv.rest.trim() !== "" && stripComment(kv.rest).trim() !== "";
     const child: string[] = [];
     while (k < content.length && /^\s/.test(content[k].l)) child.push(content[k++].l);
-    if (kv.rest.trim() !== "" && stripComment(kv.rest).trim() !== "") {
+    // An indentless block sequence: `paths:` followed by `- item` at column 0.
+    if (!hasValue && !child.length) {
+      while (k < content.length && /^-(?:[ \t]|$)/.test(content[k].l)) child.push(content[k++].l);
+    }
+    if (hasValue) {
       if (child.length) {
-        if (/^[&!|>]/.test(kv.rest.trim())) throw new Undecidable("anchor, tag or block scalar on a block");
-        throw new YamlError("value and indented block");
+        // A complete quoted scalar or flow list followed by an indented block
+        // is an error; anything else (a wrapped plain or quoted scalar, a
+        // multi-line flow list, an anchor, tag or block scalar) is valid YAML
+        // the subset does not model.
+        let complete = false;
+        if (/^["'[]/.test(kv.rest.trim())) {
+          try {
+            parseInlineValue(kv.rest);
+            complete = true;
+          } catch {
+            complete = false;
+          }
+        }
+        if (complete) throw new YamlError("value and indented block");
+        throw new Undecidable("a value continued on indented lines");
       }
       map[kv.key] = parseInlineValue(kv.rest);
       continue;
@@ -640,7 +660,8 @@ export interface ChainLink {
 
 export interface ChainBudget {
   cap: number;
-  /** Bytes Codex reads, whitespace-only files costing nothing. */
+  /** Bytes in the whole chain, dropped files included; whitespace-only files
+   *  cost nothing. */
   total: number;
   /** The file the budget runs out in, with the bytes kept from it. */
   cut: { path: string; keptBytes: number; line: number } | null;
@@ -655,13 +676,13 @@ export function chargeChain(chain: { path: string; text: string }[], cap: number
   let cut: ChainBudget["cut"] = null;
   const dropped: string[] = [];
   for (const link of chain) {
-    if (cut) {
-      if (link.text.trim()) dropped.push(link.path);
-      continue;
-    }
     if (!link.text.trim()) continue;
     const bytes = Buffer.byteLength(link.text);
     total += bytes;
+    if (cut) {
+      dropped.push(link.path);
+      continue;
+    }
     if (bytes > remaining) {
       const kept = Buffer.from(link.text).subarray(0, remaining).toString("utf8");
       cut = { path: link.path, keptBytes: remaining, line: kept.split("\n").length };

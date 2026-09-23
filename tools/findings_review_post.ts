@@ -47,6 +47,8 @@ export interface ReportFinding {
   category?: string;
   verdict?: "CONFIRMED" | "PLAUSIBLE" | string;
   outcome?: "fixed" | "skipped" | "no_change_needed" | string;
+  /** A proposed fix, for producers that carry one (`rules_audit.ts`). */
+  fix?: string;
 }
 
 export interface ReportFindingsPayload {
@@ -76,13 +78,16 @@ export function titleFor(f: ReportFinding): string {
   return `${long.slice(0, TITLE_MAX - 1).trimEnd()}…`;
 }
 
-/** Body: the summary, then the failure scenario, then any applied outcome. */
+/** Body: the summary, then the failure scenario, any proposed fix, then any
+ *  applied outcome. */
 export function bodyFor(f: ReportFinding): string {
   const parts: string[] = [];
   const summary = (f.summary ?? "").trim();
   if (summary) parts.push(summary);
   const scenario = (f.failure_scenario ?? "").trim();
   if (scenario) parts.push(`**Failure scenario:** ${scenario}`);
+  const fix = (f.fix ?? "").trim();
+  if (fix) parts.push(`**Fix:** ${fix}`);
   if (f.outcome) parts.push(`**Outcome:** \`${f.outcome}\``);
   if (parts.length === 0) parts.push("(no detail provided)");
   return parts.join("\n\n");

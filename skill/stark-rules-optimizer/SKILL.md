@@ -62,7 +62,7 @@ REPO=$(git -C "<repo>" rev-parse --show-toplevel)
 OUT="${STARK_STATE_ROOT:-$HOME/.claude/code-review}/history/rules-audit/$(basename "$REPO")/$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p "$OUT"
 audit --repo "$REPO" --json > "$OUT/audit.json"   # pass --always / budgets through
-audit --repo "$REPO"                               # the readable summary
+audit --repo "$REPO"                               # the readable summary: the same flags again
 ```
 
 Exit 2 is a usage error (not a repo, a bad budget, an `--always` name that is
@@ -137,7 +137,9 @@ Write `$OUT/findings.json`: `{ "level": "rules-audit", "repo", "loadModel",
 "findings": [...] }` — the tool's findings verbatim plus the ones you promoted,
 most severe first. It is `ReportFindings`-shaped, so
 `tools/findings_review_post.ts --findings "$OUT/findings.json"` can post it on
-a PR. Then print:
+a PR; the posted review carries each finding's `fix`, but infers its severity
+from `verdict` (`CONFIRMED` posts as high), so a finding's own `severity` lives
+only in this file and the printed report. Then print:
 
 ```
 /stark-rules-optimizer — {repo}   load model {loadModel}{, claude now X.Y.Z if different}

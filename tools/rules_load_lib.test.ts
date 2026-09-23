@@ -114,6 +114,23 @@ test("classifyRule: YAML outside the modelled subset is undecidable, never guess
   assert.equal(classifyRule("---\npaths: |\n  a\n---\n").kind, "undecidable");
 });
 
+// Valid YAML (checked against the `yaml` and `js-yaml` packages) must never
+// read as parse-failed: that reports a scoped rule as loading every session.
+test("classifyRule: valid YAML outside the subset is modelled or undecidable, never parse-failed", () => {
+  const indentless = classifyRule('---\npaths:\n- "src/**"\n- "lib/*.go"\ndescription: x\n---\nbody\n');
+  assert.equal(indentless.kind, "scoped", JSON.stringify(indentless));
+  if (indentless.kind === "scoped") assert.deepEqual(indentless.patterns.map((p) => p.pattern), ["src", "lib/*.go"]);
+  for (const raw of [
+    '---\ndescription: a long\n  continued line\npaths:\n  - "src/**"\n---\nbody\n',
+    '---\ndescription: "multi\n  line"\npaths:\n  - "src/**"\n---\nbody\n',
+    '---\npaths: [\n  "src/**",\n  "lib/**"\n]\n---\nbody\n',
+    '---\n  paths:\n    - "src/**"\n---\nbody\n',
+  ]) assert.equal(classifyRule(raw).kind, "undecidable", raw);
+  // A complete value followed by an indented block is a real parse error.
+  const bad = classifyRule('---\npaths: ["a"]\n  - b\n---\nbody\n');
+  assert.equal(bad.kind === "always" && bad.reason, "parse-failed");
+});
+
 test("normalizePaths: split, brace-expand, strip one trailing /**, drop empties", () => {
   assert.deepEqual(normalizePaths(["src/{a,b}/**", "", "x, y/**/**"]).map((n) => n.pattern), ["src/a", "src/b", "x", "y/**"]);
   assert.deepEqual(normalizePaths("/**").map((n) => n.pattern), []);
@@ -184,5 +201,6 @@ test("chargeChain cuts the file that crosses the budget and drops everything dee
   ], 40);
   assert.deepEqual(r.cut, { path: "AGENTS.md", keptBytes: 40, line: 2 });
   assert.deepEqual(r.dropped, ["pkg/sub/AGENTS.md"]);
+  assert.equal(r.total, 71, "the whole chain, dropped files included");
   assert.equal(chargeChain([{ path: "AGENTS.md", text: "x" }], 40).cut, null);
 });

@@ -38,6 +38,7 @@ import {
   type CompiledGlob,
   type Scope,
 } from "./rules_load_lib.ts";
+import { parseMarkdownLinkTargets } from "./skill_lib.ts";
 
 export type Severity = "high" | "medium" | "low";
 export type Category = "load-scope" | "size-budget" | "staleness";
@@ -151,6 +152,8 @@ export interface AuditReport {
 }
 
 const ALWAYS_RE = /\balways[- ]load|\bloads? (?:into |in )?every (?:session|time)\b/i;
+/** A sentence that denies the always-load it mentions. */
+const DENIAL_RE = /\b(?:not|never|no longer|isn't|aren't|doesn't|don't|shouldn't|mustn't|stop|instead of)\b/i;
 const NEGATION_RE =
   /\b(?:never|not|no|don't|without|instead of|removed|deleted|retired|gone|moved|renamed|replaced|superseded|formerly|legacy)\b/i;
 const CREATION_RE = /\b(?:writes?|creates?|generates?|outputs?|produces?|emits?|scaffolds?|will be)\b/i;
@@ -225,13 +228,17 @@ export function parseDeclaredAlways(docs: { file: string; text: string }[], rule
   const sources: Declared["sources"] = [];
   for (const { file, text } of docs) {
     text.split("\n").forEach((line, i) => {
-      if (!ALWAYS_RE.test(line)) return;
       let hit = false;
-      for (const m of line.matchAll(/[\w./-]+\.md\b/g)) {
-        const rule = resolveRuleName(m[0], rules);
-        if (rule) {
-          found.add(rule);
-          hit = true;
+      // Sentence by sentence: "`a.md` is always-loaded. `b.md` must never
+      // always-load" declares only `a.md`.
+      for (const sentence of line.split(/(?<=[.;!?])\s+/)) {
+        if (!ALWAYS_RE.test(sentence) || DENIAL_RE.test(sentence)) continue;
+        for (const m of sentence.matchAll(/[\w./-]+\.md\b/g)) {
+          const rule = resolveRuleName(m[0], rules);
+          if (rule) {
+            found.add(rule);
+            hit = true;
+          }
         }
       }
       if (hit) sources.push({ file, line: i + 1 });
@@ -248,13 +255,27 @@ interface Line {
   fenced: boolean;
 }
 
+/** Body lines as injected: frontmatter and block HTML comments (which the
+ *  loader strips, see `injectedText`) are skipped. */
 function bodyLines(raw: string): Line[] {
   const fm = readFrontmatter(raw);
   const out: Line[] = [];
   let fence: string | null = null;
+  let comment = false;
   raw.replace(/^﻿/, "").split("\n").forEach((line, i) => {
     if (i < fm.bodyLine - 1) return;
     const text = line.replace(/\r$/, "");
+    if (comment) {
+      if (text.includes("-->")) comment = false;
+      return;
+    }
+    if (fence === null && /^\s*<!--/.test(text)) {
+      if (!text.includes("-->")) {
+        comment = true;
+        return;
+      }
+      if (/^\s*<!--[\s\S]*-->\s*$/.test(text)) return;
+    }
     const marker = /^\s*(`{3,}|~{3,})/.exec(text)?.[1];
     if (marker && (fence === null || marker[0] === fence[0])) {
       fence = fence === null ? marker : null;
@@ -340,7 +361,8 @@ export function extractRefs(raw: string): { refs: Ref[]; idents: Ident[] } {
       if (ENV_RE.test(env) && !/_\d+$/.test(env)) idents.push({ kind: "env", name: env, token, line: n });
       const sym = /::([A-Za-z_]\w*)/.exec(token);
       if (sym) idents.push({ kind: "symbol", name: sym[1], token, line: n });
-      let t = cleanPathToken(token);
+      // A call, `internal/pkg.Render(Opts{A,B})`: its arguments are not a path.
+      let t = cleanPathToken(token.replace(/(?<=\w)\((?!.*\/).*$/, ""));
       // A Go qualified name, `internal/pkg.Symbol`: the package path plus a symbol.
       const goSym = t ? /^(.+\/[\w-]+)\.([A-Z]\w*)(?:\(\))?$/.exec(t) : null;
       if (goSym && !EXT_RE.test(t!)) {
@@ -365,9 +387,8 @@ export function extractRefs(raw: string): { refs: Ref[]; idents: Ident[] } {
       addTokens(code, n, soft, true);
       return " ";
     });
-    for (const m of prose.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {
-      const target = m[1];
-      if (/^(?:[a-z][a-z0-9+.-]*:|#)/i.test(target)) continue;
+    for (const target of parseMarkdownLinkTargets(prose)) {
+      if (!target || /^(?:[a-z][a-z0-9+.-]*:|#)/i.test(target)) continue;
       const t = target.replace(/#.*$/, "");
       if (t) {
         let decoded = t;
@@ -468,6 +489,10 @@ interface Tree {
   files: readonly string[];
   fileSet: Set<string>;
   dirSet: Set<string>;
+  /** `dirSet` as an array, built once for the glob and suffix scans. */
+  dirs: readonly string[];
+  /** Every file's basename, for bare-name lookups. */
+  baseNames: Set<string>;
   topLevel: Set<string>;
   view: RepoView;
 }
@@ -483,7 +508,7 @@ export function resolveRef(ref: Ref, dir: string, tree: Tree): Resolution {
     const r = rel.replace(/\/$/, "");
     if (r === "" || r === ".") return true;
     if (GLOB_CHARS.test(r)) {
-      return tree.files.some((f) => path.matchesGlob(f, r)) || [...tree.dirSet].some((d) => path.matchesGlob(d, r));
+      return tree.files.some((f) => path.matchesGlob(f, r)) || tree.dirs.some((d) => path.matchesGlob(d, r));
     }
     return tree.fileSet.has(r) || tree.dirSet.has(r) || tree.view.exists(r);
   };
@@ -498,17 +523,16 @@ export function resolveRef(ref: Ref, dir: string, tree: Tree): Resolution {
     if (/^\.[A-Za-z0-9]+$/.test(t)) return "unanchored"; // a bare extension, `.ts`
     if (exists(local(t)) || exists(t)) return "ok";
     const base = path.posix.basename(t);
-    const glob = GLOB_CHARS.test(base);
-    return tree.files.some((f) => (glob ? path.matchesGlob(path.posix.basename(f), base) : path.posix.basename(f) === base))
-      ? "ok"
-      : "bare-missing";
+    if (!GLOB_CHARS.test(base)) return tree.baseNames.has(base) ? "ok" : "bare-missing";
+    for (const b of tree.baseNames) if (path.matchesGlob(b, base)) return "ok";
+    return "bare-missing";
   }
   if (/^\.{1,2}\//.test(t)) {
     // `./x` in a command is relative to wherever the command runs: the repo
     // root, the file's directory, or any directory that holds `x`.
     if (t.startsWith("./")) {
       const rest = path.posix.normalize(t);
-      if (exists(rest) || tree.files.some((f) => f.endsWith(`/${rest}`)) || [...tree.dirSet].some((d) => d.endsWith(`/${rest.replace(/\/$/, "")}`))) {
+      if (exists(rest) || tree.files.some((f) => f.endsWith(`/${rest}`)) || tree.dirs.some((d) => d.endsWith(`/${rest.replace(/\/$/, "")}`))) {
         return "ok";
       }
     }
@@ -561,7 +585,19 @@ export function auditRules(input: AuditInput): AuditReport {
     const parts = f.split("/");
     for (let i = 1; i < parts.length; i++) dirSet.add(parts.slice(0, i).join("/"));
   }
-  const tree: Tree = { files, fileSet, dirSet, topLevel: new Set(files.map((f) => f.split("/")[0])), view };
+  const tree: Tree = {
+    files, fileSet, dirSet, dirs: [...dirSet], baseNames: new Set(files.map((f) => path.posix.basename(f))),
+    topLevel: new Set(files.map((f) => f.split("/")[0])), view,
+  };
+  const universes = new Map<string, string[]>();
+  const universeOf = (owner: string): string[] => {
+    let u = universes.get(owner);
+    if (!u) {
+      u = files.map((x) => relTo(owner, x)).filter((x): x is string => x !== null);
+      universes.set(owner, u);
+    }
+    return u;
+  };
   const findings: RulesFinding[] = [];
   const candidates: Candidate[] = [];
   const texts = new Map<string, string>();
@@ -636,14 +672,24 @@ export function auditRules(input: AuditInput): AuditReport {
     if (rank[l] > rank[importLoad.get(p) ?? "never"]) importLoad.set(p, l);
   };
   const seenImport = new Set<string>();
+  /** Reads a file once and keeps it: `null` for a missing path or a directory. */
+  const readText = (rel: string): string | null => {
+    const hit = texts.get(rel);
+    if (hit !== undefined) return hit;
+    const text = view.read(rel);
+    if (text !== null) texts.set(rel, text);
+    return text;
+  };
+  // A target too deep on one chain may still load through a shallower one;
+  // these are reported only for targets no chain loads.
+  const tooDeep: { target: string; finding: Omit<RulesFinding, "verdict"> }[] = [];
   for (const root of inst.filter((f) => f.claude !== "never")) {
     const queue: { file: string; depth: number }[] = [{ file: root.path, depth: 0 }];
     const visited = new Set<string>([root.path]);
     while (queue.length) {
       const { file, depth } = queue.shift()!;
-      const raw = texts.get(file) ?? view.read(file);
+      const raw = readText(file);
       if (raw === null) continue;
-      texts.set(file, raw);
       for (const imp of scanImports(raw)) {
         const key = `${file}:${imp.line}:${imp.token}`;
         const report = !seenImport.has(key);
@@ -657,7 +703,9 @@ export function auditRules(input: AuditInput): AuditReport {
         } else target = path.posix.normalize(path.posix.join(path.posix.dirname(file), imp.token));
         if (target.startsWith("../")) continue;
         const ext = /\.([A-Za-z0-9]+)$/.exec(path.posix.basename(target))?.[1]?.toLowerCase();
-        if (fileSet.has(target) || (view.exists(target) && !dirSet.has(target))) {
+        // A file outside the walk (pruned, e.g. under node_modules) counts only
+        // if it reads as a file: a directory, `docs/` included, never imports.
+        if (fileSet.has(target) || (!dirSet.has(target) && readText(target) !== null)) {
           if (ext && NON_TEXT_EXT.has(ext)) {
             if (report) add({
               file, line: imp.line, category: "staleness", severity: "medium", verdict: "PLAUSIBLE",
@@ -669,12 +717,15 @@ export function auditRules(input: AuditInput): AuditReport {
             continue;
           }
           if (depth + 1 > MAX_IMPORT_DEPTH) {
-            if (report) add({
-              file, line: imp.line, category: "staleness", severity: "medium",
-              short_summary: `@import is ${depth + 1} hops deep and never loads`,
-              summary: `\`@${imp.token}\` sits ${depth + 1} imports below \`${root.path}\`; Claude Code follows at most ${MAX_IMPORT_DEPTH}.`,
-              failure_scenario: `\`${target}\` is silently dropped.`,
-              fix: `Import it from a shallower file, or inline what it carries.`,
+            if (report) tooDeep.push({
+              target,
+              finding: {
+                file, line: imp.line, category: "staleness", severity: "medium",
+                short_summary: `@import is ${depth + 1} hops deep and never loads`,
+                summary: `\`@${imp.token}\` sits ${depth + 1} imports below \`${root.path}\`; Claude Code follows at most ${MAX_IMPORT_DEPTH}.`,
+                failure_scenario: `\`${target}\` is silently dropped.`,
+                fix: `Import it from a shallower file, or inline what it carries.`,
+              },
             });
             continue;
           }
@@ -691,7 +742,7 @@ export function auditRules(input: AuditInput): AuditReport {
           // Classification: a rule tree's files load by their own `paths:`.
           let load: ClaudeLoad = root.claude;
           if (root.kind === "rule") {
-            const own = byPath.get(target)?.kind === "rule" ? scopes.get(target)! : classifyRule(texts.get(target) ?? view.read(target) ?? "");
+            const own = byPath.get(target)?.kind === "rule" ? scopes.get(target)! : classifyRule(readText(target) ?? "");
             if (own.kind === "scoped") load = "on-demand";
             else load = root.owner === "." ? "always" : "on-demand";
             if (own.kind !== "scoped" && root.owner === "." && root.claude !== "always" && report) {
@@ -712,7 +763,7 @@ export function auditRules(input: AuditInput): AuditReport {
           continue;
         }
         if (!report || imp.inListCode) continue;
-        if (dirSet.has(target) || (view.exists(target) && !ext)) {
+        if (dirSet.has(target.replace(/\/+$/, "")) || (view.exists(target) && !ext)) {
           add({
             file, line: imp.line, category: "staleness", severity: "medium",
             short_summary: `@import names a directory`,
@@ -751,6 +802,10 @@ export function auditRules(input: AuditInput): AuditReport {
       }
     }
   }
+  for (const { target, finding } of tooDeep) {
+    const own = byPath.get(target);
+    if (!importLoad.has(target) && (!own || own.claude === "never")) add(finding);
+  }
   for (const [p, load] of importLoad) {
     const existing = byPath.get(p);
     if (existing) {
@@ -758,7 +813,7 @@ export function auditRules(input: AuditInput): AuditReport {
       existing.importedBy = importEdges.filter((e) => e.to === p).map((e) => e.from);
       continue;
     }
-    const raw = texts.get(p) ?? view.read(p) ?? "";
+    const raw = readText(p) ?? "";
     const owner = path.posix.dirname(p);
     const f: InstructionFile = {
       path: p, kind: "import", owner, claude: load, codex: false, ...measure(raw),
@@ -820,12 +875,12 @@ export function auditRules(input: AuditInput): AuditReport {
     }
     const globs: { p: (typeof s.patterns)[number]; g: CompiledGlob | null; dead: string | null }[] =
       s.patterns.map((p) => ({ p, g: compileGlob(p.pattern), dead: structurallyDead(p.pattern) }));
-    const universe = files.map((x) => relTo(f.owner, x)).filter((x): x is string => x !== null);
-    const union = new Set<string>();
+    const universe = universeOf(f.owner);
     const reports: PatternReport[] = [];
     for (const { p, g, dead } of globs) {
-      const hits = !g || dead ? [] : universe.filter((x) => matchesAny([g], x));
-      for (const h of hits) union.add(h);
+      // A `!negation` excludes rather than matches: count the files it names.
+      const probe = !g || dead ? null : g.negative ? { ...g, negative: false } : g;
+      const hits = probe ? universe.filter((x) => matchesAny([probe], x)) : [];
       reports.push({ pattern: p.pattern, line: p.line, matches: hits.length });
       if (g && !dead && !g.negative && !p.pattern.includes("/") && !isUniversal(p.pattern)) {
         const tops = new Set(hits.map((h) => h.split("/")[0]));
@@ -870,7 +925,9 @@ export function auditRules(input: AuditInput): AuditReport {
         fix: `Point the glob at where the code lives now, or delete it.`,
       });
     }
-    f.scope = { kind: "scoped", patterns: reports, matchedFiles: union.size };
+    // The loader applies the patterns as one set, negations included.
+    const live = globs.filter((x) => x.g && !x.dead).map((x) => x.g!);
+    f.scope = { kind: "scoped", patterns: reports, matchedFiles: universe.filter((x) => matchesAny(live, x)).length };
   }
 
   // Files in a rules dir that never load.
@@ -1009,19 +1066,26 @@ export function auditRules(input: AuditInput): AuditReport {
     }
   }
   const reported = new Set<string>();
+  // One cut, one finding: every directory whose chain is cut at the same place.
+  // The summary shows the longest chain the cut hits.
+  const cuts = new Map<string, {
+    cut: NonNullable<ReturnType<typeof chargeChain>["cut"]>;
+    dir: string; chain: string[]; total: number; maxBytes: number; source: string | null;
+    dirs: string[]; dropped: Set<string>;
+  }>();
   for (const dir of [...leafDirs].sort()) {
     const { maxBytes, source, fallbacks } = effective(dir);
     const chain = chainDirs(dir)
       .map((d) => pick(d, fallbacks))
       .filter((p): p is string => p !== null)
-      .map((p) => ({ path: p, text: view.read(p) ?? "" }));
+      .map((p) => ({ path: p, text: readText(p) ?? "" }));
     for (const c of chain) {
       const f = byPath.get(c.path);
       if (f) f.codex = true;
     }
     const override = dir === "." ? "AGENTS.override.md" : `${dir}/AGENTS.override.md`;
     const sibling = dir === "." ? "AGENTS.md" : `${dir}/AGENTS.md`;
-    if (fileSet.has(override) && !(view.read(override) ?? "").trim() && (view.read(sibling) ?? "").trim() && !reported.has(override)) {
+    if (fileSet.has(override) && !(readText(override) ?? "").trim() && (readText(sibling) ?? "").trim() && !reported.has(override)) {
       reported.add(override);
       add({
         file: override, line: 1, category: "load-scope", severity: "high", verdict: "PLAUSIBLE",
@@ -1033,15 +1097,27 @@ export function auditRules(input: AuditInput): AuditReport {
     }
     const charged = chargeChain(chain, maxBytes);
     if (!charged.cut) continue;
-    const key = `${charged.cut.path}|${charged.dropped.join(",")}`;
-    if (reported.has(key)) continue;
-    reported.add(key);
+    const key = `${charged.cut.path}|${charged.cut.keptBytes}`;
+    const seen = cuts.get(key);
+    if (seen) {
+      seen.dirs.push(dir);
+      for (const d of charged.dropped) seen.dropped.add(d);
+      if (chain.length > seen.chain.length) Object.assign(seen, { dir, chain: chain.map((c) => c.path), total: charged.total });
+      continue;
+    }
+    cuts.set(key, {
+      cut: charged.cut, dir, chain: chain.map((c) => c.path), total: charged.total, maxBytes, source,
+      dirs: [dir], dropped: new Set(charged.dropped),
+    });
+  }
+  for (const { cut, dir, chain, total, maxBytes, source, dirs, dropped } of cuts.values()) {
     const localCfg = source && view.ignored.has(source) ? ` (cap from the gitignored \`${source}\`)` : source ? ` (cap from \`${source}\`)` : "";
+    const more = dirs.length > 1 ? `; the same cut applies under ${dirs.length - 1} other director${dirs.length > 2 ? "ies" : "y"}` : "";
     add({
-      file: charged.cut.path, line: charged.cut.line, category: "size-budget", severity: "high",
-      short_summary: `Codex cuts ${path.posix.basename(charged.cut.path)} at ${kib(charged.cut.keptBytes)}`,
-      summary: `Codex reads ${chain.map((c) => `\`${c.path}\``).join(" + ")} (${kib(charged.total)}) for work under \`${dir}\`, over its ${kib(maxBytes)} \`project_doc_max_bytes\` budget${localCfg}.`,
-      failure_scenario: `Codex keeps the first ${charged.cut.keptBytes} bytes of \`${charged.cut.path}\` (through line ${charged.cut.line}) and drops the rest${charged.dropped.length ? `, plus ${charged.dropped.map((d) => `\`${d}\``).join(", ")}` : ""}, logging only a trace warning.`,
+      file: cut.path, line: cut.line, category: "size-budget", severity: "high",
+      short_summary: `Codex cuts ${path.posix.basename(cut.path)} at ${kib(cut.keptBytes)}`,
+      summary: `Codex reads ${chain.map((c) => `\`${c}\``).join(" + ")} (${kib(total)}) for work under \`${dir}\`, over its ${kib(maxBytes)} \`project_doc_max_bytes\` budget${localCfg}${more}.`,
+      failure_scenario: `Codex keeps the first ${cut.keptBytes} bytes of \`${cut.path}\` (through line ${cut.line}) and drops the rest${dropped.size ? `, plus ${[...dropped].sort().map((d) => `\`${d}\``).join(", ")}` : ""}, logging only a trace warning.`,
       fix: `Cut the chain under ${kib(maxBytes)}: keep AGENTS.md a short index and move detail into the files it points at.`,
     });
   }
@@ -1061,10 +1137,12 @@ export function auditRules(input: AuditInput): AuditReport {
 
   // Staleness: links and repo paths. Links and anchored repo paths are
   // findings; misses in examples, negations and creation lines are candidates.
-  const words = wordSet(view, new Set(inst.map((f) => f.path)));
+  // Every other file's words, read only if some identifier needs checking.
+  let words: Set<string> | null = null;
+  const known = (name: string) => (words ??= wordSet(view, new Set(inst.map((f) => f.path)))).has(name);
   const seenRef = new Set<string>();
   for (const f of inst) {
-    const raw = texts.get(f.path) ?? view.read(f.path) ?? "";
+    const raw = readText(f.path) ?? "";
     const dir = path.posix.dirname(f.path);
     const { refs, idents } = extractRefs(raw);
     for (const ref of refs) {
@@ -1099,7 +1177,7 @@ export function auditRules(input: AuditInput): AuditReport {
     }
     const seenIdent = new Set<string>();
     for (const id of idents) {
-      if (seenIdent.has(id.name) || words.has(id.name) || (id.kind === "env" && PLATFORM_ENV.test(id.name))) continue;
+      if (seenIdent.has(id.name) || (id.kind === "env" && PLATFORM_ENV.test(id.name)) || known(id.name)) continue;
       seenIdent.add(id.name);
       candidates.push({
         kind: "identifier", file: f.path, line: id.line, text: id.token,
@@ -1111,8 +1189,8 @@ export function auditRules(input: AuditInput): AuditReport {
   // Duplication, among files that land in one context window.
   const imports = new Set(importEdges.map((e) => `${e.from}>${e.to}`));
   const coLoad = (a: string, b: string): boolean => {
-    if (a === b) return true;
-    if (imports.has(`${a}>${b}`) || imports.has(`${b}>${a}`)) return false;
+    // An import lands both files in one context window.
+    if (a === b || imports.has(`${a}>${b}`) || imports.has(`${b}>${a}`)) return true;
     const fa = byPath.get(a)!;
     const fb = byPath.get(b)!;
     const claude = fa.claude !== "never" && fb.claude !== "never" &&
@@ -1120,7 +1198,7 @@ export function auditRules(input: AuditInput): AuditReport {
     const codex = fa.codex && fb.codex && (isAncestorOrSelf(fa.owner, fb.owner) || isAncestorOrSelf(fb.owner, fa.owner));
     return claude || codex;
   };
-  const docs = inst.map((f) => ({ file: f.path, text: texts.get(f.path) ?? view.read(f.path) ?? "" }));
+  const docs = inst.map((f) => ({ file: f.path, text: readText(f.path) ?? "" }));
   candidates.push(...findDuplicates(docs, coLoad));
   for (const d of docs) candidates.push(...findNarrative(d.file, d.text));
 

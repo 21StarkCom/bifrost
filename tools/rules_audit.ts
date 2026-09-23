@@ -7,7 +7,9 @@
  * The file universe is the disk, not `git ls-files`: Claude Code's discovery
  * ignores .gitignore, so an ignored `.claude/` still loads. Nested repos and
  * worktrees (a `.git` entry), `.claude/worktrees`, `.cursor/worktrees` and
- * dependency trees are pruned. git only labels which files it ignores.
+ * dependency trees are pruned. Symlinks are followed only where Claude Code
+ * follows them: file links, and directory links inside a rules dir. git only
+ * labels which files it ignores.
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -41,6 +43,9 @@ const MAX_READ_BYTES = 8 * 1024 * 1024;
 export interface Walk {
   files: string[];
   externalRuleLinks: string[];
+  /** Symlinked rule directories walked, outermost first: git cannot label a
+   *  path beyond one, so it labels the link instead. */
+  dirLinks: string[];
 }
 
 /** Every file under `root`, pruned as the header says. */
@@ -48,6 +53,9 @@ export function walkRepo(root: string): Walk {
   const rootReal = fs.realpathSync(root);
   const files: string[] = [];
   const externalRuleLinks: string[] = [];
+  /** Real paths of symlinked rule directories already walked (cycle guard). */
+  const linkedDirs = new Set<string>();
+  const dirLinks: string[] = [];
   const stack = [""];
   while (stack.length) {
     const rel = stack.pop()!;
@@ -71,19 +79,31 @@ export function walkRepo(root: string): Walk {
         files.push(r);
       } else if (e.isSymbolicLink()) {
         let real: string;
+        let stat: fs.Stats;
         try {
           real = fs.realpathSync(path.join(abs, e.name));
-          if (!fs.statSync(real).isFile()) continue;
+          stat = fs.statSync(real);
         } catch {
           continue;
         }
-        if (real === rootReal || real.startsWith(`${rootReal}${path.sep}`)) files.push(r);
-        else if (/(?:^|\/)\.claude\/rules\//.test(r)) externalRuleLinks.push(r);
+        const inside = real === rootReal || real.startsWith(`${rootReal}${path.sep}`);
+        if (stat.isFile()) {
+          if (inside) files.push(r);
+          else if (/(?:^|\/)\.claude\/rules\//.test(r)) externalRuleLinks.push(r);
+        } else if (stat.isDirectory() && /(?:^|\/)\.claude\/rules(?:\/|$)/.test(r)) {
+          // Claude Code follows symlinked directories inside a rules dir.
+          if (!inside) externalRuleLinks.push(r);
+          else if (!linkedDirs.has(real)) {
+            linkedDirs.add(real);
+            dirLinks.push(r);
+            stack.push(r);
+          }
+        }
       }
       if (files.length > MAX_FILES) throw new Error(`more than ${MAX_FILES} files under ${root}; point --repo at a repo root`);
     }
   }
-  return { files: files.sort(), externalRuleLinks: externalRuleLinks.sort() };
+  return { files: files.sort(), externalRuleLinks: externalRuleLinks.sort(), dirLinks };
 }
 
 function git(root: string, args: string[], input?: string) {
@@ -112,25 +132,24 @@ export function claudeFamilyAbove(root: string): boolean {
 
 export function buildView(root: string): RepoView {
   const walk = walkRepo(root);
-  const cache = new Map<string, string | null>();
+  // No cache: the audit reads every file once for its word index, and keeping
+  // those texts would hold the whole repo in memory. It memoizes what it re-reads.
   const read = (rel: string): string | null => {
-    if (cache.has(rel)) return cache.get(rel)!;
-    let text: string | null = null;
     try {
       const abs = path.join(root, rel);
-      if (fs.statSync(abs).size <= MAX_READ_BYTES) text = fs.readFileSync(abs, "utf8");
+      return fs.statSync(abs).size <= MAX_READ_BYTES ? fs.readFileSync(abs, "utf8") : null;
     } catch {
-      text = null;
+      return null;
     }
-    cache.set(rel, text);
-    return text;
   };
   const labelled = walk.files.filter((f) => instructionKind(f) !== null || /(?:^|\/)\.codex\/config\.toml$/.test(f));
+  const asked = (f: string) => walk.dirLinks.find((l) => f.startsWith(`${l}/`)) ?? f;
+  const ignored = ignoredPaths(root, [...new Set(labelled.map(asked))]);
   return {
     files: walk.files,
     read,
     exists: (rel) => fs.existsSync(path.join(root, rel)),
-    ignored: ignoredPaths(root, labelled),
+    ignored: new Set(labelled.filter((f) => ignored.has(asked(f)))),
     claudeFamilyAbove: claudeFamilyAbove(root),
     externalRuleLinks: walk.externalRuleLinks,
   };
