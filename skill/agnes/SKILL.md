@@ -126,10 +126,10 @@ things are yours on top of it, and each of them exists because there is no
 leader:
 
 - **Nobody sequences your merge.** Gru holds one `idun gh pr-merge` per repo at
-  a time; two Agneses in one repo have no such referee. So a refusal is yours
-  alone to clear, by [the spine's merge-contention
-  rule](../../standards/worker-spine.md#4-the-spine) — and never by waiting on
-  a human for what a rebase fixes.
+  a time where the base has no merge queue; two Agneses in one repo have no
+  such referee. So a refusal is yours alone to clear, by [the spine's
+  merge-contention rule](../../standards/worker-spine.md#4-the-spine) — and
+  never by waiting on a human for what a rebase fixes.
 - **Nobody reads your scrollback.** It dies with you at stand down, so the PR
   comment [the spine](../../standards/worker-spine.md)'s step 5 requires is the
   only copy of your evidence that survives.
