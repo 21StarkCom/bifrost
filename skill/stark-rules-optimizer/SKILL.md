@@ -170,13 +170,15 @@ below; where it and this list disagree, it wins.
    drops no fact that is still true; otherwise they go in the PR body as
    proposals. Never invent a fact to replace a dead reference.
 2. **Ticket first**, in the target repo's list:
-   `alfred task new --repo <name> --desc-file <file> "<title>"` with the goal,
+   `alfred task new --on-repo <name> --desc-file <file> "<title>"` (`--repo`
+   only asserts the repo you stand in, and refuses any other) with the goal,
    the findings being fixed (`file:line`), acceptance, files and verification.
 3. **Branch in a worktree** off the target's default branch, from its main
    checkout (the first `worktree` line of `git -C <repo> worktree list
    --porcelain`):
    `git -C <main> fetch origin` then
-   `git -C <main> worktree add -b <branch> <main>/.claude/worktrees/<STARK-n> origin/<default>`.
+   `git -C <main> worktree add --no-track -b <branch> <main>/.claude/worktrees/<STARK-n> origin/<default>`
+   (`--no-track`: a branch tracking the default branch can push onto it).
 4. **Edit** in that worktree. Honour the repo's mirror policies in the same
    change (both AGENTS.md and CLAUDE.md).
 5. **Verify live**: re-run `audit --repo <worktree> --json`. Every fixed
