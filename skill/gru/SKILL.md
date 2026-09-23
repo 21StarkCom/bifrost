@@ -250,20 +250,29 @@ standing is the operator's to sweep, not yours.
 
 - A Minion merges on its own once its review gate is green; you grant nothing.
   How many merge at once depends on one thing per repo: whether its base
-  branch has a GitHub merge queue. Read it before that repo's first Minion
-  reaches its merge:
+  branch has a GitHub merge queue. Read it once per repo, when you launch that
+  repo's first Minion (step 3). A Minion merges on its own and says nothing
+  before it does, so a hold sent any later can arrive after its merge ran:
 
   ```
-  gh api graphql -f query='query { repository(owner: "<owner>", name: "<repo>") { mergeQueue(branch: "<base>") { id } } }'
+  gh api graphql -f query='query { repository(owner: "<owner>", name: "<repo>") { mergeQueue { id } } }'
   ```
 
-  Keep the spaces: on Claude, a worktree session's guard refuses the compact
+  `<owner>` and `<repo>` are GitHub's, from the `remote` of the frigg record
+  step 3 reads (`git -C <path> remote get-url origin` after a `--cwd`
+  launch), never the registry name alone: a wrong owner reads as a failed
+  read. With no `branch:` argument `mergeQueue` reads the default branch; add
+  `(branch: "<base>")` only for a ticket whose PR targets another base. Keep
+  the spaces: on Claude, a worktree session's guard refuses the compact
   `'{repository(owner:"…",name:"…")…}'` form (measured) and passes this one.
 
   - **A queue** (`mergeQueue` non-null): no sequencing. Every Minion runs
     `idun gh pr-merge` the moment its review gate is green, all at once. The
     queue tests each merge against the base itself, pr-merge never rebases
     there, and it waits for the PR to be MERGED before it stamps the ticket.
+    That is idun v0.81.0 or later (`idun --version`): an older pr-merge only
+    enqueues and then stamps a merge that has not happened, so an older idun
+    is an escalation before any Minion there merges.
     A Minion the queue drops gets exit 38 and clears it by
     [the spine's merge-contention rule](../../standards/worker-spine.md#4-the-spine).
   - **No queue** (`mergeQueue` null), or a read that failed (nonzero exit,

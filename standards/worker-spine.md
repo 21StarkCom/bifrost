@@ -63,9 +63,17 @@ moment the PR merges — unless the repo's agent instructions file defines done 
 
 **Merge contention is yours to resolve, not to wait out.** If `idun gh pr-merge`
 refuses — a stale base, a merge commit from main, a check that needs a fresh
-head, or exit 38 (the merge queue removed the PR) — rebase onto the base, push
-(`--force-with-lease`: the rebase rewrote the branch), and rerun it. Never pass
-pr-merge `--force`, and never merge past an open finding.
+head, or exit 38 (the merge queue removed the PR) — fetch, rebase onto the
+base, push (`--force-with-lease`: the rebase rewrote the branch), and rerun it.
+Exit 38 prints the queue's reason: a PR someone took out of the queue by hand
+stays out, so report it blocked and stop rather than queue it again. A PR that
+may still be queued is never rebased or pushed, because a new head drops it
+from the queue: exit 35 (the watch timeout) and a queue state pr-merge could
+not read are rerun as they are, which resumes the wait. Exit 21 on a
+merge-queue base (a root `CHANGELOG.md` would conflict every queued pair) is
+not contention, and no rebase clears it: report it blocked and stop. Never
+`git push --force`, never pass pr-merge `--force`, and never merge past an open
+finding.
 
 ## 5. Re-verify after `--fix`, and post the run on the PR
 
