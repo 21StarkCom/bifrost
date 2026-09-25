@@ -4,11 +4,10 @@ Copy everything below the rule into the description file and replace every
 `TODO:` line. Keep the headings: alfred's `task start` requires Goal, Scope,
 Acceptance, Files and Verification, and the rest are what workers need.
 
-The filled ticket stays under 1,000 words: a ceiling, not a target. A line
-earns its place by changing what the worker does; a slot that needs more than
-its share means the ticket is two tickets. To fit, cut in this order: Already
-known, Evidence rows, prose. A name, flag, value or list the worker must
-implement is never cut.
+A line earns its place by changing what the worker does. A ticket that runs
+long usually holds two tickets. When cutting, go in this order: Already known,
+Evidence rows, prose; a name, flag, value or list the worker must implement is
+never cut.
 
 A trivial change (Scope IN is one documented command, such as a version bump)
 stays under 250 words: fill Ask, Goal, Scope IN, Acceptance, Files,

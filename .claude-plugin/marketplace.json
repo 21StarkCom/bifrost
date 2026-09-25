@@ -133,7 +133,7 @@
       "name": "stark-plan",
       "source": "./",
       "description": "Plan work before it starts — author a human-gated spec with its task DAG, and write tickets a fresh worker can carry to merge: measured premises, verification that fails for the defect, and one zero-context cold read before filing.",
-      "version": "0.6.0",
+      "version": "0.6.1",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
