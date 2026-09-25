@@ -5,9 +5,9 @@ Copy everything below the rule into the description file and replace every
 Acceptance, Files and Verification, and the rest are what workers need.
 
 A line earns its place by changing what the worker does. A ticket that runs
-long usually holds two tickets. When cutting, Already known, Evidence rows and
-prose go first; a name, flag, value or list the worker must implement is never
-cut.
+long usually holds two tickets. When cutting, go in this order: Already known,
+Evidence rows, prose; a name, flag, value or list the worker must implement is
+never cut.
 
 A trivial change (Scope IN is one documented command, such as a version bump)
 stays under 250 words: fill Ask, Goal, Scope IN, Acceptance, Files,
