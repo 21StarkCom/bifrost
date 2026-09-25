@@ -140,8 +140,9 @@ leader:
 
 [The spine](../../standards/worker-spine.md#6-gaps) decides them: fix in the
 same PR when the ticket's acceptance needs it or it fits the sitting, otherwise
-`alfred task new` (unbound) and comment the link on your ticket. Use judgement;
-there is nobody to ask.
+write the follow-up with `/stark-ticket` (`$stark-ticket` on Codex), file it
+with `alfred task new` (unbound), and comment the link on your ticket. Use
+judgement; there is nobody to ask.
 
 A filed follow-up does **not** hold the ticket open and does not block your
 stand-down — the ticket you own is either finished or it is not. If the gap is

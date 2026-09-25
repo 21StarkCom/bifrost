@@ -89,8 +89,10 @@ anyone can ever read.
 Anything you discover while working the ticket that is missing, broken, or wrong
 is yours to resolve in the same PR when it is needed for the ticket's acceptance
 criteria or small enough to finish in the same sitting. When it is a whole
-effort of its own, file a follow-up with `alfred task new` (unbound;
-`task start` would bind your session to it) and comment the link on your ticket.
+effort of its own, write the follow-up with the `stark-ticket` skill (`/stark-ticket`
+on Claude Code, `$stark-ticket` on Codex), file it with `alfred task new` (unbound;
+`task start` would bind your session to it), and comment the link on your ticket.
+`task new` checks nothing, so the skill is the only check the follow-up gets.
 If your ticket can still be finished without it, finish it; if it cannot, say so
 and stop. Use judgement; do not hand the decision upwards.
 
