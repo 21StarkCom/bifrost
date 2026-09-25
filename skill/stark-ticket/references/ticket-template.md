@@ -12,8 +12,8 @@ implement is never cut.
 
 A trivial change (Scope IN is one documented command, such as a version bump)
 stays under 250 words: fill Ask, Goal, Scope IN, Acceptance, Files,
-Verification and Close; write `none — trivial` in every other slot, and
-`skipped: trivial` in Cold read.
+Verification and Close; write `skipped: trivial` in Cold read and
+`none — trivial` in every other slot.
 
 Every command output quoted anywhere in the ticket is pasted from the tool
 result, never retyped, summarized or counted by eye.
@@ -54,7 +54,7 @@ TODO: one line per check: command · which build it runs (this branch's code, no
 TODO: `Blocked by <ticket> (<PR or release>)` for unmerged or unpublished work this needs, linked in alfred (`task link --kind related`); the merge order across repos or a publish chain, and the first green run to watch after it. Or "none".
 
 ## Close
-TODO: quote the target repo's done rule (close at merge, or at the end of its release chain). If the title's outcome cannot be met, the ticket goes to blocked, not done — no "or record why not" escape.
+TODO: quote the target repo's done rule (close at merge, or at the end of its release chain). If the title's outcome cannot be met, the ticket is not moved to done: alfred has no blocked status, so it stays where it is with a comment saying what blocks it — no "or record why not" escape.
 
 ## Cold read
 TODO: `<n> findings: fixed <k>, rejected <k> (<reason each>), accepted <k>`, or `skipped: <which rule in cold-read.md>`.

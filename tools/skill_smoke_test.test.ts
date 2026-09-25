@@ -334,54 +334,62 @@ for (const name of SKILLS) {
 }
 
 // ---------------------------------------------------------------------------
-// 1b. The worker family stays model-invocable (STARK-6471, decided 2026-09-19).
+// 1b. Skills pinned model-invocable. A change to either decision below has to
+// change this table first.
 //
-// `agnes`, `gru` and `minion` are launched unattended: hermod hands a fresh
-// session the brief `/agnes STARK-n` as TEXT, and on a marketplace install that
-// resolves through the plugin (STARK-6469 — Claude Code's docs: the bare form
-// invokes the skill unless another command already uses the name; the real
-// Minion transcripts resolve to `stark-ops:minion`). A review that reads
-// "auto-merges and poison-pills" and reaches for `disable-model-invocation`
-// would leave that session forbidden to enter the skill it was launched to run
-// — so the flag is pinned OFF here, and a change to that decision has to change
-// this test first.
+// The worker family (STARK-6471, decided 2026-09-19): `agnes`, `gru` and
+// `minion` are launched unattended: hermod hands a fresh session the brief
+// `/agnes STARK-n` as TEXT, and on a marketplace install that resolves through
+// the plugin (STARK-6469 — Claude Code's docs: the bare form invokes the skill
+// unless another command already uses the name; the real Minion transcripts
+// resolve to `stark-ops:minion`). A review that reads "auto-merges and
+// poison-pills" and reaches for `disable-model-invocation` would leave that
+// session forbidden to enter the skill it was launched to run.
+//
+// `stark-ticket` (STARK-9471): its whole reach is its own trigger — an agent
+// about to run `alfred task new` loads it from the description, with no slash
+// command typed. Most skills here carry `disable-model-invocation: true`, so
+// adding the flag in a tidy-up would look consistent and would silently stop
+// every follow-up from being checked.
+//
+// The value match mirrors Claude Code's own coercion: a string counts when it is
+// one of 1/true/yes/on, any case, so a quoted `"true"` disables the skill as
+// surely as a bare `true`, and a trailing `# comment` does not change the value.
 // ---------------------------------------------------------------------------
 
-const WORKER_SKILLS = ["agnes", "gru", "minion"] as const;
+const WORKER_LAUNCH =
+  "an unattended launch could then never enter the skill it was launched to run (STARK-6471)";
+const MODEL_INVOCABLE_SKILLS: Record<string, string> = {
+  agnes: WORKER_LAUNCH,
+  gru: WORKER_LAUNCH,
+  minion: WORKER_LAUNCH,
+  "stark-ticket": "no agent filing a ticket would ever load it on its own (STARK-9471)",
+};
 
-for (const name of WORKER_SKILLS) {
-  test(`skill smoke: ${name} — stays model-invocable (STARK-6471)`, () => {
+const DISABLE_MODEL_INVOCATION_TRUE =
+  /^disable-model-invocation:\s*(["']?)(true|yes|on|1)\1\s*(#.*)?$/im;
+
+for (const [name, why] of Object.entries(MODEL_INVOCABLE_SKILLS)) {
+  test(`skill smoke: ${name} — stays model-invocable`, () => {
     const file = path.join(SKILLS_ROOT, name, "SKILL.md");
     assert.ok(fs.existsSync(file), `${name}: no SKILL.md at ${file}`);
     const block = fs.readFileSync(file, "utf8").match(/^---\n([\s\S]*?)\n---/);
     assert.ok(block, `${name}: SKILL.md has no frontmatter block`);
     assert.doesNotMatch(
       block![1],
-      /^disable-model-invocation:\s*(true|yes|on|1)\s*$/im,
-      `${name} carries disable-model-invocation — an unattended launch could then never enter the skill it was launched to run (STARK-6471)`,
+      DISABLE_MODEL_INVOCATION_TRUE,
+      `${name} carries disable-model-invocation — ${why}`,
     );
   });
 }
 
-// ---------------------------------------------------------------------------
-// 1c. `stark-ticket` stays model-invocable (STARK-9471).
-//
-// Its whole reach is its own trigger: an agent about to run `alfred task new`
-// loads it from the description, with no slash command typed. Most skills here
-// carry `disable-model-invocation: true`, so adding the flag in a tidy-up would
-// look consistent and would silently stop every follow-up from being checked.
-// ---------------------------------------------------------------------------
-
-test("skill smoke: stark-ticket — stays model-invocable (STARK-9471)", () => {
-  const file = path.join(SKILLS_ROOT, "stark-ticket", "SKILL.md");
-  assert.ok(fs.existsSync(file), `stark-ticket: no SKILL.md at ${file}`);
-  const block = fs.readFileSync(file, "utf8").match(/^---\n([\s\S]*?)\n---/);
-  assert.ok(block, "stark-ticket: SKILL.md has no frontmatter block");
-  assert.doesNotMatch(
-    block![1],
-    /^disable-model-invocation:\s*(true|yes|on|1)\s*$/im,
-    "stark-ticket carries disable-model-invocation — no agent filing a ticket would ever load it on its own (STARK-9471)",
-  );
+test("skill smoke: the model-invocable guard catches every truthy spelling", () => {
+  for (const value of ["true", "True", '"true"', "'yes'", "on", "1", "true  # tidy-up"]) {
+    assert.match(`disable-model-invocation: ${value}`, DISABLE_MODEL_INVOCATION_TRUE, value);
+  }
+  for (const value of ["false", '"false"', "no", "0"]) {
+    assert.doesNotMatch(`disable-model-invocation: ${value}`, DISABLE_MODEL_INVOCATION_TRUE, value);
+  }
 });
 
 // The shared help protocol every skill points at must exist.
