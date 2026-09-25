@@ -363,6 +363,27 @@ for (const name of WORKER_SKILLS) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// 1c. `stark-ticket` stays model-invocable (STARK-9471).
+//
+// Its whole reach is its own trigger: an agent about to run `alfred task new`
+// loads it from the description, with no slash command typed. Most skills here
+// carry `disable-model-invocation: true`, so adding the flag in a tidy-up would
+// look consistent and would silently stop every follow-up from being checked.
+// ---------------------------------------------------------------------------
+
+test("skill smoke: stark-ticket — stays model-invocable (STARK-9471)", () => {
+  const file = path.join(SKILLS_ROOT, "stark-ticket", "SKILL.md");
+  assert.ok(fs.existsSync(file), `stark-ticket: no SKILL.md at ${file}`);
+  const block = fs.readFileSync(file, "utf8").match(/^---\n([\s\S]*?)\n---/);
+  assert.ok(block, "stark-ticket: SKILL.md has no frontmatter block");
+  assert.doesNotMatch(
+    block![1],
+    /^disable-model-invocation:\s*(true|yes|on|1)\s*$/im,
+    "stark-ticket carries disable-model-invocation — no agent filing a ticket would ever load it on its own (STARK-9471)",
+  );
+});
+
 // The shared help protocol every skill points at must exist.
 test("skill smoke: standards/help.md exists", () => {
   assert.ok(

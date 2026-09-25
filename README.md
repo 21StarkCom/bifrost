@@ -61,6 +61,7 @@ Author a spec you have actually gated, then implement from it autonomously.
 |-------|-------------|-------------|
 | [`/stark-author`](skill/stark-author/SKILL.md) | Human-gated spec + task DAG in one session | Starting anything non-trivial. Time-boxed recon, structured interview, then a spec you sign off on before a line is written. |
 | [`/stark-build`](skill/stark-build/SKILL.md) | Check-gated autonomous implementation from that spec | After the spec is accepted. One fresh session per task, gated by checks the agent cannot edit. |
+| [`/stark-ticket`](skill/stark-ticket/SKILL.md) | A ticket a fresh worker can carry to merge | Before `alfred task start`/`task new` — loads on its own. Measured premises, verification that fails for the defect, one zero-context cold read. |
 
 **Best practice:** The pipeline is two stages — `/stark-author` (you gate the spec) → `/stark-build` (checks gate the code). There is no LLM-reviewing-LLM loop between them, by design: the 2026-07-25 autopsy found those loops burned tokens without converging, and the five-stage chain they powered was demolished on 2026-07-26.
 
@@ -152,7 +153,7 @@ Each review identifies its models in the text.
 
 ```
 bifrost/
-├── skill/                        ← one dir per skill (26 × SKILL.md)
+├── skill/                        ← one dir per skill (28 × SKILL.md)
 │   ├── stark-author/SKILL.md
 │   ├── stark-persona/SKILL.md
 │   └── ...

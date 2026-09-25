@@ -1,6 +1,6 @@
 # AGENTS.md — bifrost
 
-`21StarkCom/bifrost` contains 27 runtime-neutral skills, their TypeScript tools, and a Claude Code marketplace serving seven plugins. This is a personal repository with one user.
+`21StarkCom/bifrost` contains 28 runtime-neutral skills, their TypeScript tools, and a Claude Code marketplace serving seven plugins. This is a personal repository with one user.
 
 This is the Codex/Cursor entry point. **Read [CLAUDE.md](CLAUDE.md) before changing the repo**; it is the detailed reference and wins on conflict. Keep both files consistent and limited to current structure, commands, and rules. Do not add incident narratives, migration history, or ticket records. Codex loads at most 32 KiB of project instructions, so keep this file a short index: put detail in `CLAUDE.md`.
 
@@ -33,7 +33,7 @@ This is the Codex/Cursor entry point. **Read [CLAUDE.md](CLAUDE.md) before chang
 ## Skills and plugins
 
 - Edit the canonical `skill/` and `tools/` trees; never write a Codex-specific copy. Claude Code is the only install target, Codex runs the same trees, and Codex and Gemini are also dispatched as review agents. Keep shared instructions runtime-neutral. A Claude skill invocation such as `/agnes` is `$agnes` on Codex.
-- The manifest stays at the repo root. Every plugin uses `"source": "./"` and an explicit `skills` list; the seven lists partition the 27 skills. Keep the directory named `skill/` so discovery follows those lists. Recheck discovery after a Claude CLI upgrade.
+- The manifest stays at the repo root. Every plugin uses `"source": "./"` and an explicit `skills` list; the seven lists partition the 28 skills. Keep the directory named `skill/` so discovery follows those lists. Recheck discovery after a Claude CLI upgrade.
 - When changing a skill, bump every owning plugin's manifest version **in the same PR**. Installed plugins use versioned caches: bump → merge → `/plugin update`. Direct checkout invocations read edits immediately.
 - Resolve shipped assets through `tools/asset_root_lib.ts` (`assetRoot()`); keep mutable state under `stateRoot()`. Skills use `${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/code-review}`. Do not hardcode asset subdirectories under the home fallback.
 - `tools/asset_links.ts` owns the five code-review asset links declared in `tools/asset_links_lib.ts`. Machine settings, hooks, and generated GCP scope belong to stark-workspace. Leave stark-workspace's `.envrc` block and `.worktreeinclude` entry to that provisioner; never add credential files or broad globs to `.worktreeinclude`. Claude- and Codex-managed worktrees copy its entries; a plain `git worktree add` does not, so a helper that creates one copies the named files itself.

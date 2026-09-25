@@ -138,7 +138,8 @@ Then report to Gru and stand down — both below.
 
 [The spine](../../standards/worker-spine.md#6-gaps) decides them: fix in the
 same PR when the ticket's acceptance needs it or it fits the sitting, otherwise
-`alfred task new` (unbound) and comment the link on your ticket. Then report —
+write the follow-up with `/stark-ticket`, file it with `alfred task new`
+(unbound), and comment the link on your ticket. Then report —
 `done` if the ticket still finished, `follow-up STARK-m filed, stopping` if it
 could not. Use judgement; do not ask Gru to decide.
 
