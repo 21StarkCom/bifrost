@@ -334,7 +334,7 @@ for (const name of SKILLS) {
 }
 
 // ---------------------------------------------------------------------------
-// 1b. Skills pinned model-invocable. A change to either decision below has to
+// 1b. Skills pinned model-invocable. A change to any decision below has to
 // change this table first.
 //
 // The worker family (STARK-6471, decided 2026-09-19): `agnes`, `gru` and
@@ -351,6 +351,10 @@ for (const name of SKILLS) {
 // command typed. Most skills here carry `disable-model-invocation: true`, so
 // adding the flag in a tidy-up would look consistent and would silently stop
 // every follow-up from being checked.
+//
+// `goldfinger` (STARK-9636): the same reach problem. An agent that needs a
+// native app with no API finds the goldfinger CLI only through this skill's
+// description; with the flag it would never learn the tool exists.
 //
 // The value match mirrors Claude Code's own coercion: a string counts when it is
 // one of 1/true/yes/on, any case, so a quoted `"true"` disables the skill as
