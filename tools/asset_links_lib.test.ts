@@ -202,9 +202,6 @@ test("a linked git worktree is recognised, and a main checkout / submodule is no
   assert.equal(linkedWorktreeMainCheckout(sub), null, "a submodule is not a worktree");
 
   assert.equal(linkedWorktreeMainCheckout(tmp("no-git")), null, "no .git at all is not a worktree");
-
-  // The real checkout this suite runs in is the main one, so the CLI is usable.
-  assert.equal(linkedWorktreeMainCheckout(REPO_ROOT), null);
 });
 
 // ---------------------------------------------------------------------------
@@ -572,7 +569,7 @@ function runCli(home: string, args: string[]) {
   return { ...r, output: (r.stdout ?? "") + (r.stderr ?? "") };
 }
 
-test("the CLI gates on --check and heals with --install", () => {
+test("the CLI gates on --check and heals or refuses --install according to the checkout", () => {
   const home = synthHome();
 
   const before = runCli(home, ["--check"]);
@@ -580,6 +577,12 @@ test("the CLI gates on --check and heals with --install", () => {
   assert.match(before.output, /PROBLEMS/);
 
   const install = runCli(home, ["--install"]);
+  if (linkedWorktreeMainCheckout(REPO_ROOT) !== null) {
+    assert.equal(install.status, 2, install.output);
+    assert.match(install.output, /refusing to --install from a linked git worktree/);
+    assert.deepEqual(fs.readdirSync(home), [], "a refused install must not write to $HOME");
+    return;
+  }
   assert.equal(install.status, 0, install.output);
 
   const after = runCli(home, ["--check", "--json"]);
