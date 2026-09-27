@@ -20,8 +20,8 @@ This is the Codex/Cursor entry point. **Read [CLAUDE.md](CLAUDE.md) before chang
 
 ## Development and shipping
 
-- Open or bind an **alfred ticket before editing**. Record the goal, scope, acceptance criteria, affected files, and verification there.
-- Every change follows **ticket → branch → draft PR → `/code-review xhigh --fix` → address every finding → `idun gh pr-merge` → close the ticket**. Never commit or push directly to `main`. Close the ticket yourself immediately after the squash merge.
+- For work that clears the root ticket bar (`~/Code/CLAUDE.md`), open or bind an **alfred ticket before editing**, and record the goal, scope, acceptance criteria, affected files, and verification there. A smaller change needs no ticket: open its PR with `idun gh pr-open --no-ticket`.
+- Every change follows **[ticket →] branch → draft PR → `/code-review xhigh --fix` → address every finding → `idun gh pr-merge` → close the ticket, if there is one**. Never commit or push directly to `main`. Close the ticket yourself immediately after the squash merge.
 - Open PRs with `idun gh pr-open`. The merge command marks a draft ready, waits for green checks, and squash-merges. Merge once green; no rollout ceremony. For target repos, [skip-draft-guard.md](standards/workflows/skip-draft-guard.md) keeps CI off drafts; never apply it to a required check.
 - Use `gh` as `aryeh-stark` for PR actions. Review text identifies the model. `idun user` is human-invoked only; follow the operator's account-rotation rules for rate limits.
 - Publish every review's findings with `tools/findings_review_post.ts`: inline where anchored, in the body otherwise. Preserve every finding and its severity. Fix findings or explain their disposition on the thread; never resolve another reviewer's thread yourself.
