@@ -29,11 +29,11 @@ The five `~/.claude/code-review/{tools,scripts,standards,prompts,config.json}` s
 - `docs/operations/` — `branch-protection.md` (what `main` gates on, and the operator-only ruleset commands) and `source-entrypoint-help-audit.md` (the entrypoint inventory `tools/source_help.test.ts` checks against).
 - `.github/workflows/` — `ci.yml` and `secret-scan.yml`. Both are `permissions: contents: read`; no workflow in this repo holds a write permission or an App credential.
 - `.claude-plugin/marketplace.json` — the manifest. Hand-curated; must stay at the root.
-- `.stark-gh.json` — `idun gh` config: PR titles carry a `STARK-n` ticket scope.
+- `.stark-gh.json` — `idun gh` config: PR titles carry a `STARK-n` ticket scope, except a `--no-ticket` PR (labeled `no-ticket`; work below the root ticket bar), whose title must carry none.
 
 ## Shipping
 
-- **Every change follows the spine:** alfred ticket → branch → draft PR → `/code-review xhigh --fix` → fix every finding → `idun gh pr-merge` (un-drafts, waits for green, squash-merges) → `alfred task move STARK-<n> done`. Never commit or push to `main`. No soak, canary or rollout ceremony — merge once green.
+- **Every change follows the spine:** [alfred ticket →] branch → draft PR → `/code-review xhigh --fix` → fix every finding → `idun gh pr-merge` (un-drafts, waits for green, squash-merges) → `alfred task move STARK-<n> done` when there is a ticket. Only work that clears the root ticket bar (`~/Code/CLAUDE.md`) gets a ticket; any other change opens with `idun gh pr-open --no-ticket` from a branch that names no ticket. Never commit or push to `main`. No soak, canary or rollout ceremony — merge once green.
 - **Every PR action uses `gh` as `aryeh-stark`**, review posting included. Review text names the model; authentication never changes with model choice. Two identity swaps exist, both the operator's and neither ever run by a tool, skill or hook: the rate-limit `gh auth switch` to `aryeh-evinced` from `~/Code/CLAUDE.md` (machine-wide, with its own switch-back timer; `preflight.ts`'s `check_github_user` refuses until it flips back, which is not a broken login), and `export GH_TOKEN=$(idun user --swap)` for one rate-limited command, reverted with `unset GH_TOKEN GITHUB_TOKEN STARK_GH_USER` as soon as that command is done or later PR activity authors as the relief account.
 - **Review findings go on the PR** — inline where anchored, in the review body otherwise — via `tools/findings_review_post.ts`. Don't drop, downgrade or summarize findings away; fix them or reply on the thread saying why not. Never resolve another reviewer's thread yourself.
 - **Verify live.** A flow that touches GCP or GitHub is exercised against the real surface. Show the command and its output.
