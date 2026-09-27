@@ -130,12 +130,12 @@ asserts by walking for `.sh` and comparing against its list.
 Three sets of rows are gone from these tables because their files left this
 tree: the cmux auto-rename `SessionStart` hook (`config/cmux-autoname.sh`), the
 statusline (`config/statusline-command.sh`, its prompt and stop hooks, and
-`statusline_setup.ts`) and `gcp_scope.ts` all **moved** to the stark-workspace
+`statusline_setup.ts`) and `gcp_scope.ts` all **moved** to the idavoll
 repo, which owns machine setup. Their help guards went with them and are that
 repo's to keep covered; this audit no longer probes them. Nothing here invokes
 them. The Claude Code settings template that wired them is gone from this tree
 too, and with it the inline hooks the exclusions below used to list: that
-template is machine configuration, owned by the stark-workspace repo.
+template is machine configuration, owned by the idavoll repo.
 
 The Codex counterparts those rows used to carry are gone with
 `runtime-overrides/codex/`, along with the four executable tool replacements it

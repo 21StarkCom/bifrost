@@ -472,7 +472,7 @@ test("stateRoot()'s audit/, history/ and locks/ are untouched and the dir is nev
 // ---------------------------------------------------------------------------
 
 // The statusline scripts, their prompt/stop hooks and the Concrete output style
-// used to be rows here. They moved to the stark-workspace repo, which links them
+// used to be rows here. They moved to the idavoll repo, which links them
 // into `~/.claude` itself, so they are neither managed NOR retired: a managed row
 // would repoint a correctly installed link back at this checkout, and a retired
 // one would make `--check` report it as a problem on every provisioned machine.
