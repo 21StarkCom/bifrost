@@ -334,7 +334,7 @@ for (const name of SKILLS) {
 }
 
 // ---------------------------------------------------------------------------
-// 1b. Skills pinned model-invocable. A change to either decision below has to
+// 1b. Skills pinned model-invocable. A change to any decision below has to
 // change this table first.
 //
 // The worker family (STARK-6471, decided 2026-09-19): `agnes`, `gru` and
@@ -352,6 +352,10 @@ for (const name of SKILLS) {
 // adding the flag in a tidy-up would look consistent and would silently stop
 // every follow-up from being checked.
 //
+// `goldfinger` (STARK-9636): the same reach problem. An agent that needs a
+// native app with no API finds the goldfinger CLI only through this skill's
+// description; with the flag it would never learn the tool exists.
+//
 // The value match mirrors Claude Code's own coercion: a string counts when it is
 // one of 1/true/yes/on, any case, so a quoted `"true"` disables the skill as
 // surely as a bare `true`, and a trailing `# comment` does not change the value.
@@ -364,6 +368,7 @@ const MODEL_INVOCABLE_SKILLS: Record<string, string> = {
   gru: WORKER_LAUNCH,
   minion: WORKER_LAUNCH,
   "stark-ticket": "no agent filing a ticket would ever load it on its own (STARK-9471)",
+  goldfinger: "an agent that needs a native app would never find the goldfinger CLI on its own (STARK-9636)",
 };
 
 const DISABLE_MODEL_INVOCATION_TRUE =
