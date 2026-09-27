@@ -464,3 +464,49 @@ test("writePrOpenFields: every outcome renders exactly one 'ticket fields: ' lin
   }
   assert.deepEqual(reports.map((r) => r.wrote), [true, false, false, false]);
 });
+
+// ── no-ticket PRs (STARK-9726) ──────────────────────────────────────────────
+
+const NO_TICKET_SKIP = {
+  wrote: false,
+  ticket: null,
+  source: "none",
+  fields: [],
+  line: "ticket fields: skipped (no-ticket PR) — pr_url, pr_state",
+};
+
+test("writePrOpenFields: a no-ticket PR never lands on alfred's bound ticket", () => {
+  // The bug: adopting a no-ticket PR in a session bound to STARK-9 stamped
+  // STARK-9 with a PR that is not its own. The skip comes before every rung, so
+  // not even `repo info` runs, let alone `task edit`.
+  const { run, calls } = recorder(() => ({ code: 0, stdout: '{"ticket":"STARK-9"}', stderr: "" }));
+  const report = writePrOpenFields({
+    branch: "build/widget-system",
+    prUrl: "https://github.com/o/r/pull/326",
+    noTicket: true,
+    run,
+  });
+  assert.deepEqual(report, NO_TICKET_SKIP);
+  assert.deepEqual(calls, [], "a no-ticket PR must reach no alfred call");
+});
+
+test("writePrOpenFields: the no-ticket label wins over an explicit --ticket and a branch handle", () => {
+  // idun's rule: the label means the PR belongs to no ticket, whatever else
+  // names one.
+  const report = writePrOpenFields({
+    explicit: "STARK-7",
+    branch: "build/STARK-8-x",
+    prUrl: "https://github.com/o/r/pull/326",
+    noTicket: true,
+    run: NEVER_RUN,
+  });
+  assert.deepEqual(report, NO_TICKET_SKIP);
+});
+
+test("writePrOpenFields: noTicket false runs the ladder as before (no-ticket off)", () => {
+  const { run, calls } = recorder(() => OK);
+  const off = writePrOpenFields({ explicit: "STARK-7", prUrl: "https://u/pull/1", noTicket: false, run });
+  assert.equal(off.wrote, true);
+  assert.equal(off.ticket, "STARK-7");
+  assert.equal(calls.length, 1);
+});

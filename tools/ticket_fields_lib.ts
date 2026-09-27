@@ -42,6 +42,11 @@
  *
  *     explicit (`--ticket`) → the branch name → alfred's bound ticket → none
  *
+ * A PR labeled `no-ticket` belongs to no ticket, so `writePrOpenFields` never
+ * stamps one: the label short-circuits every rung, `--ticket` included, as it
+ * does in idun (STARK-9690). Without that, adopting such a PR in a session
+ * bound to another ticket would stamp that ticket with a PR not its own.
+ *
  * Each repo owns its own copy of this rule rather than importing a sibling's:
  * bifrost and idun do not depend on each other, and the spec chose
  * behavioral equivalence over a shared package.
@@ -402,6 +407,8 @@ export interface PrOpenFieldsInput {
   branch?: string | null;
   /** The PR's `html_url`, exactly as the create/adopt call reported it. */
   prUrl: string | null | undefined;
+  /** The PR carries the `no-ticket` label: skip before any rung of the ladder. */
+  noTicket?: boolean;
   run: FieldRun;
 }
 
@@ -425,10 +432,25 @@ export interface PrOpenFieldsReport {
  * repairs a first run whose write failed. Restricting the write to `create`
  * would make the repair impossible — the second run always adopts.
  *
+ * A `no-ticket` PR is never stamped: `noTicket` skips before the ladder runs,
+ * so no rung is consulted and `alfred` is never called, even with an explicit
+ * `--ticket`. The label wins, as it does in idun.
+ *
  * Never throws and never signals failure to the caller through anything but
  * the report: the PR verb's exit code is not this function's to move.
  */
 export function writePrOpenFields(input: PrOpenFieldsInput): PrOpenFieldsReport {
+  if (input.noTicket) {
+    // idun's skip wording, so one grep finds both repos' no-ticket skips.
+    return {
+      wrote: false,
+      ticket: null,
+      source: "none",
+      fields: [],
+      line: "ticket fields: skipped (no-ticket PR) — pr_url, pr_state",
+    };
+  }
+
   const resolution = resolveTicketForFields({
     explicit: input.explicit,
     branch: input.branch,

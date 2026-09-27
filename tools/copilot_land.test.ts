@@ -45,11 +45,18 @@ function writeStub(dir: string, name: string, body: string): void {
  *
  * `alfredRepoInfo` is the JSON `alfred repo info --json` answers with, and
  * `alfredEditExit` the exit status `alfred task edit` reports — the two knobs
- * every case below turns.
+ * every case below turns. `openPrs` is the open-PR listing `gh api` returns;
+ * empty (the default) selects the create path, one on the landed head the
+ * adopt path.
  */
 function harness(
   t: { after: (fn: () => void) => void },
-  opts: { alfredRepoInfo: string; alfredEditExit?: number; alfredEditStderr?: string },
+  opts: {
+    alfredRepoInfo: string;
+    alfredEditExit?: number;
+    alfredEditStderr?: string;
+    openPrs?: object[];
+  },
 ): Harness {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "copilot-land-fields-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -65,7 +72,7 @@ function harness(
     dir,
     "gh",
     `#!/bin/sh
-if [ "$1" = "api" ]; then echo '[[]]'; exit 0; fi
+if [ "$1" = "api" ]; then echo '${JSON.stringify([opts.openPrs ?? []])}'; exit 0; fi
 if [ "$1" = "pr" ] && [ "$2" = "create" ]; then
   echo "https://github.com/o/r/pull/123"; exit 0
 fi
@@ -315,4 +322,92 @@ test("copilot_land land: --dry-run names the ticket it could resolve offline", (
   assert.equal(unknown.ticket, null);
 
   assert.deepEqual(h.alfredCalls(), [], "a dry run must reach no subprocess");
+});
+
+// ── no-ticket PRs (STARK-9726) ──────────────────────────────────────────────
+
+/** An open PR on `branch`, as the REST listing returns it, with `labels`. */
+function openPr(branch: string, labels?: { name: string }[]): object {
+  return {
+    number: 326,
+    head: { ref: branch },
+    html_url: "https://github.com/o/r/pull/326",
+    draft: true,
+    ...(labels === undefined ? {} : { labels }),
+  };
+}
+
+const NO_TICKET_LINE = "ticket fields: skipped (no-ticket PR) — pr_url, pr_state";
+
+test("copilot_land: an adopted no-ticket PR is never stamped onto the session's bound ticket", (t) => {
+  // The bug: `land` adopted a no-ticket PR in a session bound to STARK-0000 and
+  // wrote that PR's pr_url/pr_state onto STARK-0000, a ticket it is not.
+  const h = harness(t, {
+    alfredRepoInfo: '{"ticket":"STARK-0000"}',
+    openPrs: [openPr("build/probe", [{ name: "no-ticket" }])],
+  });
+  const result = runIn(h, [...LAND_REAL, h.dir, "--branch", "build/probe", "--json"]);
+  assert.equal(result.code, 0, result.error);
+
+  const payload = JSON.parse(result.out);
+  assert.deepEqual(payload.pr, { number: 326, url: "https://github.com/o/r/pull/326", adopted: true });
+  assert.deepEqual(payload.ticket_fields, {
+    wrote: false,
+    ticket: null,
+    source: "none",
+    fields: [],
+    line: NO_TICKET_LINE,
+  });
+  assert.deepEqual(h.alfredCalls(), [], "no alfred call: not the bound-ticket probe, not the write");
+
+  // Non-JSON mode prints the same line.
+  const plain = runIn(h, [...LAND_REAL, h.dir, "--branch", "build/probe"]);
+  assert.equal(plain.code, 0, plain.error);
+  assert.ok(plain.out.split("\n").includes(NO_TICKET_LINE), plain.out);
+});
+
+test("copilot_land: a No-Ticket label wins over an explicit --ticket", (t) => {
+  const h = harness(t, {
+    alfredRepoInfo: '{"ticket":"STARK-0000"}',
+    openPrs: [openPr("build/probe", [{ name: "No-Ticket" }])],
+  });
+  const result = runIn(h, [
+    ...LAND_REAL, h.dir, "--branch", "build/probe", "--ticket", "STARK-7", "--json",
+  ]);
+  assert.equal(result.code, 0, result.error);
+  assert.equal(JSON.parse(result.out).ticket_fields.line, NO_TICKET_LINE);
+  assert.deepEqual(h.alfredCalls(), []);
+});
+
+test("copilot_land: the --json report keeps its shape for a PR without the no-ticket label", (t) => {
+  // The report is `{ok, pr, prs, ticket_fields}` with `pr` exactly
+  // `{number, url, adopted}` — the no-ticket fact feeds the stamp and is never
+  // a report field. Checked on the create path, on an adopted PR with no
+  // `labels` field, and on one whose label only looks like it (`no-ticket-yet`),
+  // where the ladder runs and alfred's bound ticket is stamped as before.
+  const cases: { name: string; openPrs: object[]; number: number; adopted: boolean }[] = [
+    { name: "created", openPrs: [], number: 123, adopted: false },
+    { name: "adopted, no labels field", openPrs: [openPr("build/probe")], number: 326, adopted: true },
+    {
+      name: "adopted, no-ticket-yet",
+      openPrs: [openPr("build/probe", [{ name: "no-ticket-yet" }])],
+      number: 326,
+      adopted: true,
+    },
+  ];
+  for (const c of cases) {
+    const h = harness(t, { alfredRepoInfo: '{"ticket":"STARK-0000"}', openPrs: c.openPrs });
+    const result = runIn(h, [...LAND_REAL, h.dir, "--branch", "build/probe", "--json"]);
+    assert.equal(result.code, 0, `${c.name}: ${result.error}`);
+
+    const payload = JSON.parse(result.out);
+    assert.deepEqual(Object.keys(payload), ["ok", "pr", "prs", "ticket_fields"], c.name);
+    assert.deepEqual(Object.keys(payload.pr), ["number", "url", "adopted"], c.name);
+    assert.equal(payload.pr.number, c.number, c.name);
+    assert.equal(payload.pr.adopted, c.adopted, c.name);
+    assert.equal(payload.ticket_fields.wrote, true, c.name);
+    assert.equal(payload.ticket_fields.ticket, "STARK-0000", c.name);
+    assert.equal(payload.ticket_fields.source, "repo-info", c.name);
+    assert.deepEqual(h.alfredCalls().at(-1)?.slice(-2), ["--json", "STARK-0000"], c.name);
+  }
 });
