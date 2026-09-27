@@ -364,7 +364,7 @@ const REFUSED_WITH_SLURP = ["--jq", "-q", "--template", "-t"];
  * invocation written there would be exactly as broken and exactly as unreported.
  *
  * `config/` was a scope until its last file left the repo: the statusline scripts
- * moved to stark-workspace and `wif-identities.json` to 21stark, so the directory
+ * moved to idavoll and `wif-identities.json` to 21stark, so the directory
  * no longer exists. The existence check below would redden on it, which is how
  * this entry was meant to go. The completeness test still reddens on any
  * scannable file written outside every remaining scope.

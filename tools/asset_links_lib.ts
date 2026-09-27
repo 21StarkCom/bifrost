@@ -110,10 +110,10 @@ export interface ManagedLink {
  * It is deliberately the `code-review` asset tree and nothing else. The
  * statusline scripts, their `UserPromptSubmit`/`Stop` hooks and the Concrete
  * output style used to be rows here; they are machine configuration, and the
- * stark-workspace repo owns them now — the files, the links to them and the
+ * idavoll repo owns them now — the files, the links to them and the
  * settings that run them. They are NOT in `RETIRED_LINKS` either, because they
  * are not retired: on a provisioned machine those paths are correctly
- * installed links into stark-workspace, and a retired row would make `--check`
+ * installed links into idavoll, and a retired row would make `--check`
  * report every one of them as a problem. This repo neither creates, repairs
  * nor reports them.
  */
