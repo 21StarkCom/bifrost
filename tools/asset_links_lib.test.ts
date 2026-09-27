@@ -5,9 +5,11 @@
 // matters, a synthetic repo too. Nothing here reads or writes the operator's real
 // `~/.claude`: this tool's whole job is rewriting symlinks in that directory, so a
 // test that used the real one would be a test that can break the machine it runs on.
-// The two exceptions are read-only and deliberate — the real repo tree is walked to
-// prove every declared target exists, and the CLI spawn tests point a temp `$HOME` at
-// the real checkout (writes land in the temp dir, reads in the repo).
+// The exceptions are read-only and deliberate — the real repo tree is walked to prove
+// every declared target exists, and the CLI spawn tests run the real CLI source against
+// a temp `$HOME`: the usage test from this checkout, the install tests from a copy
+// standing in a synthetic repo, so which side of the worktree guard runs never depends
+// on where the suite itself was run from.
 //
 // `node:` builtins only, like the rest of the suite: ci.yml's `test` job runs no
 // `npm ci`, so any other import turns a required check red on a clean tree.
@@ -37,7 +39,8 @@ import {
 } from "./asset_links_lib.ts";
 
 const REPO_ROOT = defaultRepoRoot();
-const CLI = path.join(REPO_ROOT, "tools", "asset_links.ts");
+const TOOLS_DIR = path.join(REPO_ROOT, "tools");
+const CLI = path.join(TOOLS_DIR, "asset_links.ts");
 
 const temps: string[] = [];
 function tmp(tag: string): string {
@@ -202,9 +205,36 @@ test("a linked git worktree is recognised, and a main checkout / submodule is no
   assert.equal(linkedWorktreeMainCheckout(sub), null, "a submodule is not a worktree");
 
   assert.equal(linkedWorktreeMainCheckout(tmp("no-git")), null, "no .git at all is not a worktree");
+});
 
-  // The real checkout this suite runs in is the main one, so the CLI is usable.
-  assert.equal(linkedWorktreeMainCheckout(REPO_ROOT), null);
+// The fixtures above are hand-written from the same reading of git's layout the
+// parser was built on, so they cannot notice git writing something else. Here git
+// makes the worktree, in a temp repo rather than the checkout the suite runs in,
+// so the answer does not depend on where the suite was run from.
+test("a worktree made by real git is recognised, and its main checkout is not", () => {
+  // No GIT_* from the caller (a hook that runs the suite exports GIT_DIR, which
+  // would aim these commands at the enclosing repo) and none of the operator's
+  // config (signing, hooks, relative worktree paths); identity comes from here.
+  const env: NodeJS.ProcessEnv = {
+    ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_"))),
+    GIT_CONFIG_GLOBAL: os.devNull,
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_AUTHOR_NAME: "asset-links-test",
+    GIT_AUTHOR_EMAIL: "asset-links-test@example.invalid",
+    GIT_COMMITTER_NAME: "asset-links-test",
+    GIT_COMMITTER_EMAIL: "asset-links-test@example.invalid",
+  };
+  const main = tmp("git-main");
+  const wt = path.join(tmp("git-worktree"), "wt");
+  for (const args of [["init", "-q"], ["commit", "-q", "--allow-empty", "-m", "init"], ["worktree", "add", "-q", wt]]) {
+    const r = spawnSync("git", args, { cwd: main, env, encoding: "utf8" });
+    assert.equal(r.status, 0, `git ${args.join(" ")}: ${r.stderr}`);
+  }
+
+  assert.equal(linkedWorktreeMainCheckout(main), null, "git's own main checkout must not be refused");
+  const found = linkedWorktreeMainCheckout(wt);
+  assert.ok(found !== null, `git's worktree .git file was not recognised: ${fs.readFileSync(path.join(wt, ".git"), "utf8")}`);
+  assert.equal(fs.realpathSync(found), fs.realpathSync(main));
 });
 
 // ---------------------------------------------------------------------------
@@ -563,36 +593,86 @@ test("reportToJson carries status, outcome and the retired rows", () => {
   assert.equal(json.retired[0]!.present, false);
 });
 
-/** Runs the real CLI against a temp `$HOME` and the real checkout. */
-function runCli(home: string, args: string[]) {
-  const r = spawnSync(process.execPath, [CLI, ...args], {
+/** Runs the CLI — this checkout's, unless `cli` names a copy — against a temp `$HOME`. */
+function runCli(home: string, args: string[], cli = CLI) {
+  const r = spawnSync(process.execPath, [cli, ...args], {
     encoding: "utf8",
     env: { ...process.env, HOME: home, NO_COLOR: "1" },
   });
   return { ...r, output: (r.stdout ?? "") + (r.stderr ?? "") };
 }
 
-test("the CLI gates on --check and heals with --install", () => {
-  const home = synthHome();
+/**
+ * A runnable copy of the CLI standing in a synthetic repo whose `.git` makes it a
+ * main checkout, or a linked worktree of `worktreeOf`. The CLI takes its repo root
+ * from where it was loaded, so run from this checkout it would exercise whichever
+ * side of the worktree guard the suite happened to be run from — CI is always a
+ * main checkout, and agents are nearly always in a worktree — leaving the other
+ * side unpinned there.
+ */
+function synthCliRepo(worktreeOf?: string): { root: string; cli: string } {
+  const root = synthRepo();
+  // `tools` is itself a managed target, so synthRepo has already made it.
+  const toolDir = path.join(root, "tools");
+  for (const name of ["package.json", "asset_links.ts", "asset_links_lib.ts", "cli_args_lib.ts", "main_module_lib.ts"]) {
+    fs.copyFileSync(path.join(TOOLS_DIR, name), path.join(toolDir, name));
+  }
+  if (worktreeOf === undefined) {
+    fs.mkdirSync(path.join(root, ".git"));
+  } else {
+    fs.writeFileSync(path.join(root, ".git"), `gitdir: ${path.join(worktreeOf, ".git", "worktrees", "feature")}\n`);
+  }
+  return { root, cli: path.join(toolDir, "asset_links.ts") };
+}
 
-  const before = runCli(home, ["--check"]);
+test("the CLI gates on --check and heals with --install from a main checkout", () => {
+  const home = synthHome();
+  const { root, cli } = synthCliRepo();
+
+  const before = runCli(home, ["--check"], cli);
   assert.equal(before.status, 1, "a clean home must FAIL --check — that is what makes it usable as a gate");
   assert.match(before.output, /PROBLEMS/);
+  assert.doesNotMatch(before.output, /linked git worktree/, "a main checkout was reported as a worktree");
 
-  const install = runCli(home, ["--install"]);
+  const install = runCli(home, ["--install"], cli);
   assert.equal(install.status, 0, install.output);
 
-  const after = runCli(home, ["--check", "--json"]);
+  const after = runCli(home, ["--check", "--json"], cli);
   assert.equal(after.status, 0, after.output);
   const json = JSON.parse(after.stdout) as { ok: boolean; home: string; links: { status: string }[] };
   assert.equal(json.ok, true);
   assert.equal(json.home, home);
   assert.ok(json.links.every((l) => l.status === "ok"));
 
-  // Every write landed in the temp home, pointing at the real checkout.
+  // Every write landed in the temp home, pointing at the tree the CLI ran from.
   for (const row of MANAGED_LINKS) {
-    assert.equal(fs.realpathSync(linkPathFor(row, home)), fs.realpathSync(targetPathFor(row, REPO_ROOT)));
+    assert.equal(fs.realpathSync(linkPathFor(row, home)), fs.realpathSync(targetPathFor(row, root)));
   }
+});
+
+test("the CLI refuses --install from a linked worktree, and --check there still reports", () => {
+  const home = synthHome();
+  const main = tmp("main-checkout");
+  fs.mkdirSync(path.join(main, ".git"));
+  const { cli } = synthCliRepo(main);
+
+  const install = runCli(home, ["--install"], cli);
+  assert.equal(install.status, 2, install.output);
+  assert.match(install.output, /refusing to --install from a linked git worktree/);
+  assert.ok(
+    install.output.includes(`Run it from the main checkout: ${main}\n`),
+    `the refusal must name the checkout to run from:\n${install.output}`,
+  );
+  assert.deepEqual(fs.readdirSync(home), [], "a refused install must not write to $HOME");
+
+  const check = runCli(home, ["--check"], cli);
+  assert.equal(check.status, 1, check.output);
+  assert.match(check.output, /PROBLEMS/);
+  assert.ok(
+    check.output.includes(`the machine's links are expected to point at ${main}\n`),
+    `--check from a worktree must say where the links belong:\n${check.output}`,
+  );
+  assert.deepEqual(fs.readdirSync(home), [], "--check must not write to $HOME");
 });
 
 test("the CLI refuses a missing, doubled or unknown mode rather than doing something", () => {
