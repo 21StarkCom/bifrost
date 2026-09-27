@@ -4,7 +4,9 @@
 // REAL PR with an empty description), and `--lead` defaulted to "claude" in the `--dry-run`
 // plan even when unset, contradicting the header that calls the flag inert.
 //
-// Every case here is `--dry-run` or a pre-flight refusal, so no case reaches git or gh.
+// The argument-surface cases are `--dry-run` or a pre-flight refusal, so they reach no git
+// or gh. The ticket-field cases below run the real `land` path, against stub git/gh/alfred
+// on a PATH holding nothing else.
 
 import { strict as assert } from "node:assert";
 import { spawnSync } from "node:child_process";
@@ -67,12 +69,18 @@ function harness(
   writeStub(dir, "git", `#!/bin/sh\n[ "$1" = "rev-parse" ] && exit 1\nexit 0\n`);
 
   // `gh api .../pulls?...` is slurped, so it must print an ARRAY OF ARRAYS;
-  // empty means no open PR for the head, which selects the create path.
+  // empty means no open PR for the head, which selects the create path. The
+  // listing is read back from a file (builtins only: PATH holds no `cat`)
+  // rather than interpolated into the script: a `'` in any value would end the
+  // quoting, and dash's `echo` (ubuntu's /bin/sh) rewrites backslash escapes,
+  // either of which corrupts the JSON.
+  const listing = path.join(dir, "open-prs.json");
+  fs.writeFileSync(listing, JSON.stringify([opts.openPrs ?? []]) + "\n");
   writeStub(
     dir,
     "gh",
     `#!/bin/sh
-if [ "$1" = "api" ]; then echo '${JSON.stringify([opts.openPrs ?? []])}'; exit 0; fi
+if [ "$1" = "api" ]; then while IFS= read -r line; do printf '%s\\n' "$line"; done < "${listing}"; exit 0; fi
 if [ "$1" = "pr" ] && [ "$2" = "create" ]; then
   echo "https://github.com/o/r/pull/123"; exit 0
 fi
@@ -360,10 +368,12 @@ test("copilot_land: an adopted no-ticket PR is never stamped onto the session's 
   });
   assert.deepEqual(h.alfredCalls(), [], "no alfred call: not the bound-ticket probe, not the write");
 
-  // Non-JSON mode prints the same line.
+  // Non-JSON mode prints the same line, and reaches alfred no more than JSON
+  // mode did.
   const plain = runIn(h, [...LAND_REAL, h.dir, "--branch", "build/probe"]);
   assert.equal(plain.code, 0, plain.error);
   assert.ok(plain.out.split("\n").includes(NO_TICKET_LINE), plain.out);
+  assert.deepEqual(h.alfredCalls(), [], "non-JSON mode must reach no alfred call either");
 });
 
 test("copilot_land: a No-Ticket label wins over an explicit --ticket", (t) => {
@@ -375,7 +385,12 @@ test("copilot_land: a No-Ticket label wins over an explicit --ticket", (t) => {
     ...LAND_REAL, h.dir, "--branch", "build/probe", "--ticket", "STARK-7", "--json",
   ]);
   assert.equal(result.code, 0, result.error);
-  assert.equal(JSON.parse(result.out).ticket_fields.line, NO_TICKET_LINE);
+  // The overridden --ticket is named, so the operator sees which ticket went
+  // unstamped and why.
+  assert.equal(
+    JSON.parse(result.out).ticket_fields.line,
+    `${NO_TICKET_LINE}; the label overrides STARK-7 (ticket from explicit)`,
+  );
   assert.deepEqual(h.alfredCalls(), []);
 });
 
