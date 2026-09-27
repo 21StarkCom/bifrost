@@ -525,6 +525,9 @@ async function cmdLand(argv: string[]): Promise<number> {
       // `ticket ?? ticketFromBranch(branch)` looked equivalent and was not: it
       // echoed `--ticket stark-77` raw while the real run writes `STARK-77`,
       // so the plan named a ticket the act did not.
+      // One thing a plan cannot see: the PR's labels, since it lists no PRs.
+      // An adopted PR labeled `no-ticket` is stamped with nothing, whatever
+      // ticket this names; only the real run reads the label.
       ticket: resolveTicketForFields({
         explicit: ticket,
         branch,
@@ -595,7 +598,7 @@ async function cmdLand(argv: string[]): Promise<number> {
   // on BOTH the create and the adopt path — see `writePrOpenFields`. This can
   // only ever add a line to the report: the PR is already open, and a field
   // write is never allowed to change this command's exit code. An adopted
-  // `no-ticket` PR is skipped before the ladder, so it never lands on the
+  // `no-ticket` PR is skipped before any alfred call, so it never lands on the
   // session's bound ticket.
   const fieldsReport = writePrOpenFields({
     explicit: ticket,

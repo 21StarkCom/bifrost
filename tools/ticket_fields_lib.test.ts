@@ -477,8 +477,8 @@ const NO_TICKET_SKIP = {
 
 test("writePrOpenFields: a no-ticket PR never lands on alfred's bound ticket", () => {
   // The bug: adopting a no-ticket PR in a session bound to STARK-9 stamped
-  // STARK-9 with a PR that is not its own. The skip comes before every rung, so
-  // not even `repo info` runs, let alone `task edit`.
+  // STARK-9 with a PR that is not its own. The skip comes before any alfred
+  // call, so not even `repo info` runs, let alone `task edit`.
   const { run, calls } = recorder(() => ({ code: 0, stdout: '{"ticket":"STARK-9"}', stderr: "" }));
   const report = writePrOpenFields({
     branch: "build/widget-system",
@@ -491,16 +491,37 @@ test("writePrOpenFields: a no-ticket PR never lands on alfred's bound ticket", (
 });
 
 test("writePrOpenFields: the no-ticket label wins over an explicit --ticket and a branch handle", () => {
-  // idun's rule: the label means the PR belongs to no ticket, whatever else
-  // names one.
+  // The label means the PR belongs to no ticket, whatever else names one. The
+  // ticket it overrode is named on the line, so the override is never silent.
   const report = writePrOpenFields({
-    explicit: "STARK-7",
+    explicit: "stark-7",
     branch: "build/STARK-8-x",
     prUrl: "https://github.com/o/r/pull/326",
     noTicket: true,
     run: NEVER_RUN,
   });
-  assert.deepEqual(report, NO_TICKET_SKIP);
+  assert.deepEqual(report, {
+    ...NO_TICKET_SKIP,
+    line:
+      "ticket fields: skipped (no-ticket PR) — pr_url, pr_state; " +
+      "the label overrides STARK-7 (ticket from explicit)",
+  });
+});
+
+test("writePrOpenFields: a no-ticket PR on a branch naming a ticket names it, and calls no alfred", () => {
+  const report = writePrOpenFields({
+    branch: "build/STARK-8-x",
+    prUrl: "https://github.com/o/r/pull/326",
+    noTicket: true,
+    run: NEVER_RUN,
+  });
+  assert.equal(
+    report.line,
+    "ticket fields: skipped (no-ticket PR) — pr_url, pr_state; " +
+      "the label overrides STARK-8 (ticket from branch)",
+  );
+  assert.equal(report.wrote, false);
+  assert.equal(report.ticket, null, "nothing was stamped, so no ticket is reported");
 });
 
 test("writePrOpenFields: noTicket false runs the ladder as before (no-ticket off)", () => {
