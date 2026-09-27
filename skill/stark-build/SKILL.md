@@ -142,9 +142,10 @@ State lives OUTSIDE the repo:
    `alfred task edit --field` (STARK-6108). **Pass `--ticket STARK-n` when the
    spec names its ticket** — `build/<slug>` carries no handle, so without the
    flag the ticket comes from `alfred repo info --json` run in `<wt>`, i.e.
-   whatever session record that worktree resolves to. The write never changes
-   this command's exit code: every failure is one `ticket fields: skipped (…)`
-   line in the report.
+   whatever session record that worktree resolves to. An adopted PR labeled
+   `no-ticket` is never stamped, and `--ticket` does not override that. The
+   write never changes this command's exit code: every failure is one
+   `ticket fields: skipped (…)` line in the report.
 3. **Harness files:** copy this skill's
    [references/hooks/protect-paths.sh](references/hooks/protect-paths.sh) and
    [references/hooks/stop-gate.sh](references/hooks/stop-gate.sh) into
