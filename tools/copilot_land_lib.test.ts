@@ -4,6 +4,7 @@ import * as assert from "node:assert/strict";
 import {
   buildPushArgs,
   deriveImplBranch,
+  isNoTicketPr,
   landImpl,
   mergePrNumbers,
   type LandDeps,
@@ -312,5 +313,88 @@ describe("landImpl — adopt path un-drafts on --ready (Important finding fix)",
         deps,
       ),
     );
+  });
+});
+
+// --- isNoTicketPr: the label that keeps a PR off every ticket (STARK-9726) ---
+
+describe("isNoTicketPr — matched as idun matches it", () => {
+  const withLabels = (labels: { name?: string }[] | undefined) => ({ number: 1, labels });
+
+  test("no-ticket: the label name is case-insensitive", () => {
+    assert.equal(isNoTicketPr(withLabels([{ name: "No-Ticket" }])), true);
+    assert.equal(isNoTicketPr(withLabels([{ name: "no-ticket" }])), true);
+  });
+
+  test("no-ticket: a label padded with spaces is still the label", () => {
+    assert.equal(isNoTicketPr(withLabels([{ name: " no-ticket " }])), true);
+  });
+
+  test("no-ticket-yet is not the no-ticket label: the whole name must match", () => {
+    assert.equal(isNoTicketPr(withLabels([{ name: "no-ticket-yet" }])), false);
+    assert.equal(isNoTicketPr(withLabels([{ name: "not-no-ticket" }])), false);
+  });
+
+  test("no-ticket: a PR with no labels field, or a malformed one, is not a no-ticket PR", () => {
+    assert.equal(isNoTicketPr(withLabels(undefined)), false);
+    assert.equal(isNoTicketPr(withLabels([])), false);
+    assert.equal(isNoTicketPr(withLabels([{}])), false);
+    assert.equal(isNoTicketPr({ number: 1, labels: "no-ticket" } as never), false);
+    assert.equal(isNoTicketPr({ number: 1, labels: [null] } as never), false);
+    assert.equal(isNoTicketPr(null), false);
+  });
+
+  test("no-ticket: one matching label among others is enough", () => {
+    assert.equal(isNoTicketPr(withLabels([{ name: "docs" }, { name: "no-ticket" }])), true);
+  });
+});
+
+describe("landImpl — reports whether the landed PR is a no-ticket PR", () => {
+  const input = {
+    branch: "build/widget-system",
+    base: "main",
+    title: "t",
+    body: "b",
+    ready: false,
+    hasUpstream: true,
+    knownPrs: [],
+  };
+
+  test("an adopted PR labeled no-ticket reports noTicket, and the landed pr keeps its shape", async () => {
+    const { deps } = makeDeps({
+      listOpenPrs: async () => [
+        {
+          number: 326,
+          head: { ref: "build/widget-system" },
+          html_url: "https://github.com/o/r/pull/326",
+          labels: [{ name: "no-ticket" }],
+        },
+      ],
+    });
+    const result = await landImpl(input, deps);
+    assert.equal(result.noTicket, true);
+    assert.deepEqual(result.pr, { number: 326, url: "https://github.com/o/r/pull/326", adopted: true });
+  });
+
+  test("no-ticket: an adopted PR without the label, and a created PR, report noTicket false", async () => {
+    const adopted = makeDeps({
+      listOpenPrs: async () => [
+        {
+          number: 812,
+          head: { ref: "build/widget-system" },
+          html_url: "https://github.com/o/r/pull/812",
+          labels: [{ name: "no-ticket-yet" }],
+        },
+      ],
+    });
+    assert.equal((await landImpl(input, adopted.deps)).noTicket, false);
+
+    // Only another head's PR carries the label, so this run creates its own.
+    const created = makeDeps({
+      listOpenPrs: async () => [{ number: 5, head: { ref: "other" }, labels: [{ name: "no-ticket" }] }],
+    });
+    const result = await landImpl(input, created.deps);
+    assert.equal(result.pr.adopted, false);
+    assert.equal(result.noTicket, false);
   });
 });

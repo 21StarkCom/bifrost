@@ -42,9 +42,10 @@
  *                  only by `--dry-run`. It selects nothing.
  *                  Then stamps `pr_url` + `pr_state=open` on the ticket via
  *                  `alfred task edit --field` (STARK-6108) — `--ticket`, else
- *                  the branch name, else alfred's bound ticket. That write can
- *                  never fail the landing: every failure prints one
- *                  `ticket fields: skipped (…)` line and the exit code stands.
+ *                  the branch name, else alfred's bound ticket. An adopted PR
+ *                  labeled `no-ticket` is never stamped, `--ticket` or not.
+ *                  That write can never fail the landing: every failure prints
+ *                  one `ticket fields: skipped (…)` line and the exit code stands.
  *
  * Arg-parsing house style: explicit boolean/value flag sets, unknown flags are a
  * hard error, and every refusal prints through `fail()` so `--json` callers get
@@ -176,7 +177,8 @@ Notes:
     with the landed/adopted number, never treated as a conflict.
   - land stamps pr_url + pr_state=open on the ticket through
     'alfred task edit --field'. The ticket is --ticket, else the one the
-    branch names, else alfred's bound ticket. A skip prints one
+    branch names, else alfred's bound ticket. An adopted PR labeled
+    no-ticket is never stamped, even with --ticket. A skip prints one
     'ticket fields: skipped (...)' line; it never changes the exit code.
 `;
 
@@ -523,6 +525,9 @@ async function cmdLand(argv: string[]): Promise<number> {
       // `ticket ?? ticketFromBranch(branch)` looked equivalent and was not: it
       // echoed `--ticket stark-77` raw while the real run writes `STARK-77`,
       // so the plan named a ticket the act did not.
+      // One thing a plan cannot see: the PR's labels, since it lists no PRs.
+      // An adopted PR labeled `no-ticket` is stamped with nothing, whatever
+      // ticket this names; only the real run reads the label.
       ticket: resolveTicketForFields({
         explicit: ticket,
         branch,
@@ -592,11 +597,14 @@ async function cmdLand(argv: string[]): Promise<number> {
   // AFTER landImpl, so the URL it writes is the one that actually exists, and
   // on BOTH the create and the adopt path — see `writePrOpenFields`. This can
   // only ever add a line to the report: the PR is already open, and a field
-  // write is never allowed to change this command's exit code.
+  // write is never allowed to change this command's exit code. An adopted
+  // `no-ticket` PR is skipped before any alfred call, so it never lands on the
+  // session's bound ticket.
   const fieldsReport = writePrOpenFields({
     explicit: ticket,
     branch,
     prUrl: result.pr.url,
+    noTicket: result.noTicket,
     run: (cmd, args) =>
       cmd === "alfred"
         ? alfred(args, cwd)
@@ -604,8 +612,14 @@ async function cmdLand(argv: string[]): Promise<number> {
   });
 
   if (json) {
+    // Named keys, not `...result`: `noTicket` feeds the stamp above and is not
+    // part of the report, whose shape callers parse.
     process.stdout.write(
-      JSON.stringify({ ok: true, ...result, ticket_fields: fieldsReport }, null, 2) + "\n",
+      JSON.stringify(
+        { ok: true, pr: result.pr, prs: result.prs, ticket_fields: fieldsReport },
+        null,
+        2,
+      ) + "\n",
     );
   } else {
     process.stdout.write(

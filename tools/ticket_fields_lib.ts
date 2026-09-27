@@ -42,6 +42,15 @@
  *
  *     explicit (`--ticket`) → the branch name → alfred's bound ticket → none
  *
+ * A PR labeled `no-ticket` belongs to no ticket, so `writePrOpenFields` never
+ * stamps one: the label short-circuits every rung, `--ticket` included. idun
+ * never stamps one either (STARK-9690), but it gets there differently: its
+ * pr-merge skips on the label, and its pr-open REFUSES a no-ticket PR whose
+ * branch or title names a ticket. A landing cannot refuse (rule 1), so here
+ * the label wins and the skip line names the ticket it overrode (rule 2).
+ * Without the skip, adopting such a PR in a session bound to another ticket
+ * would stamp that ticket with a PR not its own.
+ *
  * Each repo owns its own copy of this rule rather than importing a sibling's:
  * bifrost and idun do not depend on each other, and the spec chose
  * behavioral equivalence over a shared package.
@@ -395,6 +404,13 @@ export function writeTicketFields(
 
 // ── The one entry point a PR-opening caller uses ────────────────────────────
 
+/**
+ * The line a `no-ticket` PR's skip starts with. It leads with idun's own
+ * `ticket fields: skipped (no-ticket PR)`, so one grep finds both repos'
+ * no-ticket skips.
+ */
+export const NO_TICKET_SKIP_LINE = "ticket fields: skipped (no-ticket PR) — pr_url, pr_state";
+
 export interface PrOpenFieldsInput {
   /** `--ticket`, when supplied. */
   explicit?: string | null;
@@ -402,6 +418,8 @@ export interface PrOpenFieldsInput {
   branch?: string | null;
   /** The PR's `html_url`, exactly as the create/adopt call reported it. */
   prUrl: string | null | undefined;
+  /** The PR carries the `no-ticket` label: skip the write, and never call alfred. */
+  noTicket?: boolean;
   run: FieldRun;
 }
 
@@ -425,10 +443,37 @@ export interface PrOpenFieldsReport {
  * repairs a first run whose write failed. Restricting the write to `create`
  * would make the repair impossible — the second run always adopts.
  *
+ * A `no-ticket` PR is never stamped: `noTicket` skips before `alfred` is ever
+ * called, even with an explicit `--ticket`. The label wins; a ticket the
+ * caller named anyway (`--ticket`, or the branch) contradicts it, so the skip
+ * line names that ticket rather than dropping it without a sign. Only the
+ * offline rungs are read for that: the session's bound ticket says what the
+ * session holds, not what this PR is for.
+ *
  * Never throws and never signals failure to the caller through anything but
  * the report: the PR verb's exit code is not this function's to move.
  */
 export function writePrOpenFields(input: PrOpenFieldsInput): PrOpenFieldsReport {
+  if (input.noTicket) {
+    // The same ladder, with alfred's rung answered "unavailable" by a run that
+    // never spawns — so only `--ticket` and the branch can name a ticket here.
+    const named = resolveTicketForFields({
+      explicit: input.explicit,
+      branch: input.branch,
+      run: () => ({ code: -1, stdout: "", stderr: "no-ticket PR: alfred not consulted" }),
+    });
+    const override = named.ticket
+      ? `; the label overrides ${named.ticket} (ticket from ${named.source})`
+      : "";
+    return {
+      wrote: false,
+      ticket: null,
+      source: "none",
+      fields: [],
+      line: `${NO_TICKET_SKIP_LINE}${override}`,
+    };
+  }
+
   const resolution = resolveTicketForFields({
     explicit: input.explicit,
     branch: input.branch,

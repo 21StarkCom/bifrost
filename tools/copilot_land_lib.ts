@@ -50,6 +50,24 @@ export interface OpenPr {
   head?: { ref?: string };
   html_url?: string;
   draft?: boolean;
+  /** The REST listing's labels; only `name` is read (`isNoTicketPr`). */
+  labels?: { name?: string }[];
+}
+
+/**
+ * Does this PR carry the `no-ticket` label? idun's `pr-open --no-ticket` sets
+ * it on a PR that belongs to no ticket (STARK-9690), and no path stamps ticket
+ * fields for such a PR. Matched as idun matches it: the whole name, trimmed and
+ * case-insensitive, so `No-Ticket` is the label and `no-ticket-yet` is not.
+ * Tolerant of malformed entries: a missing `labels` or a nameless label is not
+ * the label.
+ */
+export function isNoTicketPr(pr: OpenPr | null | undefined): boolean {
+  const labels = pr?.labels;
+  if (!Array.isArray(labels)) return false;
+  return labels.some(
+    (label) => typeof label?.name === "string" && label.name.trim().toLowerCase() === "no-ticket",
+  );
 }
 
 /**
@@ -111,6 +129,12 @@ export interface LandResult {
   pr: LandedPr;
   /** `mergePrNumbers(knownPrs, [pr.number])` — the complete impl-PR set. */
   prs: number[];
+  /**
+   * The adopted PR carries the `no-ticket` label (`isNoTicketPr`). Always false
+   * for a PR this run created: `createPr` never labels one. It feeds the ticket
+   * field stamp only; `copilot_land.ts` keeps it out of the `--json` report.
+   */
+  noTicket: boolean;
 }
 
 /** Injected side effects — the CLI supplies real git/gh; tests stub these. */
@@ -152,6 +176,8 @@ export interface LandDeps {
  *     authored by the operator through gh.
  *  4. Union `input.knownPrs` with the landed/adopted number — re-reporting a
  *     known number is a no-op, never a conflict.
+ *  5. Report whether the adopted PR is a `no-ticket` PR, so the caller never
+ *     stamps a ticket with it.
  */
 export async function landImpl(input: LandInput, deps: LandDeps): Promise<LandResult> {
   const pushed = deps.push();
@@ -193,5 +219,9 @@ export async function landImpl(input: LandInput, deps: LandDeps): Promise<LandRe
     };
   }
 
-  return { pr, prs: mergePrNumbers(input.knownPrs, [pr.number]) };
+  return {
+    pr,
+    prs: mergePrNumbers(input.knownPrs, [pr.number]),
+    noTicket: isNoTicketPr(existing),
+  };
 }
