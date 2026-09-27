@@ -171,30 +171,33 @@ below; where it and this list disagree, it wins.
    a large rule, condensing narrative — are applied only when the new text
    drops no fact that is still true; otherwise they go in the PR body as
    proposals. Never invent a fact to replace a dead reference.
-2. **Ticket first**, in the target repo's list:
-   `alfred task new --on-repo <name> --desc-file <file> "<title>"` (`--repo`
-   only asserts the repo you stand in, and refuses any other) with the goal,
-   the findings being fixed (`file:line`), acceptance, files and verification.
+2. **No ticket.** Agent-file fixes are doc and config edits below the root
+   ticket bar (`~/Code/CLAUDE.md`), so they ship as a PR alone. Only a fix
+   set that clears the bar (it records a decision, or spans more than one PR)
+   gets one first: `alfred task new --on-repo <name> --desc-file <file>
+   "<title>"`, then carry its id through steps 3, 6 and 8 instead.
 3. **Branch in a worktree** off the target's default branch, from its main
    checkout (the first `worktree` line of `git -C <repo> worktree list
    --porcelain`):
    `git -C <main> fetch origin` then
-   `git -C <main> worktree add --no-track -b <branch> <main>/.claude/worktrees/<STARK-n> origin/<default>`
+   `git -C <main> worktree add --no-track -b <branch> <main>/.claude/worktrees/<branch> origin/<default>`,
+   with a `<branch>` that names no ticket (e.g. `docs/scope-agent-rules`):
+   `--no-ticket` refuses a branch that carries a ticket key.
    (`--no-track`: a branch tracking the default branch can push onto it).
 4. **Edit** in that worktree. Honour the repo's mirror policies in the same
    change (both AGENTS.md and CLAUDE.md).
 5. **Verify live**: re-run `audit --repo <worktree> --json`. Every fixed
    finding must be gone, no new one may appear, and every new glob must show a
    non-zero `matches` on the files it was written for.
-6. **Draft PR** from the worktree with `idun gh pr-open` (a draft by
-   default), title per the target's convention, e.g.
-   `docs(STARK-n): scope unscoped agent rules`.
+6. **Draft PR** from the worktree with `idun gh pr-open --no-ticket` (a
+   draft by default) and a plain title, e.g.
+   `docs: scope unscoped agent rules`.
 7. **Review**: `/code-review xhigh --fix <full PR URL>` — the full URL, or
    it reviews the wrong repo's diff — then fix or answer every finding, push
    with `idun gh pr-open`, and re-run step 5.
-8. **Stop at the reviewed draft PR.** Print the PR URL, the ticket, and the
-   two lines the operator runs to finish: `idun gh pr-merge <PR>` and
-   `alfred task move STARK-n done`. Never merge; never commit to `main`.
+8. **Stop at the reviewed draft PR.** Print the PR URL and the line the
+   operator runs to finish: `idun gh pr-merge <PR>`. Never merge; never commit
+   to `main`.
 
 ## Failure modes
 
