@@ -20,8 +20,8 @@ This is the Codex/Cursor entry point. **Read [CLAUDE.md](CLAUDE.md) before chang
 
 ## Development and shipping
 
-- Shipping follows the root spine (`~/Code/CLAUDE.md`, "How we ship"), which Codex loads as `~/.codex/AGENTS.md`. Here a PR opens as a draft.
-- Open PRs with `idun gh pr-open`. The merge command marks a draft ready, waits for green checks, and squash-merges. Merge once green; no rollout ceremony. For target repos, [skip-draft-guard.md](standards/workflows/skip-draft-guard.md) keeps CI off drafts; never apply it to a required check.
+- Shipping follows the root spine (`~/Code/CLAUDE.md`, "How we ship"), which Codex loads as `~/.codex/AGENTS.md`. Never commit or push directly to `main`.
+- Open PRs as drafts with `idun gh pr-open`. The merge command marks a draft ready, waits for green checks, and squash-merges. Merge once green; no rollout ceremony. For target repos, [skip-draft-guard.md](standards/workflows/skip-draft-guard.md) keeps CI off drafts; never apply it to a required check.
 - Use `gh` as `aryeh-stark` for PR actions. Review text identifies the model. `idun user` is human-invoked only; follow the operator's account-rotation rules for rate limits.
 - Publish every review's findings with `tools/findings_review_post.ts`: inline where anchored, in the body otherwise. Preserve every finding and its severity. Fix findings or explain their disposition on the thread; never resolve another reviewer's thread yourself.
 - Verify the actual surface affected by the change and show the command and output. Exercise GCP and GitHub live when involved. Independently confirm claims that work passed, merged, or closed.
