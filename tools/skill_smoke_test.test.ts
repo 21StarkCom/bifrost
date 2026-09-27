@@ -364,6 +364,7 @@ const MODEL_INVOCABLE_SKILLS: Record<string, string> = {
   gru: WORKER_LAUNCH,
   minion: WORKER_LAUNCH,
   "stark-ticket": "no agent filing a ticket would ever load it on its own (STARK-9471)",
+  goldfinger: "an agent that needs a native app would never find the goldfinger CLI on its own (STARK-9636)",
 };
 
 const DISABLE_MODEL_INVOCATION_TRUE =
