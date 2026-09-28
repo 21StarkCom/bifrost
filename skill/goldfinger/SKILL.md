@@ -1,6 +1,6 @@
 ---
 name: goldfinger
-description: "Operate desktop apps in the background with the goldfinger CLI: list apps and windows, observe a window's accessibility tree, then click, type, press keys, scroll or set a value, move or resize a window, and read or write the clipboard's text, without taking the user's focus or moving their cursor. Use when a task needs a native app that has no API, CLI or browser route, or needs a window moved or resized or the clipboard read or written."
+description: "Operate desktop apps in the background with the goldfinger CLI: list apps and windows, observe a window's accessibility tree, then click, type, press keys, scroll or set a value, move or resize a window, and read or write the clipboard's text, without taking the user's focus or moving their cursor; or press a menu-bar command or drag, which bring the app to the front for that action alone. Use when a task needs a native app that has no API, CLI or browser route, a menu-bar command or a drag in one, a window moved or resized, or the clipboard read or written."
 argument-hint: "[help]"
 ---
 
@@ -13,11 +13,13 @@ If `$ARGUMENTS` holds a standalone `--help`, `-h` or `help` token, follow
 
 `goldfinger` gives an agent in any terminal background computer use. One daemon, shared by every
 agent on the machine, holds the OS grants and does the work; every other `goldfinger` command is
-a client that starts it on demand (`stop` never does). No verb moves the hardware cursor or raises
-a window, and none activates an app except `setup`, which is interactive, and `quit` of the
-frontmost app. So the user keeps working while you act, with one catch: when any app activates
-during an action's 1 s guard, goldfinger puts back the app that was in front, and that includes
-the user's own app switch.
+a client that starts it on demand (`stop` never does). No verb moves the hardware cursor. None
+activates an app or raises a window except `setup`, which is interactive, `quit` of the frontmost
+app, and `menu` and `drag`, which run only with `--foreground`: they activate the target's app for
+their action alone, which may raise its window, then make the app that was in front frontmost
+again. So the user keeps working while every other verb acts, with one catch: when any app
+activates during an action's 1 s guard, goldfinger puts back the app that was in front, and that
+includes the user's own app switch.
 
 ## Arguments
 
@@ -149,6 +151,41 @@ These three verbs take no target and no `--observe`. They need goldfinger 0.2.0 
   the clipboard was cleared is `action_failed` too and leaves the clipboard empty, which the
   message says.
 
+## Menus and drag: the foreground verbs
+
+`menu` and `drag` need goldfinger 0.2.0 or later (`goldfinger --version`), and they run only with
+`--foreground`. Without it both fail `background_unavailable` and nothing is activated or sent.
+With it, goldfinger activates the target's app for the action alone, which may raise its window,
+acts, and then makes the app that was frontmost before frontmost again, even when the action
+failed. The user sees a brief switch and loses their focus for that long, then gets it back, so
+use these verbs only for what no background verb reaches. The hardware cursor still never moves.
+Like every action, each takes at least 1 s. Neither takes `--observe`: observe afterwards.
+
+- `goldfinger menu <pid> "<path>" --foreground --json` presses an item in the menu bar of app
+  `pid` (from `apps`). The path is titles from the menu bar down, joined by `>`: `"File>Export…"`,
+  `"Edit>Find>Find…"`. Quote it: unquoted, the shell takes `>` as a redirect. Each segment matches
+  one title exactly, case and spaces included, and the first item with that title is taken; an
+  empty path or segment is `usage`. Only the last item is pressed, and the menus above it are not
+  opened. A path that ends at an item that opens a menu (a menu bar title, or an item with a submenu) is
+  `action_failed`, and so is a disabled item; nothing is pressed. A segment that matches nothing
+  is `not_found`, and the message names the segment, where it was looked for and the titles
+  there. A `timeout` is not retryable; its message says whether it came while the menus were
+  walked (nothing was pressed) or at the press.
+- `goldfinger drag <from> <to> --foreground --json` is one left-button press at `from`, drags
+  along the straight line to `to`, and one release there. The events go to the app as `click`'s
+  mouse events do, never through the cursor, so the cursor never moves. `from` and `to` are
+  targets under the rules below, each aimed as `click` aims: an element at its visible centre, a
+  pixel at its point. Both must be in one window: a `to` in another window than `from` is
+  `invalid_target`. A control that tracks a press in a loop of its own may take the press alone
+  and ignore the drags while the verb still succeeds, so read the effect back with `observe`, and
+  set a slider with `set-value`.
+- **Result**, for both: `{"warnings": [], "activated": {…}, "restored": {…}}`. `activated` is the
+  app goldfinger brought to the front and `restored` the one it put back, each as its `pid`,
+  `bundle_id` and `name`. Both are omitted when the target's app was already frontmost, which is
+  neither activated nor restored. `restored` alone is omitted when no app was frontmost before,
+  and with the `restore_failed` warning. An error keeps its usual shape, and its message ends by
+  saying which app was activated and whether the app frontmost before was restored.
+
 ## Targets and staleness
 
 - `k7.12:4` is the node whose `index` is 4 in snapshot `k7.12`, not `tree[4]`: nodes without
@@ -170,17 +207,20 @@ Actions return `"warnings": [...]`, usually empty:
 - `app_self_activated`: an app activated itself during the action, and the app that was in front
   was put back. The action still happened; do not repeat it.
 - `observe_failed`: the action landed, but its `--observe` did not. Run `observe` yourself.
+- `restore_failed`: a `--foreground` `menu` or `drag` acted, but the app that was frontmost before
+  it had quit or did not come back to the front within 1 s, so the result has no `restored`. The
+  action still happened; do not repeat it.
 
 ## Errors: what to do
 
 | Code | Do this |
 |---|---|
 | `permission_missing` | The daemon lacks a grant; the message names which. Ask the operator to run `goldfinger setup`. Do not retry. |
-| `not_found` | The pid or window is gone, no installed app has the bundle id (`launch`), or the window has no accessibility tree (another desktop; for `window-frame`, no accessibility counterpart). A window that closes while `window-frame` moves it is `not_found` too. List apps or windows again. |
+| `not_found` | The pid or window is gone, no installed app has the bundle id (`launch`), or the window has no accessibility tree (another desktop; for `window-frame`, no accessibility counterpart). A window that closes while `window-frame` moves it is `not_found` too. List apps or windows again. For `menu`, the app has no menu bar, an item went away while the menus were walked, or a path segment matches no item: the message names the segment and the titles where it was looked for, so fix the path from those. |
 | `stale_snapshot` | Observe again, then act on the new snapshot. |
-| `invalid_target` | Fix the target: a malformed id, an index past the snapshot, a pixel target without a screenshot or outside it, or a pixel target for `set-value`. |
-| `background_unavailable` | This action cannot keep the background guarantee: a `cmd` combo (a menu shortcut reaches only the active app), or a mouse event this platform cannot aim into a background window. Nothing was sent. For a `cmd` combo, click the control in the window's tree; otherwise use an element target, another route, or ask the user. Menu-bar commands and drag have no verb in this version. |
-| `action_failed` | The app rejected the action or value. Observe to see the state before trying another way. An element that needed mouse events has no visible part in its window (nothing was sent): scroll it into view, then observe again and act on the new snapshot. For `window-frame`, the window cannot be moved or resized (nothing was written), the app rejected a write (part of the frame may have landed), or its read-back did not match the request, clamped by the app or the platform: run `windows` to see where it went. For `clipboard read` and `clipboard write`, the user denied goldfinger clipboard access, or refused a `clipboard read` at the paste alert, and the message names the setting: ask the operator to allow it. A write the platform refused after clearing the clipboard left it empty, and the message says so. |
+| `invalid_target` | Fix the target: a malformed id, an index past the snapshot, a pixel target without a screenshot or outside it, a pixel target for `set-value`, or a `drag` whose `to` is in another window than its `from`. |
+| `background_unavailable` | This action cannot keep the background guarantee: a `cmd` combo (a menu shortcut reaches only the active app), `menu` or `drag` without `--foreground`, or a mouse event this platform cannot aim into a background window. Nothing was activated or sent. For a `cmd` combo, click the control in the window's tree, or press its menu-bar command with `menu … --foreground`; `menu` and `drag` need `--foreground`, which switches the user's front app for the action; otherwise use an element target, another route, or ask the user. |
+| `action_failed` | The app rejected the action or value. Observe to see the state before trying another way. An element that needed mouse events has no visible part in its window (nothing was sent): scroll it into view, then observe again and act on the new snapshot. For `window-frame`, the window cannot be moved or resized (nothing was written), the app rejected a write (part of the frame may have landed), or its read-back did not match the request, clamped by the app or the platform: run `windows` to see where it went. For `clipboard read` and `clipboard write`, the user denied goldfinger clipboard access, or refused a `clipboard read` at the paste alert, and the message names the setting: ask the operator to allow it. A write the platform refused after clearing the clipboard left it empty, and the message says so. For `menu` and `drag`, the target's app did not come frontmost within 1 s: nothing was sent, and the app frontmost before was put back if the focus moved. For `menu`, the path ends at a disabled item or at one that opens a menu, such as a menu bar title (nothing was pressed): end the path at the command itself. |
 | `usage` | Malformed arguments (exit 2). Fix the call; `goldfinger --help` lists the verbs. |
 | `timeout` | A read (`status`, `apps`, `windows`, `observe`, `clipboard read`) may be retried. An action may already have landed, so observe before you repeat it; a `launch` may still open, so list apps first. No observe shows a `clipboard write`: check a lost `clipboard write` with `clipboard read`, and a lost `window-frame` with `windows`, before you repeat it. |
 | `daemon_unavailable` | Retry when `retryable` is true. When the message says the action may have landed, observe first, or for a `window-frame` run `windows` and for a `clipboard write` run `clipboard read`. |
