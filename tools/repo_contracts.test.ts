@@ -240,6 +240,52 @@ test("the seven skills: lists partition the skill/ tree — no unclaimed skill, 
   );
 });
 
+// Plugin hooks ride the same shared root. A `hooks/hooks.json` or a
+// `.claude-plugin/plugin.json` there would load into all seven plugins and fire
+// seven times per event, so a hook is declared inline on the one entry that owns
+// it. Only the inline-object form loads from a marketplace entry with no
+// plugin.json; a path or an array surfaces only in `/plugin`'s Errors tab.
+test("plugin hooks are declared inline on stark-ops alone and run tools from this tree", () => {
+  for (const rel of ["hooks", ".claude-plugin/plugin.json"]) {
+    assert.ok(
+      !fs.existsSync(path.join(REPO_ROOT, rel)),
+      `${rel} exists at the repo root. Every plugin's source is "./", so all seven would load it; ` +
+        `declare the hook inline on its owning entry in ${MARKETPLACE_REL} instead.`,
+    );
+  }
+
+  const entries = (JSON.parse(readRepoFile(MARKETPLACE_REL, "")) as { plugins: Record<string, unknown>[] }).plugins;
+  const withHooks = entries.filter((p) => "hooks" in p);
+  assert.deepEqual(
+    withHooks.map((p) => p.name),
+    ["stark-ops"],
+    `${MARKETPLACE_REL}: only stark-ops ships hooks (the fact-routing hook, next to /stark-memory).`,
+  );
+  const hooks = withHooks[0].hooks;
+  assert.ok(
+    hooks !== null && typeof hooks === "object" && !Array.isArray(hooks),
+    `${MARKETPLACE_REL}: stark-ops \`hooks\` must be an inline object; a path or array does not load from a marketplace entry.`,
+  );
+
+  type Group = { matcher?: string; hooks: { type: string; command: string }[] };
+  const groups = hooks as Record<string, Group[]>;
+  assert.deepEqual(
+    groups.PostToolUse?.map((g) => [g.matcher, g.hooks.map((h) => h.command)]),
+    [["Write|Edit|MultiEdit", ['node "${CLAUDE_PLUGIN_ROOT}/tools/fact_routing_hook.ts"']]],
+    `${MARKETPLACE_REL}: stark-ops must wire tools/fact_routing_hook.ts on PostToolUse for Write|Edit|MultiEdit.`,
+  );
+  for (const [event, list] of Object.entries(groups)) {
+    for (const h of list.flatMap((g) => g.hooks)) {
+      const m = h.command.match(/^node "\$\{CLAUDE_PLUGIN_ROOT\}\/(tools\/[a-z_]+\.ts)"$/);
+      assert.ok(
+        m && fs.existsSync(path.join(REPO_ROOT, m[1])),
+        `${MARKETPLACE_REL}: stark-ops ${event} hook \`${h.command}\` must run a tools/*.ts that exists, ` +
+          `through \${CLAUDE_PLUGIN_ROOT} (the installed copy), never a checkout or $HOME path.`,
+      );
+    }
+  }
+});
+
 // ────────────────────────────────────────────────────────────────────────────
 // §2  `.gitleaks.toml` — the config BOTH secret scanners read
 // ────────────────────────────────────────────────────────────────────────────
