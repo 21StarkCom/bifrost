@@ -119,7 +119,7 @@ Protocol skills over alfred (the board is the state) and hermod (`hermod ticket`
 
 ### Goldfinger
 
-- `/goldfinger` — teaches the `goldfinger` CLI (the goldfinger repo, installed by the `21StarkCom/tap/goldfinger` cask): background computer use through an observe → act loop on snapshot targets, `--json` output, and what to do per error code. It is OS-neutral: every verb and flag it names is in goldfinger's `contract/api.md`. Model-invocable, because an agent that needs a native app has to find it on its own. `goldfinger setup` is the operator's to run once; the skill never clicks a grant.
+- `/goldfinger` — teaches the `goldfinger` CLI (the goldfinger repo, installed by the `21StarkCom/tap/goldfinger` cask): background computer use through an observe → act loop on snapshot targets, `--json` output, and what to do per error code. It also covers `goldfinger mcp`, the same client as a stdio MCP server: registering it with Claude Code and Codex, and how its tools map onto the verbs. It is OS-neutral: every verb and flag it names is in goldfinger's `contract/api.md`. Model-invocable, because an agent that needs a native app has to find it on its own. `goldfinger setup` is the operator's to run once; the skill never clicks a grant.
 
 ## Commands
 
