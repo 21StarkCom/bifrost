@@ -39,7 +39,8 @@ No arguments. The skill teaches the CLI; the work happens through `goldfinger` i
 
 `goldfinger mcp` serves the same client as an MCP server on stdio, for an agent that would rather
 call tools than run commands. It needs goldfinger 0.2.0 or later (`goldfinger --version`); an
-older install fails it with `unknown subcommand "mcp"`. Register it once:
+older install fails it with `unknown subcommand "mcp"`. Register it once. Its tools appear in
+an agent session started after that; in one already running, use the CLI:
 
 - **Claude Code:** `claude mcp add --scope user goldfinger -- goldfinger mcp`.
 - **Codex:** `codex mcp add goldfinger -- goldfinger mcp`, or add this block to
@@ -51,16 +52,25 @@ older install fails it with `unknown subcommand "mcp"`. Register it once:
   args = ["mcp"]
   ```
 
-The tools are the CLI's verbs, under the same names. Their parameters are the socket args, which
-are snake_case (`window_id`, `max_nodes`, `new_instance`), and a tool's result is the object
-`goldfinger <verb> … --json` prints for the same call, errors included. `observe` with
-`screenshot` also returns the PNG as an image. Everything else in this skill applies unchanged.
+The tools are the thirteen verbs this skill teaches, `status` through `stop`, under the same
+names; the CLI's other verbs have no tool. Their parameters are the socket args, which are
+snake_case (`window_id`, `max_nodes`, `new_instance`), and a tool's result is what
+`goldfinger <verb> … --json` prints for the same call, errors included (marked `isError`): an
+object, or for `apps` and `windows` an array, which comes as text only. `observe` with
+`screenshot` also returns the PNG as an image. A client caps a result's size (Claude Code cuts
+one off past `MAX_MCP_OUTPUT_TOKENS`, 25,000 by default), so pass `max_nodes` on a large window.
+The rest of this skill applies, but not the CLI's own syntax: a tool takes no `--json` or `--`
+and has no exit code, and a flag such as `--observe` is a boolean parameter.
 
-Each MCP connection gets a session of its own, started on its first call and ended when the
-connection closes. There are no session tools. A call that fails `session_limit` found every
-session colour held and ran nothing: retry later. `setup` is a tool too, and it stays the
-operator's to run, as "Install, once" says. After a `brew upgrade`, restart the agent: until
-then its `goldfinger mcp` is the old client, and the new daemon answers it `version_mismatch`.
+Each MCP connection gets a session of its own: the server starts one when a call first needs
+it, starts another when that one has ended (an idle end, any agent's `stop`), and ends it when
+the connection closes. There are no session tools. A call that fails `session_limit` found
+every session colour held and ran nothing: retry later. `setup` is a tool too, and it stays the
+operator's to run, as "Install, once" says. After a `brew upgrade`, the agent needs a restart:
+until then its `goldfinger mcp` is the old client, and the new daemon answers it
+`version_mismatch`. So on a tool's `version_mismatch`, ask the operator to restart the agent.
+Do not call `stop`: the next call starts the upgraded daemon again and still mismatches, and
+every other agent has lost its daemon for nothing.
 
 ## Output
 
