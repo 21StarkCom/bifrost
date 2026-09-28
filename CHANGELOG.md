@@ -13,6 +13,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=335 runId=335 sha=1da69a0f -->
+- `/goldfinger` skill now covers registering `goldfinger mcp` with Claude Code and Codex, and how its tools mirror the CLI (stark-ops 0.17.18).
 <!-- idun:pr-merge pr=334 runId=334 sha=d3830b6c -->
 - stark-ops now ships the fact-routing PostToolUse hook inline; its advisory reaches the model via additionalContext and honors CLAUDE_CONFIG_DIR.
 <!-- idun:pr-merge pr=333 runId=333 sha=f1a9cf24 -->
