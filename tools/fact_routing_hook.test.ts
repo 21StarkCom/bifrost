@@ -50,12 +50,19 @@ test("a flagged memory is queued and its advisory reaches the model as additiona
   });
 });
 
-test("CLAUDE_CONFIG_DIR moves both the memory root and the queue", () => {
+test("CLAUDE_CONFIG_DIR moves the memory root and the queue, and the fold reads that queue", () => {
   withMemory(".claude-work", (home, cfg, memory) => {
     const r = run(home, memory, { CLAUDE_CONFIG_DIR: cfg });
     assert.equal(r.status, 0, r.stderr);
     assert.equal(queueLines(cfg).length, 1);
     assert.equal(fs.existsSync(path.join(home, ".claude")), false);
+
+    const fold = spawnSync(process.execPath, ["--no-warnings", path.join(import.meta.dirname, "fact_routing_fold.ts")], {
+      env: { ...process.env, HOME: home, CLAUDE_CONFIG_DIR: cfg },
+      encoding: "utf8",
+    });
+    assert.equal(fold.status, 0, fold.stderr);
+    assert.match(fold.stdout, /→ vault-ecosystem corpus {2}\(1\)/);
   });
 });
 

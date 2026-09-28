@@ -248,13 +248,19 @@ test("the seven skills: lists partition the skill/ tree — no unclaimed skill, 
 // plugin root loads into all seven plugins at once: a `hooks/hooks.json` fires
 // seven times per event, a `skills/` dir defeats the `skills:` restriction above,
 // and a `.claude-plugin/plugin.json` redefines every entry. None may exist here.
+// The list is the plugin loader's own component set as of claude 2.1.283.
 const SHARED_ROOT_AUTO_DISCOVERED = [
   "hooks",
   "skills",
   "commands",
   "agents",
+  "output-styles",
+  "themes",
+  "workflows",
+  "monitors",
   ".mcp.json",
   ".lsp.json",
+  "settings.json",
   ".claude-plugin/plugin.json",
 ];
 
