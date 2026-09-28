@@ -123,19 +123,26 @@ These three verbs take no target and no `--observe`. They need goldfinger 0.2.0 
   background: its app is not activated, the window is not raised and the cursor does not move.
   The frame is four whole numbers of points from the top left of the primary display, as
   `windows` reports frames: `x` and `y` at least 0, `w` and `h` at least 1; anything else is
-  `usage`. The result is `{"frame": {"x", "y", "width", "height"}, "warnings": []}`, and `frame`
-  is the window server's read-back once the window has stopped moving, never the request; a
-  `windows` right after reports the same. It is `action_failed` when the window cannot be moved
-  or resized (nothing is written), or when the read-back does not match the request to within
-  2 points because the app or the platform clamped it (to a minimum size, or to keep a title bar
-  below the menu bar); the message names both frames. Like every action it takes at least 1 s.
+  `usage`. So a window on a display left of or above the primary one, where `windows` reports a
+  negative `x` or `y`, cannot be framed there. The result is
+  `{"frame": {"x", "y", "width", "height"}, "warnings": []}`, and `frame` is the window server's
+  read-back once it matches the request, never the request itself; a `windows` right after
+  reports the same. It is `action_failed` when the window cannot be moved or resized (nothing is
+  written), when the app rejects a write (part of the frame may have landed), or when the
+  read-back does not match the request to within 2 points because the app or the platform
+  clamped it (to a minimum size, or to keep a title bar below the menu bar); the message names
+  both frames. Like every action it takes at least 1 s.
 - `goldfinger clipboard read --json` returns the clipboard's plain text as `{"text": "…"}`. `text`
   is omitted (`{}`) when the clipboard holds no plain text, or an empty string. It needs no grant,
-  sends nothing to any app and holds no 1 s guard. When the user has denied goldfinger clipboard
+  sends nothing to any app and holds no 1 s guard, but it can put the platform's paste alert in
+  front of the user for them to answer, which is not background: read the clipboard only when
+  the task needs it. When the user has denied goldfinger clipboard
   access in the platform's settings, or refused the read at the platform's paste alert, it is
   `action_failed`, naming that setting: a denied read is an error, never an empty clipboard.
 - `goldfinger clipboard write --json [--] <text>` replaces everything on the clipboard with that
-  one plain-text string and returns `{"warnings": []}`. Put `--json` before the `--`, as Output
+  one plain-text string and returns `{"warnings": []}`. The clipboard is the user's: what they had
+  copied is gone, and `clipboard read` can save and restore only its plain text, so write it only
+  when the task calls for it. Put `--json` before the `--`, as Output
   says: after it, `--json` is an operand and the call is `usage`. Empty text is `usage`. It needs
   no grant and sends nothing to any app, but it is an action, so it takes at least 1 s. Denied
   clipboard access is `action_failed`, and nothing is written; a write the platform refuses after
@@ -173,9 +180,9 @@ Actions return `"warnings": [...]`, usually empty:
 | `stale_snapshot` | Observe again, then act on the new snapshot. |
 | `invalid_target` | Fix the target: a malformed id, an index past the snapshot, a pixel target without a screenshot or outside it, or a pixel target for `set-value`. |
 | `background_unavailable` | This action cannot keep the background guarantee: a `cmd` combo (a menu shortcut reaches only the active app), or a mouse event this platform cannot aim into a background window. Nothing was sent. For a `cmd` combo, click the control in the window's tree; otherwise use an element target, another route, or ask the user. Menu-bar commands and drag have no verb in this version. |
-| `action_failed` | The app rejected the action or value. Observe to see the state before trying another way. An element that needed mouse events has no visible part in its window (nothing was sent): scroll it into view, then observe again and act on the new snapshot. For `window-frame`, the window cannot be moved or resized (nothing was written), or its read-back did not match the request, clamped by the app or the platform: run `windows` to see where it went. For `clipboard read` and `clipboard write`, the user denied goldfinger clipboard access or refused the read at the paste alert, and the message names the setting: ask the operator to allow it. A write the platform refused after clearing the clipboard left it empty, and the message says so. |
+| `action_failed` | The app rejected the action or value. Observe to see the state before trying another way. An element that needed mouse events has no visible part in its window (nothing was sent): scroll it into view, then observe again and act on the new snapshot. For `window-frame`, the window cannot be moved or resized (nothing was written), the app rejected a write (part of the frame may have landed), or its read-back did not match the request, clamped by the app or the platform: run `windows` to see where it went. For `clipboard read` and `clipboard write`, the user denied goldfinger clipboard access, or refused a `clipboard read` at the paste alert, and the message names the setting: ask the operator to allow it. A write the platform refused after clearing the clipboard left it empty, and the message says so. |
 | `usage` | Malformed arguments (exit 2). Fix the call; `goldfinger --help` lists the verbs. |
-| `timeout` | A read (`status`, `apps`, `windows`, `observe`, `clipboard read`) may be retried. An action may already have landed, so observe before you repeat it; a `launch` may still open, so list apps first. Observing a window cannot show a `window-frame` or a `clipboard write`: check a lost `window-frame` with `windows` and a lost `clipboard write` with `clipboard read` before you repeat it. |
+| `timeout` | A read (`status`, `apps`, `windows`, `observe`, `clipboard read`) may be retried. An action may already have landed, so observe before you repeat it; a `launch` may still open, so list apps first. No observe shows a `clipboard write`: check a lost `clipboard write` with `clipboard read`, and a lost `window-frame` with `windows`, before you repeat it. |
 | `daemon_unavailable` | Retry when `retryable` is true. When the message says the action may have landed, observe first, or for a `window-frame` run `windows` and for a `clipboard write` run `clipboard read`. |
 | `version_mismatch` | Two goldfinger versions met. Use the newer `goldfinger`. `goldfinger stop` and a retry also clears it, but stops the daemon other agents share. |
 
