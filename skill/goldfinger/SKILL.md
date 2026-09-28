@@ -35,6 +35,33 @@ No arguments. The skill teaches the CLI; the work happens through `goldfinger` i
 - **Check:** `goldfinger status --json` shows `"permissions": {"accessibility": true,
   "screen_recording": true}`. `status` never raises a prompt.
 
+## MCP
+
+`goldfinger mcp` serves the same client as an MCP server on stdio, for an agent that would rather
+call tools than run commands. It needs goldfinger 0.2.0 or later (`goldfinger --version`); an
+older install fails it with `unknown subcommand "mcp"`. Register it once:
+
+- **Claude Code:** `claude mcp add --scope user goldfinger -- goldfinger mcp`.
+- **Codex:** `codex mcp add goldfinger -- goldfinger mcp`, or add this block to
+  `~/.codex/config.toml`:
+
+  ```toml
+  [mcp_servers.goldfinger]
+  command = "goldfinger"
+  args = ["mcp"]
+  ```
+
+The tools are the CLI's verbs, under the same names. Their parameters are the socket args, which
+are snake_case (`window_id`, `max_nodes`, `new_instance`), and a tool's result is the object
+`goldfinger <verb> … --json` prints for the same call, errors included. `observe` with
+`screenshot` also returns the PNG as an image. Everything else in this skill applies unchanged.
+
+Each MCP connection gets a session of its own, started on its first call and ended when the
+connection closes. There are no session tools. A call that fails `session_limit` found every
+session colour held and ran nothing: retry later. `setup` is a tool too, and it stays the
+operator's to run, as "Install, once" says. After a `brew upgrade`, restart the agent: until
+then its `goldfinger mcp` is the old client, and the new daemon answers it `version_mismatch`.
+
 ## Output
 
 Pass `--json` on every call. Success prints the verb's result itself (an object or an array);
