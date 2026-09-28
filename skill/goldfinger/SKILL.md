@@ -107,7 +107,7 @@ Actions return `"warnings": [...]`, usually empty:
 | `stale_snapshot` | Observe again, then act on the new snapshot. |
 | `invalid_target` | Fix the target: a malformed id, an index past the snapshot, a pixel target without a screenshot or outside it, or a pixel target for `set-value`. |
 | `background_unavailable` | This action cannot keep the background guarantee: a `cmd` combo (a menu shortcut reaches only the active app), or a mouse event this platform cannot aim into a background window. Nothing was sent. For a `cmd` combo, click the control in the window's tree; otherwise use an element target, another route, or ask the user. Menu-bar commands and drag have no verb in this version. |
-| `action_failed` | The app rejected the action or value. Observe to see the state before trying another way. |
+| `action_failed` | The app rejected the action or value. Observe to see the state before trying another way. An element that needed mouse events has no visible part in its window (nothing was sent): scroll it into view, then observe again and act on the new snapshot. |
 | `usage` | Malformed arguments (exit 2). Fix the call; `goldfinger --help` lists the verbs. |
 | `timeout` | A read (`status`, `apps`, `windows`, `observe`) may be retried. An action may already have landed, so observe before you repeat it; a `launch` may still open, so list apps first. |
 | `daemon_unavailable` | Retry when `retryable` is true. When the message says the action may have landed, observe first. |
