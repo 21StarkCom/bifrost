@@ -2,19 +2,18 @@
 /**
  * fact-routing PostToolUse hook (STARK-1785).
  *
- * Wire in ~/.claude/settings.json:
- *   "PostToolUse": [{ "matcher": "Write|Edit|MultiEdit", "hooks": [
- *     { "type": "command",
- *       "command": "node --experimental-strip-types $HOME/.claude/code-review/tools/fact_routing_hook.ts" }]}]
- *
- * Wire it through the ~/.claude/code-review/tools symlink, which points at this
- * repo's tools/, rather than at a checkout path: the hook then survives the repo
- * moving. $HOME expands because a command hook with no `args` runs in shell form.
+ * Shipped by the stark-ops plugin: its marketplace.json entry declares this hook
+ * inline on PostToolUse through ${CLAUDE_PLUGIN_ROOT}, with `if` gates that start
+ * it only for a Write or Edit of a `projects/*\/memory/*.md` file, so installing
+ * stark-ops wires it and no settings.json entry is needed.
  *
  * Reads the PostToolUse payload on stdin. When the written file is a
- * `<project>/memory/<name>.md` auto-memory that smells corpus- or repo-CLAUDE-worthy, it
- * appends a candidate to ~/.claude/.fact-routing-queue.jsonl and prints a
- * one-line advisory. It is ADVISORY: it never blocks the tool and always exits 0.
+ * `<config dir>/projects/<project>/memory/<name>.md` auto-memory (config dir:
+ * $CLAUDE_CONFIG_DIR, else ~/.claude) that smells corpus- or repo-CLAUDE-worthy,
+ * it appends a candidate to `<config dir>/.fact-routing-queue.jsonl` and hands
+ * the model a one-line advisory as PostToolUse `additionalContext` on stdout;
+ * plain stdout or stderr from a PostToolUse hook never reaches the model. It is
+ * ADVISORY: it never blocks the tool and always exits 0.
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -25,6 +24,7 @@ import {
   makeEntry,
   appendToQueue,
   defaultQueuePath,
+  isAutoMemoryPath,
   resolveFleetSlugs,
 } from "./fact_routing_hook_lib.ts";
 
@@ -59,9 +59,7 @@ function main(): void {
   const fp = data?.tool_input?.file_path;
   if (typeof fp !== "string") return;
   if (!["Write", "Edit", "MultiEdit"].includes(tool)) return;
-  // Only Claude auto-memory under ~/.claude/projects/<proj>/memory/ — not an
-  // ordinary repo that happens to have a memory/ dir.
-  if (!/\.claude\/projects\/[^/]+\/memory\/[^/]+\.md$/.test(fp)) return;
+  if (!isAutoMemoryPath(fp)) return;
 
   let content: string;
   try {
@@ -84,9 +82,11 @@ function main(): void {
   appendToQueue(entry, queue);
 
   const target = flag.route === "corpus" ? "the vault-ecosystem corpus" : "the repo's own CLAUDE.md";
-  process.stderr.write(
+  const advisory =
     `↳ fact-routing: ${path.basename(fp)} looks like it belongs in ${target} (${flag.reason}). ` +
-      `Queued in ~/.claude/.fact-routing-queue.jsonl — fold it, don't sweep later.\n`,
+    `Queued in ${queue} — fold it, don't sweep later.`;
+  process.stdout.write(
+    JSON.stringify({ hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext: advisory } }) + "\n",
   );
 }
 

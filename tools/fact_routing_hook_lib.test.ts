@@ -15,7 +15,9 @@ import {
   fleetSlugsMentioned,
   makeEntry,
   appendToQueue,
+  claudeConfigDir,
   defaultQueuePath,
+  isAutoMemoryPath,
   resolveFleetSlugs,
 } from "./fact_routing_hook_lib.ts";
 
@@ -98,8 +100,20 @@ test("queue roundtrip — makeEntry extracts the project, appendToQueue writes J
   }
 });
 
-test("defaultQueuePath is under the Claude home", () => {
-  assert.equal(defaultQueuePath("/home/x"), "/home/x/.claude/.fact-routing-queue.jsonl");
+test("claudeConfigDir honors CLAUDE_CONFIG_DIR, else ~/.claude; the queue lives under it", () => {
+  assert.equal(claudeConfigDir({}, "/home/x"), "/home/x/.claude");
+  assert.equal(claudeConfigDir({ CLAUDE_CONFIG_DIR: "/home/x/.claude-work" }, "/home/x"), "/home/x/.claude-work");
+  assert.equal(defaultQueuePath("/home/x/.claude"), "/home/x/.claude/.fact-routing-queue.jsonl");
+});
+
+test("isAutoMemoryPath matches <configDir>/projects/<p>/memory/<n>.md only", () => {
+  const cfg = "/home/x/.claude-work";
+  assert.equal(isAutoMemoryPath(`${cfg}/projects/p/memory/f.md`, cfg), true);
+  assert.equal(isAutoMemoryPath(`${cfg}/projects/p/memory/sub/f.md`, cfg), false);
+  assert.equal(isAutoMemoryPath(`${cfg}/projects/p/memory/f.txt`, cfg), false);
+  // Another profile's memory, and a repo that merely has the same shape, are not this profile's.
+  assert.equal(isAutoMemoryPath("/home/x/.claude/projects/p/memory/f.md", cfg), false);
+  assert.equal(isAutoMemoryPath("/home/x/Code/r/.claude/projects/p/memory/f.md", "/home/x/.claude"), false);
 });
 
 test("resolveFleetSlugs takes kebab entity slugs only — no README/non-kebab", () => {

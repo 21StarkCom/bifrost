@@ -102,7 +102,7 @@
       "name": "stark-ops",
       "source": "./",
       "description": "Repository operations beyond the spec-driven pipeline — coordinate Minions with Gru, cut releases, run session start/end, hand off work across sessions, run one ticket solo and unattended with Agnes, open a Lucius brainstorm in a tab of its own, and operate desktop apps in the background with goldfinger.",
-      "version": "0.17.16",
+      "version": "0.17.17",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -128,6 +128,25 @@
         "./skill/lucius",
         "./skill/goldfinger"
       ],
+      "hooks": {
+        "PostToolUse": [
+          {
+            "matcher": "Write|Edit",
+            "hooks": [
+              {
+                "type": "command",
+                "if": "Write(//**/projects/*/memory/*.md)",
+                "command": "node \"${CLAUDE_PLUGIN_ROOT}/tools/fact_routing_hook.ts\""
+              },
+              {
+                "type": "command",
+                "if": "Edit(//**/projects/*/memory/*.md)",
+                "command": "node \"${CLAUDE_PLUGIN_ROOT}/tools/fact_routing_hook.ts\""
+              }
+            ]
+          }
+        ]
+      },
       "strict": true
     },
     {

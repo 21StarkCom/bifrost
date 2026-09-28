@@ -33,9 +33,21 @@ export interface QueueEntry extends RoutingFlag {
   snippet: string;
 }
 
-/** The routing queue: append-only JSONL under the Claude home. */
-export function defaultQueuePath(home: string = os.homedir()): string {
-  return path.join(home, ".claude", ".fact-routing-queue.jsonl");
+/** Claude Code's config dir: `$CLAUDE_CONFIG_DIR`, else `~/.claude`. */
+export function claudeConfigDir(env: NodeJS.ProcessEnv = process.env, home: string = os.homedir()): string {
+  return env.CLAUDE_CONFIG_DIR ? path.resolve(env.CLAUDE_CONFIG_DIR) : path.join(home, ".claude");
+}
+
+/** The routing queue: append-only JSONL under the Claude config dir. */
+export function defaultQueuePath(configDir: string = claudeConfigDir()): string {
+  return path.join(configDir, ".fact-routing-queue.jsonl");
+}
+
+/** True for a Claude auto-memory file, `<configDir>/projects/<project>/memory/<name>.md`,
+ *  and not for an ordinary repo that happens to have a memory/ dir. */
+export function isAutoMemoryPath(filePath: string, configDir: string = claudeConfigDir()): boolean {
+  const rel = path.relative(configDir, filePath).split(path.sep).join("/");
+  return /^projects\/[^/]+\/memory\/[^/]+\.md$/.test(rel);
 }
 
 /** Best-effort frontmatter `type:` read — a line scan, no YAML dependency. */
