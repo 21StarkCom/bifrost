@@ -79,9 +79,11 @@ interface Plugin {
   name: string;
   source: string;
   skills: string[];
+  /** Present only on an entry that declares `hooks`; its shape is checked by the hooks gate. */
+  hooks?: unknown;
 }
 
-/** Parses the manifest into the three fields these gates care about, failing loudly on any shape surprise. */
+/** Parses the manifest into the fields these gates care about, failing loudly on any shape surprise. */
 function readMarketplace(): Plugin[] {
   const raw = readRepoFile(
     MARKETPLACE_REL,
@@ -101,7 +103,7 @@ function readMarketplace(): Plugin[] {
   assert.ok(Array.isArray(plugins), `${MARKETPLACE_REL}: \`plugins\` is missing or not an array`);
 
   return plugins.map((entry, i) => {
-    const p = entry as { name?: unknown; source?: unknown; skills?: unknown };
+    const p = entry as { name?: unknown; source?: unknown; skills?: unknown; hooks?: unknown };
     assert.equal(typeof p.name, "string", `${MARKETPLACE_REL}: plugins[${i}] has no string \`name\``);
     assert.equal(
       typeof p.source,
@@ -120,7 +122,9 @@ function readMarketplace(): Plugin[] {
         `${MARKETPLACE_REL}: plugin \`${String(p.name)}\` lists a non-string skill entry`,
       );
     }
-    return { name: p.name as string, source: p.source as string, skills: p.skills as string[] };
+    const plugin: Plugin = { name: p.name as string, source: p.source as string, skills: p.skills as string[] };
+    if ("hooks" in p) plugin.hooks = p.hooks;
+    return plugin;
   });
 }
 
@@ -240,22 +244,35 @@ test("the seven skills: lists partition the skill/ tree — no unclaimed skill, 
   );
 });
 
-// Plugin hooks ride the same shared root. A `hooks/hooks.json` or a
-// `.claude-plugin/plugin.json` there would load into all seven plugins and fire
-// seven times per event, so a hook is declared inline on the one entry that owns
-// it. Only the inline-object form loads from a marketplace entry with no
-// plugin.json; a path or an array surfaces only in `/plugin`'s Errors tab.
-test("plugin hooks are declared inline on stark-ops alone and run tools from this tree", () => {
-  for (const rel of ["hooks", ".claude-plugin/plugin.json"]) {
+// Every plugin's source is "./", so any component Claude Code auto-discovers at a
+// plugin root loads into all seven plugins at once: a `hooks/hooks.json` fires
+// seven times per event, a `skills/` dir defeats the `skills:` restriction above,
+// and a `.claude-plugin/plugin.json` redefines every entry. None may exist here.
+const SHARED_ROOT_AUTO_DISCOVERED = [
+  "hooks",
+  "skills",
+  "commands",
+  "agents",
+  ".mcp.json",
+  ".lsp.json",
+  ".claude-plugin/plugin.json",
+];
+
+test("nothing Claude Code auto-discovers sits at the shared plugin root", () => {
+  for (const rel of SHARED_ROOT_AUTO_DISCOVERED) {
     assert.ok(
       !fs.existsSync(path.join(REPO_ROOT, rel)),
       `${rel} exists at the repo root. Every plugin's source is "./", so all seven would load it; ` +
-        `declare the hook inline on its owning entry in ${MARKETPLACE_REL} instead.`,
+        `declare the component on its owning entry in ${MARKETPLACE_REL} instead.`,
     );
   }
+});
 
-  const entries = (JSON.parse(readRepoFile(MARKETPLACE_REL, "")) as { plugins: Record<string, unknown>[] }).plugins;
-  const withHooks = entries.filter((p) => "hooks" in p);
+// A hook is declared inline on the one entry that owns it. Only the inline-object
+// form loads from a marketplace entry with no plugin.json; a path or an array
+// surfaces only in `/plugin`'s Errors tab.
+test("plugin hooks are declared inline on stark-ops alone and run tools from this tree", () => {
+  const withHooks = readMarketplace().filter((p) => p.hooks !== undefined);
   assert.deepEqual(
     withHooks.map((p) => p.name),
     ["stark-ops"],
@@ -267,20 +284,36 @@ test("plugin hooks are declared inline on stark-ops alone and run tools from thi
     `${MARKETPLACE_REL}: stark-ops \`hooks\` must be an inline object; a path or array does not load from a marketplace entry.`,
   );
 
-  type Group = { matcher?: string; hooks: { type: string; command: string }[] };
+  // One `if`-gated handler per tool: an `Edit(...)` rule does not match a Write
+  // call, and the gate keeps node from starting on every other file edit.
+  type Group = { matcher?: unknown; hooks?: { type?: unknown; if?: unknown; command?: unknown }[] };
   const groups = hooks as Record<string, Group[]>;
+  const factRouting = 'node "${CLAUDE_PLUGIN_ROOT}/tools/fact_routing_hook.ts"';
   assert.deepEqual(
-    groups.PostToolUse?.map((g) => [g.matcher, g.hooks.map((h) => h.command)]),
-    [["Write|Edit|MultiEdit", ['node "${CLAUDE_PLUGIN_ROOT}/tools/fact_routing_hook.ts"']]],
-    `${MARKETPLACE_REL}: stark-ops must wire tools/fact_routing_hook.ts on PostToolUse for Write|Edit|MultiEdit.`,
+    groups.PostToolUse?.map((g) => [g.matcher, g.hooks?.map((h) => [h.type, h.if, h.command])]),
+    [
+      [
+        "Write|Edit",
+        [
+          ["command", "Write(//**/projects/*/memory/*.md)", factRouting],
+          ["command", "Edit(//**/projects/*/memory/*.md)", factRouting],
+        ],
+      ],
+    ],
+    `${MARKETPLACE_REL}: stark-ops must wire tools/fact_routing_hook.ts on PostToolUse as two command hooks, ` +
+      `gated to auto-memory files by \`if\`, one for Write and one for Edit.`,
   );
   for (const [event, list] of Object.entries(groups)) {
-    for (const h of list.flatMap((g) => g.hooks)) {
-      const m = h.command.match(/^node "\$\{CLAUDE_PLUGIN_ROOT\}\/(tools\/[a-z_]+\.ts)"$/);
+    assert.ok(Array.isArray(list), `${MARKETPLACE_REL}: stark-ops \`hooks.${event}\` must be an array of matcher groups.`);
+    for (const h of list.flatMap((g) => g.hooks ?? [])) {
+      const m =
+        h.type === "command" && typeof h.command === "string"
+          ? h.command.match(/^node "\$\{CLAUDE_PLUGIN_ROOT\}\/(tools\/[a-z_]+\.ts)"$/)
+          : null;
       assert.ok(
         m && fs.existsSync(path.join(REPO_ROOT, m[1])),
-        `${MARKETPLACE_REL}: stark-ops ${event} hook \`${h.command}\` must run a tools/*.ts that exists, ` +
-          `through \${CLAUDE_PLUGIN_ROOT} (the installed copy), never a checkout or $HOME path.`,
+        `${MARKETPLACE_REL}: stark-ops ${event} hook ${JSON.stringify(h)} must be a command hook running a ` +
+          `tools/*.ts that exists, through \${CLAUDE_PLUGIN_ROOT} (the installed copy), never a checkout or $HOME path.`,
       );
     }
   }

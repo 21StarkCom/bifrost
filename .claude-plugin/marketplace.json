@@ -131,10 +131,16 @@
       "hooks": {
         "PostToolUse": [
           {
-            "matcher": "Write|Edit|MultiEdit",
+            "matcher": "Write|Edit",
             "hooks": [
               {
                 "type": "command",
+                "if": "Write(//**/projects/*/memory/*.md)",
+                "command": "node \"${CLAUDE_PLUGIN_ROOT}/tools/fact_routing_hook.ts\""
+              },
+              {
+                "type": "command",
+                "if": "Edit(//**/projects/*/memory/*.md)",
                 "command": "node \"${CLAUDE_PLUGIN_ROOT}/tools/fact_routing_hook.ts\""
               }
             ]
