@@ -2,13 +2,13 @@
 
 A lightweight standard for engineering teams who want their AI code reviews to actually understand the code — and want their docs to stop going stale unnoticed.
 
-This isn't a documentation process. It's a pipeline that connects your design decisions to your code reviews, automatically.
+This isn't a documentation process. It's a pipeline that connects your design decisions to your code reviews through a spec link on every PR.
 
 ---
 
 ## What You Get
 
-- AI reviewers (Claude, Codex, Gemini) that read your spec before reviewing the PR — not just the diff
+- A spec link on every PR, so a reviewer, human or AI, can read the intent before the diff
 - A PR template that takes 2 seconds to fill out and makes reviews 10x more useful
 - Stale doc detection on every PR (warns, never blocks)
 - ADRs that explain the "why" behind surprising choices — permanently
@@ -24,10 +24,10 @@ flowchart LR
     B --> C[AI Spec Review]
     C --> D[Code]
     D --> E[PR]
-    E --> F[AI Code Review\n reads the spec]
+    E --> F[Code Review\n spec linked]
 ```
 
-The spec link in the PR description is what closes the loop. The AI reviewer fetches and reads it before saying a word about the code.
+The spec link in the PR description is what closes the loop: it is what a reviewer should read before saying a word about the code. Nothing here fetches it automatically; give it to your reviewer, or point your review prompt at it.
 
 ---
 

@@ -26,7 +26,7 @@ This is the Codex/Cursor entry point. **Read [CLAUDE.md](CLAUDE.md) before chang
 - Publish every review's findings with `tools/findings_review_post.ts`: inline where anchored, in the body otherwise. Preserve every finding and its severity. Fix findings or explain their disposition on the thread; never resolve another reviewer's thread yourself.
 - Verify the actual surface affected by the change and show the command and output. Exercise GCP and GitHub live when involved. Independently confirm claims that work passed, merged, or closed.
 - Update relevant docs, including this file and `CLAUDE.md`, in the same change as behavior, structure, commands, or operational rules.
-- Use TypeScript for tooling, Node 24+, `node:` builtins at runtime, and sibling `.ts` imports. POSIX shell is limited to the existing skill hooks, `gh` wrappers, and `tools/check-rest-only.sh`. No Python.
+- Use TypeScript for tooling, Node 24+, `node:` builtins at runtime, and sibling `.ts` imports. POSIX shell is limited to the existing skill hooks, `gh` wrappers, and `tools/check-rest-only.sh`. No new Python. What already runs `python3`: the inline program in `skill/stark-gha-cost/scripts/gha-cost-breakdown.sh` (the one Python program a skill ships), `/stark-refactor-plan`'s `python3 -m json.tool` check, the `python3 -c` strings in `scripts/healer_patterns.json`, and three tools that spawn it (one, `stark_session_lib.ts`, targets a `github_projects.py` that no longer exists).
 - Reuse existing tools. Keep code and docs lean; remove dead code and stale references. Store secrets only in mimir.
 
 ## Skills and plugins

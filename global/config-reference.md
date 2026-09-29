@@ -4,31 +4,19 @@ Explanatory context for `global/config.json`. Does not duplicate the values them
 
 ---
 
-## Feature Flag Interactions
+## Feature Flags
 
-Four subsystems can be enabled or disabled independently. They interact as follows:
+Four sections configure four independent tools. None of them triggers another, and no skill or tool reads any of the four `enabled` flags: a tool runs when something invokes it, and runs the same with its flag set to `false`.
 
-| Flag | What it does | Interacts with |
-|------|-------------|----------------|
-| `self_heal.enabled` | Detects repeated failures and suggests or auto-applies fixes. `mode: suggest` means findings are posted only; `mode: auto` applies `auto_patterns`. | `validation_gate` — if the gate fails, self-heal is invoked before retrying. |
-| `validation_gate.enabled` | Runs a post-implementation review pass on `implementation` and `autopilot` workflows, skipping `validation_gate.skip_domains`. | `self_heal` — gate failure triggers heal attempt up to `circuit_breaker_threshold` times. |
-| `skill_activation.enabled` | Watches for signals (review findings, corrections, skill invocations) and suggests relevant skills after `suggest_after_review_rounds` rounds. Respects `cooldown_hours` between suggestions per skill. | Independent of heal/gate; purely advisory. |
-| `context_compaction.enabled` | Checkpoints agent context every `checkpoint_interval_minutes` to stay under token limits during long-running workflows (autopilot, phase-execute). | Active only during multi-step orchestration; no interaction with heal or gate. |
-
-Disabling `validation_gate` also silences any self-heal retries triggered by gate failures, even if `self_heal.enabled` is `true`.
+| Section | Read by | Keys it reads |
+|---------|---------|---------------|
+| `self_heal` | `tools/self_healer.ts` (suggests or applies the fix for one named pattern from `scripts/healer_patterns.json`) and `tools/healer_canary.ts` (promotes a pattern into `auto_patterns`, or demotes it) | `circuit_breaker_threshold` trips a pattern's circuit after that many consecutive failures. `auto_patterns` lists the patterns whose `--mode auto` is honored; any other pattern is downgraded to suggest. The mode itself comes from the `--mode` flag (default `suggest`), not from `mode`, and `max_auto_retries` and `patterns_file` are read by nothing. The canary's promotion gate also reads `min_successful_suggests`, `abort_window_days` and `circuit_open_hours` when set. Authentication patterns are never auto-applied. |
+| `validation_gate` | `tools/validation_gate.ts`, which runs a repo's lint/typecheck/test commands and reports the results | `per_repo_commands` (a repo's commands, else `_default`, else commands discovered from marker files) and `timeout_seconds` per check. `run_on` and `skip_domains` are read by nothing. |
+| `skill_activation` | `tools/skill_router.ts`, which `/stark-session start` calls for its briefing's skill suggestions | `max_suggestions` caps the list, `cooldown_hours` skips a skill used that recently, and `suppressed_skills` are never suggested. `suggest_after_review_rounds` is echoed in the output only, and `activation_signals` is loaded but drives nothing. |
+| `context_compaction` | `tools/context_compactor.ts`, which `/stark-session end` runs once to write a session checkpoint | `max_checkpoint_size_kb` caps the checkpoint and `include_file_summaries` adds file summaries to it. Nothing writes checkpoints on a timer, so `checkpoint_interval_minutes` is loaded but drives nothing. |
 
 ---
 
-## Cost Controls
+## Cost Thresholds
 
-Three thresholds govern spend at different scopes:
-
-| Key | Scope | Behavior |
-|-----|-------|---------|
-| `cost.weekly_budget_usd` ($50) | Rolling 7-day window across all runs | Posts a Slack alert when crossed. Does not stop execution. |
-| `cost.daily_alert_usd` ($15) | Single calendar day | Posts Slack alert if daily spend exceeds threshold. |
-| `cost.hard_stop_usd` ($100) | Per-session / per-run ceiling | Terminates the current orchestration immediately when hit. Prevents runaway spend on stuck loops. |
-
-Budget evaluation order: daily alert → weekly alert → hard stop. A run that would breach `hard_stop_usd` is not started.
-
-`cost.track_rolling_7d: true` means spend is accumulated over a sliding 7-day window, not a fixed Mon–Sun week.
+`cost.weekly_budget_usd`, `cost.daily_alert_usd`, `cost.hard_stop_usd` and `cost.track_rolling_7d` are config defaults only. `tools/stark_config_lib.ts` carries their default values, and no skill or tool reads them: crossing one sends no alert, stops no run and blocks no start. The one spend stop is manual: while a `~/.claude/code-review/cost-hard-stop` file exists, preflight's critical `check_cost_hard_stop` fails and a skill that runs preflight stops. Nothing creates or removes that file for you.
