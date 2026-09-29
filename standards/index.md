@@ -2,7 +2,7 @@
 
 A lightweight standard for engineering teams who want their AI code reviews to actually understand the code — and want their docs to stop going stale unnoticed.
 
-This isn't a documentation process. It's a pipeline that connects your design decisions to your code reviews, automatically.
+This isn't a documentation process. It's a pipeline that connects your design decisions to your code reviews through a spec link on every PR.
 
 ---
 

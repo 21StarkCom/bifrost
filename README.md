@@ -1,10 +1,10 @@
 # Bifröst
 
-Twenty-nine runtime-neutral skills and the TypeScript tools they call, served straight from this tree as a seven-plugin Claude Code marketplace. There is no build step: `skill/<name>/SKILL.md` is the artifact, and it ships when its PR merges.
+Twenty-nine skills and the TypeScript tools they call, served straight from this tree as a seven-plugin Claude Code marketplace. There is no build step: `skill/<name>/SKILL.md` is the artifact, and it ships when its PR merges.
 
 **Status:** a public repo and a one-user personal playground. It is not production, and nothing here promises support to anyone but its author.
 
-It exists so that one operator's way of working (how a ticket is written, a spec gated, a PR reviewed and merged, a session opened and handed over) lives in one place as skills any agent can run. Claude Code is the only install target. The skills are runtime-neutral: Codex runs the same `skill/` + `tools/` trees (`/agnes` is `$agnes` on Codex), and Codex and Gemini are also dispatched as review agents.
+It exists so that one operator's way of working (how a ticket is written, a spec gated, a PR reviewed and merged, a session opened and handed over) lives in one place as skills any agent can run. Claude Code is the only install target. The skills are runtime-neutral, except /stark-memory, which tidies Claude Code's own auto-memory: Codex runs the same `skill/` + `tools/` trees (`/agnes` is `$agnes` on Codex), and Codex and Gemini are also dispatched as review agents.
 
 It absorbed the stark-skills repo, which is archived.
 
@@ -60,7 +60,7 @@ The global config in [Config Hierarchy](#config-hierarchy) is one of those links
 node tools/findings_review_post.ts --repo ORG/REPO --pr 42 --findings findings.json
 ```
 
-Codex reads the same skills from a clone: idavoll links them in at session start.
+Codex reads the same skills from a clone: idavoll links them in at session start, all but the Claude-only /stark-memory.
 
 ## Skills
 
@@ -77,7 +77,7 @@ Codex reads the same skills from a clone: idavoll links them in at session start
 
 | Skill | What it does |
 |---|---|
-| [`/stark-build`](skill/stark-build/SKILL.md) | Implements an accepted spec: one fresh headless session per task, gated by hooks the agent cannot edit, one commit per green task, one cross-vendor advisory review and exactly one fix round, then a draft PR. |
+| [`/stark-build`](skill/stark-build/SKILL.md) | Implements an accepted spec on a draft PR it opens first: one fresh headless session per task, gated by hooks the agent cannot edit, one commit per green task, one cross-vendor advisory review and exactly one fix round. The PR is marked ready only when everything is green and no medium+ finding is left open. |
 
 The pipeline has two stages: you gate the spec at `/stark-author`, and checks gate the code in `/stark-build`. There is no LLM-reviewing-LLM loop between them, by design: the loops that used to sit there burned tokens without converging.
 
@@ -138,7 +138,7 @@ stark-ops also ships one hook: a PostToolUse `tools/fact_routing_hook.ts` that r
 
 ## Architecture
 
-A skill is either protocol-only or a front end to a tool. The worker family (/gru, /minion, /agnes) and /lucius have no tooling of their own here: their SKILL.md carries the whole procedure and drives fleet CLIs such as alfred, hermod and idun. Other skills call a TypeScript dispatcher in `tools/`, which resolves the enabled agents from config, spawns each as a headless subprocess with a credential-scrubbed env, parses the structured output, and merges the results:
+A skill is either protocol-only or a front end to a tool. Most are protocol-only: the SKILL.md carries the whole procedure, and the worker family (/gru, /minion, /agnes) and /lucius drive fleet CLIs such as alfred, hermod and idun from it. Some call a single-purpose tool in `tools/` (`memory_tidy.ts`, `rules_audit.ts`, `stark_session.ts`, …). The multi-agent skills call a TypeScript dispatcher, which resolves the enabled agents from config, spawns each as a headless subprocess with a credential-scrubbed env, parses the structured output, and merges the results:
 
 ```
 /stark-terraform-review ─┐
@@ -147,7 +147,7 @@ A skill is either protocol-only or a front end to a tool. The worker family (/gr
 /stark-jury ─────────────────→ jury.ts             ─→ claude, codex, gemini panel
 ```
 
-PR findings, from `/code-review` or any of the above, reach GitHub through `tools/findings_review_post.ts`: one anchored `COMMENT` review, inline where the anchor falls inside a diff hunk and in the body otherwise. A rejected anchor is demoted, never dropped, and a review already on the PR is never posted twice.
+`/code-review` findings reach GitHub through `tools/findings_review_post.ts`: one anchored `COMMENT` review, inline where the anchor falls inside a diff hunk and in the body otherwise. A rejected anchor is demoted, never dropped, and a review already on the PR is never posted twice. `iac_review.ts --pr` is the exception: it posts its own report as one body-only `COMMENT` review, with no anchors and no duplicate check, so a rerun posts again.
 
 Everything posts through the operator's existing `gh` login as `aryeh-stark`. Each review names its models in the text.
 
@@ -189,8 +189,9 @@ Repos can override the enabled agents and nothing else: the walk above lives onl
 - macOS
 - Node.js ≥ 24 (the tools run under plain `node`)
 - GitHub CLI authenticated as `aryeh-stark`
-- `claude`, plus `codex` and `gemini` for the multi-agent reviews, /stark-jury and /stark-story-judge
-- `python3` for /stark-gha-cost, and for /stark-refactor-plan's JSON check (which falls back to `jq`)
+- `claude`, plus `codex` and `gemini` for the multi-agent reviews and /stark-jury, and `codex` for /stark-build's advisory review and /stark-story-judge's second judge
+- `jq` for /stark-build's path-protection hook and /stark-author's ticket stamp
+- `python3` for /stark-gha-cost, and for /stark-refactor-plan's JSON check (which falls back to `jq` or `node`)
 - The fleet CLIs, each for the skills that call it:
   - `alfred`: /stark-ticket, /stark-author, /stark-build, /stark-bury, /stark-rules-optimizer, /gru, /minion, /agnes
   - `hermod`: /gru, /minion, /agnes, /lucius
@@ -243,7 +244,7 @@ Editing a skill means bumping the `version` of every plugin whose `skills:` list
 
 **The name.** Bifröst (Bilröst in Grímnismál) is the burning, three-coloured rainbow bridge that joins Midgard, the world of humans, to Asgard. Heimdall guards it from Himinbjörg, the gods ride over it daily to hold court at the Well of Urðr, and it is fated to shatter at Ragnarök when the sons of Muspell ride across (Gylfaginning). Its skills /gru, /minion and /agnes come from Despicable Me (2010): Gru the supervillain, his yellow Minions, and Agnes, the youngest of the girls he adopts.
 
-The rainbow bridge is how the gods reach the world, and bifrost is how the operator's craft reaches every agent. One public source tree holds twenty-nine runtime-neutral skills and the tools they call, served straight from the tree as a seven-plugin Claude Code marketplace, with no build step. Cross the bridge and you meet a crew out of Despicable Me. `/gru` takes an epic and drives it with one Minion per ticket. `/minion` owns a single ticket through the whole spine. `/agnes`, named for the youngest girl Gru adopts and never one of his Minions, carries a ticket alone with no Gru at all. Their board is [alfred](https://github.com/21StarkCom/alfred), their horses are [hermod](https://github.com/21StarkCom/hermod)'s tabs, their PRs pass through [idun](https://github.com/21StarkCom/idun), and [frigg](https://github.com/21StarkCom/frigg) tells them where each repo lives. Beyond them wait a spec-to-code pipeline, a jury of Claude, Codex and Gemini, and a review poster that never posts the same review twice. When code must die, `/stark-bury` carries it down to [nastrond](https://github.com/21StarkCom/nastrond). The quest stepped onto the bridge. Gru called a Minion, and Hermod saddled up.
+The rainbow bridge is how the gods reach the world, and bifrost is how the operator's craft reaches every agent. One public source tree holds twenty-nine skills and the tools they call, served straight from the tree as a seven-plugin Claude Code marketplace, with no build step. Cross the bridge and you meet a crew out of Despicable Me. `/gru` takes an epic and drives it with one Minion per ticket. `/minion` owns a single ticket through the whole spine. `/agnes`, named for the youngest girl Gru adopts and never one of his Minions, carries a ticket alone with no Gru at all. Their board is [alfred](https://github.com/21StarkCom/alfred), their horses are [hermod](https://github.com/21StarkCom/hermod)'s tabs, their PRs pass through [idun](https://github.com/21StarkCom/idun), and [frigg](https://github.com/21StarkCom/frigg) tells them where each repo lives. Beyond them wait a spec-to-code pipeline, a jury of Claude, Codex and Gemini, and a review poster that never posts the same review twice. When code must die, `/stark-bury` carries it down to [nastrond](https://github.com/21StarkCom/nastrond). The quest stepped onto the bridge. Gru called a Minion, and Hermod saddled up.
 
 **Supporting cast.** Every crossing passes a sentry: [.github](https://github.com/21StarkCom/.github), the org's public front door and home of this saga, hosts the one reusable gitleaks workflow that more than forty fleet repos pin by SHA, scanning only the commits a change brings.
 

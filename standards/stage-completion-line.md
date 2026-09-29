@@ -63,8 +63,9 @@ Forge maps the line straight onto `forge_state.ts record-output`:
 
 ## Ownership
 
-`spec_path` and `plan_slug` have exactly **one** producer: `stark-author` — the
-spec IS the plan, so there is no separate plan doc and no `plan_path`. No
-stage consumes a recorded slug today: `stark-build` takes the spec path as its
+`spec_path` and `plan_slug` have exactly **one** owner: `stark-author`, which
+creates the spec and its slug — the spec IS the plan, so there is no separate
+plan doc and no `plan_path`. `stark-author` does not emit this line today, and
+no stage consumes a recorded slug: `stark-build` takes the spec path as its
 argument, and a future chainer that threads the slug onward must never
 re-derive it from a filename.
