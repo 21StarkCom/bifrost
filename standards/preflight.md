@@ -1,7 +1,8 @@
 # Skill Preflight Protocol
 
-Standard environment validation that every skill runs before doing real work.
-Skills point at this doc instead of inlining the pattern.
+Standard environment validation a skill runs before doing real work. A skill
+that adopts it points at this doc instead of inlining the pattern; today
+`stark-session` is the one skill that links it.
 
 ## Invocation
 

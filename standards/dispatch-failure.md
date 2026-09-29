@@ -21,13 +21,12 @@ failure that returns zero findings is a failure, not a pass.
 
 ```bash
 which claude codex gemini
-node "$TOOLS/plan_review_dispatch.ts" --prompts-dir <prompts-dir> \
-  --file "$path" --round $round --agents claude --timeout 60
 ```
 
-`<prompts-dir>` is `spec-review` or `plan-review`. The single-agent probe
-isolates whether the failure is per-agent (one CLI broken / unauthenticated)
-or systemic (all CLIs missing, network down).
+Then re-run the same dispatch restricted to one agent (for example,
+`iac_review.ts … --agents codex`). The single-agent probe isolates
+whether the failure is per-agent (one CLI broken / unauthenticated) or
+systemic (all CLIs missing, network down).
 
 ## Dispatch-failure summary template
 
