@@ -8,6 +8,20 @@ It exists so that one operator's way of working (how a ticket is written, a spec
 
 It absorbed the stark-skills repo, which is archived.
 
+## The legend of bifrost: The Burning Bridge
+
+*The Rainbow Road Between Source and Session*
+
+**The name.** Bifröst (Bilröst in Grímnismál) is the burning, three-coloured rainbow bridge that joins Midgard, the world of humans, to Asgard. Heimdall guards it from Himinbjörg, the gods ride over it daily to hold court at the Well of Urðr, and it is fated to shatter at Ragnarök when the sons of Muspell ride across (Gylfaginning). Its skills /gru, /minion and /agnes come from Despicable Me (2010): Gru the supervillain, his yellow Minions, and Agnes, the youngest of the girls he adopts.
+
+The rainbow bridge is how the gods reach the world, and bifrost is how the operator's craft reaches every agent. One public source tree holds twenty-nine skills and the tools they call, served straight from the tree as a seven-plugin Claude Code marketplace, with no build step. Cross the bridge and you meet a crew out of Despicable Me. `/gru` takes an epic and drives it with one Minion per ticket. `/minion` owns a single ticket through the whole spine. `/agnes`, named for the youngest girl Gru adopts and never one of his Minions, carries a ticket alone with no Gru at all. Their board is [alfred](https://github.com/21StarkCom/alfred), their horses are [hermod](https://github.com/21StarkCom/hermod)'s tabs, their PRs pass through [idun](https://github.com/21StarkCom/idun), and [frigg](https://github.com/21StarkCom/frigg) tells them where each repo lives. Beyond them wait a spec-to-code pipeline, a jury of Claude, Codex and Gemini, and a review poster that never posts the same review twice. When code must die, `/stark-bury` carries it down to [nastrond](https://github.com/21StarkCom/nastrond). The quest stepped onto the bridge. Gru called a Minion, and Hermod saddled up.
+
+**Supporting cast.** Every crossing passes a sentry: [.github](https://github.com/21StarkCom/.github), the org's public front door and home of this saga, hosts the one reusable gitleaks workflow that more than forty fleet repos pin by SHA, scanning only the commits a change brings.
+
+← [muninn](https://github.com/21StarkCom/muninn) · [The saga](https://github.com/21StarkCom/.github/blob/main/fleet/saga.md) · [hermod](https://github.com/21StarkCom/hermod) →
+
+---
+
 ## Quick Start
 
 ```bash
@@ -235,17 +249,3 @@ Editing a skill means bumping the `version` of every plugin whose `skills:` list
 - [`CLAUDE.md`](CLAUDE.md): the detailed reference for Claude Code and agentic contributors. It wins on conflict.
 - [`AGENTS.md`](AGENTS.md): the concise entry point for Codex and Cursor; defers to `CLAUDE.md`.
 - Each skill documents itself: `skill/<name>/SKILL.md` is the source of truth, and every skill answers `--help`. There is no generated documentation layer.
-
----
-
-## The legend of bifrost: The Burning Bridge
-
-*The Rainbow Road Between Source and Session*
-
-**The name.** Bifröst (Bilröst in Grímnismál) is the burning, three-coloured rainbow bridge that joins Midgard, the world of humans, to Asgard. Heimdall guards it from Himinbjörg, the gods ride over it daily to hold court at the Well of Urðr, and it is fated to shatter at Ragnarök when the sons of Muspell ride across (Gylfaginning). Its skills /gru, /minion and /agnes come from Despicable Me (2010): Gru the supervillain, his yellow Minions, and Agnes, the youngest of the girls he adopts.
-
-The rainbow bridge is how the gods reach the world, and bifrost is how the operator's craft reaches every agent. One public source tree holds twenty-nine skills and the tools they call, served straight from the tree as a seven-plugin Claude Code marketplace, with no build step. Cross the bridge and you meet a crew out of Despicable Me. `/gru` takes an epic and drives it with one Minion per ticket. `/minion` owns a single ticket through the whole spine. `/agnes`, named for the youngest girl Gru adopts and never one of his Minions, carries a ticket alone with no Gru at all. Their board is [alfred](https://github.com/21StarkCom/alfred), their horses are [hermod](https://github.com/21StarkCom/hermod)'s tabs, their PRs pass through [idun](https://github.com/21StarkCom/idun), and [frigg](https://github.com/21StarkCom/frigg) tells them where each repo lives. Beyond them wait a spec-to-code pipeline, a jury of Claude, Codex and Gemini, and a review poster that never posts the same review twice. When code must die, `/stark-bury` carries it down to [nastrond](https://github.com/21StarkCom/nastrond). The quest stepped onto the bridge. Gru called a Minion, and Hermod saddled up.
-
-**Supporting cast.** Every crossing passes a sentry: [.github](https://github.com/21StarkCom/.github), the org's public front door and home of this saga, hosts the one reusable gitleaks workflow that more than forty fleet repos pin by SHA, scanning only the commits a change brings.
-
-← [muninn](https://github.com/21StarkCom/muninn) · [The saga](https://github.com/21StarkCom/.github/blob/main/fleet/saga.md) · [hermod](https://github.com/21StarkCom/hermod) →
