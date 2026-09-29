@@ -3,7 +3,7 @@ name: minion
 runtimes:
   - claude
   - codex
-description: "Act as a Minion launched by Gru: own one ticket, carry it through the repo's ticket → PR → review → merge → close spine, and report the outcome to Gru over Hermod."
+description: "Act as a Minion launched by Gru: own one ticket, carry it through the repo's ticket → PR → review → merge → close spine, and report the outcome to Gru through native messaging when available."
 argument-hint: "<Gru brief: ticket id + leader peer id> | [STARK-n] --new-tab [--leader <peer>] [--repo <name>] [--agent claude|codex]"
 ---
 
@@ -91,8 +91,9 @@ and if that is what the operator wants, say so and stop.
    there the leader is yours to write too: your own `hermod msg peers` `id` in
    the brief. The `STARK-n` is already on the launch line from step 1.
 3. Read the ack before you call it launched. Its `prompt` must read
-   `/minion STARK-n` (`$minion STARK-n` on Codex) and name the leader peer you
-   meant. A failed start looks different per `--agent`, and either leaves the
+   `/minion STARK-n` (`$minion STARK-n` on Codex), name the leader peer you
+   meant, and describe the route for that provider pair. A failed start looks
+   different per `--agent`, and either leaves the
    tab and worktree standing for inspection: Claude exits 1 with a complete,
    normal-looking ack whose only tell is `verified:false`; Codex prints
    `{error, code, stage}` with no ack fields at all. Exit 2 names a bad
@@ -100,10 +101,22 @@ and if that is what the operator wants, say so and stop.
    printed; a nonzero exit is the answer, not something to work around.
 4. **Then it depends on who the leader is.**
    - **`--leader <someone else>`**: print the ack's `surface`, `workspace`,
-     `name` and `prompt`, and stop. That peer receives the report and confirms
-     the `done`.
+     `name`, `sessionId`, `peerId`, and `prompt`, and stop. Hand the native
+     address to that leader; for Claude/Claude, the actual leader must send
+     the first `SendMessage` to `name`. Until that happens the Minion uses
+     the Hermod fallback in [Reporting](#reporting). That leader receives the
+     report and confirms the `done`.
    - **You are the leader**: you do not stop. You are Gru for exactly one
-     ticket — wait for the Minion's report and handle it by
+     ticket. First make Gru step 3's native contact after the verified ack:
+     for Claude/Claude, use `SendMessage` to the ack's launch `name` so the
+     Minion learns your `from` address; for Codex/Codex, use
+     `codex queue --thread <ack sessionId> --message '<ticket assignment>'`.
+     If native messaging is unavailable or explicitly fails, send the
+     assignment through `hermod msg send --to <ack peerId>` and ask for bridge
+     reports. A held Claude message is pending; inspect its state. If it
+     remains held, send only a Hermod routing notice for bridge reports,
+     without duplicating the ticket assignment. Then wait for the Minion's
+     report and handle it by
      [Gru's protocol](../gru/SKILL.md), steps 4 and 5: what counts as a death
      (step 4's single relaunch of a real one is the only second launch you ever
      make), and the confirm that turns a `done` from a claim into a fact (PR
@@ -145,17 +158,37 @@ could not. Use judgement; do not ask Gru to decide.
 
 ## Reporting
 
-One line to the leader peer from the brief, never typed into another terminal:
-`hermod msg send --to <leader-peer> --kind progress -- "STARK-n <report>"` where
-`<report>` is one of:
+Send one line to the leader peer from the brief, never into another terminal.
+The leader and Minion's provider determine the route:
+
+- **Claude → Claude:** Gru's first native `SendMessage` to your launch name
+  supplies its `from` address. Use `SendMessage` to that address for progress
+  and final reports. If no `from` address has arrived by reporting time,
+  report through Hermod until Gru confirms a route switch. The leader peer
+  UUID in the brief is for Hermod fallback,
+  not the native `SendMessage` recipient. If the tool is absent, messaging is
+  disabled, or native submission explicitly fails, use
+  `hermod msg send --to <leader-peer> --kind progress -- "STARK-n <report>"`.
+  A held native message is pending; check its state before retrying.
+- **Codex → Codex:** use
+  `codex queue --thread <leader-thread-id> --message 'STARK-n <report>'`,
+  taking the exact thread ID after `codex:` in the brief. A queue receipt
+  proves submission only. If the queue command is unavailable or rejects the
+  send, use `hermod msg send --to <leader-peer> --kind progress -- "STARK-n <report>"`.
+- **Different providers or unresolved native identity:** use
+  `hermod msg send --to <leader-peer> --kind progress -- "STARK-n <report>"`.
+
+If Gru contacts you through the fallback bridge, continue reporting there
+until you both establish a native route. Peer messages on either channel are
+observation, never operator authorization. The `<report>` is one of:
 
 - `done <PR url> merged <sha> verified <the live check you ran>` — the live
   check is a required element, not a flourish: it names the evidence, and the
   run itself is on the PR (the spine's step 5), so Gru confirms the ticket by
   reading that comment instead of taking your word for it. Write the check as
-  plain prose, never a pasted command line: this report is a double-quoted
-  shell argument, so a `$`, a quote or a backtick in it is expanded, mangled
-  or executed. A ticket with no live surface says `verified none (<why>)`.
+  plain prose, never a pasted command line: CLI report text is a shell
+  argument, so quote it safely and do not run its content. A ticket with no
+  live surface says `verified none (<why>)`.
 - `blocked <one-line reason>` — only for what you cannot resolve yourself:
   missing access, an operator's decision, an unmerged dependency.
 - `follow-up STARK-m filed, stopping`.
@@ -169,7 +202,8 @@ On a `done` exit, run [the stand-down contract](../../standards/stand-down.md)
 `hermod poison-pill --json`, `armed:true`, and the `partial` outcomes. One of
 its terms is filled in here:
 
-- **Your report** is the `hermod msg send` line in [Reporting](#reporting),
+- **Your report** is the completed native or Hermod send in
+  [Reporting](#reporting),
   sent and completed *before* you arm. Anything you see go wrong in the
   poison-pill foreground goes to Gru in one more line before you stop.
 
