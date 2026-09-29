@@ -13,6 +13,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=341 runId=341 sha=74eb14e8 -->
+- Gru and Minion now coordinate over Claude `SendMessage` or the Codex queue for same-provider pairs, falling back to Hermod messaging otherwise.
 <!-- idun:pr-merge pr=340 runId=340 sha=de580e68 -->
 - Moved the README's saga chapter, "The Burning Bridge", from the end of the file to the top, right after the header block.
 - `/goldfinger` now teaches goldfinger 0.3.0 whole: sessions and their cursor, `batch`, `record` and `replay`, the 19 MCP tools, `session_limit` and `record_failed`, and fixes its MCP and exit-code claims, tightened to stay under 3,400 words and 250 lines; `stark-ops` is 0.17.21.

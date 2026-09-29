@@ -116,7 +116,7 @@ The pipeline has two stages: you gate the spec at `/stark-author`, and checks ga
 | [`/stark-bury`](skill/stark-bury/SKILL.md) | Retires code into the nastrond graveyard: bury before delete, and every destructive step waits for the operator. |
 | [`/stark-memory`](skill/stark-memory/SKILL.md) | Audits and tidies Claude Code auto-memory under its load and recall caps. Dry-run by default; `--apply` writes. |
 | [`/gru`](skill/gru/SKILL.md) | Drives an epic or a list of tickets to done, one Minion per ticket, and confirms each `done` from the merged PR and the board. |
-| [`/minion`](skill/minion/SKILL.md) | Owns one ticket for Gru through ticket → PR → review → merge → close, and reports over hermod. |
+| [`/minion`](skill/minion/SKILL.md) | Owns one ticket for Gru through ticket → PR → review → merge → close, and reports through native messaging when available or Hermod fallback. |
 | [`/agnes`](skill/agnes/SKILL.md) | Carries one ticket alone and unattended, with no Gru: confirms its own merge and close, then stands down. |
 | [`/lucius`](skill/lucius/SKILL.md) | Opens a Lucius brainstorm in a tab of its own through `hermod lucius`, then stops. |
 | [`/goldfinger`](skill/goldfinger/SKILL.md) | Teaches the `goldfinger` CLI: observe a window's accessibility tree, then click, type, press keys, scroll or set a value in the background; move or resize a window and read or write the clipboard's text; press a menu-bar command or drag under `--foreground`, which brings the app to the front for that action alone; run up to 10 actions in one `batch`, work in a session with its own drawn cursor, and record a session to replay it; and register `goldfinger mcp`, the same client as an MCP server. |

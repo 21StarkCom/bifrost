@@ -38,6 +38,7 @@ This is the Codex/Cursor entry point. **Read [CLAUDE.md](CLAUDE.md) before chang
 - Resolve shipped assets through `tools/asset_root_lib.ts` (`assetRoot()`); keep mutable state under `stateRoot()`. Skills use `${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/code-review}`. Do not hardcode asset subdirectories under the home fallback.
 - `tools/asset_links.ts` owns the five code-review asset links declared in `tools/asset_links_lib.ts`. Machine settings, machine hooks, and generated GCP scope belong to the idavoll repo (`21StarkCom/idavoll`); only plugin-shipped hooks live here. Leave idavoll's `.envrc` block and `.worktreeinclude` entry to that provisioner; never add credential files or broad globs to `.worktreeinclude`. Claude- and Codex-managed worktrees copy its entries; a plain `git worktree add` does not, so a helper that creates one copies the named files itself.
 - Read a skill's own `SKILL.md` for its arguments and workflow. [CLAUDE.md](CLAUDE.md#skills) maps plugins to skills. Shared worker rules live in [worker-spine.md](standards/worker-spine.md) and [stand-down.md](standards/stand-down.md); change shared rules there.
+- Gru and Minion use Claude SendMessage or direct Codex queue for same-provider messages when available. Mixed-provider and native-unavailable messages use Hermod. Keep the report-before-stand-down rule in the shared standard.
 
 ## Tool and documentation contracts
 

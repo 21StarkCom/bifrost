@@ -108,7 +108,7 @@ tab because they want this one back.
 ## First: are you the right skill?
 
 **If your brief names a leader peer, stop.** A leader peer means there is a Gru
-expecting `hermod msg` reports and confirming your `done` — that is
+expecting native or Hermod reports and confirming your `done` — that is
 [`/minion`](../minion/SKILL.md), not Agnes, and running Agnes there would leave
 Gru waiting on a report that never comes. Say so in one line and stop.
 
