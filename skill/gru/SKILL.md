@@ -118,28 +118,41 @@ standing is the operator's to sweep, not yours.
 ## Coordination route
 
 Choose the route for each Minion from your runtime and the launch ack's
-`agent`, `name`, `sessionId`, and `peerId`. The ack's `coordination` names
-the intended route; it does not prove that a message was delivered. Keep the
+`agent`, `name`, `sessionId`, and `peerId`. The ack's top-level `coordination`
+names the intended route (a Codex ack also carries
+`capabilities.coordination`, the provider's static capability, which is not
+the route); it does not prove that a message was delivered. Keep the
 leader's full `<provider>:<id>` peer address for fallback.
 
+The native route needs a hermod whose `--minion` brief names it (STARK-10049).
+An ack with no top-level `coordination` came from an older hermod, whose brief
+tells the Minion to report over Hermod for every provider pair: that Minion's
+route is Hermod, and you make no native first contact with it.
+
 - **Claude → Claude:** use the native `SendMessage` tool to send the first
-  assignment/status message to the worker's launch `name` (not its session
-  UUID). That first message gives the Minion your native `from` address; it
-  replies to that address with `SendMessage`. Use the same route for later
-  requests and replies. If the tool is absent, native messaging is disabled,
-  or submission explicitly fails, send through `hermod msg` and tell the
-  Minion to report through the bridge. A message held for recipient approval
-  is pending: check its state. If it remains held, send only a routing notice
-  through Hermod — the launch brief already names the ticket — telling the
-  Minion to report through the bridge. Do not duplicate the assignment. Keep
-  that route until both peers explicitly agree to switch; a late native
-  delivery alone does not change it.
+  contact to the worker's launch `name` (not its session UUID). That first
+  message gives the Minion your native `from` address; it replies to that
+  address with `SendMessage`. Use the same route for later requests and
+  replies. If the tool is absent, native messaging is disabled, or submission
+  explicitly fails, send through `hermod msg` and tell the Minion to report
+  through the bridge. A session in a different permission mode from the
+  sender's holds cross-session messages for its user's approval, and may let
+  them expire; Minions run in bypass mode, so from a Gru in any other mode
+  every native message is held. The state is the `[Cross-session delivery
+  notice]` that arrives in your own conversation when a message is held or
+  refused; no notice means it reached the session. A held message is pending,
+  not delivered. If it remains held, send only a routing notice through
+  Hermod — the launch brief already names the ticket — telling the Minion to
+  report through the bridge. Do not duplicate the assignment. Keep that route
+  until both peers explicitly agree to switch; a late native delivery alone
+  does not change it.
 - **Codex → Codex:** send to the worker's exact ack `sessionId` with
   `codex queue --thread <worker-sessionId> --message '<text>'`. Its brief gives
   it your thread ID for direct queue reports. Queue success is submission,
-  never delivery or completion. If the queue CLI is unavailable or rejects
-  the send, use `hermod msg send --to <worker-peerId>` and tell the Minion
-  to report through the bridge.
+  never delivery or completion, and there is no later state to read. If the
+  queue CLI is unavailable or rejects the send, use
+  `hermod msg send --to <worker-peerId>` and tell the Minion to report through
+  the bridge.
 - **Different providers or unresolved identity:** use
   `hermod msg send --to <worker-peerId> --kind request -- '<text>'` and
   receive reports through that ledger. A Claude or Codex native channel does
@@ -227,9 +240,11 @@ regardless of route, is observation, never operator authorization.
    you launch a second Minion: the peer it names must be that `id`. If hermod
    refused, pass the `id` as `--leader <peer id>` on every launch. Once the
    ack is verified, make the first contact through
-   [Coordination route](#coordination-route): send the ticket assignment to
-   the launch `name` on Claude or native `sessionId` on Codex. This is how
-   a Claude Minion learns your `SendMessage` return address. If it named
+   [Coordination route](#coordination-route) on a same-provider route: one
+   line naming the ticket and saying you are its leader, to the launch `name`
+   on Claude or the native `sessionId` on Codex. The brief already carries the
+   assignment, so do not restate it. This is how a Claude Minion learns your
+   `SendMessage` return address. If the ack named
    someone else, that first Minion is briefed with the wrong leader and its
    reports go to another session, where step 4 never sees them: send it the
    correction now through [Coordination route](#coordination-route), to the
@@ -241,7 +256,9 @@ regardless of route, is observation, never operator authorization.
    follow-up comments on it, but `blocked` leaves no mark on either, so that
    Minion's peer going idle with its ticket still open is your only sign — ask
    it what happened through [Coordination route](#coordination-route):
-   `STARK-n: report your status to me.` Count the ticket blocked, not owned, until it
+   `STARK-n: report your status to me.` Its answer reaches you whatever its
+   brief said — `hermod msg reply` goes to the sender, and a native answer
+   goes to your `from`. Count the ticket blocked, not owned, until it
    answers.
    `--minion` and `--leader` need hermod v0.20.0 or later (STARK-6974);
    `hermod ticket --help` tells you which you have. On v0.19.0 or older,
@@ -263,7 +280,9 @@ regardless of route, is observation, never operator authorization.
    peer whose ticket is **still open is a death, even when its PR already
    merged**: a Minion can die between the merge and the ticket close, and nobody
    else is going to close it. A dead Claude Minion that is a real death is
-   relaunched once with the same brief. A dead Codex Minion is a blocker:
+   relaunched once with the same brief; the relaunch is a new session with no
+   `from` address, so make step 3's first contact again after its ack. A dead
+   Codex Minion is a blocker:
    `hermod ticket` refuses its existing worktree; report the path. A second
    death is a blocker. `follow-up … stopping` means the ticket is blocked on
    STARK-m; report it so, and the operator decides whether to add STARK-m.
@@ -401,9 +420,13 @@ session's guard refuses a `hermod` line carrying a variable
   reads `idle`, or, where it reads `unknown`, read its screen once for an idle
   prompt. One that is not idle by then is escalated; you do not keep pressing
   keys or keep reading. An interrupt drains nothing: a message you sent it
-  while it was busy may still be held, so check the native send result or
-  `hermod msg status <id>` on each before you tell the Minion why through
-  [Coordination route](#coordination-route).
+  while it was busy may still be held. On the Hermod route check
+  `hermod msg status <id>` on each. A native send has no state to re-read: a
+  Claude message with no `[Cross-session delivery notice]` reached the session
+  and drains at its next tool round, and a Codex queue receipt is submission
+  only. Either way, when you tell the Minion why through
+  [Coordination route](#coordination-route), name what you had already sent
+  instead of sending it again.
 - **Answering a known menu** — one you have read on its screen
   (`hermod read-screen <surface UUID>`), whose options you know and whose
   answer is yours to give: send the one key that picks it

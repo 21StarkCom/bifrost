@@ -15,7 +15,7 @@ launch or a brief naming one names the other.
 One thing is the calling skill's, and this doc calls it by name:
 
 - **your report** — where the outcome goes before you die (a Minion's
-  native or Hermod message to its leader peer; Agnes's comment on the ticket).
+  native or Hermod message to its leader; Agnes's comment on the ticket).
   Whatever it is, it is a completed act before you arm, and it is never the
   durable copy of your evidence: that is the PR comment the spine's step 5
   requires, because your report is a line and your scrollback is gone.
@@ -33,7 +33,7 @@ teardown: your own session, your own tab, your own disk, a job you finished.
 Nobody has to authorize it at the time, and it makes no difference whether a
 leader launched you or a hand did — with no leader peer to report to, your
 report is the one your skill names (a ticket comment, for Agnes) rather than a
-Hermod line, and nothing else changes. What is not negotiable is the scope:
+line to a leader, and nothing else changes. What is not negotiable is the scope:
 **only after `idun gh pr-merge` and the ticket close, only your own tab, never
 on `blocked` or `follow-up … stopping`, and never on any other trigger.** The
 standing permission the command needs is still the operator's, and a refusal
