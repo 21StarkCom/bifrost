@@ -35,7 +35,7 @@ Every skill answers `--help` (`/stark-session --help`): it prints its purpose, u
 
 ### From the marketplace
 
-A marketplace install needs nothing vendored, linked or installed beside it. Every entry in `.claude-plugin/marketplace.json` points at `./`, so an installed plugin is this repo's own `skill/` tree, restricted to that plugin's `skills:` list.
+Every entry in `.claude-plugin/marketplace.json` points at `./`, so an installed plugin is this repo's own tree, with its skills restricted to that plugin's `skills:` list. A protocol-only skill needs nothing beside it. A skill that calls a tool resolves it through `${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/code-review}`, and Claude Code (measured at 2.1.284) neither sets `CLAUDE_PLUGIN_ROOT` in a skill's shell nor substitutes that fallback form. So those skills find their tools through the checkout links in [From a checkout](#from-a-checkout), and a marketplace install still needs them.
 
 ```
 /plugin marketplace add 21StarkCom/bifrost
@@ -151,7 +151,7 @@ A skill is either protocol-only or a front end to a tool. Most are protocol-only
 
 Everything posts through the operator's existing `gh` login as `aryeh-stark`. Each review names its models in the text.
 
-Immutable assets (tools, prompts, config) resolve through `tools/asset_root_lib.ts` from the installed plugin root (`${CLAUDE_PLUGIN_ROOT}`), else `~/.claude/code-review`. Mutable state (`history/`, `sessions/`, `locks/`, …) lives under `~/.claude/code-review/` (`stateRoot()`), never in the plugin cache, so it survives a plugin update.
+Immutable assets (tools, prompts, config) resolve through `tools/asset_root_lib.ts` from `STARK_ASSET_ROOT`, else `CLAUDE_PLUGIN_ROOT` when it is set (a plugin hook), else `~/.claude/code-review`. Mutable state (`history/`, `sessions/`, `locks/`, …) lives under `~/.claude/code-review/` (`stateRoot()`), never in the plugin cache, so it survives a plugin update.
 
 ## Repo Structure
 

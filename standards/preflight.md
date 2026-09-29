@@ -40,15 +40,14 @@ Preflight checks the existing `gh` login as `aryeh-stark`.
 Authentication changes require operator action.
 
 **Why `TOOLS` reads `CLAUDE_PLUGIN_ROOT` before `$HOME`.** Every marketplace
-entry ships this whole repo (`"source": "./"`), so inside an installed plugin
-Claude Code sets `CLAUDE_PLUGIN_ROOT` to a cache holding the very `tools/` these
-skills call. Resolving straight to `$HOME/.claude/code-review/tools` reached out
-of the plugin into the operator's own symlink tree instead — a tree that exists
-on one machine and points at whatever checkout that operator last linked. The
-nested form keeps an installed plugin self-contained and leaves the direct,
-non-plugin invocation (where `CLAUDE_PLUGIN_ROOT` is unset) on the home tree,
-unchanged. This is the shape every skill body already uses; preflight was the
-last file in the repo still on the flat one.
+entry ships this whole repo (`"source": "./"`), so a plugin cache holds the very
+`tools/` these skills call, and the nested form is meant to prefer it over the
+operator's own symlink tree. It is the shape every skill body uses. Measured at
+Claude Code 2.1.284, though, a skill's shell does not have `CLAUDE_PLUGIN_ROOT`
+set, and Claude Code substitutes only the bare `${CLAUDE_PLUGIN_ROOT}` token in
+a skill body, not this fallback form. So `TOOLS` resolves to
+`$HOME/.claude/code-review/tools`, the checkout links `tools/asset_links.ts`
+provisions, even inside an installed plugin.
 
 `alerts.jsonl` above deliberately does NOT follow the same chain. It is mutable
 STATE, and plugin caches are replaced wholesale on update, so state written
