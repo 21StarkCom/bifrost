@@ -102,7 +102,7 @@
       "name": "stark-ops",
       "source": "./",
       "description": "Repository operations beyond the spec-driven pipeline — coordinate Minions with Gru, cut releases, run session start/end, hand off work across sessions, run one ticket solo and unattended with Agnes, open a Lucius brainstorm in a tab of its own, and operate desktop apps in the background with goldfinger.",
-      "version": "0.17.22",
+      "version": "0.17.23",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -152,8 +152,8 @@
     {
       "name": "stark-plan",
       "source": "./",
-      "description": "Plan work before it starts — author a human-gated spec with its task DAG, and write tickets a fresh worker can carry to merge: measured premises, verification that fails for the defect, and one zero-context cold read before filing.",
-      "version": "0.6.1",
+      "description": "Plan work before it starts — author a human-gated spec with its task DAG, and write short tickets someone else can pick up, with no guessed claims.",
+      "version": "0.7.0",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"

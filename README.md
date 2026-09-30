@@ -85,7 +85,7 @@ Codex reads the same skills from a clone: idavoll links them in at session start
 | Skill | What it does |
 |---|---|
 | [`/stark-author`](skill/stark-author/SKILL.md) | A human-gated spec and task DAG in one session: recon, a plain-language interview, one advisory pass, your sign-off, then a draft PR. |
-| [`/stark-ticket`](skill/stark-ticket/SKILL.md) | A ticket a fresh worker can carry to merge: measured evidence, verification that fails for the defect, one zero-context cold read. Loads on its own before `alfred task start`/`task new`. |
+| [`/stark-ticket`](skill/stark-ticket/SKILL.md) | A short checklist for a ticket someone else can pick up: a twin check, alfred's headings, under 300 words, no guessed claims. Loads on its own before `alfred task start`/`task new`. |
 
 ### stark-implement: autonomous build
 
