@@ -18,7 +18,7 @@ The rainbow bridge is how the gods reach the world, and bifrost is how the opera
 
 **Supporting cast.** Every crossing passes a sentry: [.github](https://github.com/21StarkCom/.github), the org's public front door and home of this saga, hosts the one reusable gitleaks workflow that more than forty fleet repos pin by SHA, scanning only the commits a change brings.
 
-← [muninn](https://github.com/21StarkCom/muninn) · [The saga](https://github.com/21StarkCom/.github/blob/main/fleet/saga.md) · [hermod](https://github.com/21StarkCom/hermod) →
+← [yggdrasil](https://github.com/21StarkCom/yggdrasil) · [The saga](https://github.com/21StarkCom/.github/blob/main/fleet/saga.md) · [hermod](https://github.com/21StarkCom/hermod) →
 
 ---
 
