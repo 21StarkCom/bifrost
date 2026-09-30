@@ -451,8 +451,9 @@ test(".gitleaks.toml exempts values, never paths", () => {
 // It is a hand-maintained copy of what 21StarkCom/21stark renders from
 // `repos/secret_scan.tf`; Terraform writes those exact bytes into the other 63
 // repos with `github_repository_file` and skips bifrost, because `main` here
-// carries `enforce_admins = true` and the provider's direct commit is rejected
-// even for an admin token. So the bytes arrive here by PR instead, and they must
+// carried `enforce_admins = true` until 2026-09-30 and the provider's direct
+// commit was rejected even for an admin token. So the bytes arrive here by PR
+// instead, and they must
 // stay byte-identical to the render: 21stark's
 // `check "bifrost_runs_the_current_secret_scan_caller"` reads this file over the
 // API on every plan and warns when it drifts, which is the only signal that a

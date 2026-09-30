@@ -89,9 +89,9 @@ above**.
 It is the fleet's uniform secret scan — a thin caller, pinned by SHA, for the one
 reusable workflow in `21StarkCom/.github`. Terraform in `21StarkCom/21stark`
 (`repos/secret_scan.tf`) writes that caller into the rolled-out repos;
-**bifrost is in `local.secret_scan_excluded`** because `main` here carries
-`enforce_admins = true` plus a required pull request, so the provider's direct
-commit is rejected even for an admin token (STARK-7490). The file arrived by PR
+**bifrost is in `local.secret_scan_excluded`** because `main` here carried
+`enforce_admins = true` plus a required pull request until 2026-09-30, so the
+provider's direct commit was rejected even for an admin token (STARK-7490). The file arrived by PR
 instead, **byte-identical to the render**, and must stay that way: 21stark's
 `check "bifrost_runs_the_current_secret_scan_caller"` byte-compares it over the
 API on every plan and only *warns*, which is the only signal anyone gets that a
@@ -210,14 +210,16 @@ repo is the only human.
 **Classic protection on `main`** carries **no `required_status_checks` key at
 all**. Reading that endpoint alone is therefore actively misleading: it returns a
 populated object with the status-check field simply absent, which reads as "no
-checks required" when four are. What it does carry, and what binds *everyone*
-including an admin because `enforce_admins` is `true`:
+checks required" when four are. What it does carry, and what binds everyone
+**but the admin** — `enforce_admins` has been `false` since 2026-09-30, when the
+operator turned it off so the admin can push to `main` directly (re-measured
+that day):
 
 - `required_pull_request_reviews` present with
   `required_approving_review_count: 0`, `require_code_owner_reviews: false`,
   `dismiss_stale_reviews: true`, `require_last_push_approval: false` — the
   object's *presence* is what requires a pull request at all. So: a PR is
-  mandatory for every change; approvals are not (§6).
+  mandatory for every non-admin change; approvals are not (§6).
 - `required_conversation_resolution: true` — every review thread must be resolved
   before merge. This is what makes an unresolvable inline review comment a hard
   blocker rather than a note.
@@ -227,13 +229,13 @@ including an admin because `enforce_admins` is `true`:
 
 The two surfaces are **additive**: a ruleset does not replace classic protection,
 and the most restrictive rule across both wins. **A ruleset's bypass actor grants
-no exemption from classic protection** — the admin can merge past a red required
-check, and cannot push to `main` directly, cannot force-push, and cannot leave a
-review thread unresolved.
+no exemption from classic protection** — the admin's exemption from the classic
+rules comes from `enforce_admins` being off, not from the ruleset. Together they
+let the admin merge past a red required check and push to `main` directly.
 
-Neither half binds an admin who **rewrites** the settings. `enforce_admins` stops
-an admin *using* a bypass, not one who PUTs `enforce_admins: false` or deletes
-the ruleset, and nothing here detects that. The re-measure commands above are the
+Neither half binds an admin who **rewrites** the settings — `enforce_admins`
+went off exactly that way on 2026-09-30 — and nothing here detects such a
+change. The re-measure commands above are the
 only control.
 
 ## 3. APPLY — the `Required CI on main` ruleset (operator-only; already applied)

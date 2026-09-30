@@ -54,7 +54,7 @@ This is the Codex/Cursor entry point. **Read [CLAUDE.md](CLAUDE.md) before chang
 Read [branch-protection.md](docs/operations/branch-protection.md) before changing CI or branch controls.
 
 - Required contexts: **`test`**, **`typecheck`**, **`secret scan (tree)`**, **`actionlint`**. The ruleset permits repository-admin bypass; the agent workflow still requires green checks.
-- Classic protection also requires a pull request, conversation resolution, and linear history, and `enforce_admins` applies those to the admin too. Audit both `rules/branches/main` and `branches/main/protection`; neither alone is complete.
+- Classic protection also requires a pull request, conversation resolution, and linear history. `enforce_admins` is off (2026-09-30), so the admin can push to `main` directly; everyone else goes through a PR. Audit both `rules/branches/main` and `branches/main/protection`; neither alone is complete.
 - Keep required jobs unconditional, without draft guards or `continue-on-error`. Required contexts match check names; coordinate any rename with the ruleset. `tools/workflow_shape.test.ts` pins CI structure.
 - The blocking secret job scans the whole tree and PR commit range and proves both custom gitleaks rules fire. `secret-scan / secret-scan` is additional and is not required.
 - `.github/workflows/secret-scan.yml` is a byte-identical Terraform render owned by `21StarkCom/21stark`. Change its template there and bring the render here by PR; fleet-check enrollment also belongs there.
