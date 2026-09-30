@@ -57,7 +57,7 @@ Read [branch-protection.md](docs/operations/branch-protection.md) before changin
 - Classic protection also requires a pull request, conversation resolution, and linear history. `enforce_admins` is off (2026-09-30), so the admin can push to `main` directly; everyone else goes through a PR. Audit both `rules/branches/main` and `branches/main/protection`; neither alone is complete.
 - Keep required jobs unconditional, without draft guards or `continue-on-error`. Required contexts match check names; coordinate any rename with the ruleset. `tools/workflow_shape.test.ts` pins CI structure.
 - The blocking secret job scans the whole tree and PR commit range and proves both custom gitleaks rules fire. `secret-scan / secret-scan` is additional and is not required.
-- `.github/workflows/secret-scan.yml` is owned by Terraform in `21StarkCom/21stark`, whose apply commits the new render straight to `main` when it changes. Change its template there, never this file: a hand edit is a pending update on 21stark's plan that `idun gh repo apply` refuses (57) until a hand `terraform apply` there reverts it. Fleet-check enrollment also belongs there.
+- `.github/workflows/secret-scan.yml` is owned by Terraform in `21StarkCom/21stark`, whose apply commits the new render straight to `main` when it changes, on the admin's exemptions here (turn `enforce_admins` back on or drop the ruleset's admin bypass and that apply fails). Change its template there, never this file: a hand edit is a pending update on 21stark's plan that stalls every `idun gh repo apply` there (57) until a hand `terraform apply` reverts it. Fleet-check enrollment also belongs there.
 
 Run from the repo root:
 

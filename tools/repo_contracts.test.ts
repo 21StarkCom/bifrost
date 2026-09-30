@@ -454,16 +454,18 @@ test(".gitleaks.toml exempts values, never paths", () => {
 // pin bump or a template change — 21stark's apply commits the new bytes straight
 // to `main`. Its own header says "a hand edit is reverted by the next apply",
 // which holds only for a hand `terraform apply`: a hand edit here shows as a
-// pending update on 21stark's plan, and `idun gh repo apply` refuses (57) that
-// row until a hand `terraform apply` there reverts it. Change the template in
-// 21stark, never this file.
+// pending update on 21stark's plan, and `idun gh repo apply` refuses (57) the
+// whole tier's apply, not just that row, until a hand `terraform apply` there
+// reverts it. Change the template in 21stark, never this file.
 //
-// These assertions check the caller's SHAPE, never its pin, so a pin bump stays
-// green, and a template change that breaks one of these shapes reddens `test`
-// here — the tripwire working, not a test to loosen. They are a tripwire on a
-// well-meaning tidy-up too, not a design. Every failure below is one where the
-// working tree is clean, the file looks fine, and a check run goes red — or
-// quietly stops being the context anything names.
+// These assertions check the caller's SHAPE, never the pin's value, so a pin
+// bump stays green, and a template change that breaks one of these shapes
+// reddens `test` here. That is the tripwire working: either the template change
+// is wrong, or it is deliberate and this test changes first, in a bifrost PR
+// merged before 21stark applies (its `secret_scan.tf` wave-6 note says the
+// same). They are a tripwire on a well-meaning tidy-up too, not a design. Every
+// failure below is one where the working tree is clean, the file looks fine, and
+// a check run goes red — or quietly stops being the context anything names.
 
 const SECRET_SCAN_REL = ".github/workflows/secret-scan.yml";
 const FLEET_REUSABLE_WORKFLOW = "21StarkCom/.github/.github/workflows/secret-scan.yml";
