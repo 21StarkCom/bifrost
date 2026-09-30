@@ -452,7 +452,10 @@ export interface StampTarget extends TicketResolution {
  * nothing to compare, and `writePrOpenFields` refuses to stamp without one.
  *
  * Makes only `repo info` and `task show` calls, never a write, so it is also
- * the read-only probe for what a landing would stamp.
+ * a read-only probe of the ladder and the bound-ticket check. It is not the
+ * whole answer to "what would a landing stamp": the `no-ticket` label and a
+ * blank url are `writePrOpenFields`' own skips, and a target returned without
+ * `skipped` can still hit either.
  */
 export function resolveStampTarget(input: StampTargetInput): StampTarget {
   const resolution = resolveTicketForFields(input);

@@ -714,10 +714,16 @@ test("resolveStampTarget: the read-only probe never writes", () => {
   }
 
   // A blank url is not vetted: there is nothing to compare, and the stamp
-  // refuses it on its own line.
-  const blank = boundTo6107(() => {
+  // refuses it on its own line. The probe itself returns the target unskipped.
+  const noShow = () => {
     throw new Error("a blank url must make no task show");
-  });
+  };
+  const probe = boundTo6107(noShow);
+  const target = resolveStampTarget({ branch: "misc-fix", prUrl: "  ", created: false, run: probe.run });
+  assert.deepEqual(target, { ticket: "STARK-6107", source: "repo-info" });
+  assert.deepEqual(probe.calls, [REPO_INFO]);
+
+  const blank = boundTo6107(noShow);
   const report = writePrOpenFields({ branch: "misc-fix", prUrl: "", created: false, run: blank.run });
   assert.match(report.line, /^ticket fields: skipped \(the PR reported no URL\)/);
   assert.deepEqual(blank.calls, [REPO_INFO]);
