@@ -12,6 +12,7 @@ import test from "node:test";
 
 import {
   alfredSkipReason,
+  resolveStampTarget,
   resolveTicketForFields,
   ticketFromBranch,
   ticketFromRepoInfo,
@@ -297,6 +298,7 @@ test("writeTicketFields: an exit 0 that wrote nothing is reported as a skip", ()
   const report = writePrOpenFields({
     explicit: "STARK-1",
     prUrl: "https://github.com/o/r/pull/1",
+    created: true,
     run: () => ({ code: 0, stdout: ALFRED_SKIP_JSON, stderr: ALFRED_SKIP_STDERR }),
   });
   assert.equal(report.wrote, false);
@@ -310,6 +312,7 @@ test("writeTicketFields: an exit 0 that wrote nothing is reported as a skip", ()
   const wrote = writePrOpenFields({
     explicit: "STARK-1",
     prUrl: "https://github.com/o/r/pull/1",
+    created: true,
     run: () => ({
       code: 0,
       stdout: JSON.stringify({ fields_set: ["pr_url", "pr_state"], field_ops: ["a", "b"] }),
@@ -414,6 +417,7 @@ test("writePrOpenFields: stamps pr_url and pr_state=open on the resolved ticket"
   const report = writePrOpenFields({
     branch: "copilot/STARK-6108-fields",
     prUrl: "https://github.com/21StarkCom/stark-skills/pull/900",
+    created: true,
     run,
   });
   assert.equal(report.wrote, true);
@@ -434,14 +438,14 @@ test("writePrOpenFields: an empty PR url skips rather than writing half the pair
   // `landImpl` reports `html_url ?? ""` on the adopt path. Writing pr_state=open
   // alone would leave the ticket claiming an open PR it cannot name.
   const { run, calls } = recorder(() => OK);
-  const report = writePrOpenFields({ explicit: "STARK-6108", prUrl: "", run });
+  const report = writePrOpenFields({ explicit: "STARK-6108", prUrl: "", created: true, run });
   assert.equal(report.wrote, false);
   assert.equal(report.ticket, "STARK-6108");
   assert.deepEqual(report.fields, []);
   assert.match(report.line, /^ticket fields: skipped \(the PR reported no URL\)/);
   assert.deepEqual(calls, [], "no alfred call should have been made");
 
-  const missing = writePrOpenFields({ explicit: "STARK-6108", prUrl: undefined, run });
+  const missing = writePrOpenFields({ explicit: "STARK-6108", prUrl: undefined, created: true, run });
   assert.equal(missing.wrote, false);
 });
 
@@ -449,12 +453,13 @@ test("writePrOpenFields: every outcome renders exactly one 'ticket fields: ' lin
   // Rule 2 of the module: a skip that prints nothing is indistinguishable from
   // a successful write, which is how a whole plane of ticket state stays empty.
   const reports = [
-    writePrOpenFields({ branch: "copilot/STARK-1-x", prUrl: "https://u/pull/1", run: () => OK }),
-    writePrOpenFields({ branch: "copilot/none", prUrl: "https://u/pull/1", run: () => ({ code: 0, stdout: "{}", stderr: "" }) }),
-    writePrOpenFields({ branch: "copilot/STARK-1-x", prUrl: "", run: () => OK }),
+    writePrOpenFields({ branch: "copilot/STARK-1-x", prUrl: "https://u/pull/1", created: true, run: () => OK }),
+    writePrOpenFields({ branch: "copilot/none", prUrl: "https://u/pull/1", created: true, run: () => ({ code: 0, stdout: "{}", stderr: "" }) }),
+    writePrOpenFields({ branch: "copilot/STARK-1-x", prUrl: "", created: true, run: () => OK }),
     writePrOpenFields({
       branch: "copilot/STARK-1-x",
       prUrl: "https://u/pull/1",
+      created: true,
       run: () => ({ code: 2, stdout: "", stderr: "jiraVerbUnsupported" }),
     }),
   ];
@@ -484,6 +489,7 @@ test("writePrOpenFields: a no-ticket PR never lands on alfred's bound ticket", (
     branch: "build/widget-system",
     prUrl: "https://github.com/o/r/pull/326",
     noTicket: true,
+    created: false,
     run,
   });
   assert.deepEqual(report, NO_TICKET_SKIP);
@@ -498,6 +504,7 @@ test("writePrOpenFields: the no-ticket label wins over an explicit --ticket and 
     branch: "build/STARK-8-x",
     prUrl: "https://github.com/o/r/pull/326",
     noTicket: true,
+    created: false,
     run: NEVER_RUN,
   });
   assert.deepEqual(report, {
@@ -513,6 +520,7 @@ test("writePrOpenFields: a no-ticket PR on a branch naming a ticket names it, an
     branch: "build/STARK-8-x",
     prUrl: "https://github.com/o/r/pull/326",
     noTicket: true,
+    created: false,
     run: NEVER_RUN,
   });
   assert.equal(
@@ -526,8 +534,191 @@ test("writePrOpenFields: a no-ticket PR on a branch naming a ticket names it, an
 
 test("writePrOpenFields: noTicket false runs the ladder as before (no-ticket off)", () => {
   const { run, calls } = recorder(() => OK);
-  const off = writePrOpenFields({ explicit: "STARK-7", prUrl: "https://u/pull/1", noTicket: false, run });
+  const off = writePrOpenFields({ explicit: "STARK-7", prUrl: "https://u/pull/1", created: true, noTicket: false, run });
   assert.equal(off.wrote, true);
   assert.equal(off.ticket, "STARK-7");
   assert.equal(calls.length, 1);
+});
+
+// ── the bound ticket on an adopted PR (STARK-10105) ─────────────────────────
+//
+// Every case: branch `misc-fix` (names no ticket), no `--ticket`, and a session
+// bound to STARK-6107, so only the third rung can name a ticket.
+
+const PR_12 = "https://github.com/o/r/pull/12";
+const REPO_INFO = ["alfred", "repo", "info", "--json"];
+const SHOW_6107 = ["alfred", "task", "show", "STARK-6107", "--json", "--no-comments"];
+const EDIT_6107 = [
+  "alfred", "task", "edit",
+  "--field", `pr_url=${PR_12}`,
+  "--field", "pr_state=open",
+  "--json", "STARK-6107",
+];
+const MISMATCH_LINE =
+  "ticket fields: skipped (bound ticket STARK-6107 does not carry this PR's url) — pr_url, pr_state";
+
+/** `alfred task show --json` for STARK-6107, its `fields` map as given (absent when undefined). */
+function showing(fields?: Record<string, string>): FieldRunResult {
+  const item = { ref: "STARK-6107", name: "a ticket", ...(fields === undefined ? {} : { fields }) };
+  return { code: 0, stdout: JSON.stringify({ item, comments: [], comments_read: false }), stderr: "" };
+}
+
+/** A session bound to STARK-6107, whose `task show` answers `show`. */
+function boundTo6107(show: () => FieldRunResult): { run: FieldRun; calls: string[][] } {
+  return recorder((args) => {
+    if (args[0] === "repo") return { code: 0, stdout: '{"ticket":"STARK-6107"}', stderr: "" };
+    if (args[0] === "task" && args[1] === "show") return show();
+    return OK;
+  });
+}
+
+test("writePrOpenFields: a created PR stamps the bound ticket unvetted", () => {
+  const { run, calls } = boundTo6107(() => {
+    throw new Error("a created PR must make no task show");
+  });
+  const report = writePrOpenFields({ branch: "misc-fix", prUrl: PR_12, created: true, run });
+  assert.equal(report.wrote, true);
+  assert.equal(report.ticket, "STARK-6107");
+  assert.equal(report.source, "repo-info");
+  assert.deepEqual(calls, [REPO_INFO, EDIT_6107]);
+});
+
+test("writePrOpenFields: an adopted PR stamps a bound ticket that already carries its url", () => {
+  const { run, calls } = boundTo6107(() => showing({ pr_url: PR_12, pr_state: "open" }));
+  const report = writePrOpenFields({ branch: "misc-fix", prUrl: PR_12, created: false, run });
+  assert.equal(report.wrote, true);
+  assert.equal(report.source, "repo-info");
+  assert.equal(
+    report.line,
+    `ticket fields: wrote pr_url=${PR_12} pr_state=open on STARK-6107 (ticket from repo-info)`,
+  );
+  assert.deepEqual(calls, [REPO_INFO, SHOW_6107, EDIT_6107]);
+});
+
+test("writePrOpenFields: an adopted PR skips a bound ticket that carries another url, or none", () => {
+  const cases: [string, FieldRunResult][] = [
+    ["another PR's url", showing({ pr_url: "https://github.com/o/r/pull/8", pr_state: "open" })],
+    ["no pr_url", showing({ pr_state: "open" })],
+    ["no fields map", showing()],
+    // Compared exactly: a trailing slash is another url.
+    ["the url with a trailing slash", showing({ pr_url: `${PR_12}/` })],
+  ];
+  for (const [name, show] of cases) {
+    const { run, calls } = boundTo6107(() => show);
+    const report = writePrOpenFields({ branch: "misc-fix", prUrl: PR_12, created: false, run });
+    assert.deepEqual(
+      report,
+      { wrote: false, ticket: "STARK-6107", source: "repo-info", fields: [], line: MISMATCH_LINE },
+      name,
+    );
+    assert.deepEqual(calls, [REPO_INFO, SHOW_6107], `${name}: no task edit`);
+  }
+});
+
+test("writePrOpenFields: an adopted PR whose bound ticket cannot be read skips, naming why", () => {
+  const cases: [string, () => FieldRunResult, string][] = [
+    [
+      "exits non-zero",
+      () => ({ code: 1, stdout: "", stderr: "alfred: task STARK-6107 not found\n" }),
+      "alfred task show exited 1: alfred: task STARK-6107 not found",
+    ],
+    [
+      "cannot spawn",
+      () => ({ code: -1, stdout: "", stderr: "spawnSync alfred ENOENT" }),
+      "alfred task show could not run: spawnSync alfred ENOENT",
+    ],
+    [
+      "prints non-JSON",
+      () => ({ code: 0, stdout: "STARK-6107  a ticket\n", stderr: "" }),
+      "alfred returned unreadable --json",
+    ],
+    ["prints JSON with no item", () => ({ code: 0, stdout: "{}", stderr: "" }), "alfred returned unreadable --json"],
+    [
+      "throws",
+      () => {
+        throw new Error("spawn EAGAIN");
+      },
+      "alfred task show threw: spawn EAGAIN",
+    ],
+  ];
+  for (const [name, show, reason] of cases) {
+    const { run, calls } = boundTo6107(show);
+    const report = writePrOpenFields({ branch: "misc-fix", prUrl: PR_12, created: false, run });
+    assert.equal(report.wrote, false, name);
+    assert.equal(
+      report.line,
+      `ticket fields: skipped (could not read STARK-6107: ${reason}) — pr_url, pr_state`,
+      name,
+    );
+    assert.deepEqual(calls, [REPO_INFO, SHOW_6107], `${name}: no task edit`);
+  }
+});
+
+test("writePrOpenFields: an absent created counts as adopted at runtime", () => {
+  // The type requires it; a caller that slips past the typecheck gets the
+  // side that vets, never an unvetted stamp.
+  const { run, calls } = boundTo6107(() => showing({ pr_url: "https://github.com/o/r/pull/8" }));
+  const input = { branch: "misc-fix", prUrl: PR_12, run } as unknown as Parameters<typeof writePrOpenFields>[0];
+  const report = writePrOpenFields(input);
+  assert.equal(report.line, MISMATCH_LINE);
+  assert.deepEqual(calls, [REPO_INFO, SHOW_6107]);
+});
+
+test("writePrOpenFields: an adopted PR's --ticket or branch handle is never vetted", () => {
+  const noShow = () => {
+    throw new Error("--ticket and the branch must make no task show");
+  };
+  const explicit = boundTo6107(noShow);
+  const byFlag = writePrOpenFields({
+    explicit: "STARK-7",
+    branch: "misc-fix",
+    prUrl: PR_12,
+    created: false,
+    run: explicit.run,
+  });
+  assert.equal(byFlag.wrote, true);
+  assert.equal(byFlag.source, "explicit");
+  assert.deepEqual(explicit.calls.map((c) => c.slice(0, 3)), [["alfred", "task", "edit"]]);
+
+  const branch = boundTo6107(noShow);
+  const byBranch = writePrOpenFields({ branch: "build/STARK-8-x", prUrl: PR_12, created: false, run: branch.run });
+  assert.equal(byBranch.wrote, true);
+  assert.equal(byBranch.source, "branch");
+  assert.deepEqual(branch.calls.map((c) => c.slice(0, 3)), [["alfred", "task", "edit"]]);
+});
+
+test("writePrOpenFields: an adopted no-ticket PR still calls no alfred", () => {
+  const report = writePrOpenFields({
+    branch: "misc-fix",
+    prUrl: PR_12,
+    created: false,
+    noTicket: true,
+    run: NEVER_RUN,
+  });
+  assert.deepEqual(report, NO_TICKET_SKIP);
+});
+
+test("resolveStampTarget: the read-only probe never writes", () => {
+  const cases: [boolean, FieldRunResult, string | undefined, string[][]][] = [
+    [false, showing({ pr_url: PR_12 }), undefined, [REPO_INFO, SHOW_6107]],
+    [false, showing({ pr_url: "https://github.com/o/r/pull/8" }), "bound ticket STARK-6107 does not carry this PR's url", [REPO_INFO, SHOW_6107]],
+    [true, showing({ pr_url: "https://github.com/o/r/pull/8" }), undefined, [REPO_INFO]],
+  ];
+  for (const [created, show, skipped, expectedCalls] of cases) {
+    const { run, calls } = boundTo6107(() => show);
+    const target = resolveStampTarget({ branch: "misc-fix", prUrl: PR_12, created, run });
+    assert.equal(target.ticket, "STARK-6107");
+    assert.equal(target.source, "repo-info");
+    assert.equal(target.skipped, skipped);
+    assert.deepEqual(calls, expectedCalls);
+  }
+
+  // A blank url is not vetted: there is nothing to compare, and the stamp
+  // refuses it on its own line.
+  const blank = boundTo6107(() => {
+    throw new Error("a blank url must make no task show");
+  });
+  const report = writePrOpenFields({ branch: "misc-fix", prUrl: "", created: false, run: blank.run });
+  assert.match(report.line, /^ticket fields: skipped \(the PR reported no URL\)/);
+  assert.deepEqual(blank.calls, [REPO_INFO]);
 });

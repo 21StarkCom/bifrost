@@ -142,8 +142,11 @@ State lives OUTSIDE the repo:
    `alfred task edit --field` (STARK-6108). **Pass `--ticket STARK-n` when the
    spec names its ticket** — `build/<slug>` carries no handle, so without the
    flag the ticket comes from `alfred repo info --json` run in `<wt>`, i.e.
-   whatever session record that worktree resolves to. An adopted PR labeled
-   `no-ticket` is never stamped, and `--ticket` does not override that; the
+   whatever session record that worktree resolves to. On a PR `land` adopted
+   rather than created, that bound ticket is stamped only when it already
+   carries the PR's url; otherwise the line reads `bound ticket STARK-<n> does
+   not carry this PR's url`, and `--ticket` is how to stamp it. An adopted PR
+   labeled `no-ticket` is never stamped, and `--ticket` does not override that; the
    skip line names the ticket the label overrode. The write never changes this
    command's exit code: every failure is one `ticket fields: skipped (…)` line
    in the report.
