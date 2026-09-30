@@ -46,8 +46,8 @@ import test from "node:test";
 // none may be used. Every regex there anchors a YAML key to the start of an
 // indented line (`/^\s+if:/m`), and a comment line's first non-space character
 // is `#`, so it can never produce a match. Leaving that file read verbatim keeps
-// the byte the assertions see identical to the byte 21stark's drift check
-// compares.
+// the bytes the assertions see identical to the bytes 21stark's Terraform renders
+// and writes here.
 import { REPO_ROOT, blankWholeLineComments, readRepoFile } from "./repo_files_lib.ts";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -448,23 +448,24 @@ test(".gitleaks.toml exempts values, never paths", () => {
 // ────────────────────────────────────────────────────────────────────────────
 //
 // THIS FILE IS NOT THIS REPO'S TO DESIGN, AND NOT A BYTE OF IT MAY BE EDITED HERE.
-// It is a hand-maintained copy of what 21StarkCom/21stark renders from
-// `repos/secret_scan.tf`; Terraform writes those exact bytes into the other 63
-// repos with `github_repository_file` and skips bifrost, because `main` here
-// carried `enforce_admins = true` until 2026-09-30 and the provider's direct
-// commit was rejected even for an admin token. So the bytes arrive here by PR
-// instead, and they must
-// stay byte-identical to the render: 21stark's
-// `check "bifrost_runs_the_current_secret_scan_caller"` reads this file over the
-// API on every plan and warns when it drifts, which is the only signal that a
-// fleet pin bump has not reached bifrost. Its own header says "a hand edit is
-// reverted by the next apply" — on THIS repo nothing reverts it, which is worse,
-// not better. Change the template in 21stark and copy the new render.
+// 21StarkCom/21stark renders it from `repos/secret_scan.tf` and owns it with
+// `github_repository_file`, as it owns every rolled-out repo's caller; bifrost
+// joined that rollout on 2026-09-30 (STARK-10130). When the render changes — a
+// pin bump or a template change — 21stark's apply commits the new bytes straight
+// to `main`. Its own header says "a hand edit is reverted by the next apply",
+// which holds only for a hand `terraform apply`: a hand edit here shows as a
+// pending update on 21stark's plan, and `idun gh repo apply` refuses (57) the
+// whole tier's apply, not just that row, until a hand `terraform apply` there
+// reverts it. Change the template in 21stark, never this file.
 //
-// These assertions are therefore a tripwire on a well-meaning tidy-up, not a
-// design. Every failure below is one where the working tree is clean, the file
-// looks fine, and a check run goes red — or quietly stops being the context
-// anything names.
+// These assertions check the caller's SHAPE, never the pin's value, so a pin
+// bump stays green, and a template change that breaks one of these shapes
+// reddens `test` here. That is the tripwire working: either the template change
+// is wrong, or it is deliberate and this test changes first, in a bifrost PR
+// merged before 21stark applies (its `secret_scan.tf` wave-6 note says the
+// same). They are a tripwire on a well-meaning tidy-up too, not a design. Every
+// failure below is one where the working tree is clean, the file looks fine, and
+// a check run goes red — or quietly stops being the context anything names.
 
 const SECRET_SCAN_REL = ".github/workflows/secret-scan.yml";
 const FLEET_REUSABLE_WORKFLOW = "21StarkCom/.github/.github/workflows/secret-scan.yml";
@@ -472,9 +473,9 @@ const FLEET_REUSABLE_WORKFLOW = "21StarkCom/.github/.github/workflows/secret-sca
 function readSecretScanCaller(): string {
   return readRepoFile(
     SECRET_SCAN_REL,
-    "It is a hand-maintained byte-identical copy of 21stark's Terraform render; deleting it here makes " +
-      "this repo silently drop out of the fleet's secret scan while 21stark's drift check still reports " +
-      "on it. Restore it from the render, never rewrite it.",
+    "21stark's Terraform owns it; deleting it here drops this repo out of the fleet's secret scan and " +
+      "leaves a pending create on 21stark's plan, which `idun gh repo apply` refuses (57) until a hand " +
+      "`terraform apply` there writes it back. Restore it from the render, never rewrite it.",
   );
 }
 
@@ -497,7 +498,7 @@ test("the secret-scan caller pins the fleet's reusable workflow to a full commit
     workflow,
     FLEET_REUSABLE_WORKFLOW,
     `${SECRET_SCAN_REL} calls "${workflow}". The fleet's scan logic lives in ${FLEET_REUSABLE_WORKFLOW} so ` +
-      `a gitleaks bump is one PR for 64 repos; calling anything else forks this repo off that channel.`,
+      `a gitleaks bump is one PR for the whole fleet; calling anything else forks this repo off that channel.`,
   );
   assert.match(
     ref,
@@ -521,7 +522,7 @@ test("the secret-scan caller reports under the fleet context `secret-scan / secr
       `\`secret-scan / secret-scan\` context 21stark's rulesets used to require fleet-wide. No repo in the ` +
       `org requires it today (STARK-7967 withdrew it on 2026-09-20 and STARK-7635 was cancelled with it), ` +
       `but a context that silently renames itself is what makes restoring that control later look like a ` +
-      `broken gate — and the name is part of the byte-identity 21stark's drift check compares.`,
+      `broken gate — and the name is part of the render 21stark's Terraform writes here.`,
   );
   const at = body.indexOf("\njobs:\n");
   assert.notEqual(at, -1, `${SECRET_SCAN_REL}: no top-level \`jobs:\` block — there is no calling job to name`);
@@ -545,7 +546,7 @@ test("the secret-scan caller keeps all three fleet triggers and no skip guard", 
       null,
       `${SECRET_SCAN_REL} gained \`${hit?.[0].trim()}\`. A guarded or filtered job reports \`skipped\`, ` +
         `GitHub counts \`skipped\` as SATISFYING a required check and renders it identically to a pass, and ` +
-        `only a new commit clears it. It also breaks the byte-identity 21stark's drift check relies on.`,
+        `only a new commit clears it. It also diverges from 21stark's render, a pending update on its plan.`,
     );
   }
   // Each trigger is pinned with the reason it is there, because the reason is
