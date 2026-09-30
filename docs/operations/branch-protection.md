@@ -88,15 +88,16 @@ above**.
 
 It is the fleet's uniform secret scan — a thin caller, pinned by SHA, for the one
 reusable workflow in `21StarkCom/.github`. Terraform in `21StarkCom/21stark`
-(`repos/secret_scan.tf`) writes that caller into the rolled-out repos;
-**bifrost is in `local.secret_scan_excluded`** because `main` here carried
-`enforce_admins = true` plus a required pull request until 2026-09-30, so the
-provider's direct commit was rejected even for an admin token (STARK-7490). The file arrived by PR
-instead, **byte-identical to the render**, and must stay that way: 21stark's
-`check "bifrost_runs_the_current_secret_scan_caller"` byte-compares it over the
-API on every plan and only *warns*, which is the only signal anyone gets that a
-fleet pin bump has not reached bifrost. Change the template there and copy the
-new render; never edit the body here.
+(`repos/secret_scan.tf`) writes that caller into every rolled-out repo, and
+**bifrost has been one of them since 2026-09-30** (STARK-10130, wave 6, imported
+over the bytes already here). When the render changes — a pin bump or a template
+change — 21stark's apply commits the new bytes straight to `main`; a plan with no
+render change commits nothing. **A hand edit here does not stick:** it shows as a
+pending update on 21stark's plan, which `idun gh repo apply` refuses (57) until a
+hand `terraform apply` there reverts it. Change the template in 21stark; never
+edit the body here. `tools/repo_contracts.test.ts` §3 checks the caller's shape,
+not its pin, so a pin bump stays green and a template change that breaks the shape
+reddens `test`.
 
 **Do not add `secret-scan / secret-scan` to the ruleset in §3 by hand**, for two
 reasons that now point the same way:
@@ -114,8 +115,9 @@ reasons that now point the same way:
    hand-PR'd repos (bifrost and `.github`), was **cancelled** on the same day for
    exactly that reason; nothing was built and nothing should be. If the fleet
    control is ever restored (the commented-out derivation in 21stark's
-   `repos/locals.tf`, plus an apply), bifrost and `.github` really are the two
-   repos left uncovered — re-file then, in 21stark.
+   `repos/locals.tf`, plus an apply), bifrost stays unrequired by a decision
+   21stark records in `local.secret_scan_not_enforced` (STARK-10130), and of the
+   two only `.github` is left uncovered — re-file then, in 21stark.
 2. **It would be an unowned rule.** Every other repo's requirement, when there
    was one, was Terraform state in 21stark. A hand-made one here is invisible to
    that tier's audit, and the next fleet pin bump — which **renames the right

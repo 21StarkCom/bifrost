@@ -54,7 +54,7 @@ Read `docs/operations/branch-protection.md` before touching CI. The short versio
 
 ### `secret-scan.yml` is not this repo's to edit
 
-It is a byte-identical copy of a Terraform render from `21StarkCom/21stark` (`repos/secret_scan.tf`), which excludes bifrost; it arrived by PR because `enforce_admins`, on until 2026-09-30, rejected the provider's direct commit. Change the template there and copy the new render; a hand edit here only makes bifrost diverge from the fleet. `tools/repo_contracts.test.ts` pins its SHA pin, context name, triggers and the absence of a `selftest_rule_id` override.
+Terraform in `21StarkCom/21stark` (`repos/secret_scan.tf`) owns it, as it owns every rolled-out repo's caller: when the render changes (a pin bump or a template change), 21stark's apply commits the new bytes straight to `main`. A hand edit here shows as a pending update on 21stark's plan, which `idun gh repo apply` refuses (57) until a hand `terraform apply` there reverts it. Change the template in 21stark, never this file. `tools/repo_contracts.test.ts` pins its shape — a full 40-hex SHA pin, context name, triggers and the absence of a `selftest_rule_id` override — so a pin bump stays green, and a template change that breaks one of those reddens `test` on the apply's commit and every PR after it.
 
 ### Draft PRs
 
