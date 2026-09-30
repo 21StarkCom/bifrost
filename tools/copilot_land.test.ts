@@ -47,9 +47,10 @@ function writeStub(dir: string, name: string, body: string): void {
  *
  * `alfredRepoInfo` is the JSON `alfred repo info --json` answers with, and
  * `alfredEditExit` the exit status `alfred task edit` reports — the two knobs
- * every case below turns. `openPrs` is the open-PR listing `gh api` returns;
- * empty (the default) selects the create path, one on the landed head the
- * adopt path.
+ * every case below turns. `alfredShow` is what `alfred task show --json`
+ * prints; by default the bound ticket carries another PR's url. `openPrs` is
+ * the open-PR listing `gh api` returns; empty (the default) selects the create
+ * path, one on the landed head the adopt path.
  */
 function harness(
   t: { after: (fn: () => void) => void },
@@ -57,6 +58,7 @@ function harness(
     alfredRepoInfo: string;
     alfredEditExit?: number;
     alfredEditStderr?: string;
+    alfredShow?: object;
     openPrs?: object[];
   },
 ): Harness {
@@ -88,6 +90,10 @@ exit 1
 `,
   );
 
+  // Read back from a file for the same reason as the listing above.
+  const show = path.join(dir, "task-show.json");
+  const defaultShow = { item: { ref: "STARK-0000", fields: { pr_url: "https://github.com/o/r/pull/1" } } };
+  fs.writeFileSync(show, JSON.stringify(opts.alfredShow ?? defaultShow) + "\n");
   writeStub(
     dir,
     "alfred",
@@ -96,6 +102,7 @@ exit 1
 for a in "$@"; do printf '%s\\n' "$a" >> "${log}"; done
 printf '%s\\n' '--' >> "${log}"
 if [ "$1" = "repo" ]; then printf '%s' '${opts.alfredRepoInfo}'; exit 0; fi
+if [ "$1" = "task" ] && [ "$2" = "show" ]; then while IFS= read -r line; do printf '%s\\n' "$line"; done < "${show}"; exit 0; fi
 if [ -n "${opts.alfredEditStderr ?? ""}" ]; then echo '${opts.alfredEditStderr ?? ""}' >&2; fi
 echo '{"fields_set":["pr_url","pr_state"]}'
 exit ${opts.alfredEditExit ?? 0}
@@ -347,6 +354,11 @@ function openPr(branch: string, labels?: { name: string }[]): object {
 
 const NO_TICKET_LINE = "ticket fields: skipped (no-ticket PR) — pr_url, pr_state";
 
+const REPO_INFO_CALL = ["repo", "info", "--json"];
+const SHOW_0000_CALL = ["task", "show", "STARK-0000", "--json", "--no-comments"];
+const BOUND_MISMATCH_LINE =
+  "ticket fields: skipped (bound ticket STARK-0000 does not carry this PR's url) — pr_url, pr_state";
+
 test("copilot_land: an adopted no-ticket PR is never stamped onto the session's bound ticket", (t) => {
   // The bug: `land` adopted a no-ticket PR in a session bound to STARK-0000 and
   // wrote that PR's pr_url/pr_state onto STARK-0000, a ticket it is not.
@@ -399,7 +411,9 @@ test("copilot_land: the --json report keeps its shape for a PR without the no-ti
   // `{number, url, adopted}` — the no-ticket fact feeds the stamp and is never
   // a report field. Checked on the create path, on an adopted PR with no
   // `labels` field, and on one whose label only looks like it (`no-ticket-yet`),
-  // where the ladder runs and alfred's bound ticket is stamped as before.
+  // where the ladder runs. The created PR is stamped onto alfred's bound
+  // ticket; the adopted ones are not, since that ticket carries another PR's
+  // url (STARK-10105).
   const cases: { name: string; openPrs: object[]; number: number; adopted: boolean }[] = [
     { name: "created", openPrs: [], number: 123, adopted: false },
     { name: "adopted, no labels field", openPrs: [openPr("build/probe")], number: 326, adopted: true },
@@ -420,9 +434,71 @@ test("copilot_land: the --json report keeps its shape for a PR without the no-ti
     assert.deepEqual(Object.keys(payload.pr), ["number", "url", "adopted"], c.name);
     assert.equal(payload.pr.number, c.number, c.name);
     assert.equal(payload.pr.adopted, c.adopted, c.name);
-    assert.equal(payload.ticket_fields.wrote, true, c.name);
+    assert.equal(payload.ticket_fields.wrote, !c.adopted, c.name);
     assert.equal(payload.ticket_fields.ticket, "STARK-0000", c.name);
     assert.equal(payload.ticket_fields.source, "repo-info", c.name);
-    assert.deepEqual(h.alfredCalls().at(-1)?.slice(-2), ["--json", "STARK-0000"], c.name);
+    if (c.adopted) {
+      assert.equal(payload.ticket_fields.line, BOUND_MISMATCH_LINE, c.name);
+      assert.deepEqual(h.alfredCalls(), [REPO_INFO_CALL, SHOW_0000_CALL], `${c.name}: no task edit`);
+    } else {
+      assert.deepEqual(h.alfredCalls().map((call) => call.slice(0, 2)), [["repo", "info"], ["task", "edit"]], c.name);
+      assert.deepEqual(h.alfredCalls().at(-1)?.slice(-2), ["--json", "STARK-0000"], c.name);
+    }
   }
+});
+
+// ── the bound ticket on an adopted PR (STARK-10105) ─────────────────────────
+
+test("copilot_land: an adopted PR is not stamped onto a bound ticket that carries another PR's url", (t) => {
+  // The bug: `land` adopted a PR on a branch that names no ticket and wrote its
+  // pr_url over the session's bound ticket, which belonged to another PR.
+  const h = harness(t, {
+    alfredRepoInfo: '{"ticket":"STARK-0000"}',
+    alfredShow: { item: { ref: "STARK-0000", fields: { pr_url: "https://github.com/o/r/pull/8", pr_state: "open" } } },
+    openPrs: [openPr("build/probe")],
+  });
+  const result = runIn(h, [...LAND_REAL, h.dir, "--branch", "build/probe", "--json"]);
+  assert.equal(result.code, 0, result.error);
+
+  const payload = JSON.parse(result.out);
+  assert.equal(payload.pr.adopted, true);
+  assert.deepEqual(payload.ticket_fields, {
+    wrote: false,
+    ticket: "STARK-0000",
+    source: "repo-info",
+    fields: [],
+    line: BOUND_MISMATCH_LINE,
+  });
+  assert.deepEqual(h.alfredCalls(), [REPO_INFO_CALL, SHOW_0000_CALL], "read the ticket, wrote nothing");
+
+  // Non-JSON mode prints the same line.
+  const plain = runIn(h, [...LAND_REAL, h.dir, "--branch", "build/probe"]);
+  assert.equal(plain.code, 0, plain.error);
+  assert.ok(plain.out.split("\n").includes(BOUND_MISMATCH_LINE), plain.out);
+});
+
+test("copilot_land: an adopted PR is stamped onto a bound ticket that already carries its url", (t) => {
+  const h = harness(t, {
+    alfredRepoInfo: '{"ticket":"STARK-0000"}',
+    alfredShow: { item: { ref: "STARK-0000", fields: { pr_url: "https://github.com/o/r/pull/326", pr_state: "open" } } },
+    openPrs: [openPr("build/probe")],
+  });
+  const result = runIn(h, [...LAND_REAL, h.dir, "--branch", "build/probe", "--json"]);
+  assert.equal(result.code, 0, result.error);
+
+  const fields = JSON.parse(result.out).ticket_fields;
+  assert.equal(fields.wrote, true);
+  assert.equal(fields.ticket, "STARK-0000");
+  assert.equal(fields.source, "repo-info");
+  // The show precedes the edit: the check gates the write.
+  assert.deepEqual(h.alfredCalls(), [
+    REPO_INFO_CALL,
+    SHOW_0000_CALL,
+    [
+      "task", "edit",
+      "--field", "pr_url=https://github.com/o/r/pull/326",
+      "--field", "pr_state=open",
+      "--json", "STARK-0000",
+    ],
+  ]);
 });

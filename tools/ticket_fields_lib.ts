@@ -42,6 +42,15 @@
  *
  *     explicit (`--ticket`) → the branch name → alfred's bound ticket → none
  *
+ * The first two rungs are read from the PR itself; the third says only what
+ * this session holds. So `writePrOpenFields` stamps a bound ticket onto a PR
+ * this run did not create only when that ticket already carries the PR's url
+ * (`resolveStampTarget`), else it skips with `bound ticket STARK-<n> does not
+ * carry this PR's url` or `could not read STARK-<n>: …`. That is idun's
+ * pr-merge rule (STARK-10074) and its skip wording. Without it, adopting a PR
+ * whose branch names no ticket, in a session bound to another ticket,
+ * overwrites that ticket's `pr_url` and restarts its ladder.
+ *
  * A PR labeled `no-ticket` belongs to no ticket, so `writePrOpenFields` never
  * stamps one: the label short-circuits every rung, `--ticket` included. idun
  * never stamps one either (STARK-9690), but it gets there differently: its
@@ -411,16 +420,85 @@ export function writeTicketFields(
  */
 export const NO_TICKET_SKIP_LINE = "ticket fields: skipped (no-ticket PR) — pr_url, pr_state";
 
-export interface PrOpenFieldsInput {
-  /** `--ticket`, when supplied. */
-  explicit?: string | null;
-  /** The PR's head branch. */
-  branch?: string | null;
+export interface StampTargetInput extends ResolveInput {
   /** The PR's `html_url`, exactly as the create/adopt call reported it. */
   prUrl: string | null | undefined;
+  /**
+   * This run opened the PR. Required, so a caller that forgets it fails the
+   * typecheck; at runtime anything but `true` counts as adopted, the side
+   * that vets.
+   */
+  created: boolean;
+}
+
+/** The ticket a stamp writes to, or why it writes nothing. */
+export interface StampTarget extends TicketResolution {
+  /** Present when a ticket resolved but must not be written: the one-line why. */
+  skipped?: string;
+}
+
+/**
+ * Walk the ladder, then vet a bound ticket on a PR this run did not create.
+ *
+ * `--ticket` and the branch say what the PR is for, and a PR this run opened is
+ * the bound ticket's own work, so none of those is vetted. An adopted PR is
+ * different: the session may be bound to an unrelated ticket, and stamping it
+ * would overwrite that ticket's `pr_url` with a PR it never had. A bound ticket
+ * that already carries this PR's url is proved to own it; any other is skipped.
+ *
+ * The one extra call is `alfred task show <ticket> --json --no-comments` (1–2 s,
+ * and it works from a ClickUp- or Jira-bound checkout), comparing
+ * `.item.fields.pr_url` to the url exactly. A blank url is not vetted: there is
+ * nothing to compare, and `writePrOpenFields` refuses to stamp without one.
+ *
+ * Makes only `repo info` and `task show` calls, never a write, so it is also
+ * a read-only probe of the ladder and the bound-ticket check. It is not the
+ * whole answer to "what would a landing stamp": the `no-ticket` label and a
+ * blank url are `writePrOpenFields`' own skips, and a target returned without
+ * `skipped` can still hit either.
+ */
+export function resolveStampTarget(input: StampTargetInput): StampTarget {
+  const resolution = resolveTicketForFields(input);
+  const prUrl = (input.prUrl ?? "").trim();
+  if (!resolution.ticket || resolution.source !== "repo-info" || input.created === true || !prUrl) {
+    return resolution;
+  }
+  const skipped = boundTicketMismatch(resolution.ticket, prUrl, input.run);
+  return skipped ? { ...resolution, skipped } : resolution;
+}
+
+/** Null when `ticket`'s `pr_url` is exactly `url`, else the skip reason. */
+function boundTicketMismatch(ticket: string, url: string, run: FieldRun): string | null {
+  const unreadable = (reason: string): string => `could not read ${ticket}: ${reason}`;
+  let result: FieldRunResult;
+  try {
+    // `--no-comments`: only the fields are wanted, and the thread is a second
+    // provider read whose failure would fail the whole show.
+    result = run("alfred", ["task", "show", ticket, "--json", "--no-comments"]);
+  } catch (err) {
+    return unreadable(`alfred task show threw: ${(err as Error).message}`);
+  }
+  if (result.code !== 0) {
+    const how = result.code < 0 ? "could not run" : `exited ${result.code}`;
+    return unreadable(`alfred task show ${how}: ${firstDiagnosticLine(result.stderr, result.stdout)}`);
+  }
+  const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(result.stdout);
+  } catch {
+    return unreadable("alfred returned unreadable --json");
+  }
+  const item = isRecord(parsed) ? parsed["item"] : undefined;
+  if (!isRecord(item)) return unreadable("alfred returned unreadable --json");
+  // A ticket with no fields set may omit the map: that is "no pr_url", not unreadable.
+  const prUrl = isRecord(item["fields"]) ? item["fields"]["pr_url"] : undefined;
+  return prUrl === url ? null : `bound ticket ${ticket} does not carry this PR's url`;
+}
+
+export interface PrOpenFieldsInput extends StampTargetInput {
   /** The PR carries the `no-ticket` label: skip the write, and never call alfred. */
   noTicket?: boolean;
-  run: FieldRun;
 }
 
 export interface PrOpenFieldsReport {
@@ -440,8 +518,11 @@ export interface PrOpenFieldsReport {
  * Called on BOTH the create and the adopt path of a landing, deliberately.
  * The PR is open either way, so both fields are true either way; alfred
  * journals nothing for a same-value write, so adopting is free; and a re-run
- * repairs a first run whose write failed. Restricting the write to `create`
- * would make the repair impossible — the second run always adopts.
+ * repairs a first run whose write failed, through `--ticket` or the branch.
+ * The session's bound ticket is not enough on the adopt path: it is stamped
+ * only when it already carries this PR's url (`resolveStampTarget`), so a
+ * failed first write on a branch that names no ticket is repaired by passing
+ * `--ticket`, and the skip line says why the bound ticket was not used.
  *
  * A `no-ticket` PR is never stamped: `noTicket` skips before `alfred` is ever
  * called, even with an explicit `--ticket`. The label wins; a ticket the
@@ -474,11 +555,7 @@ export function writePrOpenFields(input: PrOpenFieldsInput): PrOpenFieldsReport 
     };
   }
 
-  const resolution = resolveTicketForFields({
-    explicit: input.explicit,
-    branch: input.branch,
-    run: input.run,
-  });
+  const resolution = resolveStampTarget(input);
   if (!resolution.ticket) {
     return {
       wrote: false,
@@ -502,6 +579,17 @@ export function writePrOpenFields(input: PrOpenFieldsInput): PrOpenFieldsReport 
       line:
         `ticket fields: skipped (the PR reported no URL) — pr_url, pr_state ` +
         `on ${resolution.ticket}`,
+    };
+  }
+  if (resolution.skipped) {
+    // A bound ticket this adopted PR is not proved to belong to. Nothing was
+    // offered to alfred, and the wording is idun's, so one grep finds both.
+    return {
+      wrote: false,
+      ticket: resolution.ticket,
+      source: resolution.source,
+      fields: [],
+      line: `ticket fields: skipped (${resolution.skipped}) — pr_url, pr_state`,
     };
   }
 
