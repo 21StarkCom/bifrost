@@ -92,7 +92,8 @@ criteria or small enough to finish in the same sitting. When it is a whole
 effort of its own, write the follow-up with the `stark-ticket` skill (`/stark-ticket`
 on Claude Code, `$stark-ticket` on Codex), file it with `alfred task new` (unbound;
 `task start` would bind your session to it), and comment the link on your ticket.
-`task new` checks nothing, so the skill is the only check the follow-up gets.
+`task new` checks only the headings, so the skill is the only check on what the
+follow-up says.
 If your ticket can still be finished without it, finish it; if it cannot, say so
 and stop. Use judgement; do not hand the decision upwards.
 

@@ -22,18 +22,19 @@ follow [standard help](../../standards/help.md), then stop.
 
 # stark-ticket
 
-A ticket is a work order for someone who was not in the room. Short beats
-thorough: under 300 words, a few lines for a small change.
+A ticket is a work order for someone who was not in the room. Keep it under
+300 words; a line or two per heading for a small change.
 
 1. **Twin check.** `alfred task find` in the target repo. If a live ticket
-   already covers it, use or comment on that one.
-2. **Write** it from `alfred task start --template` (Goal, Scope IN/OUT,
-   Acceptance, Files, Verification), in a file under `mktemp -d`, never inside
-   a checkout. For a bug, the Goal says what broke, where, and the error text.
-   Acceptance lines are checkable; Verification is commands and what they
-   should print.
-3. **Don't guess.** A claim about code or a tool's behaviour comes from
-   something you looked at in this session; paste output, never retype it.
-   Mark anything you did not check `unverified`.
-4. **File:** `alfred task start` (your own work), `alfred task new` (a
-   follow-up, unbound), `alfred task edit <id> --desc-file` (a rewrite).
+   covers it, comment there instead of filing.
+2. **Write** it from `alfred task start --template` in a file under
+   `mktemp -d`, never inside a checkout. A bug's Goal names what broke, where,
+   and the error text. Verification is commands and what they should print.
+   Unmerged work it needs: `Blocked by STARK-n`, then `alfred task link` both.
+3. **Don't guess.** Claims about code or a tool come from output you ran or
+   source you read, never `--help`, docs or memory. Paste output, never
+   retype it, and never paste credentials or auth/env output. Mark anything
+   unchecked `unverified: <claim> — check: <command>`.
+4. **File** with `--desc-file <draft>`: `alfred task start` (your own work),
+   `alfred task new` (a follow-up, unbound; `--on-repo <repo>` for another
+   repo's), `alfred task edit <id>` (a rewrite).
