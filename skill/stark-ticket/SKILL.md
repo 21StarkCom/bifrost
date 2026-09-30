@@ -22,28 +22,18 @@ follow [standard help](../../standards/help.md), then stop.
 
 # stark-ticket
 
-A ticket is a work order a stranger executes. It fails on a false claim, a check
-that cannot fail, or two lines that cannot both hold — all knowable before filing.
+A ticket is a work order for someone who was not in the room. Short beats
+thorough: under 300 words, a few lines for a small change.
 
-1. **Twin check.** `alfred task find` in the target repo.
-2. **Pin.** Per repo: `git fetch origin`, record `git rev-parse origin/HEAD`. Live systems: UTC time.
-3. **Read the rules.** The repo's agent instructions, ADRs, nearest sibling change (`git log --name-only`).
-4. **Draft** from [the template](references/ticket-template.md) in a `mktemp -d` dir, never a checkout (an untracked draft fails a worker's stand-down). Each `TODO:` says what goes there; "none — <why>" answers, silence does not.
-5. **Run it.** Every Verification command, now, at the pinned sha, in a scratch copy; rewrite any that errors or passes on the unfixed code (a new target: a planted negative). Paste output, never retype.
-6. **Self-check.** (a) Would the laziest change passing every Acceptance line meet the Goal? If not, add the line it fails. (b) Apply the fix and each Acceptance line literally to the incident. (c) Cross-read Goal, Scope IN/OUT and Acceptance: no INVARIANT the Goal breaks, no check the planned change cannot pass. (d) Every Scope IN line traces to the Ask; the rest is TRIM. (e) A trivial-change ticket stays under 250 words; no `TODO:` left but Cold read.
-7. **Cold read**, once, per [cold-read.md](references/cold-read.md).
-8. **File** through alfred once every Verification line changed since step 5 has run: `task start` (own work), `task new` (a follow-up; checks nothing), `task edit <id> --desc-file` (a rewrite).
-
-## Red flags
-
-| Thought | Reality |
-|---|---|
-| "Small follow-up; the finding says it" | Follow-ups carry the most unmeasured claims. |
-| "`--help` says it does that" | Help text is not behaviour. Run the argv, or read the source. |
-| "The sibling ticket measured this" | Its repo, its sha. Re-run it here. |
-| "I'll work it myself" | After a compaction you are the stranger. |
-| "Open and spawn — keep it quick" | A right ticket beats a fast one. |
-| "They'll obviously want this too" | Not asked is TRIM. |
-| "I remember what it printed" | Retyped output is how false claims get in. |
-| "The alfred gate passed" | It checks headings, not truth. |
-| "The design is settled" | A prescribed location or signature needs the rule that makes it right. |
+1. **Twin check.** `alfred task find` in the target repo. If a live ticket
+   already covers it, use or comment on that one.
+2. **Write** it from `alfred task start --template` (Goal, Scope IN/OUT,
+   Acceptance, Files, Verification), in a file under `mktemp -d`, never inside
+   a checkout. For a bug, the Goal says what broke, where, and the error text.
+   Acceptance lines are checkable; Verification is commands and what they
+   should print.
+3. **Don't guess.** A claim about code or a tool's behaviour comes from
+   something you looked at in this session; paste output, never retype it.
+   Mark anything you did not check `unverified`.
+4. **File:** `alfred task start` (your own work), `alfred task new` (a
+   follow-up, unbound), `alfred task edit <id> --desc-file` (a rewrite).
