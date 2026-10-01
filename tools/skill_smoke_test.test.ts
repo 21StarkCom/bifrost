@@ -338,7 +338,7 @@ for (const name of SKILLS) {
 // change this table first.
 //
 // The worker family (STARK-6471, decided 2026-09-19): `agnes`, `gru` and
-// `minion` are launched unattended: hermod hands a fresh session the brief
+// `minion` are launched unattended: idun hands a fresh session the brief
 // `/agnes STARK-n` as TEXT, and on a marketplace install that resolves through
 // the plugin (STARK-6469 — Claude Code's docs: the bare form invokes the skill
 // unless another command already uses the name; the real Minion transcripts
@@ -626,12 +626,13 @@ for (const dir of SHARED_DOC_DIRS) {
 const fencedLaunchLines = (file: string, launcher: RegExp): string[] =>
   fencedLines(fs.readFileSync(file, "utf8")).filter((line) => launcher.test(line));
 
-// The operand after `idun gru`: one token, or a `( a | b )` alternation.
+// The operand after `idun gru`: one token, `--tickets <list>`, or a
+// `( a | b )` alternation of those.
 function gruLaunchOperands(line: string): string[] {
   const rest = line.trim().replace(/^idun gru\s+/, "");
   const group = /^\(([^)]*)\)/.exec(rest);
   if (group) return (group[1] ?? "").split("|").map((alt) => alt.trim());
-  return [rest.split(/\s+/)[0] ?? ""];
+  return [/^--tickets\s+\S+/.exec(rest)?.[0] ?? rest.split(/\s+/)[0] ?? ""];
 }
 
 test("skill smoke: skill/gru — Gru is never launched on a ticket it works", () => {
@@ -642,7 +643,7 @@ test("skill smoke: skill/gru — Gru is never launched on a ticket it works", ()
     for (const operand of gruLaunchOperands(line)) {
       assert.match(
         operand,
-        /^(STARK-<epic>|--tickets\s\S+)$/,
+        /^(STARK-<epic>|--tickets\s+\S+)$/,
         `Gru launched on something other than the epic or --tickets: ${line.trim()}`,
       );
     }

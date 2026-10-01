@@ -32,8 +32,8 @@ never wait on Gru for anything.
   registry name. Default: the repo the ticket names, else the repo you are
   standing in.
 - `--agent claude|codex` — with `--new-tab` only: the agent that runs the
-  Minion. Default: idun's configured `launchers.minion.agent` (built in:
-  claude).
+  Minion. Default: idun's configured `agents.launchers.minion.agent` (built
+  in: claude).
 
 ## New tab
 
@@ -71,9 +71,11 @@ and if that is what the operator wants, say so and stop.
    from `frigg repos get <name> --json`) may end in `/<the ticket id>`. One that
    does is somebody's already — yours, when this session was itself launched on
    the ticket, which is the likely case if you let the id default to your bound
-   ticket. A Claude launch re-enters it — idun says so on stderr, but the ack
-   looks normal — and the Minion's stand-down would then aim at the worktree
-   you are standing in; a Codex launch is refused. Stop and say so.
+   ticket. A Claude launch onto it exits 4 while a live session stands in it —
+   this one included, since idun's name check counts the launcher's own
+   session — and otherwise re-enters it, saying so only on stderr behind a
+   normal-looking ack, so the Minion's stand-down would then aim at a worktree
+   somebody left; a Codex launch is refused. Stop and say so.
 2. Launch, once, with idun v0.94.0 or later (`idun --version`; an older one has
    no ticket-mode `minion` — stop and say so):
 
@@ -95,19 +97,22 @@ and if that is what the operator wants, say so and stop.
      `/minion STARK-n` (`$minion STARK-n` on Codex) and name the leader peer
      you meant, and its `coordination` names the route the prompt describes
      for the provider pair (`SendMessage` or `hermod-msg`).
-   - **1**: something was placed or started and did not come up. The tab and
-     the worktree are left standing for inspection, and idun's stderr names
-     both. Under `--json` stdout still carries a complete, normal-looking ack
-     on either runtime, whose only tells are `verified: false` and an `error`
-     field.
+   - **1**: something was placed or started and did not come up, and idun's
+     stderr names what it left standing. When the tab opened, that is the tab
+     and the worktree, and under `--json` stdout still carries a complete,
+     normal-looking ack on either runtime, whose only tells are
+     `verified: false` and an `error` field. When Hermod could not place the
+     tab, or a Codex worktree could not be cut, there is no ack on stdout at
+     all.
    - **2**: refused before anything was created: a bad argument, a repo frigg
      cannot resolve, a `--cwd` outside any git checkout, both or neither
      session stamps without `--leader`, an existing worktree for the id or a
      leftover branch `STARK-n` on a Codex launch, or a main checkout Codex
      does not trust (`Codex does not trust <path>…`), which the operator
      trusts once — name it and stop.
-   - **4**: a live agent or tab already holds the id; a live worker owns the
-     ticket. Do not launch it again.
+   - **4**: a live agent or tab already holds the id, and idun's stderr lists
+     each holder — this session counts among them when it stands in the
+     ticket's worktree. Do not launch it again.
    - **128+n**: interrupted.
 4. **Then it depends on who the leader is.**
    - **`--leader <someone else>`**: print the ack's `surface`, `workspace`,

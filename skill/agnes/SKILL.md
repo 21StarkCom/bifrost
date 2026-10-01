@@ -38,7 +38,8 @@ work but you.
   frigg registry name. Default: the repo the ticket names, else the repo you
   are standing in.
 - `--agent claude|codex` — with `--new-tab` only: the agent that runs her.
-  Default: idun's configured `launchers.agnes.agent` (built in: claude).
+  Default: idun's configured `agents.launchers.agnes.agent` (built in:
+  claude).
 
 ## New tab
 
@@ -71,9 +72,11 @@ down. Launch her and stop.
    from `frigg repos get <name> --json`) may end in `/<the ticket id>`. One that
    does is somebody's already — yours, when this session was itself launched on
    the ticket, which is the likely case if you let the id default to your bound
-   ticket. A Claude launch re-enters it — idun says so on stderr, but the ack
-   looks normal — and her stand-down would then remove the worktree you are
-   standing in; a Codex launch is refused. Stop and say so.
+   ticket. A Claude launch onto it exits 4 while a live session stands in it —
+   this one included, since idun's name check counts the launcher's own
+   session — and otherwise re-enters it, saying so only on stderr behind a
+   normal-looking ack, so her stand-down would then remove a worktree somebody
+   left; a Codex launch is refused. Stop and say so.
 2. Launch, once, with idun v0.94.0 or later (`idun --version`; an older one has
    no `agnes` verb — stop and say so):
 
@@ -91,20 +94,24 @@ Read the exit code before the ack. A nonzero exit is the answer, not something
 to work around; report what it printed:
 
 - **0** with `verified: true`: launched.
-- **1**: something was placed or started and did not come up. The tab and the
-  worktree are left standing for inspection, and idun's stderr names both
-  (`… left standing: surface:N, worktree <path>`). Under `--json` stdout still
-  carries a complete, normal-looking ack on either runtime, whose only tells
-  are `verified: false` and an `error` field, so check that field and the exit
-  code before you call the hand-off done.
+- **1**: something was placed or started and did not come up, and idun's
+  stderr names what it left standing. When the tab opened but Agnes did not
+  come up, that is the tab and the worktree
+  (`… left standing: surface:N, worktree <path>`), and under `--json` stdout
+  still carries a complete, normal-looking ack on either runtime, whose only
+  tells are `verified: false` and an `error` field, so check that field and
+  the exit code before you call the hand-off done. When Hermod could not place
+  the tab, or a Codex worktree could not be cut, there is no ack on stdout at
+  all.
 - **2**: refused before anything was created: a bad argument, no id and no
   bound ticket, a repo frigg cannot resolve, a `--cwd` outside any git
   checkout, an existing worktree for the id or a leftover branch `STARK-n` on
   a Codex launch, or a main checkout Codex does not trust
   (`Codex does not trust <path>…`). Trusting a repo is the operator's to do,
   once; name it and stop.
-- **4**: a live agent or tab already holds the id; a live worker owns the
-  ticket. Do not launch it again.
+- **4**: a live agent or tab already holds the id, and idun's stderr lists
+  each holder — this session counts among them when it stands in the ticket's
+  worktree. Do not launch it again.
 - **128+n**: interrupted.
 
 Never fall back to working the ticket in this session — the operator asked for
@@ -222,7 +229,8 @@ Claude — the default agent — it launches `claude --worktree=<ticket>`, which
 **re-enters** an existing worktree of that name rather than minting one, so the
 relaunch drops a second session into your leftovers behind a normal-looking ack,
 with only a line on idun's stderr to say so. Both are reasons to run the
-preflight properly, never a reason to reach for `--force`.
+preflight properly, never a reason to reach for `STARK_SKIP_NAME_CHECK=1`, the
+bypass idun's exit-4 message offers.
 
 ## When not to stand down
 

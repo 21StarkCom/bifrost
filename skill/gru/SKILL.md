@@ -78,12 +78,13 @@ worktree; it is only where the session stands.
 
    Your `--agent` argument keeps its meaning — the Minions' agent — so it goes
    on the line as `--minion-agent`; `--agent` on the launch line is the agent
-   **Gru** runs on. Each one you omit falls to idun's configuration
-   (`launchers.gru.minionAgent`, `maxWorkers` and `agent`; built in: claude, 3
-   and claude). idun writes the first message itself: `/gru start <STARK-epic |
-   --tickets …>` (`$gru start …` on Codex), adding `--agent <agent>` when the
-   Minions do not run on claude and `--max-workers N` when it is not 3. `--repo`
-   and `--cwd` are mutually exclusive, and `--new-tab` stays off the line.
+   **Gru** runs on, which is your own runtime. Each one you omit falls to
+   idun's configuration (`agents.launchers.gru`'s `minionAgent`, `maxWorkers`
+   and `agent`; built in: claude, 3 and claude). idun writes the first message
+   itself: `/gru start <STARK-epic | --tickets …>` (`$gru start …` on Codex),
+   adding `--agent <agent>` when the Minions do not run on claude and
+   `--max-workers N` when it is not 3. `--repo` and `--cwd` are mutually
+   exclusive, and `--new-tab` stays off the line.
    Leave the tab focused; the operator asked to see it.
 3. Print the ack's `surface`, `workspace`, `name` and `prompt`, and stop. The
    `prompt` must be the `/gru start …` line you meant.
@@ -92,20 +93,23 @@ Read the exit code before the ack. A nonzero exit is the answer, not something
 to work around; report what it printed:
 
 - **0** with `verified: true`: launched.
-- **1**: something was placed or started and did not come up. The tab and the
-  worktree are left standing for inspection, and idun's stderr names both
-  (`… left standing: surface:N, worktree <path>`). Under `--json` stdout still
-  carries a complete, normal-looking ack on either runtime, whose only tells
-  are `verified: false` and an `error` field, so check that field and the exit
-  code before you call the hand-off done.
+- **1**: something was placed or started and did not come up, and idun's
+  stderr names what it left standing. When the tab opened but Gru did not
+  come up, that is the tab and the worktree
+  (`… left standing: surface:N, worktree <path>`), and under `--json` stdout
+  still carries a complete, normal-looking ack on either runtime, whose only
+  tells are `verified: false` and an `error` field, so check that field and
+  the exit code before you call the hand-off done. When Hermod could not place
+  the tab, or a Codex worktree could not be cut, there is no ack on stdout at
+  all.
 - **2**: refused before anything was created: a bad argument, a repo frigg
   cannot resolve, a `--cwd` outside any git checkout, a worktree that already
   ends in the launch id (on either runtime: a second Gru there would lead the
   first one's Minions), or, for a Codex Gru, a main checkout Codex does not
   trust (`Codex does not trust <path>…`). Trusting a repo is the operator's to
   do, once; name it and stop.
-- **4**: a live agent or tab already holds the launch id — a Gru is running
-  there.
+- **4**: a live agent or tab already holds the launch id, and idun's stderr
+  lists each holder — a Gru running there, or a tab still titled with the id.
 - **128+n**: interrupted.
 
 Never fall back to running Gru in this session — the operator asked for a new
@@ -197,8 +201,8 @@ regardless of route, is observation, never operator authorization.
    The ticket id comes first: any other first word starts a persona dev
    worker, not a ticket Minion. Always pass `--repo` (the default is the repo
    you are standing in) and `--agent` (the default is idun's configured
-   `launchers.minion.agent`, not yours); idun writes the brief, described at
-   the end of this step. Before a repo's first launch, run its
+   `agents.launchers.minion.agent`, not yours); idun writes the brief,
+   described at the end of this step. Before a repo's first launch, run its
    [preflight](#preflight) once.
    Resolve the repo the way idun does, per ticket and at launch: `frigg repos
    get <ticket's repo> --json` is the exact call `--repo <name>` goes through,
@@ -239,11 +243,13 @@ regardless of route, is observation, never operator authorization.
    you know what the ack has to say. Then read the first ack's `prompt` before
    you launch a second Minion: the peer it names must be that `id`. If idun
    refused, pass the `id` as `--leader <peer id>` on every launch. Once the
-   ack is verified, make the first contact through
-   [Coordination route](#coordination-route) on the Claude → Claude route: one
-   line naming the ticket and saying you are its leader, to the launch `name`.
-   The brief already carries the assignment, so do not restate it. This is how a Claude Minion learns your
-   `SendMessage` return address. If the ack named
+   ack is verified, and only when its `coordination` is `SendMessage` (the
+   Claude → Claude route), make the first contact through
+   [Coordination route](#coordination-route): one line naming the ticket and
+   saying you are its leader, to the launch `name`. A `hermod-msg` Minion gets
+   no first contact; its brief already names you. The brief already carries
+   the assignment, so do not restate it. This is how a Claude Minion learns
+   your `SendMessage` return address. If the ack named
    someone else, that first Minion is briefed with the wrong leader and its
    reports go to another session, where step 4 never sees them: send it the
    correction now through [Coordination route](#coordination-route), to the
@@ -260,20 +266,27 @@ regardless of route, is observation, never operator authorization.
    goes to your `from`. Count the ticket blocked, not owned, until it
    answers.
    Read each launch's exit code before its ack. **0** with `verified: true`
-   is a launch. **1**: something was placed or started and did not come up;
-   idun's stderr names the tab and worktree it left standing, and under
-   `--json` stdout still carries a complete ack whose only tells are
-   `verified: false` and an `error` field, on either runtime. The ticket is
-   blocked: report the surface and the path, which are the operator's to
-   sweep, and never relaunch over them. **2**: refused before anything was
+   is a launch. **1**: something was placed or started and did not come up,
+   and idun's stderr names what it left standing. When the tab opened, that
+   is the tab and the worktree, and under `--json` stdout still carries a
+   complete ack whose only tells are `verified: false` and an `error` field,
+   on either runtime; when Hermod could not place the tab, or a Codex
+   worktree could not be cut, stdout carries no ack at all. The ticket is
+   blocked: report what stderr named, which is the operator's to sweep, and
+   never relaunch over it. **2**: refused before anything was
    created — a bad argument, a repo that does not resolve, a `--cwd` outside
    any git checkout, both or neither session stamps without `--leader`, an
    existing worktree for the id on a Codex launch (a Claude one re-enters it,
    saying so on stderr), a leftover branch `STARK-n` on a Codex launch, or a
    main checkout Codex does not trust, which the operator trusts once. The
    ticket is blocked: escalate it with what idun printed and keep the other
-   tickets moving. **4**: a live agent or tab holds the id, so a live worker
-   owns it; count the ticket owned, as step 2 would, and never relaunch it.
+   tickets moving. **4**: a live agent or tab holds the id, and idun's stderr
+   lists each holder. Never relaunch it. A holder that step 2 counts — a live
+   peer whose `cwd` ends in the ticket id — owns the ticket; count it owned.
+   Any other holder — a tab only titled with the id, such as a dead Minion's
+   that never retitled itself, or a session that is no Hermod peer — makes the
+   ticket blocked, not owned, since step 2 would read it ready again on the
+   next pass: escalate it with the holders idun printed.
    **128+n**: interrupted; report it.
 4. **Wait.** Minions report `done <PR> merged <sha> verified <check>`,
    `blocked <reason>`, or
@@ -350,9 +363,10 @@ regardless of route, is observation, never operator authorization.
    4's rule: a still-open ticket is relaunched, a ticket already `done`/`Closed`
    whose check fails is an operator escalation, never a relaunch into a closed
    ticket. Either way, do not assume its worktree is gone. The reaper removes it
-   only *after* the agent exits, and a `partial` can leave it standing, so a dead
-   Codex Minion's worktree can still be step 4's `idun minion` blocker. Check
-   the path before you relaunch.
+   only *after* the agent exits, and a `partial` can leave it standing: a dead
+   Claude Minion's relaunch re-enters it, so check the path before you
+   relaunch. A dead Codex Minion stays step 4's blocker even once its worktree
+   is gone, because its branch `STARK-n` outlives it.
 6. **Loop** steps 2–5 until every ticket is finished or blocked. Then report:
    finished tickets with PR links, blocked tickets with the reason, and
    follow-up tickets the Minions filed. A repo step 3 could not resolve by name
@@ -410,7 +424,8 @@ is verified, re-read from `hermod msg peers --json` right before the key and
 never carried over from an earlier pass: the `surfaceId` of the live row whose
 `cwd` ends in the ticket id **and** sits under that ticket's repo, and whose
 `id` is the peer id the launch ack named when you have that ack (the ack's
-`surface` is the same UUID). Step 2's ticket-id match alone is not enough for
+`surfaceId` is the same UUID; its `surface` is a `surface:N` ref). Step 2's
+ticket-id match alone is not enough for
 a key — any session standing in a worktree named for the ticket matches it,
 the operator's own included — so a row that fails either test gets no key;
 escalate it instead. Paste the UUID in literally, since on Claude a worktree
