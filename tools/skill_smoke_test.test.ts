@@ -338,7 +338,7 @@ for (const name of SKILLS) {
 // change this table first.
 //
 // The worker family (STARK-6471, decided 2026-09-19): `agnes`, `gru` and
-// `minion` are launched unattended: hermod hands a fresh session the brief
+// `minion` are launched unattended: idun hands a fresh session the brief
 // `/agnes STARK-n` as TEXT, and on a marketplace install that resolves through
 // the plugin (STARK-6469 — Claude Code's docs: the bare form invokes the skill
 // unless another command already uses the name; the real Minion transcripts
@@ -617,27 +617,51 @@ for (const dir of SHARED_DOC_DIRS) {
   });
 }
 
-// Gru's launch lines (STARK-7122, STARK-7540). The rule a tidy-up can drop
-// without anything else going red: Gru is never launched on the id of a ticket
-// it will work. The id names Gru's own worktree, and Gru's step 2 reads a live
-// peer whose cwd ends in a ticket id as the Minion that owns it — so it would
-// read ITSELF as that ticket's Minion and never launch it.
-const hermodTicketLines = (file: string): string[] =>
-  fencedLines(fs.readFileSync(file, "utf8")).filter((line) => /^\s*hermod ticket\b/.test(line));
+// Gru's launch line (STARK-7122, STARK-7540, STARK-10154). The rule a tidy-up
+// can drop without anything else going red: Gru is never launched on the id of
+// a ticket it will work. The id names Gru's own worktree, and Gru's step 2
+// reads a live peer whose cwd ends in a ticket id as the Minion that owns it —
+// so it would read ITSELF as that ticket's Minion and never launch it. `idun
+// gru` derives the id from its operand: the epic, or GRU-<n> from --tickets.
+const fencedLaunchLines = (file: string, launcher: RegExp): string[] =>
+  fencedLines(fs.readFileSync(file, "utf8")).filter((line) => launcher.test(line));
+
+// The operand after `idun gru`: one token, `--tickets <list>`, or a
+// `( a | b )` alternation of those.
+function gruLaunchOperands(line: string): string[] {
+  const rest = line.trim().replace(/^idun gru\s+/, "");
+  const group = /^\(([^)]*)\)/.exec(rest);
+  if (group) return (group[1] ?? "").split("|").map((alt) => alt.trim());
+  return [/^--tickets\s+\S+/.exec(rest)?.[0] ?? rest.split(/\s+/)[0] ?? ""];
+}
 
 test("skill smoke: skill/gru — Gru is never launched on a ticket it works", () => {
   const file = path.join(SKILLS_ROOT, "gru", "SKILL.md");
-  const lines = hermodTicketLines(file);
-  assert.equal(lines.length, 2, "expected the --gru form and the --prompt-file form");
+  const lines = fencedLaunchLines(file, /^\s*idun gru\b/);
+  assert.equal(lines.length, 1, "expected exactly one fenced `idun gru` launch form");
   for (const line of lines) {
-    assert.match(
-      line,
-      /^\s*hermod ticket (STARK-<epic>|<STARK-epic, or GRU-n>) /,
-      `Gru launched on something other than the epic or GRU-n: ${line.trim()}`,
-    );
+    for (const operand of gruLaunchOperands(line)) {
+      assert.match(
+        operand,
+        /^(STARK-<epic>|--tickets\s+\S+)$/,
+        `Gru launched on something other than the epic or --tickets: ${line.trim()}`,
+      );
+    }
+    assert.match(line, /--minion-agent\b/, "the Minions' agent rides --minion-agent");
+    assert.match(line, /--agent\b/, "Gru's own runtime rides --agent");
   }
   assert.match(fs.readFileSync(file, "utf8"), /Never the id of a ticket Gru will work/);
 });
+
+// The worker launchers moved from `hermod ticket` to idun (STARK-10154). A
+// fenced `hermod ticket` line left in any of the three skills would launch on a
+// hermod path that bypasses idun's managed Codex account and exit-code contract.
+for (const name of ["agnes", "gru", "minion"]) {
+  test(`skill smoke: skill/${name} — no fenced \`hermod ticket\` launch line`, () => {
+    const lines = fencedLaunchLines(path.join(SKILLS_ROOT, name, "SKILL.md"), /^\s*hermod ticket\b/);
+    assert.deepEqual(lines, [], `skill/${name} still launches through hermod ticket`);
+  });
+}
 
 // ---------------------------------------------------------------------------
 // 5. Every distinct in-repo `tools/*.ts` CLI mentioned by any skill exits

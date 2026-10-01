@@ -39,7 +39,8 @@ ticket.
 
 ## 2. Implement
 
-In the worktree Hermod placed you in. Do not `cd` out of it.
+In the worktree idun's launcher cut for you, in the tab it placed through
+Hermod. Do not `cd` out of it.
 
 ## 3. Verify live
 

@@ -16,8 +16,12 @@ follow [standard help](../../standards/help.md), then stop.
 
 You lead. You take an epic or a ticket list and drive every ticket to done.
 Each ticket gets exactly one Minion (`/minion`), launched in its own worktree
-through Hermod. You never implement a ticket yourself and never edit a Minion's
-worktree. The ticket board is the only state; Hermod is the only worker registry.
+by `idun minion`, which places its tab through Hermod. You never implement a
+ticket yourself and never edit a Minion's worktree. The ticket board is the only
+state; Hermod is the only worker registry.
+
+Every launch here needs idun v0.94.0 or later (`idun --version`). An older idun
+has no `gru` verb and no ticket-mode `minion`; stop and say so.
 
 ## Arguments
 
@@ -40,94 +44,93 @@ tells you to stop; there is no other verb.
 nothing below this section as yours: no expand, no launches, no waiting, and no
 tab title — the Gru you launch titles its own tab. Launch it and stop.
 
-Gru launches through `hermod ticket` like every other persona, so it gets a
-launch id, and with it a worktree and a tab named after that id: the epic's, or
-— given `--tickets` — `GRU-<n>`, `<n>` being the **first** ticket's number
-(`GRU-1234`). **Never the id of a ticket Gru will work.** The id names Gru's own
-worktree, so the launched Gru's step 2 would read its own peer row — live, its
-`cwd` ending in that ticket id — as the Minion that owns the ticket and never
-launch it; and a launch on it anyway attaches a second Claude session to Gru's
-worktree, or is refused outright on Codex. An epic is safe because Gru works its
-children, never the epic. Hermod does nothing with the id but check it against
-`[A-Za-z0-9][A-Za-z0-9._-]*` and name the worktree and the tab. Gru never works
-in that worktree; it is only where the session stands.
+Gru launches through `idun gru`, so it gets a launch id, and with it a worktree,
+a branch and a tab named after that id: the epic's, or — given `--tickets` —
+`GRU-<n>`, `<n>` being the **first** ticket's trailing digits (`GRU-1234`),
+which idun derives itself. **Never the id of a ticket Gru will work.** The id
+names Gru's own worktree, so the launched Gru's step 2 would read its own peer
+row — live, its `cwd` ending in that ticket id — as the Minion that owns the
+ticket and never launch it. An epic is safe because Gru works its children,
+never the epic. idun checks the id against `[A-Za-z0-9][A-Za-z0-9._-]*` and
+names the worktree, the branch and the tab with it. Gru never works in that
+worktree; it is only where the session stands.
 
 1. Pick the repo. With `--repo <name>`, pass it through. Without it, find the
    **main checkout** of the repo you are in — the first `worktree` line of
    `git worktree list --porcelain`, not `git rev-parse --show-toplevel`, which
    names your own worktree when you are inside one — and pass it as `--cwd`.
    Run that as its own command and paste the path in literally: on Claude, a
-   worktree session's guard refuses a `hermod` line carrying a variable
-   ([measured](../../standards/worker-spine.md#title-your-tab)), and a `$(...)`
+   worktree session's guard refuses a launch line carrying a variable
+   ([measured](../../standards/worker-spine.md#title-your-tab) on a `hermod`
+   line), and a `$(...)`
    was [measured](../../standards/stand-down.md#four-rules-about-when) refused on
    its quoted form only — too fine a line to rest a launch on.
    **The launch id must be free in that repo**: no `worktree` line of that list
    (with `--repo`, of `git -C <path> worktree list --porcelain`, `<path>` from
    `frigg repos get <name> --json`) may end in `/<launch id>`. One that does is
-   an earlier Gru's, and the Claude attach it would draw comes back with a
-   normal-looking ack — so stop and say so; the last paragraph of this section
-   is why.
-2. Launch, once. A bare `start <STARK-epic>`, with no other argument, is
-   hermod's own form:
+   an earlier Gru's, and `idun gru` refuses it on either runtime — so stop and
+   say so; the last paragraph of this section is why.
+2. Launch, once, with your arguments mapped onto idun's flags:
 
    ```
-   hermod ticket STARK-<epic> --gru (--repo <name> | --cwd <main checkout>) [--agent <agent>] --json
+   idun gru (STARK-<epic> | --tickets STARK-n,…) [--minion-agent <agent>] [--max-workers N] (--repo <name> | --cwd <main checkout>) [--agent <agent>] --json
    ```
 
-   Its first message is `/gru start STARK-<epic>` (`$gru start …` on Codex).
-   Hermod does not parse Gru's arguments, so every other form — `--tickets`,
-   `--max-workers`, `--agent` — goes in a brief: write
-   the whole invocation, `/gru start` included — your arguments alone load no
-   skill — minus `--new-tab` and `--repo <name>`, as the one line of a file and
-   launch with
-
-   ```
-   hermod ticket <STARK-epic, or GRU-n> --prompt-file <brief> (--repo <name> | --cwd <main checkout>) [--agent <agent>] --json
-   ```
-
-   never `--message`, which hands the line's quotes and `$` to the shell.
-   `--gru` excludes `--prompt-file` (and `--agnes`, `--minion`, `--prompt`,
-   `--message`), so it is one form or the other. `--gru` needs hermod v0.20.0 or later
-   (STARK-7537); on v0.19.0 or older the `--prompt-file`
-   form is the only one, and `hermod ticket --help` tells you which you have.
-   Your `--agent` argument keeps its meaning — the Minions' agent — so it belongs
-   in the brief; `--agent` on the launch line is the agent **Gru** runs on, which
-   is your own runtime. `--repo` and `--cwd` are mutually exclusive.
+   Your `--agent` argument keeps its meaning — the Minions' agent — so it goes
+   on the line as `--minion-agent`; `--agent` on the launch line is the agent
+   **Gru** runs on, which is your own runtime. Each one you omit falls to
+   idun's configuration (`agents.launchers.gru`'s `minionAgent`, `maxWorkers`
+   and `agent`; built in: claude, 3 and claude). idun writes the first message
+   itself: `/gru start <STARK-epic | --tickets …>` (`$gru start …` on Codex),
+   adding `--agent <agent>` when the Minions do not run on claude and
+   `--max-workers N` when it is not 3. `--repo` and `--cwd` are mutually
+   exclusive, and `--new-tab` stays off the line.
    Leave the tab focused; the operator asked to see it.
 3. Print the ack's `surface`, `workspace`, `name` and `prompt`, and stop. The
    `prompt` must be the `/gru start …` line you meant.
 
-A nonzero exit is the answer, not something to work around: exit 2 names a bad
-argument, an unbound session, or a repo frigg cannot resolve. A failed start
-looks different per `--agent`, and either leaves the tab and worktree standing
-for inspection: Claude exits 1 with a complete, normal-looking ack whose only
-tell is `verified:false`, so check that field and the exit code before you call
-the hand-off done; Codex prints `{error, code, stage}` with no ack fields at
-all. Report what it printed. Never fall back to running Gru in this session —
-the operator asked for a new tab because they want this one back.
+Read the exit code before the ack. A nonzero exit is the answer, not something
+to work around; report what it printed:
+
+- **0** with `verified: true`: launched.
+- **1**: something was placed or started and did not come up, and idun's
+  stderr names what it left standing. When the tab opened but Gru did not
+  come up, that is the tab and the worktree
+  (`… left standing: surface:N, worktree <path>`), and under `--json` stdout
+  still carries a complete, normal-looking ack on either runtime, whose only
+  tells are `verified: false` and an `error` field, so check that field and
+  the exit code before you call the hand-off done. When Hermod could not place
+  the tab, or a Codex worktree could not be cut, there is no ack on stdout at
+  all.
+- **2**: refused before anything was created: a bad argument, a repo frigg
+  cannot resolve, a `--cwd` outside any git checkout, a worktree that already
+  ends in the launch id (on either runtime: a second Gru there would lead the
+  first one's Minions), or, for a Codex Gru, a main checkout Codex does not
+  trust (`Codex does not trust <path>…`). Trusting a repo is the operator's to
+  do, once; name it and stop.
+- **4**: a live agent or tab already holds the launch id, and idun's stderr
+  lists each holder — a Gru running there, or a tab still titled with the id.
+- **128+n**: interrupted.
+
+Never fall back to running Gru in this session — the operator asked for a new
+tab because they want this one back.
 
 **`--new-tab` starts a Gru; it does not resume one.** The launch cuts a worktree
 on the launch id, so a second `--new-tab` on the same input meets the first
-one's worktree: on Codex `hermod ticket` refuses (`Codex worktree path already
-exists`), and on Claude `claude --worktree=<launch id>` **attaches** a second Gru to
-it, which would then launch Minions the first is already leading. Rerunning
-`start` to resume means rerunning it in the tab Gru is already in. Launch again
-only once that Gru is gone and its worktree with it — and a worktree still
-standing is the operator's to sweep, not yours.
+one's worktree, and `idun gru` refuses it (exit 2). On Codex the branch named
+for the launch id outlives that worktree, and idun refuses a Codex launch onto
+an existing branch too (exit 2). Rerunning `start` to resume means rerunning it
+in the tab Gru is already in. Launch again only once that Gru is gone and its
+worktree with it — and a worktree or branch still standing is the operator's to
+sweep, not yours.
 
 ## Coordination route
 
 Choose the route for each Minion from your runtime and the launch ack's
-`agent`, `name`, `sessionId`, and `peerId`. The ack's top-level `coordination`
-names the intended route (a Codex ack also carries
-`capabilities.coordination`, the provider's static capability, which is not
-the route); it does not prove that a message was delivered. Keep the
-leader's full `<provider>:<id>` peer address for fallback.
-
-The native route needs a hermod whose `--minion` brief names it (STARK-10049).
-An ack with no top-level `coordination` came from an older hermod, whose brief
-tells the Minion to report over Hermod for every provider pair: that Minion's
-route is Hermod, and you make no native first contact with it.
+`agent`, `name`, `sessionId`, and `peerId`. The ack's `coordination` names the
+intended route, `SendMessage` or `hermod-msg`, the same one the brief idun
+wrote tells the Minion; it does not prove that a message was delivered. Keep
+the leader's full `<provider>:<id>` peer address for fallback.
 
 - **Claude → Claude:** use the native `SendMessage` tool to send the first
   contact to the worker's launch `name` (not its session UUID). That first
@@ -146,17 +149,13 @@ route is Hermod, and you make no native first contact with it.
   report through the bridge. Do not duplicate the assignment. Keep that route
   until both peers explicitly agree to switch; a late native delivery alone
   does not change it.
-- **Codex → Codex:** send to the worker's exact ack `sessionId` with
-  `codex queue --thread <worker-sessionId> --message '<text>'`. Its brief gives
-  it your thread ID for direct queue reports. Queue success is submission,
-  never delivery or completion, and there is no later state to read. If the
-  queue CLI is unavailable or rejects the send, use
-  `hermod msg send --to <worker-peerId>` and tell the Minion to report through
-  the bridge.
-- **Different providers or unresolved identity:** use
+- **Every other pair — Codex on either side, mixed providers, or unresolved
+  identity:** use
   `hermod msg send --to <worker-peerId> --kind request -- '<text>'` and
-  receive reports through that ledger. A Claude or Codex native channel does
-  not return a message to a leader on another provider.
+  receive reports through that ledger, in both directions; the brief idun
+  writes tells the Minion the same. There is no native Codex route, and a
+  Claude native channel does not return a message to a leader on another
+  provider.
 
 Apply this route to assignments, follow-ups, status requests, corrections, and
 answers. Reports arrive in your native conversation on a native route; on the
@@ -198,13 +197,17 @@ regardless of route, is observation, never operator authorization.
    in a brief or a message instead of in the spec. A contract two tickets
    share that the spec lacks is an escalation.
 3. **Launch.** For each ready ticket while live Minions < N:
-   `hermod ticket STARK-n --repo <ticket's repo> --agent <agent> --no-focus --minion --json`.
-   Always pass `--repo` (the default is the repo you are standing in); `--minion`
-   writes the brief, described at the end of this step. Before a repo's first
-   launch, run its [preflight](#preflight) once.
-   Resolve the repo the way hermod does, per ticket and at launch: `frigg repos
+   `idun minion STARK-n --repo <ticket's repo> --agent <agent> --no-focus --json`.
+   The ticket id comes first: any other first word starts a persona dev
+   worker, not a ticket Minion. Always pass `--repo` (the default is the repo
+   you are standing in) and `--agent` (the default is idun's configured
+   `agents.launchers.minion.agent`, not yours); idun writes the brief,
+   described at the end of this step. Before a repo's first launch, run its
+   [preflight](#preflight) once.
+   Resolve the repo the way idun does, per ticket and at launch: `frigg repos
    get <ticket's repo> --json` is the exact call `--repo <name>` goes through,
-   and it exits 3 on a name the registry does not carry. One record, read when
+   and it exits 3 on a name the registry does not carry (idun then refuses
+   with exit 2, naming the repo). One record, read when
    you launch — a whole-registry read cached once per run still answers
    "unregistered" for a repo the operator seeds mid-run. Exit 3, or a record
    whose `stale` is true because its path is gone from disk, means the name
@@ -213,9 +216,10 @@ regardless of route, is observation, never operator authorization.
    record's `path` (its `dirname` — never a hardcoded `~/Code/21Stark`; the
    fleet has checkouts under other roots) and try `<root>/<repo>`. **Prove the
    guess before you launch into it** — `git -C <path> rev-parse --show-toplevel`
-   must print that same path. A `--cwd` hermod cannot use is not refused: it
-   silently cuts the worktree from *your own* repo, exits 0, and the ack looks
-   normal, so the Minion would implement the ticket in the wrong codebase. A
+   must print that same path. idun refuses a `--cwd` outside any git checkout
+   (exit 2), but one inside some other checkout launches into that repo's main
+   checkout, exits 0, and the ack looks normal, so the Minion would implement
+   the ticket in the wrong codebase. A
    guess that does not prove out makes the ticket blocked, not ready — record
    it with its repo name, leave it alone on later passes, raise it under
    Authority's escalation rule when it happens rather than only in step 6, and
@@ -227,24 +231,25 @@ regardless of route, is observation, never operator authorization.
    ticket id alone, so a misrouted Minion otherwise reads as a correctly-owned
    one. Seeding the registry is the operator's: run neither `frigg repos scan`
    nor `frigg repos set` yourself; name the fix in your report instead.
-   The brief `--minion` writes invokes `/minion` (`$minion` on Codex), names
+   The brief idun writes invokes `/minion` (`$minion` on Codex), names
    the ticket and your peer id, and gives the route from
-   [Coordination route](#coordination-route) with a Hermod fallback. Hermod
+   [Coordination route](#coordination-route) with a Hermod fallback. idun
    takes your peer id from your own
    `$CLAUDE_CODE_SESSION_ID` (`$CODEX_THREAD_ID` on Codex), and refuses the
-   launch when it finds neither or both. **Your peer id** is the `id` of the
+   launch (exit 2) when it finds neither or both. **Your peer id** is the `id` of the
    `hermod msg peers` row whose `sessionId` is yours — the whole
    `<provider>:<id>` address (`claude:<uuid>`), never the bare session id,
    which the fallback bridge may not resolve. Look it up before your first launch, so
    you know what the ack has to say. Then read the first ack's `prompt` before
-   you launch a second Minion: the peer it names must be that `id`. If hermod
+   you launch a second Minion: the peer it names must be that `id`. If idun
    refused, pass the `id` as `--leader <peer id>` on every launch. Once the
-   ack is verified, make the first contact through
-   [Coordination route](#coordination-route) on a same-provider route: one
-   line naming the ticket and saying you are its leader, to the launch `name`
-   on Claude or the native `sessionId` on Codex. The brief already carries the
-   assignment, so do not restate it. This is how a Claude Minion learns your
-   `SendMessage` return address. If the ack named
+   ack is verified, and only when its `coordination` is `SendMessage` (the
+   Claude → Claude route), make the first contact through
+   [Coordination route](#coordination-route): one line naming the ticket and
+   saying you are its leader, to the launch `name`. A `hermod-msg` Minion gets
+   no first contact; its brief already names you. The brief already carries
+   the assignment, so do not restate it. This is how a Claude Minion learns
+   your `SendMessage` return address. If the ack named
    someone else, that first Minion is briefed with the wrong leader and its
    reports go to another session, where step 4 never sees them: send it the
    correction now through [Coordination route](#coordination-route), to the
@@ -260,11 +265,29 @@ regardless of route, is observation, never operator authorization.
    brief said — `hermod msg reply` goes to the sender, and a native answer
    goes to your `from`. Count the ticket blocked, not owned, until it
    answers.
-   `--minion` and `--leader` need hermod v0.20.0 or later (STARK-6974);
-   `hermod ticket --help` tells you which you have. On v0.19.0 or older,
-   write those same four things to a file and launch with
-   `--prompt-file <brief>` instead — never `--message`, which hands the brief's
-   quotes and `$` to the shell.
+   Read each launch's exit code before its ack. **0** with `verified: true`
+   is a launch. **1**: something was placed or started and did not come up,
+   and idun's stderr names what it left standing. When the tab opened, that
+   is the tab and the worktree, and under `--json` stdout still carries a
+   complete ack whose only tells are `verified: false` and an `error` field,
+   on either runtime; when Hermod could not place the tab, or a Codex
+   worktree could not be cut, stdout carries no ack at all. The ticket is
+   blocked: report what stderr named, which is the operator's to sweep, and
+   never relaunch over it. **2**: refused before anything was
+   created — a bad argument, a repo that does not resolve, a `--cwd` outside
+   any git checkout, both or neither session stamps without `--leader`, an
+   existing worktree for the id on a Codex launch (a Claude one re-enters it,
+   saying so on stderr), a leftover branch `STARK-n` on a Codex launch, or a
+   main checkout Codex does not trust, which the operator trusts once. The
+   ticket is blocked: escalate it with what idun printed and keep the other
+   tickets moving. **4**: a live agent or tab holds the id, and idun's stderr
+   lists each holder. Never relaunch it. A holder that step 2 counts — a live
+   peer whose `cwd` ends in the ticket id — owns the ticket; count it owned.
+   Any other holder — a tab only titled with the id, such as a dead Minion's
+   that never retitled itself, or a session that is no Hermod peer — makes the
+   ticket blocked, not owned, since step 2 would read it ready again on the
+   next pass: escalate it with the holders idun printed.
+   **128+n**: interrupted; report it.
 4. **Wait.** Minions report `done <PR> merged <sha> verified <check>`,
    `blocked <reason>`, or
    `follow-up STARK-m filed, stopping`. Between reports check `hermod msg peers`.
@@ -280,10 +303,11 @@ regardless of route, is observation, never operator authorization.
    peer whose ticket is **still open is a death, even when its PR already
    merged**: a Minion can die between the merge and the ticket close, and nobody
    else is going to close it. A dead Claude Minion that is a real death is
-   relaunched once with the same brief; the relaunch is a new session with no
+   relaunched once with step 3's same `idun minion` line, which re-enters its
+   worktree; the relaunch is a new session with no
    `from` address, so make step 3's first contact again after its ack. A dead
-   Codex Minion is a blocker:
-   `hermod ticket` refuses its existing worktree; report the path. A second
+   Codex Minion is a blocker: `idun minion` refuses its existing worktree, and
+   the branch `STARK-n` that outlives one, with exit 2; report the path. A second
    death is a blocker. `follow-up … stopping` means the ticket is blocked on
    STARK-m; report it so, and the operator decides whether to add STARK-m.
 
@@ -339,16 +363,17 @@ regardless of route, is observation, never operator authorization.
    4's rule: a still-open ticket is relaunched, a ticket already `done`/`Closed`
    whose check fails is an operator escalation, never a relaunch into a closed
    ticket. Either way, do not assume its worktree is gone. The reaper removes it
-   only *after* the agent exits, and a `partial` can leave it standing, so a dead
-   Codex Minion's worktree can still be step 4's `hermod ticket` blocker. Check
-   the path before you relaunch.
+   only *after* the agent exits, and a `partial` can leave it standing: a dead
+   Claude Minion's relaunch re-enters it, so check the path before you
+   relaunch. A dead Codex Minion stays step 4's blocker even once its worktree
+   is gone, because its branch `STARK-n` outlives it.
 6. **Loop** steps 2–5 until every ticket is finished or blocked. Then report:
    finished tickets with PR links, blocked tickets with the reason, and
    follow-up tickets the Minions filed. A repo step 3 could not resolve by name
    gets one line naming it and the operator's fix, per repo and with the path
-   you already resolved: `frigg repos set <repo> --path <p>` — the command
-   hermod's own error names, and the only one that reaches a checkout outside
-   the fleet root that `frigg repos scan <root>` would sweep.
+   you already resolved: `frigg repos set <repo> --path <p>` — the only
+   command that reaches a checkout outside the fleet root that
+   `frigg repos scan <root>` would sweep.
 
 ## Preflight
 
@@ -391,15 +416,16 @@ keep them for the rest of the run:
 
 ## Terminal control
 
-You never type prose into a Minion's terminal. The brief rides
-`hermod ticket` and every word after it follows
+You never type prose into a Minion's terminal. The brief rides the
+`idun minion` launch and every word after it follows
 [Coordination route](#coordination-route). Messages are not worker control. What does go
 to a Minion's surface is control, and only this. Every `<surface UUID>` below
 is verified, re-read from `hermod msg peers --json` right before the key and
 never carried over from an earlier pass: the `surfaceId` of the live row whose
 `cwd` ends in the ticket id **and** sits under that ticket's repo, and whose
 `id` is the peer id the launch ack named when you have that ack (the ack's
-`surface` is the same UUID). Step 2's ticket-id match alone is not enough for
+`surfaceId` is the same UUID; its `surface` is a `surface:N` ref). Step 2's
+ticket-id match alone is not enough for
 a key — any session standing in a worktree named for the ticket matches it,
 the operator's own included — so a row that fails either test gets no key;
 escalate it instead. Paste the UUID in literally, since on Claude a worktree
@@ -423,8 +449,7 @@ session's guard refuses a `hermod` line carrying a variable
   while it was busy may still be held. On the Hermod route check
   `hermod msg status <id>` on each. A native send has no state to re-read: a
   Claude message with no `[Cross-session delivery notice]` reached the session
-  and drains at its next tool round, and a Codex queue receipt is submission
-  only. Either way, when you tell the Minion why through
+  and drains at its next tool round. Either way, when you tell the Minion why through
   [Coordination route](#coordination-route), name what you had already sent
   instead of sending it again.
 - **Answering a known menu** — one you have read on its screen
