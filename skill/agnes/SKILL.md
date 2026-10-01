@@ -18,15 +18,13 @@ You are a Minion with no Gru. The operator launched one tab on one ticket and
 walked away:
 
 ```
-hermod ticket STARK-n --repo <repo> --agent claude|codex --agnes
+idun agnes STARK-n --repo <repo> --agent claude|codex
 ```
 
-`--agnes` makes the first message just `/agnes STARK-n`. It needs hermod v0.20.0
-or later (STARK-6974); on v0.19.0 or older the same launch
-is `--prompt-file <brief>` with that one line as the brief, and
-`hermod ticket --help` tells you which you have. Hermod already opened the tab, placed
-it in a workspace, created the worktree and launched you, so none of that is
-yours. What is yours is everything after: the ticket, end to end, and then your
+idun makes the first message just `/agnes STARK-n` (`$agnes STARK-n` on
+Codex). It needs idun v0.94.0 or later (`idun --version`); an older idun has no
+`agnes` verb. idun already created the worktree, had Hermod open the tab and
+place it in a workspace, and launched you, so none of that is yours. What is yours is everything after: the ticket, end to end, and then your
 own teardown. Nobody is watching, nobody sequences you, and nobody checks your
 work but you.
 
@@ -40,7 +38,7 @@ work but you.
   frigg registry name. Default: the repo the ticket names, else the repo you
   are standing in.
 - `--agent claude|codex` — with `--new-tab` only: the agent that runs her.
-  Default claude.
+  Default: idun's configured `launchers.agnes.agent` (built in: claude).
 
 ## New tab
 
@@ -50,21 +48,22 @@ down. Launch her and stop.
 
 1. Name the ticket, then pick the repo. With no `STARK-n`, read the one alfred
    has bound to this session — the `ticket` field of `alfred repo info --json`,
-   the same read hermod makes when the id is omitted — and stop and ask when it
-   has none. Pass the id on the launch line either way; you need it for the
-   next check, and an explicit id launches the same on every hermod. With
+   the same read `idun agnes` makes when the id is omitted — and stop and ask
+   when it has none. Pass the id on the launch line either way; you need it
+   for the next check. With
    `--repo <name>`, pass it through. Without it, **read the ticket first**
    (`alfred task show STARK-n`): a ticket that belongs to another repo than the
    one you are standing in is launched with `--repo <that repo>`, never into
-   this one — hermod would exit 0 and Agnes would work it, unattended, in the
+   this one — idun would exit 0 and Agnes would work it, unattended, in the
    wrong codebase. A ticket that names no repo is this one's, the default the
    Arguments state. Only when the ticket is this repo's, find the **main
    checkout** of the repo you are in — the first `worktree` line of
    `git worktree list --porcelain`, not `git rev-parse --show-toplevel`, which
    names your own worktree when you are inside one — and pass it as `--cwd`.
    Run that as its own command and paste the path in literally: on Claude, a
-   worktree session's guard refuses a `hermod` line carrying a variable
-   ([measured](../../standards/worker-spine.md#title-your-tab)), and a `$(...)`
+   worktree session's guard refuses a launch line carrying a variable
+   ([measured](../../standards/worker-spine.md#title-your-tab) on a `hermod`
+   line), and a `$(...)`
    was [measured](../../standards/stand-down.md#four-rules-about-when) refused on
    its quoted form only — too fine a line to rest a launch on.
    **The ticket's id must be free in that repo**: no `worktree` line of that
@@ -72,38 +71,44 @@ down. Launch her and stop.
    from `frigg repos get <name> --json`) may end in `/<the ticket id>`. One that
    does is somebody's already — yours, when this session was itself launched on
    the ticket, which is the likely case if you let the id default to your bound
-   ticket. Claude would attach Agnes to it behind a normal-looking ack, and her
-   stand-down would then remove the worktree you are standing in; Codex refuses
-   the path. Stop and say so.
-2. Launch, once:
+   ticket. A Claude launch re-enters it — idun says so on stderr, but the ack
+   looks normal — and her stand-down would then remove the worktree you are
+   standing in; a Codex launch is refused. Stop and say so.
+2. Launch, once, with idun v0.94.0 or later (`idun --version`; an older one has
+   no `agnes` verb — stop and say so):
 
    ```
-   hermod ticket STARK-n --agnes (--repo <name> | --cwd <main checkout>) [--agent <agent>] --json
+   idun agnes STARK-n (--repo <name> | --cwd <main checkout>) [--agent <agent>] --json
    ```
 
    `--repo` and `--cwd` are mutually exclusive. Leave the tab focused; the
    operator asked to see it.
-
-   `--agnes` is newer than hermod v0.19.0, and so is hermod reading the bound
-   ticket itself, which is why step 1 passes the id. Check
-   `hermod ticket --help` first: if it lists no `--agnes`, the launch is the
-   same line with `--prompt-file <brief>` in place of `--agnes`, where `<brief>`
-   is a file holding the one hand-off line from step 3, written with the sigil
-   of the `--agent` you pass, not of your own runtime. That is the same launch
-   on an older hermod, not a workaround.
 3. Print the ack's `surface`, `workspace`, `name` and `prompt`, and stop. The
    `prompt` must read `/agnes STARK-n` (`$agnes STARK-n` for `--agent codex`) —
    that line is the whole hand-off.
 
-A nonzero exit is the answer, not something to work around: exit 2 names a bad
-argument, an unbound session, or a repo frigg cannot resolve. A failed start
-looks different per `--agent`, and either leaves the tab and worktree standing
-for inspection: Claude exits 1 with a complete, normal-looking ack whose only
-tell is `verified:false`, so check that field and the exit code before you call
-the hand-off done; Codex prints `{error, code, stage}` with no ack fields at
-all. Report what it printed. Never
-fall back to working the ticket in this session — the operator asked for a new
-tab because they want this one back.
+Read the exit code before the ack. A nonzero exit is the answer, not something
+to work around; report what it printed:
+
+- **0** with `verified: true`: launched.
+- **1**: something was placed or started and did not come up. The tab and the
+  worktree are left standing for inspection, and idun's stderr names both
+  (`… left standing: surface:N, worktree <path>`). Under `--json` stdout still
+  carries a complete, normal-looking ack on either runtime, whose only tells
+  are `verified: false` and an `error` field, so check that field and the exit
+  code before you call the hand-off done.
+- **2**: refused before anything was created: a bad argument, no id and no
+  bound ticket, a repo frigg cannot resolve, a `--cwd` outside any git
+  checkout, an existing worktree for the id or a leftover branch `STARK-n` on
+  a Codex launch, or a main checkout Codex does not trust
+  (`Codex does not trust <path>…`). Trusting a repo is the operator's to do,
+  once; name it and stop.
+- **4**: a live agent or tab already holds the id; a live worker owns the
+  ticket. Do not launch it again.
+- **128+n**: interrupted.
+
+Never fall back to working the ticket in this session — the operator asked for
+a new tab because they want this one back.
 
 ## First: are you the right skill?
 
@@ -211,12 +216,13 @@ scope, plus one term of your own:
 
 An unattended worker that fails to stand down leaves a worktree behind, and a
 relaunch on that ticket does **not** start clean — differently, and badly, on
-each runtime. On Codex `hermod ticket` refuses outright (`Codex worktree path
-already exists`), so the ticket simply cannot be relaunched. On Claude — the
-default agent — it launches `claude --worktree=<ticket>`, which **attaches** to
-an existing worktree of that name rather than minting one, so the relaunch
-silently drops a second session into your leftovers. Both are reasons to run
-the preflight properly, never a reason to reach for `--force`.
+each runtime. On Codex `idun agnes` refuses outright (`a worktree for STARK-n
+already exists …`, exit 2), so the ticket simply cannot be relaunched. On
+Claude — the default agent — it launches `claude --worktree=<ticket>`, which
+**re-enters** an existing worktree of that name rather than minting one, so the
+relaunch drops a second session into your leftovers behind a normal-looking ack,
+with only a line on idun's stderr to say so. Both are reasons to run the
+preflight properly, never a reason to reach for `--force`.
 
 ## When not to stand down
 

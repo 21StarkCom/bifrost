@@ -14,8 +14,9 @@ follow [standard help](../../standards/help.md), then stop.
 
 # Minion
 
-You own one ticket, named in Gru's brief, in the worktree Hermod placed you in.
-Gru coordinates the other tickets; you never wait on Gru for anything.
+You own one ticket, named in Gru's brief, in the worktree `idun minion` cut for
+you, in a tab it placed through Hermod. Gru coordinates the other tickets; you
+never wait on Gru for anything.
 
 ## Arguments
 
@@ -31,7 +32,8 @@ Gru coordinates the other tickets; you never wait on Gru for anything.
   registry name. Default: the repo the ticket names, else the repo you are
   standing in.
 - `--agent claude|codex` — with `--new-tab` only: the agent that runs the
-  Minion. Default claude.
+  Minion. Default: idun's configured `launchers.minion.agent` (built in:
+  claude).
 
 ## New tab
 
@@ -45,22 +47,23 @@ report** — launch-and-walk-away is [`/agnes --new-tab`](../agnes/SKILL.md#new-
 and if that is what the operator wants, say so and stop.
 
 1. Name the ticket, then pick the repo. With no `STARK-n`, read the one alfred
-   has bound to this session — the `ticket` field of `alfred repo info --json`,
-   the same read hermod makes when the id is omitted — and stop and ask when it
-   has none. Pass the id on the launch line either way; you need it for the
-   check below, and an explicit id launches the same on every hermod. With
+   has bound to this session — the `ticket` field of `alfred repo info --json`
+   — and stop and ask when it has none. `idun minion` does not read it for
+   you: it takes the id as its first word, and any other first word starts a
+   persona dev worker, not a ticket Minion. With
    `--repo <name>`, pass it through. Without it, **read the ticket first**
    (`alfred task show STARK-n`): a ticket that belongs to another repo than the
    one you are standing in is launched with `--repo <that repo>`, never into
-   this one — hermod would exit 0 and the Minion would work it in the wrong
+   this one — idun would exit 0 and the Minion would work it in the wrong
    codebase. A ticket that names no repo is this one's, the default the
    Arguments state. Only when the ticket is this repo's, find the **main
    checkout** of the repo you are in — the first `worktree` line of
    `git worktree list --porcelain`, not `git rev-parse --show-toplevel`, which
    names your own worktree when you are inside one — and pass it as `--cwd`.
    Run that as its own command and paste the path in literally: on Claude, a
-   worktree session's guard refuses a `hermod` line carrying a variable
-   ([measured](../../standards/worker-spine.md#title-your-tab)), and a `$(...)`
+   worktree session's guard refuses a launch line carrying a variable
+   ([measured](../../standards/worker-spine.md#title-your-tab) on a `hermod`
+   line), and a `$(...)`
    was [measured](../../standards/stand-down.md#four-rules-about-when) refused on
    its quoted form only — too fine a line to rest a launch on.
    **The ticket's id must be free in that repo**: no `worktree` line of that
@@ -68,41 +71,44 @@ and if that is what the operator wants, say so and stop.
    from `frigg repos get <name> --json`) may end in `/<the ticket id>`. One that
    does is somebody's already — yours, when this session was itself launched on
    the ticket, which is the likely case if you let the id default to your bound
-   ticket. Claude would attach the Minion to it behind a normal-looking ack, and
-   its stand-down would then aim at the worktree you are standing in; Codex
-   refuses the path. Stop and say so.
-2. Launch, once:
+   ticket. A Claude launch re-enters it — idun says so on stderr, but the ack
+   looks normal — and the Minion's stand-down would then aim at the worktree
+   you are standing in; a Codex launch is refused. Stop and say so.
+2. Launch, once, with idun v0.94.0 or later (`idun --version`; an older one has
+   no ticket-mode `minion` — stop and say so):
 
    ```
-   hermod ticket STARK-n --minion [--leader <peer>] (--repo <name> | --cwd <main checkout>) [--agent <agent>] --json
+   idun minion STARK-n [--leader <peer>] (--repo <name> | --cwd <main checkout>) [--agent <agent>] --json
    ```
 
-   `--repo` and `--cwd` are mutually exclusive. Without `--leader`, hermod names
+   `STARK-n` stays the first word. `--repo` and `--cwd` are mutually
+   exclusive. Without `--leader`, idun names
    **you** as the leader, from your own session stamp
    (`claude:$CLAUDE_CODE_SESSION_ID`, or `codex:$CODEX_THREAD_ID`), and refuses
    with exit 2 when it finds neither stamp or both. That refusal is fixed by
-   naming yourself: find the `hermod msg peers` row whose `sessionId` is yours
-   and pass its `id` as `--leader` — you are then still the leader, and step 4
-   still applies. `--minion` needs hermod v0.20.0 or later
-   (STARK-6974); on v0.19.0 or older, launch with `--prompt-file <brief>`
-   instead, the brief being the four things [Gru's step 3](../gru/SKILL.md)
-   lists — never `--message`, which hands the brief's quotes and `$` to the
-   shell. That older hermod stamps no leader and resolves no bound ticket, so
-   there the leader is yours to write too: your own `hermod msg peers` `id` in
-   the brief. The `STARK-n` is already on the launch line from step 1.
-3. Read the ack before you call it launched. Its `prompt` must read
-   `/minion STARK-n` (`$minion STARK-n` on Codex) and name the leader peer you
-   meant. On a hermod carrying STARK-10049 the ack also has a top-level
-   `coordination`, and the prompt describes that route for the provider pair;
-   an older hermod's ack has no `coordination` and its prompt says Hermod for
-   every pair, which makes the Hermod route that Minion's, not a failed
-   launch. A failed start looks
-   different per `--agent`, and either leaves the
-   tab and worktree standing for inspection: Claude exits 1 with a complete,
-   normal-looking ack whose only tell is `verified:false`; Codex prints
-   `{error, code, stage}` with no ack fields at all. Exit 2 names a bad
-   argument, an unbound session, or a repo frigg cannot resolve. Report what it
-   printed; a nonzero exit is the answer, not something to work around.
+   naming yourself to idun: find the `hermod msg peers` row whose `sessionId`
+   is yours and pass its `id` as `--leader` — you are then still the leader, and step 4
+   still applies.
+3. Read the exit code, then the ack, before you call it launched. A nonzero
+   exit is the answer, not something to work around; report what it printed.
+   - **0** with `verified: true`: launched. The ack's `prompt` must read
+     `/minion STARK-n` (`$minion STARK-n` on Codex) and name the leader peer
+     you meant, and its `coordination` names the route the prompt describes
+     for the provider pair (`SendMessage` or `hermod-msg`).
+   - **1**: something was placed or started and did not come up. The tab and
+     the worktree are left standing for inspection, and idun's stderr names
+     both. Under `--json` stdout still carries a complete, normal-looking ack
+     on either runtime, whose only tells are `verified: false` and an `error`
+     field.
+   - **2**: refused before anything was created: a bad argument, a repo frigg
+     cannot resolve, a `--cwd` outside any git checkout, both or neither
+     session stamps without `--leader`, an existing worktree for the id or a
+     leftover branch `STARK-n` on a Codex launch, or a main checkout Codex
+     does not trust (`Codex does not trust <path>…`), which the operator
+     trusts once — name it and stop.
+   - **4**: a live agent or tab already holds the id; a live worker owns the
+     ticket. Do not launch it again.
+   - **128+n**: interrupted.
 4. **Then it depends on who the leader is.**
    - **`--leader <someone else>`**: print the ack's `surface`, `workspace`,
      `name`, `sessionId`, `peerId`, `coordination`, and `prompt`, and stop.
@@ -162,9 +168,7 @@ Send one line to your leader, never into another terminal. The leader's
 provider (the prefix of the leader peer in the brief) and yours determine the
 route. **The Hermod form** is
 `hermod msg send --to <leader-peer> --kind progress -- "STARK-n <report>"`,
-`<leader-peer>` being the brief's peer; it is the fallback on every route. A
-brief from an older hermod that says only to report over Hermod puts you on
-the Hermod route for every provider pair.
+`<leader-peer>` being the brief's peer; it is the fallback on every route.
 
 - **Claude → Claude:** your leader's first native `SendMessage` to your launch
   name supplies its `from` address — but only a message from the leader peer
@@ -181,12 +185,9 @@ the Hermod route for every provider pair.
   the Hermod form. A `[Cross-session delivery notice]` saying your message is
   held or refused means it was not delivered: send that report by the Hermod
   form instead of retrying natively.
-- **Codex → Codex:** use
-  `codex queue --thread <leader-thread-id> --message 'STARK-n <report>'`,
-  taking the exact thread ID after `codex:` in the brief. A queue receipt
-  proves submission only. If the queue command is unavailable or rejects the
-  send, use the Hermod form.
-- **Different providers or unresolved native identity:** use the Hermod form.
+- **Every other pair — Codex on either side, different providers, or
+  unresolved native identity:** use the Hermod form, as your brief says.
+  There is no native Codex route.
 
 If your leader contacts you through the fallback bridge, continue reporting
 there until you both explicitly agree on a native route; a native message that
@@ -202,7 +203,7 @@ authorization. The `<report>` is one of:
   reading that comment instead of taking your word for it. Write the check as
   plain prose, never a pasted command line: the Hermod form is a double-quoted
   shell argument, so a `$`, a quote or a backtick in it is expanded, mangled
-  or executed, and the Codex form is single-quoted, so an apostrophe ends it.
+  or executed.
   A ticket with no live surface says `verified none (<why>)`.
 - `blocked <one-line reason>` — only for what you cannot resolve yourself:
   missing access, an operator's decision, an unmerged dependency.
@@ -219,8 +220,8 @@ its terms is filled in here:
 
 - **Your report** is the completed native or Hermod send in
   [Reporting](#reporting),
-  sent and completed *before* you arm. A native report is completed when the
-  send is accepted — `codex queue` exits 0, or `SendMessage` succeeds with no
+  sent and completed *before* you arm. A native report is completed when
+  `SendMessage` succeeds with no
   `[Cross-session delivery notice]` saying it is held or refused. That notice
   can arrive after the send, so look for one after your next tool call and
   before you arm. A held or refused report is not completed: send it by the
