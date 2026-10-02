@@ -123,7 +123,7 @@ The pipeline has two stages: you gate the spec at `/stark-author`, and checks ga
 
 /minion and /agnes run the same two shared docs, so their review gate and merge path cannot drift: [standards/worker-spine.md](standards/worker-spine.md) (bind → implement → verify live → PR → `/code-review xhigh --fix` → merge → close) and [standards/stand-down.md](standards/stand-down.md) (the tab teardown after a `done`).
 
-stark-ops also ships one hook: a PostToolUse `tools/fact_routing_hook.ts` that runs when a Write or Edit touches an auto-memory file and advises the model where the fact belongs. It is the safety net behind `/stark-memory`, declared on the stark-ops entry of the manifest, and it installs and updates with that plugin.
+stark-ops also ships one hook: a PostToolUse `tools/fact_routing_hook.ts` that runs when a Write or Edit touches an auto-memory file and advises the model where the fact belongs. It takes the fleet's repo names from the vault-ecosystem checkout, and says so when it finds none and falls back to its built-in list. It is the safety net behind `/stark-memory`, declared on the stark-ops entry of the manifest, and it installs and updates with that plugin.
 
 ### stark-constitution: docs, decisions and rules
 

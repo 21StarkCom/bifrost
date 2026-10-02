@@ -80,17 +80,46 @@ export function descriptionOf(content: string): string {
 }
 
 // Product-level "which thing / when to reach / how the fleet connects" language.
+// Selection phrasing only: "is a", "is the", "owns" and a bare "instead of" turn
+// up in any note that names a repo, so they say nothing about its class.
 const PRODUCT_LANG =
-  /\b(reach for|when to reach|is the|is a |instead of|\bvs\b|owns |routes? to|which (?:tool|repo|thing)|use .{0,30} for|sibling|superseded|the tool for|product-level|capability)\b/i;
+  /\b(reach for|when to reach|\bvs\b|routes? to|which (?:tool|repo|thing)|use .{0,30} for|sibling|superseded|the tool for|product-level|capability)\b/i;
 
 // Repo-internal / implementation markers.
 const IMPL_MARKERS =
   /(\b(?:internal|cmd|pkg|tools|src|apps|packages)\/|\.(?:ts|go|py|rs|swift)\b|\bCI\b|\bgate\b|\btest(?:s|ing)?\b|\binvariant\b|\bexit code\b|\benv var\b|\bregex\b|\bfrontmatter\b|\blint\b|\bschema\b|\bstruct\b|\bfunction\b|\bmigration\b|\bcompile)/i;
 
-/** Match whole-word fleet slugs present in the text. */
+// A ticket progress log ("STARK-n done, merged <sha>") pairs a ticket id with a
+// completion word. The hyphen guards on both sides keep "fail-closed" and
+// "done-when" from reading as "closed" and "done".
+const TICKET_ID = /\bSTARK-\d+\b/i;
+const TICKET_STATUS = /(?<![\w-])(?:done|merged|shipped|closed|landed|released|completed?|fixed)(?![\w-])/i;
+
+// The note is ABOUT a ticket when its headline opens with the id ("STARK-n …",
+// "Epic STARK-n …") or its filename does ("stark-n-…"). A headline that only
+// cites a ticket in passing ("… a sibling of STARK-n, merged") is not a log.
+const HEADLINE_TICKET = /^\W*(?:epic\s+)?STARK-\d+\b/i;
+const FILENAME_TICKET = /^stark-\d+(?:-|\.md$)/i;
+
+/** True for a ticket progress log: a note about one ticket (see HEADLINE_TICKET)
+ *  whose headline (the `description:`, else the first body line) carries a
+ *  completion word. The board and the merged PR already record that; it routes
+ *  nowhere. */
+export function isTicketLog(content: string, filePath: string): boolean {
+  const headline = descriptionOf(content) || bodyOf(content).trim().split("\n")[0];
+  return TICKET_STATUS.test(headline) && (HEADLINE_TICKET.test(headline) || FILENAME_TICKET.test(path.basename(filePath)));
+}
+
+/** Entities whose slug is never matched in prose. `21stark` is the GitHub org
+ *  and the `~/Code/21Stark` workspace as well as a repo, so it would match every
+ *  workspace path, `com.21stark.*` bundle id and the 21stark ClickUp space. */
+export const UNMATCHED_SLUGS: ReadonlySet<string> = new Set(["21stark"]);
+
+/** Match whole-word fleet slugs present in the text, less UNMATCHED_SLUGS. */
 export function fleetSlugsMentioned(text: string, fleetSlugs: readonly string[]): string[] {
   const lower = text.toLowerCase();
   return fleetSlugs.filter((s) => {
+    if (UNMATCHED_SLUGS.has(s.toLowerCase())) return false;
     const esc = s.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const re = new RegExp(`(^|[^a-z0-9-])${esc}([^a-z0-9-]|$)`);
     return re.test(lower);
@@ -113,25 +142,26 @@ export function classifyMemory(
   const type = frontmatterType(content);
   // feedback = how Claude works; user = who the user is. Both belong in memory.
   if (type === "feedback" || type === "user") return null;
+  if (isTicketLog(content, filePath)) return null;
 
   // Scan the description (where the memory schema puts the one-line fact) as
   // well as the body — a fact stated mainly in the frontmatter would otherwise
   // slip through.
   const text = (descriptionOf(content) + "\n" + bodyOf(content)).trim();
   const slugs = fleetSlugsMentioned(text, fleetSlugs);
-  const productLang = PRODUCT_LANG.test(text);
-  const impl = IMPL_MARKERS.test(text);
+  if (slugs.length === 0) return null;
 
+  // class 2 — repo implementation/invariant that ended up in memory. Checked
+  // BEFORE both corpus rules so an *implementation* fact routes to the repo's
+  // CLAUDE.md whatever else it says or names (repo-impl is the dominant
+  // mis-store, and its prose trips the product-language test by accident).
+  if (IMPL_MARKERS.test(text)) {
+    return { route: "repo-claude", reason: `implementation detail about ${slugs.slice(0, 3).join("/")} — belongs in its CLAUDE.md` };
+  }
   // class 1 — product-level fleet fact: names a fleet entity AND reads
   // product-level ("when to reach", relationship, selection).
-  if (slugs.length >= 1 && productLang) {
+  if (PRODUCT_LANG.test(text)) {
     return { route: "corpus", reason: `product-level, mentions ${slugs.slice(0, 4).join("/")} + when-to-reach language` };
-  }
-  // class 2 — repo implementation/invariant that ended up in memory. Checked
-  // BEFORE the bare multi-slug rule so a multi-repo *implementation* fact routes
-  // to the repo's CLAUDE.md, not the corpus (repo-impl is the dominant mis-store).
-  if (impl && slugs.length >= 1) {
-    return { route: "repo-claude", reason: `implementation detail about ${slugs.slice(0, 3).join("/")} — belongs in its CLAUDE.md` };
   }
   // class 1 — a cross-repo relationship (two+ entities, no impl markers, no
   // explicit when-to-reach language) is still product-level.
@@ -154,28 +184,48 @@ export function appendToQueue(entry: QueueEntry, queuePath: string): void {
   fs.appendFileSync(queuePath, JSON.stringify(entry) + "\n", "utf8");
 }
 
-// Non-slug markdown files that can live under repos/ or systems/ — never fleet
-// entities, and common enough words that treating them as slugs would false-match.
-const NON_SLUG_MD = new Set(["readme", "index", "template", "_template", "contributing"]);
+/** Folder names under `repos/` or `systems/` that are scaffolding, never an
+ *  entity: common words that would otherwise match in every memory note. */
+export const SCAFFOLD_NAMES: ReadonlySet<string> = new Set(["contributing", "index", "readme", "template"]);
 
-/** Resolve the fleet slug list from a vault-ecosystem checkout, with a fallback.
- *  Only kebab-case entity filenames count — a `README.md`/`index.md` dropped in
- *  the dir must not become a slug that matches those words in every memory note. */
+/** The fleet slugs to match when no corpus checkout answers (CI, a fresh
+ *  machine): the vault-ecosystem entity folders as of 2026-10-02. */
+export const FALLBACK_SLUGS: readonly string[] = [
+  "21stark", "alfred", "apple-developer", "atlas", "bifrost", "draupnir",
+  "ev-infra-group", "frigg", "heimdall", "hermod", "homebrew-tap", "idun",
+  "infra-ai-platform", "infra-sentinel", "kotodama", "lumiere", "meridian",
+  "mimir", "mimir-automations", "nastrond", "plume", "sleipnir", "stark-clickup",
+  "stark-engineering-labs", "stark-invoices-collector", "stark-personal",
+  "stark-showcase", "stark-skills", "stark-slack-indexer", "stark-stream-deck-sdk",
+  "stark-tui", "stark-workspace", "tyr", "user-management-agent",
+  "workplan-slack-app", "workplan-tools",
+];
+
+/** The vault-ecosystem checkout: `$ATLAS_ECOSYSTEM_PATH`, else `~/Code/Vaults/vault-ecosystem`. */
+export function defaultCorpusPath(home: string = os.homedir()): string {
+  return process.env.ATLAS_ECOSYSTEM_PATH || path.join(home, "Code", "Vaults", "vault-ecosystem");
+}
+
+/** Resolve the fleet slug list from a vault-ecosystem checkout, which keeps one
+ *  folder per entity: `repos/<slug>/index.md` and `systems/<slug>/index.md`.
+ *  Only a kebab-case folder holding an `index.md`, and not in SCAFFOLD_NAMES,
+ *  counts, so a stray file or scaffold dir never becomes a slug. Empty when the
+ *  corpus is absent or laid out some other way; the caller owns the fallback. */
 export function resolveFleetSlugs(corpusPath: string): string[] {
-  const out: string[] = [];
+  const out = new Set<string>();
   for (const sub of ["repos", "systems"]) {
     const dir = path.join(corpusPath, sub);
+    let names: string[];
     try {
-      for (const f of fs.readdirSync(dir)) {
-        if (!f.endsWith(".md")) continue;
-        const slug = f.slice(0, -3);
-        if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) continue; // kebab entity slugs only
-        if (NON_SLUG_MD.has(slug)) continue;
-        out.push(slug);
-      }
+      names = fs.readdirSync(dir);
     } catch {
-      /* corpus not present on this machine — fall through to whatever we found */
+      continue; // corpus not present on this machine
+    }
+    for (const slug of names) {
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) continue; // kebab entity slugs only
+      if (SCAFFOLD_NAMES.has(slug)) continue;
+      if (fs.existsSync(path.join(dir, slug, "index.md"))) out.add(slug);
     }
   }
-  return out;
+  return [...out];
 }

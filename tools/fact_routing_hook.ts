@@ -14,27 +14,24 @@
  * the model a one-line advisory as PostToolUse `additionalContext` on stdout;
  * plain stdout or stderr from a PostToolUse hook never reaches the model. It is
  * ADVISORY: it never blocks the tool and always exits 0.
+ *
+ * Fleet slugs come from the vault-ecosystem checkout ($ATLAS_ECOSYSTEM_PATH,
+ * else ~/Code/Vaults/vault-ecosystem). When that yields none, the hook matches
+ * the built-in FALLBACK_SLUGS and says so in the same `additionalContext`.
  */
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import {
   classifyMemory,
   bodyOf,
   makeEntry,
   appendToQueue,
+  defaultCorpusPath,
   defaultQueuePath,
   isAutoMemoryPath,
   resolveFleetSlugs,
+  FALLBACK_SLUGS,
 } from "./fact_routing_hook_lib.ts";
-
-// Fallback slug list if the corpus checkout is absent (CI, fresh machine).
-const FALLBACK_SLUGS = [
-  "tyr", "frigg", "alfred", "meridian", "bifrost", "lumiere", "plume", "sleipnir",
-  "hermod", "heimdall", "idun", "draupnir", "kotodama", "mimir", "atlas",
-  "stark-skills", "stark-tui", "stark-showcase", "ev-infra-group", "homebrew-tap",
-  "apple-developer", "stark-invoices-collector",
-];
 
 function readStdin(): string {
   try {
@@ -68,25 +65,34 @@ function main(): void {
     return; // file gone / unreadable — nothing to classify
   }
 
-  const corpusPath =
-    process.env.ATLAS_ECOSYSTEM_PATH ||
-    path.join(os.homedir(), "Code", "Vaults", "vault-ecosystem");
-  let slugs = resolveFleetSlugs(corpusPath);
-  if (slugs.length === 0) slugs = FALLBACK_SLUGS;
+  const corpusPath = defaultCorpusPath();
+  const corpusSlugs = resolveFleetSlugs(corpusPath);
+  const fellBack = corpusSlugs.length === 0;
+  const advisories: string[] = [];
 
-  const flag = classifyMemory(content, fp, slugs);
-  if (!flag) return;
+  const flag = classifyMemory(content, fp, fellBack ? FALLBACK_SLUGS : corpusSlugs);
+  if (flag) {
+    const entry = makeEntry(flag, fp, bodyOf(content), new Date().toISOString());
+    const queue = defaultQueuePath();
+    appendToQueue(entry, queue);
 
-  const entry = makeEntry(flag, fp, bodyOf(content), new Date().toISOString());
-  const queue = defaultQueuePath();
-  appendToQueue(entry, queue);
-
-  const target = flag.route === "corpus" ? "the vault-ecosystem corpus" : "the repo's own CLAUDE.md";
-  const advisory =
-    `↳ fact-routing: ${path.basename(fp)} looks like it belongs in ${target} (${flag.reason}). ` +
-    `Queued in ${queue} — fold it, don't sweep later.`;
+    const target = flag.route === "corpus" ? "the vault-ecosystem corpus" : "the repo's own CLAUDE.md";
+    advisories.push(
+      `↳ fact-routing: ${path.basename(fp)} looks like it belongs in ${target} (${flag.reason}). ` +
+        `Queued in ${queue} — fold it, don't sweep later.`,
+    );
+  }
+  // Said on every memory write, flagged or not: a reader that no longer
+  // understands the corpus layout must not hide behind the built-in list.
+  if (fellBack) {
+    advisories.push(
+      `↳ fact-routing: no fleet entity found under ${corpusPath} (repos/<slug>/index.md, systems/<slug>/index.md), ` +
+        `so this ran on the built-in list of ${FALLBACK_SLUGS.length} slugs: the checkout is missing, or laid out in a way this hook cannot read.`,
+    );
+  }
+  if (advisories.length === 0) return;
   process.stdout.write(
-    JSON.stringify({ hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext: advisory } }) + "\n",
+    JSON.stringify({ hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext: advisories.join("\n") } }) + "\n",
   );
 }
 

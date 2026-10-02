@@ -571,7 +571,10 @@ test("realRunner: a hung child times out and its whole process GROUP dies", asyn
       env: { PATH: process.env.PATH ?? "" },
       cwd: dir,
       stdin: "prompt",
-      timeoutMs: 700,
+      // Long enough for the child to start and write the marker on a loaded
+      // host; at 700 ms a busy machine killed it first and the read below
+      // failed ENOENT before anything about the kill was asserted.
+      timeoutMs: 3000,
     });
 
     assert.equal(outcome.timedOut, true);

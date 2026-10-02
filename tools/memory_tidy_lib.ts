@@ -28,7 +28,11 @@ import {
   fleetSlugsMentioned,
   descriptionOf,
   bodyOf,
+  defaultCorpusPath,
+  FALLBACK_SLUGS as HOOK_FALLBACK_SLUGS,
 } from "./fact_routing_hook_lib.ts";
+
+export { defaultCorpusPath };
 
 /** The `claude` build the cap constants below were read from. */
 export const CAP_SOURCE_VERSION = "2.1.259";
@@ -43,15 +47,10 @@ export const FILE_MAX_BYTES = 4096;
 export const INDEX_LINE_SOFT_MAX = 150;
 
 // Fleet slugs to fall back on when the vault-ecosystem corpus is not checked out
-// (CI, a fresh machine). Copied — NOT imported — from fact_routing_hook.ts:
-// that file's FALLBACK_SLUGS is un-exported and it self-execs main()+exit(0) on
-// import. Plus the four live 21Stark checkouts the corpus currently misses
-// (cmux-client, gjallarhorn, ratatoskr, vor).
+// (CI, a fresh machine): the fact-routing hook's list, plus the four live
+// 21Stark checkouts the corpus currently misses.
 export const FALLBACK_SLUGS: readonly string[] = [
-  "tyr", "frigg", "alfred", "meridian", "bifrost", "lumiere", "plume", "sleipnir",
-  "hermod", "heimdall", "idun", "draupnir", "kotodama", "mimir", "atlas",
-  "stark-skills", "stark-tui", "stark-showcase", "ev-infra-group", "homebrew-tap",
-  "apple-developer", "stark-invoices-collector",
+  ...HOOK_FALLBACK_SLUGS,
   "cmux-client", "gjallarhorn", "ratatoskr", "vor",
 ];
 
@@ -352,10 +351,6 @@ export interface MeasureTreeOptions {
 
 export function defaultProjectsDir(home: string = os.homedir()): string {
   return path.join(home, ".claude", "projects");
-}
-
-export function defaultCorpusPath(home: string = os.homedir()): string {
-  return process.env.ATLAS_ECOSYSTEM_PATH || path.join(home, "Code", "Vaults", "vault-ecosystem");
 }
 
 /** List project dir-name slugs that actually contain a memory/ subdirectory. */
