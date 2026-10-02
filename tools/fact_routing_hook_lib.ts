@@ -90,22 +90,36 @@ const IMPL_MARKERS =
   /(\b(?:internal|cmd|pkg|tools|src|apps|packages)\/|\.(?:ts|go|py|rs|swift)\b|\bCI\b|\bgate\b|\btest(?:s|ing)?\b|\binvariant\b|\bexit code\b|\benv var\b|\bregex\b|\bfrontmatter\b|\blint\b|\bschema\b|\bstruct\b|\bfunction\b|\bmigration\b|\bcompile)/i;
 
 // A ticket progress log ("STARK-n done, merged <sha>") pairs a ticket id with a
-// completion word. The lookbehind keeps "fail-closed" from reading as "closed".
+// completion word. The hyphen guards on both sides keep "fail-closed" and
+// "done-when" from reading as "closed" and "done".
 const TICKET_ID = /\bSTARK-\d+\b/i;
-const TICKET_STATUS = /(?<![\w-])(?:done|merged|shipped|closed|landed|released|completed?|fixed)\b/i;
+const TICKET_STATUS = /(?<![\w-])(?:done|merged|shipped|closed|landed|released|completed?|fixed)(?![\w-])/i;
 
-/** True for a ticket progress log: the headline (the `description:`, else the
- *  first body line) carries a completion word, and it or the filename a ticket
- *  id. The board and the merged PR already record that; it routes nowhere. */
+// The note is ABOUT a ticket when its headline opens with the id ("STARK-n …",
+// "Epic STARK-n …") or its filename does ("stark-n-…"). A headline that only
+// cites a ticket in passing ("… a sibling of STARK-n, merged") is not a log.
+const HEADLINE_TICKET = /^\W*(?:epic\s+)?STARK-\d+\b/i;
+const FILENAME_TICKET = /^stark-\d+(?:-|\.md$)/i;
+
+/** True for a ticket progress log: a note about one ticket (see HEADLINE_TICKET)
+ *  whose headline (the `description:`, else the first body line) carries a
+ *  completion word. The board and the merged PR already record that; it routes
+ *  nowhere. */
 export function isTicketLog(content: string, filePath: string): boolean {
   const headline = descriptionOf(content) || bodyOf(content).trim().split("\n")[0];
-  return TICKET_STATUS.test(headline) && (TICKET_ID.test(headline) || TICKET_ID.test(path.basename(filePath)));
+  return TICKET_STATUS.test(headline) && (HEADLINE_TICKET.test(headline) || FILENAME_TICKET.test(path.basename(filePath)));
 }
 
-/** Match whole-word fleet slugs present in the text. */
+/** Entities whose slug is never matched in prose. `21stark` is the GitHub org
+ *  and the `~/Code/21Stark` workspace as well as a repo, so it would match every
+ *  workspace path, `com.21stark.*` bundle id and the 21stark ClickUp space. */
+export const UNMATCHED_SLUGS: ReadonlySet<string> = new Set(["21stark"]);
+
+/** Match whole-word fleet slugs present in the text, less UNMATCHED_SLUGS. */
 export function fleetSlugsMentioned(text: string, fleetSlugs: readonly string[]): string[] {
   const lower = text.toLowerCase();
   return fleetSlugs.filter((s) => {
+    if (UNMATCHED_SLUGS.has(s.toLowerCase())) return false;
     const esc = s.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const re = new RegExp(`(^|[^a-z0-9-])${esc}([^a-z0-9-]|$)`);
     return re.test(lower);
@@ -170,6 +184,10 @@ export function appendToQueue(entry: QueueEntry, queuePath: string): void {
   fs.appendFileSync(queuePath, JSON.stringify(entry) + "\n", "utf8");
 }
 
+/** Folder names under `repos/` or `systems/` that are scaffolding, never an
+ *  entity: common words that would otherwise match in every memory note. */
+export const SCAFFOLD_NAMES: ReadonlySet<string> = new Set(["contributing", "index", "readme", "template"]);
+
 /** The fleet slugs to match when no corpus checkout answers (CI, a fresh
  *  machine): the vault-ecosystem entity folders as of 2026-10-02. */
 export const FALLBACK_SLUGS: readonly string[] = [
@@ -183,11 +201,16 @@ export const FALLBACK_SLUGS: readonly string[] = [
   "workplan-slack-app", "workplan-tools",
 ];
 
+/** The vault-ecosystem checkout: `$ATLAS_ECOSYSTEM_PATH`, else `~/Code/Vaults/vault-ecosystem`. */
+export function defaultCorpusPath(home: string = os.homedir()): string {
+  return process.env.ATLAS_ECOSYSTEM_PATH || path.join(home, "Code", "Vaults", "vault-ecosystem");
+}
+
 /** Resolve the fleet slug list from a vault-ecosystem checkout, which keeps one
  *  folder per entity: `repos/<slug>/index.md` and `systems/<slug>/index.md`.
- *  Only a kebab-case folder holding an `index.md` counts, so a stray file or
- *  scaffold dir never becomes a slug. Empty when the corpus is absent or laid
- *  out some other way; the caller owns the fallback. */
+ *  Only a kebab-case folder holding an `index.md`, and not in SCAFFOLD_NAMES,
+ *  counts, so a stray file or scaffold dir never becomes a slug. Empty when the
+ *  corpus is absent or laid out some other way; the caller owns the fallback. */
 export function resolveFleetSlugs(corpusPath: string): string[] {
   const out = new Set<string>();
   for (const sub of ["repos", "systems"]) {
@@ -200,6 +223,7 @@ export function resolveFleetSlugs(corpusPath: string): string[] {
     }
     for (const slug of names) {
       if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) continue; // kebab entity slugs only
+      if (SCAFFOLD_NAMES.has(slug)) continue;
       if (fs.existsSync(path.join(dir, slug, "index.md"))) out.add(slug);
     }
   }

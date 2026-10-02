@@ -20,7 +20,9 @@ import {
   defaultQueuePath,
   isAutoMemoryPath,
   resolveFleetSlugs,
+  defaultCorpusPath,
   FALLBACK_SLUGS,
+  SCAFFOLD_NAMES,
 } from "./fact_routing_hook_lib.ts";
 
 const SLUGS = ["tyr", "frigg", "alfred", "meridian", "stark-tui", "plume"];
@@ -40,6 +42,12 @@ test("fleetSlugsMentioned is whole-word and hyphen-safe (no substring hits)", ()
   assert.deepEqual(fleetSlugsMentioned("stark-tui powers frigg's cockpit", SLUGS).sort(), ["frigg", "stark-tui"]);
   assert.deepEqual(fleetSlugsMentioned("startup friggin fritter", SLUGS), []); // no false hits
   assert.deepEqual(fleetSlugsMentioned("use tyr's clickup adapter", SLUGS), ["tyr"]); // apostrophe boundary
+});
+
+test("fleetSlugsMentioned never matches 21stark, the org and workspace name", () => {
+  const text = "Edit ~/Code/21Stark/idavoll, sign com.21stark.goldfinger, file into the 21stark ClickUp space; frigg reads it.";
+  assert.deepEqual(fleetSlugsMentioned(text, ["21stark", "frigg"]), ["frigg"]);
+  assert.equal(classifyMemory(note("project", "Reach for ~/Code/21Stark/idavoll's setup."), "/x/projects/p/memory/f.md", ["21stark"]), null);
 });
 
 test("class 1 — product language + a fleet slug routes to corpus", () => {
@@ -86,16 +94,24 @@ test("null — a ticket progress log routes nowhere", () => {
   // whatever its body names — implementation markers and a second slug included.
   const described = "---\nname: x\ntype: project\ndescription: STARK-4242 shipped the frigg cache\n---\n\ntyr's schema in internal/db.go.\n";
   assert.equal(classifyMemory(described, fp, SLUGS), null);
-  // The ticket id can sit in the filename instead.
+  // The ticket id can lead the filename instead, and an epic says so first.
   assert.equal(classifyMemory(note("project", "DONE — frigg imports tyr as a pinned module."), "/x/projects/p/memory/stark-4242-frigg-cache.md", SLUGS), null);
+  assert.equal(classifyMemory(note("project", "Epic STARK-4242 closed: frigg imports tyr."), fp, SLUGS), null);
+});
+
+test("a note that cites a finished ticket in passing is not a progress log", () => {
+  // The note is about a live bug; the merged ticket is only a sibling it names.
+  const c = "---\nname: x\ntype: project\ndescription: frigg picks the tracker from the cwd remote (sibling STARK-4242 merged)\n---\n\nfrigg reads the remote in internal/route.go.\n";
+  assert.equal(classifyMemory(c, "/x/projects/p/memory/frigg-tracker-routing.md", SLUGS)?.route, "repo-claude");
 });
 
 test("a ticket id alone, or a completion word alone, is not a progress log", () => {
   const fp = "/x/projects/p/memory/f.md";
   assert.equal(classifyMemory(note("project", "frigg main requires the ci gate (STARK-4242)."), fp, SLUGS)?.route, "repo-claude");
   assert.equal(classifyMemory(note("project", "frigg's merged cache schema lives in internal/db.go."), fp, SLUGS)?.route, "repo-claude");
-  // "fail-closed" is not "closed".
+  // "fail-closed" is not "closed", and "done-when" is not "done".
   assert.equal(classifyMemory(note("project", "STARK-4242: frigg's gate is fail-closed."), fp, SLUGS)?.route, "repo-claude");
+  assert.equal(classifyMemory(note("project", "STARK-4242: a green done-when misses plume's hostile-input tests."), fp, SLUGS)?.route, "repo-claude");
 });
 
 test("classifier scans the description field, not only the body", () => {
@@ -165,9 +181,11 @@ test("resolveFleetSlugs reads one folder per entity: <repos|systems>/<slug>/inde
     entity("systems", "plume"); // an entity under both roots is one slug
     entity("repos", "no-index", "notes.md"); // a folder without an index.md is not an entity
     entity("repos", "_template"); // nor is a non-kebab folder
+    entity("repos", "template"); // nor a scaffold name
+    entity("repos", "21stark"); // an entity, though fleetSlugsMentioned never matches it
     fs.writeFileSync(path.join(dir, "repos", "README.md"), "x");
     fs.writeFileSync(path.join(dir, "repos", "frigg.md"), "x"); // the retired flat-file layout
-    assert.deepEqual(resolveFleetSlugs(dir).sort(), ["mimir", "plume", "stark-tui"]);
+    assert.deepEqual(resolveFleetSlugs(dir).sort(), ["21stark", "mimir", "plume", "stark-tui"]);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -177,7 +195,23 @@ test("resolveFleetSlugs is empty when the corpus is absent", () => {
   assert.deepEqual(resolveFleetSlugs(path.join(os.tmpdir(), "no-such-corpus-xyz")), []);
 });
 
-test("FALLBACK_SLUGS are unique kebab slugs", () => {
+test("FALLBACK_SLUGS are unique kebab slugs, none of them a scaffold name", () => {
   assert.equal(new Set(FALLBACK_SLUGS).size, FALLBACK_SLUGS.length);
-  for (const s of FALLBACK_SLUGS) assert.match(s, /^[a-z0-9][a-z0-9-]*$/);
+  for (const s of FALLBACK_SLUGS) {
+    assert.match(s, /^[a-z0-9][a-z0-9-]*$/);
+    assert.equal(SCAFFOLD_NAMES.has(s), false, s);
+  }
+});
+
+test("defaultCorpusPath is $ATLAS_ECOSYSTEM_PATH, else ~/Code/Vaults/vault-ecosystem", () => {
+  const saved = process.env.ATLAS_ECOSYSTEM_PATH;
+  try {
+    delete process.env.ATLAS_ECOSYSTEM_PATH;
+    assert.equal(defaultCorpusPath("/h"), path.join("/h", "Code", "Vaults", "vault-ecosystem"));
+    process.env.ATLAS_ECOSYSTEM_PATH = "/elsewhere";
+    assert.equal(defaultCorpusPath("/h"), "/elsewhere");
+  } finally {
+    if (saved === undefined) delete process.env.ATLAS_ECOSYSTEM_PATH;
+    else process.env.ATLAS_ECOSYSTEM_PATH = saved;
+  }
 });

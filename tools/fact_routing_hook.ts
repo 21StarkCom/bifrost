@@ -20,13 +20,13 @@
  * the built-in FALLBACK_SLUGS and says so in the same `additionalContext`.
  */
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import {
   classifyMemory,
   bodyOf,
   makeEntry,
   appendToQueue,
+  defaultCorpusPath,
   defaultQueuePath,
   isAutoMemoryPath,
   resolveFleetSlugs,
@@ -65,9 +65,7 @@ function main(): void {
     return; // file gone / unreadable — nothing to classify
   }
 
-  const corpusPath =
-    process.env.ATLAS_ECOSYSTEM_PATH ||
-    path.join(os.homedir(), "Code", "Vaults", "vault-ecosystem");
+  const corpusPath = defaultCorpusPath();
   const corpusSlugs = resolveFleetSlugs(corpusPath);
   const fellBack = corpusSlugs.length === 0;
   const advisories: string[] = [];

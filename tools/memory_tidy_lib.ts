@@ -28,8 +28,11 @@ import {
   fleetSlugsMentioned,
   descriptionOf,
   bodyOf,
+  defaultCorpusPath,
   FALLBACK_SLUGS as HOOK_FALLBACK_SLUGS,
 } from "./fact_routing_hook_lib.ts";
+
+export { defaultCorpusPath };
 
 /** The `claude` build the cap constants below were read from. */
 export const CAP_SOURCE_VERSION = "2.1.259";
@@ -348,10 +351,6 @@ export interface MeasureTreeOptions {
 
 export function defaultProjectsDir(home: string = os.homedir()): string {
   return path.join(home, ".claude", "projects");
-}
-
-export function defaultCorpusPath(home: string = os.homedir()): string {
-  return process.env.ATLAS_ECOSYSTEM_PATH || path.join(home, "Code", "Vaults", "vault-ecosystem");
 }
 
 /** List project dir-name slugs that actually contain a memory/ subdirectory. */
