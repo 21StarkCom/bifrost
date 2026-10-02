@@ -4,7 +4,7 @@ runtimes:
   - claude
   - codex
 description: "Run one ticket solo and unattended, with no Gru: carry it end to end through the repo's ticket → PR → review → merge → close spine, confirm the merge and the close yourself, comment the evidence on the ticket, and tear your own tab down."
-argument-hint: "<STARK-n> | [STARK-n] --new-tab [--repo <name>] [--agent claude|codex]"
+argument-hint: "<STARK-n> [text] | [STARK-n] --new-tab [--repo <name>] [--agent claude|codex] [-- <text>]"
 ---
 
 ## Help
@@ -21,9 +21,10 @@ walked away:
 idun agnes STARK-n --repo <repo> --agent claude|codex
 ```
 
-idun makes the first message just `/agnes STARK-n` (`$agnes STARK-n` on
-Codex). It needs idun v0.94.0 or later (`idun --version`); an older idun has no
-`agnes` verb. idun already created the worktree, had Hermod open the tab and
+Since idun v0.103.0, the first message is `/goal /agnes STARK-n [text]`
+(`/goal $agnes STARK-n [text]` on Codex). Check with `idun --version`;
+v0.94.0 added the `agnes` verb, but older versions do not send the goal.
+idun already created the worktree, had Hermod open the tab and
 place it in a workspace, and launched you, so none of that is yours. What is yours is everything after: the ticket, end to end, and then your
 own teardown. Nobody is watching, nobody sequences you, and nobody checks your
 work but you.
@@ -31,9 +32,13 @@ work but you.
 ## Arguments
 
 - `STARK-n` — the one ticket you own. Required, except with `--new-tab`.
+- `text` — optional instructions from the operator for this run, after the
+  ticket id. They may narrow or add to the ticket. Follow the worker spine
+  unless the operator explicitly says otherwise.
 - `--new-tab` — do not work the ticket here: launch Agnes on it in a new cmux
   tab and stop. See [New tab](#new-tab). Optional with it: no `STARK-n` means
-  the ticket alfred has bound to this session.
+  the ticket alfred has bound to this session. Put optional text after `--`
+  so it is passed to idun as instructions rather than parsed as an option.
 - `--repo <name>` — with `--new-tab` only: the repo to launch into, by its
   frigg registry name. Default: the repo the ticket names, else the repo you
   are standing in.
@@ -77,18 +82,19 @@ down. Launch her and stop.
    session — and otherwise re-enters it, saying so only on stderr behind a
    normal-looking ack, so her stand-down would then remove a worktree somebody
    left; a Codex launch is refused. Stop and say so.
-2. Launch, once, with idun v0.94.0 or later (`idun --version`; an older one has
-   no `agnes` verb — stop and say so):
+2. Launch, once, with idun v0.103.0 or later (`idun --version`; an older one
+   does not send the goal — stop and say so):
 
    ```
-   idun agnes STARK-n (--repo <name> | --cwd <main checkout>) [--agent <agent>] --json
+   idun agnes STARK-n (--repo <name> | --cwd <main checkout>) [--agent <agent>] --json [-- <text>]
    ```
 
-   `--repo` and `--cwd` are mutually exclusive. Leave the tab focused; the
-   operator asked to see it.
+   `--repo` and `--cwd` are mutually exclusive. Pass any text from the skill
+   invocation after `--`, with all idun flags before it. Leave the tab
+   focused; the operator asked to see it.
 3. Print the ack's `surface`, `workspace`, `name` and `prompt`, and stop. The
-   `prompt` must read `/agnes STARK-n` (`$agnes STARK-n` for `--agent codex`) —
-   that line is the whole hand-off.
+   `prompt` must read `/goal /agnes STARK-n [text]` (`/goal $agnes STARK-n
+   [text]` for `--agent codex`) — that line is the whole hand-off.
 
 Read the exit code before the ack. A nonzero exit is the answer, not something
 to work around; report what it printed:
@@ -124,8 +130,8 @@ expecting native or Hermod reports and confirming your `done` — that is
 [`/minion`](../minion/SKILL.md), not Agnes, and running Agnes there would leave
 Gru waiting on a report that never comes. Say so in one line and stop.
 
-Agnes's brief is a ticket id and nothing else. **Send no `hermod msg`** — there
-is no leader to send it to.
+Agnes's brief is a ticket id with optional instructions for this run. **Send no
+`hermod msg`** — there is no leader to send it to.
 
 ## Work
 
@@ -133,7 +139,10 @@ Run [the worker spine](../../standards/worker-spine.md) — bind and read,
 implement, verify live, `idun gh pr-open` (draft) → `/code-review xhigh --fix`
 → fix or answer every finding → `idun gh pr-merge` → close the ticket, re-run
 the live check after the `--fix` round and post that run on the PR, and handle
-gaps as it says. Your tab title, which its step 1 sets, is `AGNES (<n>)`. Three
+gaps as it says. The goal stays active until the ticket is done and you have
+stood down. Decide the points this skill already assigns to you without
+stopping to ask the operator. Your tab title, which its step 1 sets, is
+`AGNES (<n>)`. Three
 things are yours on top of it, and each of them exists because there is no
 leader:
 

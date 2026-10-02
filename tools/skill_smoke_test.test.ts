@@ -338,10 +338,10 @@ for (const name of SKILLS) {
 // change this table first.
 //
 // The worker family (STARK-6471, decided 2026-09-19): `agnes`, `gru` and
-// `minion` are launched unattended: idun hands a fresh session the brief
-// `/agnes STARK-n` as TEXT, and on a marketplace install that resolves through
-// the plugin (STARK-6469 — Claude Code's docs: the bare form invokes the skill
-// unless another command already uses the name; the real Minion transcripts
+// `minion` are launched unattended. idun gives Agnes `/goal /agnes STARK-n`
+// as TEXT (`/goal $agnes STARK-n` on Codex). On a marketplace install that
+// resolves through the plugin (STARK-6469 — Claude Code's docs: the bare form
+// invokes the skill unless another command already uses the name; real Minion transcripts
 // resolve to `stark-ops:minion`). A review that reads "auto-merges and
 // poison-pills" and reaches for `disable-model-invocation` would leave that
 // session forbidden to enter the skill it was launched to run.
