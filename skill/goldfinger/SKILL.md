@@ -91,7 +91,11 @@ ending all sessions; run it only as the errors say.
   pixel, never the screen points of a node's `frame`. It goes stale the moment its window moves
   or resizes. Inside a `batch`, `step0:4` targets an earlier step's observe (see Batch).
 - In Chromium and Electron apps, a pixel click into web content may not land and a scroll may be
-  dropped, with no error. Target web content by element, and observe to confirm.
+  dropped, with no error. Target web content by element, and observe to confirm. Only each
+  window's active tab has a web tree: a background tab's page is not in its window's `observe`
+  until that tab is the active one, and the next `observe` then holds it (measured on Chrome
+  Canary: goldfinger's browser DOM spec, probe P4). A tree with no `webarea` does not mean the page
+  is empty; read a background Chrome tab through Huginn (below).
 - From 0.5.0, a single left click into web content of a background app outside the Chromium family
   (Safari or any other app built on WebKit, and Firefox too, as the tree names no engine) is
   refused `background_unavailable`, with nothing sent: a `click` without `--double` or `--right`,
