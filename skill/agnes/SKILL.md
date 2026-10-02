@@ -9,8 +9,10 @@ argument-hint: "<STARK-n> [text] | [STARK-n] --new-tab [--repo <name>] [--agent 
 
 ## Help
 
-If `$ARGUMENTS` contains a standalone `--help`, `-h`, or `help`,
-follow [standard help](../../standards/help.md), then stop.
+If `$ARGUMENTS` contains a standalone `--help`, `-h`, or `help` before the
+run text (see [Arguments](#arguments)), follow
+[standard help](../../standards/help.md), then stop. A word inside the run
+text is never an option.
 
 # Agnes
 
@@ -21,24 +23,29 @@ walked away:
 idun agnes STARK-n --repo <repo> --agent claude|codex
 ```
 
-Since idun v0.103.0, the first message is `/goal /agnes STARK-n [text]`
-(`/goal $agnes STARK-n [text]` on Codex). Check with `idun --version`;
-v0.94.0 added the `agnes` verb, but older versions do not send the goal.
-idun already created the worktree, had Hermod open the tab and
-place it in a workspace, and launched you, so none of that is yours. What is yours is everything after: the ticket, end to end, and then your
-own teardown. Nobody is watching, nobody sequences you, and nobody checks your
+From idun v0.103.0 the first message is a goal, `/goal /agnes STARK-n [text]`
+(`/goal $agnes STARK-n [text]` on Codex); v0.94.0 to v0.102 send a bare
+`/agnes STARK-n`. idun already created the worktree, had Hermod open the tab
+and place it in a workspace, and launched you, so none of that is yours. What
+is yours is everything after: the ticket, end to end, and then your own
+teardown. Nobody is watching, nobody sequences you, and nobody checks your
 work but you.
 
 ## Arguments
 
 - `STARK-n` — the one ticket you own. Required, except with `--new-tab`.
-- `text` — optional instructions from the operator for this run, after the
-  ticket id. They may narrow or add to the ticket. Follow the worker spine
+- `text` — optional instructions from the operator for this run. In a goal
+  (`/goal /agnes STARK-n …`) it is every word after the ticket id. Otherwise
+  the ticket id, the options below and a help token come first, and the text
+  starts at `--` or at the first word that is none of those. Either way it
+  runs to the end, and a `help`, `--new-tab` or `--repo` inside it is text.
+  The instructions may narrow or add to the ticket. Follow the worker spine
   unless the operator explicitly says otherwise.
 - `--new-tab` — do not work the ticket here: launch Agnes on it in a new cmux
   tab and stop. See [New tab](#new-tab). Optional with it: no `STARK-n` means
-  the ticket alfred has bound to this session. Put optional text after `--`
-  so it is passed to idun as instructions rather than parsed as an option.
+  the ticket alfred has bound to this session. The launcher puts any run text
+  after `--` on the idun command line; use `--` in the skill invocation when
+  text starts with a flag-shaped word.
 - `--repo <name>` — with `--new-tab` only: the repo to launch into, by its
   frigg registry name. Default: the repo the ticket names, else the repo you
   are standing in.
@@ -48,9 +55,9 @@ work but you.
 
 ## New tab
 
-**If `$ARGUMENTS` contains `--new-tab`, you are the launcher, not Agnes.** Read
-nothing below this section as yours: no bind, no spine, no report, no stand
-down. Launch her and stop.
+**If `--new-tab` stands in `$ARGUMENTS` before the run text, you are the
+launcher, not Agnes.** Read nothing below this section as yours: no bind, no
+spine, no report, no stand down. Launch her and stop.
 
 1. Name the ticket, then pick the repo. With no `STARK-n`, read the one alfred
    has bound to this session — the `ticket` field of `alfred repo info --json`,
@@ -89,9 +96,11 @@ down. Launch her and stop.
    idun agnes STARK-n (--repo <name> | --cwd <main checkout>) [--agent <agent>] --json [-- <text>]
    ```
 
-   `--repo` and `--cwd` are mutually exclusive. Pass any text from the skill
-   invocation after `--`, with all idun flags before it. Leave the tab
-   focused; the operator asked to see it.
+   `--repo` and `--cwd` are mutually exclusive. Pass the run text after `--`,
+   with every idun flag before it: only words the operator wrote, never text
+   of your own, on one line, as one single-quoted word with each `'` inside it
+   written `'\''` (`-- 'don'\''t cut a release'`), so the shell runs and
+   expands nothing in it. Leave the tab focused; the operator asked to see it.
 3. Print the ack's `surface`, `workspace`, `name` and `prompt`, and stop. The
    `prompt` must read `/goal /agnes STARK-n [text]` (`/goal $agnes STARK-n
    [text]` for `--agent codex`) — that line is the whole hand-off.
@@ -109,10 +118,12 @@ to work around; report what it printed:
   the exit code before you call the hand-off done. When Hermod could not place
   the tab, or a Codex worktree could not be cut, there is no ack on stdout at
   all.
-- **2**: refused before anything was created: a bad argument, no id and no
-  bound ticket, a repo frigg cannot resolve, a `--cwd` outside any git
-  checkout, an existing worktree for the id or a leftover branch `STARK-n` on
-  a Codex launch, or a main checkout Codex does not trust
+- **2**: refused before anything was created: a bad argument (among them
+  text after `--` with a newline or other control character, text that makes
+  the goal longer than 4,000 characters, or an idun flag as a word after
+  `--`), no id and no bound ticket, a repo frigg cannot resolve, a `--cwd`
+  outside any git checkout, an existing worktree for the id or a leftover
+  branch `STARK-n` on a Codex launch, or a main checkout Codex does not trust
   (`Codex does not trust <path>…`). Trusting a repo is the operator's to do,
   once; name it and stop.
 - **4**: a live agent or tab already holds the id, and idun's stderr lists
@@ -139,12 +150,12 @@ Run [the worker spine](../../standards/worker-spine.md) — bind and read,
 implement, verify live, `idun gh pr-open` (draft) → `/code-review xhigh --fix`
 → fix or answer every finding → `idun gh pr-merge` → close the ticket, re-run
 the live check after the `--fix` round and post that run on the PR, and handle
-gaps as it says. The goal stays active until the ticket is done and you have
-stood down. Decide the points this skill already assigns to you without
-stopping to ask the operator. Your tab title, which its step 1 sets, is
-`AGNES (<n>)`. Three
-things are yours on top of it, and each of them exists because there is no
-leader:
+gaps as it says. A goal you were launched with stays active until the ticket
+is done and you have stood down, or you take a stopping exit
+([When not to stand down](#when-not-to-stand-down)). Decide the points this
+skill already assigns to you without stopping to ask the operator. Your tab
+title, which its step 1 sets, is `AGNES (<n>)`. Three things are yours on top
+of it, and each of them exists because there is no leader:
 
 - **Nobody sequences your merge.** Gru holds one `idun gh pr-merge` per repo at
   a time where the base has no merge queue; two Agneses in one repo have no
@@ -201,6 +212,8 @@ The ticket is your only report surface. There is no leader peer and no
 
 - the PR link;
 - the merge sha from `mergeCommit`;
+- a summary of any run instructions and what they changed, when there were
+  any, without copying sensitive text into the ticket;
 - the live verification — the command and its output — and a pointer to the PR
   comment carrying the post-`--fix` re-run;
 - the links of any follow-ups you filed.
@@ -214,6 +227,8 @@ bounds it, the subagent hard stop, its four rules about when (report first;
 strictly after the merge and the close; a clean tree and no unpushed commits
 against **your own branch**; the pane surface count), `hermod poison-pill
 --json`, `armed:true` as the only proof it took, and the `partial` outcomes.
+Once it reads `armed:true`, say so and end the turn; if a goal sends you back,
+say again that the stand-down is armed and end the turn, never firing it twice.
 
 **Nobody launched you but the operator, and that changes nothing.** Standing
 down needs no go-ahead — the contract says so, and it says so for a Minion and
@@ -270,3 +285,9 @@ hermod notify send "STARK-n blocked: <one-line reason> — tab and worktree left
 Send it after the ticket comment, which stays the detailed record; the
 notification is the pointer that gets the operator to it. Then stop, and leave
 the session, the worktree and the tab exactly as they are.
+
+**A goal does not outlast the stop.** With one active, end your last message
+by saying the ticket cannot be carried through in this session, and why, so
+the goal's check can close it unmet. If the goal sends you back anyway, do not
+work around the stop or take the gated step: restate it in one line and end
+the turn.
