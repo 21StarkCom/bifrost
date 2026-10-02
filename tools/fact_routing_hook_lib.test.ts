@@ -1,7 +1,8 @@
 // Tests for `tools/fact_routing_hook_lib.ts` (STARK-1785). Covers the classifier
 // (the four routing classes + the null cases), the frontmatter/body parsers, the
-// whole-word slug matcher (hyphenated slugs, no substring false-hits), and the
-// queue roundtrip.
+// whole-word slug matcher (hyphenated slugs, no substring false-hits), the
+// queue roundtrip, and the corpus slug reader. Every fixture is synthetic: real
+// memory files are never copied in.
 import { strict as assert } from "node:assert";
 import fs from "node:fs";
 import os from "node:os";
@@ -19,6 +20,7 @@ import {
   defaultQueuePath,
   isAutoMemoryPath,
   resolveFleetSlugs,
+  FALLBACK_SLUGS,
 } from "./fact_routing_hook_lib.ts";
 
 const SLUGS = ["tyr", "frigg", "alfred", "meridian", "stark-tui", "plume"];
@@ -43,6 +45,8 @@ test("fleetSlugsMentioned is whole-word and hyphen-safe (no substring hits)", ()
 test("class 1 — product language + a fleet slug routes to corpus", () => {
   const c = note("project", "Reach for meridian for cron jobs instead of a one-off script.");
   assert.deepEqual(classifyMemory(c, "/x/projects/p/memory/f.md", SLUGS)?.route, "corpus");
+  const d = note("project", "Reach for plume instead of a spreadsheet macro for xlsx output.");
+  assert.deepEqual(classifyMemory(d, "/x/projects/p/memory/f.md", SLUGS)?.route, "corpus");
 });
 
 test("class 1 — a cross-repo relationship (two slugs) routes to corpus even without when-to-reach words", () => {
@@ -60,6 +64,38 @@ test("class 2 — a multi-repo IMPLEMENTATION fact routes to repo-claude, not co
   // dominant mis-store class (repo-implementation) against the bare 2-slug rule.
   const c = note("project", "frigg's cache schema is imported by tyr's sql adapter in internal/db.go.");
   assert.equal(classifyMemory(c, "/x/projects/p/memory/f.md", SLUGS)?.route, "repo-claude");
+});
+
+test("class 2 — implementation markers win over product language", () => {
+  // File paths plus an incidental "instead of": a repo note, not a fleet fact.
+  const c = note("project", "plume writes the sheet in pkg/xlsx/writer.go with a streaming encoder instead of buffering rows.");
+  assert.equal(classifyMemory(c, "/x/projects/p/memory/f.md", SLUGS)?.route, "repo-claude");
+});
+
+test("null — ordinary prose around one slug is not when-to-reach language", () => {
+  for (const body of ["plume is a document toolkit.", "frigg is the cockpit.", "frigg owns the identity cache."]) {
+    assert.equal(classifyMemory(note("project", body), "/x/projects/p/memory/f.md", SLUGS), null, body);
+  }
+});
+
+test("null — a ticket progress log routes nowhere", () => {
+  const fp = "/x/projects/p/memory/f.md";
+  // Names one slug and says "is a": the old class-1 test sent this to the corpus.
+  assert.equal(classifyMemory(note("project", "STARK-4242 done, merged 1a2b3c4. plume is a dependency of the report."), fp, SLUGS), null);
+  // The headline is the description when there is one, and a log stays a log
+  // whatever its body names — implementation markers and a second slug included.
+  const described = "---\nname: x\ntype: project\ndescription: STARK-4242 shipped the frigg cache\n---\n\ntyr's schema in internal/db.go.\n";
+  assert.equal(classifyMemory(described, fp, SLUGS), null);
+  // The ticket id can sit in the filename instead.
+  assert.equal(classifyMemory(note("project", "DONE — frigg imports tyr as a pinned module."), "/x/projects/p/memory/stark-4242-frigg-cache.md", SLUGS), null);
+});
+
+test("a ticket id alone, or a completion word alone, is not a progress log", () => {
+  const fp = "/x/projects/p/memory/f.md";
+  assert.equal(classifyMemory(note("project", "frigg main requires the ci gate (STARK-4242)."), fp, SLUGS)?.route, "repo-claude");
+  assert.equal(classifyMemory(note("project", "frigg's merged cache schema lives in internal/db.go."), fp, SLUGS)?.route, "repo-claude");
+  // "fail-closed" is not "closed".
+  assert.equal(classifyMemory(note("project", "STARK-4242: frigg's gate is fail-closed."), fp, SLUGS)?.route, "repo-claude");
 });
 
 test("classifier scans the description field, not only the body", () => {
@@ -116,16 +152,32 @@ test("isAutoMemoryPath matches <configDir>/projects/<p>/memory/<n>.md only", () 
   assert.equal(isAutoMemoryPath("/home/x/Code/r/.claude/projects/p/memory/f.md", "/home/x/.claude"), false);
 });
 
-test("resolveFleetSlugs takes kebab entity slugs only — no README/non-kebab", () => {
+test("resolveFleetSlugs reads one folder per entity: <repos|systems>/<slug>/index.md", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fact-corpus-"));
+  const entity = (sub: string, slug: string, file = "index.md") => {
+    fs.mkdirSync(path.join(dir, sub, slug), { recursive: true });
+    fs.writeFileSync(path.join(dir, sub, slug, file), "x");
+  };
   try {
-    fs.mkdirSync(path.join(dir, "repos"));
-    fs.mkdirSync(path.join(dir, "systems"));
-    fs.writeFileSync(path.join(dir, "repos", "plume.md"), "x");
+    entity("repos", "plume");
+    entity("repos", "stark-tui");
+    entity("systems", "mimir");
+    entity("systems", "plume"); // an entity under both roots is one slug
+    entity("repos", "no-index", "notes.md"); // a folder without an index.md is not an entity
+    entity("repos", "_template"); // nor is a non-kebab folder
     fs.writeFileSync(path.join(dir, "repos", "README.md"), "x");
-    fs.writeFileSync(path.join(dir, "systems", "mimir.md"), "x");
-    assert.deepEqual(resolveFleetSlugs(dir).sort(), ["mimir", "plume"]);
+    fs.writeFileSync(path.join(dir, "repos", "frigg.md"), "x"); // the retired flat-file layout
+    assert.deepEqual(resolveFleetSlugs(dir).sort(), ["mimir", "plume", "stark-tui"]);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("resolveFleetSlugs is empty when the corpus is absent", () => {
+  assert.deepEqual(resolveFleetSlugs(path.join(os.tmpdir(), "no-such-corpus-xyz")), []);
+});
+
+test("FALLBACK_SLUGS are unique kebab slugs", () => {
+  assert.equal(new Set(FALLBACK_SLUGS).size, FALLBACK_SLUGS.length);
+  for (const s of FALLBACK_SLUGS) assert.match(s, /^[a-z0-9][a-z0-9-]*$/);
 });

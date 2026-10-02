@@ -203,9 +203,10 @@ test("resolveFleetSlugSet is non-empty via the fallback even with no corpus", ()
 test("resolveFleetSlugSet unions corpus slugs with the fallback, deduped", () => {
   const corpus = fs.mkdtempSync(path.join(os.tmpdir(), "memory-tidy-corpus-"));
   try {
-    fs.mkdirSync(path.join(corpus, "repos"), { recursive: true });
-    fs.writeFileSync(path.join(corpus, "repos", "newrepo.md"), "x");
-    fs.writeFileSync(path.join(corpus, "repos", "alfred.md"), "x"); // dup with fallback
+    for (const slug of ["newrepo", "alfred"]) { // alfred: dup with fallback
+      fs.mkdirSync(path.join(corpus, "repos", slug), { recursive: true });
+      fs.writeFileSync(path.join(corpus, "repos", slug, "index.md"), "x");
+    }
     const set = resolveFleetSlugSet(corpus);
     assert.ok(set.includes("newrepo"));
     assert.equal(set.filter((s) => s === "alfred").length, 1);
