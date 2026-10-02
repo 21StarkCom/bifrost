@@ -13,6 +13,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=351 runId=351 sha=834d66ae -->
+- Document Agnes's idun v0.103.0 goal kickoff and optional operator run instructions, including the `--new-tab` `--` separator; bump stark-ops to 0.17.28.
 <!-- idun:pr-merge pr=349 runId=349 sha=06db07c7 -->
 - goldfinger skill: Chromium note says only each window's active tab has a web tree; background tab reads go to Huginn (stark-ops 0.17.27)
 <!-- idun:pr-merge pr=348 runId=348 sha=2c666f9a -->
