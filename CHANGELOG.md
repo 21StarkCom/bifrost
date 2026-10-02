@@ -13,6 +13,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=347 runId=347 sha=6d4c428b -->
+- Teach `/goldfinger` the 0.5.0 `hover` and `glide` verbs, drop the still-cursor claim, and catch the skill up to 0.4.0 (MCP `session-cursor`, full replay).
 <!-- idun:pr-merge pr=346 runId=346 sha=03297509 -->
 - `/gru`, `/minion` and `/agnes` now launch workers through `idun gru|minion|agnes` (idun v0.94.0+), handling its exit codes, instead of `hermod ticket`.
 <!-- idun:pr-merge pr=345 runId=345 sha=3147469f -->
