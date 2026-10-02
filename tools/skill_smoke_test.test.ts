@@ -338,13 +338,16 @@ for (const name of SKILLS) {
 // change this table first.
 //
 // The worker family (STARK-6471, decided 2026-09-19): `agnes`, `gru` and
-// `minion` are launched unattended: idun hands a fresh session the brief
-// `/agnes STARK-n` as TEXT, and on a marketplace install that resolves through
-// the plugin (STARK-6469 — Claude Code's docs: the bare form invokes the skill
-// unless another command already uses the name; the real Minion transcripts
-// resolve to `stark-ops:minion`). A review that reads "auto-merges and
-// poison-pills" and reaches for `disable-model-invocation` would leave that
-// session forbidden to enter the skill it was launched to run.
+// `minion` are launched unattended. idun hands Gru and a Minion their brief
+// (`/gru start …`, `/minion STARK-n …`) as TEXT, and on a marketplace install
+// that resolves through the plugin (STARK-6469 — Claude Code's docs: the bare
+// form invokes the skill unless another command already uses the name; real
+// Minion transcripts resolve to `stark-ops:minion`). Agnes's brief is a goal,
+// `/goal /agnes STARK-n` (`/goal $agnes STARK-n` on Codex), which neither
+// runtime expands: she enters the skill only because the model invokes it. A
+// review that reads "auto-merges and poison-pills" and reaches for
+// `disable-model-invocation` would leave that session forbidden to enter the
+// skill it was launched to run.
 //
 // `stark-ticket` (STARK-9471): its whole reach is its own trigger — an agent
 // about to run `alfred task new` loads it from the description, with no slash
