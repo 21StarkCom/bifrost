@@ -68,6 +68,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **`workflow_shape.test.ts` now proves `SCAN_SCOPES` is complete.** That hand-written list claims in its own comment to be *every* top-level dir holding a scannable file, and nothing checked it — so a new top-level directory (or a `gh` call parked in `docs/`) left the `gh api --slurp` gate reporting clean over a file it never opened. A second walk of the whole tree now diffs against the scoped walk and names anything outside it. Mutation-proved: dropping `config` from the list reddens with the eight files it covers.
 
 ### Fixed
+<!-- idun:pr-merge pr=350 runId=350 sha=8ba4e1dd -->
+- Fact-routing hook reads folder-per-repo vault slugs and no longer routes ordinary prose or ticket progress logs to the corpus (stark-ops 0.17.28).
 - **`copilot_land.ts land` no longer stamps an adopted PR onto a bound ticket that is not its own (STARK-10105).** On a PR this run did not create, a ticket from alfred's bound rung is written only when `alfred task show <ticket> --json --no-comments` shows its `pr_url` is that PR's url exactly; otherwise the line is `ticket fields: skipped (bound ticket STARK-<n> does not carry this PR's url)` or `ticket fields: skipped (could not read STARK-<n>: …)`, idun pr-merge's rule and wording (STARK-10074). `--ticket`, a branch handle and a created PR are unchanged; `writePrOpenFields` takes a required `created`, and `resolveStampTarget` is the read-only probe. `stark-implement` → 0.4.75.
 <!-- idun:pr-merge pr=331 runId=331 sha=47020f42 -->
 - Fixed asset link tests to run correctly from any git worktree, not just the main checkout, covering both CLI paths.
