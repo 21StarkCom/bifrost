@@ -1,6 +1,6 @@
 ---
 name: goldfinger
-description: "Operate desktop apps in the background with the goldfinger CLI: list apps and windows, observe a window's accessibility tree, then click, type, press keys, scroll or set a value, move or resize a window, and read or write the clipboard's text, without taking the user's focus; hover a target with the mouse pointer, held there and then put back, so hover-only UI shows; press a menu-bar command or drag, which briefly bring the app to the front; batch actions, and record a session to replay it. Use when a task needs a native app that has no API, CLI or browser route, a menu-bar command, a drag or a hover in one, a window moved or resized, or the clipboard read or written."
+description: "Operate desktop apps in the background with the goldfinger CLI: list apps and windows, observe a window's accessibility tree, then click, type, press keys, scroll or set a value, move or resize a window, and read or write the clipboard's text, without taking the user's focus; hover a target with the mouse pointer, held there and then put back, so hover-only UI shows; press a menu-bar command or drag, which briefly bring the app to the front; batch actions, and record a session to replay it. Use when a task needs a native app that has no API, CLI or browser route, a menu-bar command, a drag or a hover in one, a window moved or resized, or the clipboard read or written; and before acting in a Chrome window, since Chrome page work goes to Huginn."
 argument-hint: "[help]"
 ---
 
@@ -101,6 +101,90 @@ ending all sessions; run it only as the errors say.
   a single one: it toggles a checkbox twice.
 - A target is never guessed. It is `stale_snapshot` when its snapshot was evicted (8 are kept per
   window, 64 in all) or is an earlier daemon's, its window has closed, or its element is gone.
+
+## Chrome: page work goes to Huginn
+
+Chrome and Chrome Canary page work (reading a page, finding an element in it, opening or
+navigating a tab, filling a form, a page screenshot) goes to Huginn, sleipnir's browser companion,
+for every agent: `slp huginn <action> <uuid> --tab <id>` (each action needs its own grant, and a
+mutation adds `--yes`), or the sleipnir MCP server's `huginn` and `huginn_batch` tools
+(`confirm: true`), taught in sleipnir's `docs/huginn.md`. It does not go through goldfinger's tree
+too: when `slp huginn list --json` shows no Huginn online for that Chrome, or the action has no
+grant, ask the operator. goldfinger's
+part in a Chrome window is a background element action, `click`, `type`, `keys` or `set-value`
+on an element target, and the `observe` that finds that target or reads a Chrome the operator is
+typing in (below). The rules below come from goldfinger's browser DOM spec
+(`docs/specs/2026-10-01-goldfinger-browser-dom-spec.md`, in the goldfinger repo), and what they
+call unmeasured waits on its probe P6.
+
+**What a Huginn action does to the operator's focus and Chrome's windows**, as sleipnir's
+`docs/huginn.md` gives it:
+
+- **These do not activate Chrome:** its reads (`tabs`, `observe`, `find`, `read`, `screenshot`
+  and the rest), `set-value`, `upload`, an insert-mode `type` (the default), `scroll` with `to`,
+  `open` (a background tab) and `navigate`.
+- **These activate Chrome:** pointer and key input (`click`, `hover`, `scroll` without `to`,
+  `drag`, `gesture`, `key`), a keys- or compose-mode `type`, input guarded by an `origin`, and
+  `audit-dropdown` first bring their tab to the front. It becomes its window's active tab, the
+  window comes up, a minimized one back on screen, and Chrome takes the front from whatever the
+  operator is using. From Huginn 0.45.0, `"inBackground": true` on `click`, `hover`, `scroll`,
+  `drag`, `gesture`, `key` or `type` brings nothing forward (Chrome's focus emulation instead). It
+  is refused with an `origin`, on `audit-dropdown` and while an older worker is loaded; agent
+  sessions do not offer it, and a journey replays without it.
+- **`focus`** makes the tab its window's active tab and brings that window to the front, a
+  minimized one restored: it activates Chrome by design. **`resize`** makes the tab its window's
+  active tab and sets the window's outer size, restoring a maximized window first: a binding
+  (below) is made again.
+- **The debugger bar.** Every action attaches Chrome's debugger but `tabs`, `open`, `focus` and
+  `record` itself, and, outside a recording, `navigate` without `expect`, `close` and `resize`. A
+  recording that keeps a workflow trace (`record start` with `trace`) or a demonstration holds the
+  debugger between its actions too, until it stops. With Huginn 0.46.0's Quiet reads on (the
+  operator turns it on in Huginn's popup), a plain `read` that reads by script attaches nothing;
+  a frozen or discarded tab, a page Chrome keeps scripts out of, and a background tab in a Chrome
+  before 132 are still read by the debugger. While attached, Chrome shows its "started debugging
+  this browser" bar in every window of that Chrome, until 5 s after the last attachment ends. The
+  bar shrinks the page by 56 CSS px without moving the window, and, showing or leaving, can take
+  the page's keyboard focus: sleipnir saw that in 2 of 3 headed runs, and with Chrome behind other
+  apps it is unmeasured.
+
+**Sharing a Chrome window:**
+
+- **One tool per Chrome window.** A window driven with Huginn takes no goldfinger action, and one
+  driven with goldfinger no Huginn action, until the agent binds them. From Huginn 0.44.0 each
+  `tabs` row carries its window's bounds (`window`: `left`, `top`, `width`, `height`, `state`, in
+  screen points from the primary display's top left) and `browserPid`. Bind a Huginn tab to a
+  goldfinger window only on a unique match: exactly one window in
+  `goldfinger windows --pid <browserPid>` whose `frame` is those bounds, and no other window in
+  Huginn's `tabs` with the same bounds. None, or more than one, is no binding, and so is a row
+  with no `browserPid` or no `window` (an older worker's, or a window that closed); and whether
+  the two tools report one window's bounds alike is unmeasured.
+- **Never carry coordinates or refs between the tools.** A Huginn `ref` or `point` means nothing
+  to goldfinger, and a goldfinger target or `frame` nothing to Huginn: each finds its own element.
+- **No goldfinger pixel target in any window of a Chrome that Huginn drives**, by any agent: act
+  there by element. A pixel target is never checked against what it showed: short of a lost
+  snapshot or a closed window, it goes stale only when its window moves or resizes. Content that
+  moves inside an unmoved window, as the bar moves it, leaves the target on its old point. The bar
+  slides in again with each action, and no agent sees another's Huginn calls, so no wait makes a
+  pixel target safe there. An element target reads its element's frame when it acts.
+- **Observe again after a Huginn call** before acting in that window: the call may have changed
+  the page, its active tab or its window's frame.
+- **Keys near the bar.** Before goldfinger `keys` or `type` into a Chrome, wait about 6 s after
+  your own last Huginn call in that Chrome: the bar closes 5 s after the last action, plus 1 s of
+  margin. These count as a call still running: a `huginn_batch` until its lease ends (up to 5 s
+  after its last step), a JavaScript dialog Huginn holds until it is answered (up to 120 s), and a
+  recording with a trace or a demonstration until it stops. The wait covers only your own calls:
+  another agent's Huginn read can take the page's keyboard focus at any time. So in a Chrome that
+  Huginn drives, prefer `set-value`, or `type` by element, and observe after `keys`, which reads
+  nothing back. Whether another agent's read takes the focus from goldfinger `keys` is unmeasured.
+- **While the operator types in a Chrome,** read it by goldfinger's `observe`, not Huginn, whose
+  bar can take their keyboard focus.
+
+**Consent, security and extension UI.** Press no browser consent, security or extension UI with
+goldfinger, in Chrome or any other browser: a site's permission prompt, the debugger bar's
+Cancel, an extension's install or site-access prompt (turning Quiet reads on raises one), a
+certificate or Safe Browsing warning, a password or passkey prompt. The daemon cannot tell that UI
+from the UI an agent aims at, so the rule is yours: leave it to the operator. Change no browser
+setting with goldfinger either.
 
 ## Window frames and the clipboard
 
