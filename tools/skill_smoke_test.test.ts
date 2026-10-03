@@ -369,6 +369,7 @@ const WORKER_LAUNCH =
 const MODEL_INVOCABLE_SKILLS: Record<string, string> = {
   agnes: WORKER_LAUNCH,
   gru: WORKER_LAUNCH,
+  kevin: WORKER_LAUNCH,
   minion: WORKER_LAUNCH,
   "stark-ticket": "no agent filing a ticket would ever load it on its own (STARK-9471)",
   goldfinger: "an agent that needs a native app would never find the goldfinger CLI on its own (STARK-9636)",
@@ -657,14 +658,82 @@ test("skill smoke: skill/gru — Gru is never launched on a ticket it works", ()
 });
 
 // The worker launchers moved from `hermod ticket` to idun (STARK-10154). A
-// fenced `hermod ticket` line left in any of the three skills would launch on a
+// fenced `hermod ticket` line left in any of the worker skills would launch on a
 // hermod path that bypasses idun's managed Codex account and exit-code contract.
-for (const name of ["agnes", "gru", "minion"]) {
+for (const name of ["agnes", "gru", "kevin", "minion"]) {
   test(`skill smoke: skill/${name} — no fenced \`hermod ticket\` launch line`, () => {
     const lines = fencedLaunchLines(path.join(SKILLS_ROOT, name, "SKILL.md"), /^\s*hermod ticket\b/);
     assert.deepEqual(lines, [], `skill/${name} still launches through hermod ticket`);
   });
 }
+
+// Kevin (STARK-10445, docs/specs/2026-10-03-kevin-spec.md): a Minion with no
+// ticket who takes his leader's instructions in one repo. The pins below are
+// the strings a later edit can drop without anything else going red: the
+// closed instruction set (KV9), the kickoff markers idun writes (idun spec
+// K7/K8), the merge-queue read before any push (KV12/KV18), and the
+// kevin-unpushed branch his stand-down check globs (KV14, S1).
+const KEVIN_VERBS = ["merge", "review", "rebase", "rerun", "status", "stand down"];
+
+test("skill smoke: skill/kevin — instruction set and kickoff markers", () => {
+  const text = fs.readFileSync(path.join(SKILLS_ROOT, "kevin", "SKILL.md"), "utf8");
+  for (const verb of KEVIN_VERBS) {
+    const escaped = verb.replace(/ /g, "\\s+");
+    assert.match(
+      text,
+      new RegExp(`^(?:#{2,4} .*\`${escaped}\\b|.*\\*\\*\`${escaped}\\b)`, "m"),
+      `the instruction \`${verb}\` is no longer a heading or bold lead`,
+    );
+  }
+  for (const marker of ["leader peer", "leader operator", "first instruction:", "isInMergeQueue", "kevin-unpushed/"]) {
+    assert.ok(text.includes(marker), `skill/kevin no longer names ${marker}`);
+  }
+});
+
+// Every fenced `idun kevin` line, in any skill, reads its ack (`--json`) and
+// names the repo it launches into: without one, idun launches into whichever
+// repo the caller stands in. At least one must exist, or the check is vacuous.
+test("skill smoke: skill/kevin — fenced idun kevin lines carry --json and a repo", () => {
+  const lines = SKILLS.flatMap((name) =>
+    fencedLaunchLines(path.join(SKILLS_ROOT, name, "SKILL.md"), /^\s*idun kevin\b/),
+  );
+  assert.ok(lines.length > 0, "no fenced `idun kevin` line in any skill");
+  for (const line of lines) {
+    assert.match(line, /--json\b/, `no --json: ${line.trim()}`);
+    assert.match(line, /--(?:repo|cwd)\b/, `no --repo or --cwd: ${line.trim()}`);
+  }
+});
+
+// Kevin owns no ticket, so the shared contracts name his terms (S1, S2): the
+// stand-down's two triggers and its glob-scoped unpushed check, and the spine
+// steps he runs. A skill-only copy would drift from the shared doc.
+test("skill smoke: standards — Kevin's place in the shared docs", () => {
+  const standDown = fs.readFileSync(path.join(REPO_ROOT, "standards", "stand-down.md"), "utf8");
+  const spine = fs.readFileSync(path.join(REPO_ROOT, "standards", "worker-spine.md"), "utf8");
+  assert.ok(standDown.includes("/kevin"), "stand-down.md no longer names /kevin");
+  assert.ok(spine.includes("/kevin"), "worker-spine.md no longer names /kevin");
+  assert.ok(standDown.includes("kevin-unpushed/"), "stand-down.md lost Kevin's kevin-unpushed glob");
+  assert.ok(standDown.includes("--not --remotes"), "stand-down.md lost Kevin's unpushed check");
+});
+
+// The hand-off (G1–G5, M1–M2): Gru launches Kevin as his leader and dismisses
+// him; step 2 waits on Kevin for a `blocked needs` ticket instead of the
+// operator; a Minion names the PR it needs and resumes on `unblocked`.
+test("skill smoke: gru and minion — Kevin hand-off", () => {
+  const gru = fs.readFileSync(path.join(SKILLS_ROOT, "gru", "SKILL.md"), "utf8");
+  const minion = fs.readFileSync(path.join(SKILLS_ROOT, "minion", "SKILL.md"), "utf8");
+  const launches = fencedLaunchLines(path.join(SKILLS_ROOT, "gru", "SKILL.md"), /^\s*idun kevin --repo\b/);
+  assert.equal(launches.length, 1, "expected exactly one fenced `idun kevin --repo` line in gru");
+  for (const flag of ["--leader", "--no-focus", "--json", "-- merge"]) {
+    assert.ok(launches[0]!.includes(flag), `gru's Kevin launch lost ${flag}`);
+  }
+  const kevinSection = /^## Kevin\n([\s\S]*?)^## /m.exec(gru)?.[1] ?? "";
+  assert.ok(kevinSection.includes("stand down"), "gru's Kevin section no longer dismisses him");
+  const step2 = /^2\. \*\*Read the board\.\*\*([\s\S]*?)^3\. \*\*Launch\.\*\*/m.exec(gru)?.[1] ?? "";
+  assert.ok(step2.includes("blocked needs"), "gru's step 2 lost the blocked-needs carve-out");
+  assert.ok(minion.includes("blocked needs"), "minion no longer names `blocked needs`");
+  assert.ok(minion.includes("unblocked"), "minion no longer resumes on `unblocked`");
+});
 
 // ---------------------------------------------------------------------------
 // 5. Every distinct in-repo `tools/*.ts` CLI mentioned by any skill exits

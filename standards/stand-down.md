@@ -2,6 +2,8 @@
 
 How a solo ticket worker closes its own session, worktree and cmux tab when its
 ticket is finished. `/minion` and `/agnes` both run this; neither restates it.
+`/kevin`, who owns no ticket, runs it too, on the terms in
+[Kevin, who owns no ticket](#kevin-who-owns-no-ticket).
 The full hermod behaviour below was live-verified against hermod's TS engine
 (`close-session.ts`, `poison-pill.ts`, `bin/hermod.ts`) plus an observed real
 run under STARK-6166 — it is spec, not hints.
@@ -245,3 +247,38 @@ refused, that is a refusal, not an obstacle: report and stop.
 Not even with `--keep`. The operator may still need your worktree, your tab and
 your scrollback to see what happened. Report, then stop and leave everything in
 place.
+
+## Kevin, who owns no ticket
+
+`/kevin` merges and closes no ticket of his own, so "after the merge and the
+ticket close" cannot be his trigger, and `origin/<your branch>..HEAD` cannot be
+his check: his own branch is never pushed. Everything else above binds him as
+written. His terms instead:
+
+- **Two triggers, and no other.** His leader's (or the operator's)
+  `stand down`, after his last instruction is reported; or his leader gone
+  (its `hermod msg peers --all --json` row's `pid` no longer running; hermod
+  has no `dead` liveness, and `stale` alone can be a live session) when a
+  message wakes him, since a peer cannot inherit a dead leader's authority.
+- **His report** is `standing down`, on the route his skill names, sent before
+  he arms. It names every branch he kept, so their work is not lost from
+  sight: `git -C <that path> branch --list 'kevin-unpushed/<launch id>/*'`.
+- **His two checks**, against the worktree poison-pill reports, both printing
+  nothing:
+
+  ```
+  git -C <that path> status --porcelain
+  git -C <that path> log --oneline HEAD --not --remotes
+  ```
+
+  They cover only what poison-pill destroys: the worktree's files and a
+  commit reachable from HEAD alone. HEAD is the detached `origin/<base>` he
+  returns to after every instruction, so the second prints nothing unless
+  something went wrong. His kept `kevin-unpushed/` branches are not checked:
+  they are on no remote by definition, so checking them would block every
+  stand-down once one exists. They are refs in the shared repository, and
+  removing the worktree leaves them standing. Never `--branches`: branches
+  are shared by every worktree of the repo, so other agents' work in progress
+  would block him forever.
+- **Either check printing anything** is `blocked stand down <what is left>`: he
+  does not arm, and waits.
