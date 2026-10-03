@@ -180,6 +180,7 @@ bifrost/
 ├── docs/operations/              ← branch-protection.md (what `main` gates on) and
 │                                   source-entrypoint-help-audit.md (the entrypoint inventory
 │                                   tools/source_help.test.ts checks)
+├── docs/specs/                   ← this repo's own specs (each with its plan) and their .human.md briefs
 ├── .claude-plugin/               ← marketplace.json: seven entries, source ./ + disjoint skills: lists
 └── .github/workflows/            ← ci.yml (test, typecheck, secret scan (tree), actionlint) + secret-scan.yml
 ```
