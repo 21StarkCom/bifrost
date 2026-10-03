@@ -6,6 +6,11 @@ doc; neither restates it. Each skill adds only what is genuinely its own —
 `/minion` its reporting to Gru, `/agnes` its self-confirmation — so the review
 gate and the merge path cannot drift between the two.
 
+`/kevin` owns no ticket, so he runs none of the ticket steps (1's bind, 3's
+verify, 5's re-verify, 6's gaps). He runs [Title your tab](#title-your-tab)'s
+mechanics, [§4's](#4-the-spine) merge-contention rule on every PR he merges,
+and [§7](#7-authority). His own skill carries the rest.
+
 This doc is runtime-neutral and is shipped byte-identical to both runtimes.
 Throughout, **the repo's agent instructions file** means `CLAUDE.md` on Claude
 and `AGENTS.md` on Codex. Where it and this doc disagree, it wins. And **a

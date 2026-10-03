@@ -616,7 +616,22 @@ except C5 and C11, and I made the rest:
 
 ## Deviations (append-only)
 
-(empty at acceptance)
+- **2026-10-03, implementation (STARK-10445): a live leader may be no Hermod
+  peer.** Measured while leading the STARK-10444 Minion: `hermod msg send --to
+  claude:<this leader>` answered `unknown-target`, "Claude terminal binding is
+  missing, stale, or ambiguous"; the session shows up only under `hermod msg
+  peers --all --json` (`liveness` unknown, messaging unavailable). Native
+  SendMessage both ways worked. Three changes, none moving the scope boundary:
+  - KV6: the skill checks a native `from` against the `--all` peer row.
+  - KV21: on the `SendMessage` route, every report goes natively once first
+    contact has given a checked address, and that includes the kickoff
+    instruction's. `hermod msg send` is used only before then.
+  - A failed send, or a held native report, is retried once on the other
+    route, then said in the tab and by `hermod notify`. The skill does not
+    read it as a dead leader.
+
+  Gru's Kevin section says the same. Gru's own step-3 lookup of its peer id
+  in the default peer list predates this and is untouched.
 
 [the spine's §4 rule]: ../../standards/worker-spine.md#4-the-spine
 [the stand-down contract]: ../../standards/stand-down.md

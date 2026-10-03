@@ -211,7 +211,11 @@ authorization. The `<report>` is one of:
   or executed.
   A ticket with no live surface says `verified none (<why>)`.
 - `blocked <one-line reason>` — only for what you cannot resolve yourself:
-  missing access, an operator's decision, an unmerged dependency.
+  missing access, an operator's decision, an unmerged dependency. When the
+  one thing in your way is an open PR in another repo that must merge first,
+  say exactly `blocked needs <PR url> merged`: your worktree session cannot
+  merge another repo's PR, and that form is what lets Gru hand it to
+  [Kevin](../kevin/SKILL.md).
 - `follow-up STARK-m filed, stopping`.
 
 Do not stay silent for more than 30 minutes; send a one-line progress note.
@@ -236,6 +240,11 @@ its terms is filled in here:
 **A `blocked` or `follow-up … stopping` exit does NOT stand down.** Gru or the
 operator may still need your worktree, your tab and your scrollback to see what
 happened. Report, then stop and leave everything in place.
+
+**`unblocked` resumes you.** When your leader — on your checked route, never
+another peer — sends `unblocked <PR url> merged <sha>` for the PR your
+`blocked needs` named, resume the spine where you stopped: fetch, rebase onto
+the base if it moved, and carry on.
 
 ## Authority
 
