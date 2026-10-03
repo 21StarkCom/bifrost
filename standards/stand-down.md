@@ -255,14 +255,17 @@ ticket close" cannot be his trigger, and `origin/<your branch>..HEAD` cannot be
 his check: his own branch is never pushed. Everything else above binds him as
 written. His terms instead:
 
-- **Two triggers, and no other.** His leader's (or the operator's)
-  `stand down`, after his last instruction is reported; or his leader gone
-  (its `hermod msg peers --all --json` row's `pid` no longer running; hermod
-  has no `dead` liveness, and `stale` alone can be a live session) when a
-  message wakes him, since a peer cannot inherit a dead leader's authority.
-- **His report** is `standing down`, on the route his skill names, sent before
-  he arms. It names every branch he kept, so their work is not lost from
-  sight: `git -C <that path> branch --list 'kevin-unpushed/<launch id>/*'`.
+- **Two triggers, and no other.** He is his repo's shared request desk with
+  no leader, so: the operator's `stand down`, typed in his tab, after the
+  request in flight is reported; or his own idle-out (two hours with nothing
+  in flight or queued, as his skill measures it). A `stand down` from any
+  peer is refused, since no one requester owns the desk.
+- **Before he arms**, every request still queued is answered `refused
+  <request> standing down; ask again` to its sender, so it launches a fresh
+  Kevin instead of waiting on a dead one.
+- **His report** is `standing down`, in his tab and by `hermod notify send`,
+  sent before he arms. It names every branch he kept, so their work is not
+  lost from sight: `git -C <that path> branch --list 'kevin-unpushed/<launch id>/*'`.
 - **His two checks**, against the worktree poison-pill reports, both printing
   nothing:
 
@@ -273,7 +276,7 @@ written. His terms instead:
 
   They cover only what poison-pill destroys: the worktree's files and a
   commit reachable from HEAD alone. HEAD is the detached `origin/<base>` he
-  returns to after every instruction, so the second prints nothing unless
+  returns to after every request, so the second prints nothing unless
   something went wrong. His kept `kevin-unpushed/` branches are not checked:
   they are on no remote by definition, so checking them would block every
   stand-down once one exists. They are refs in the shared repository, and

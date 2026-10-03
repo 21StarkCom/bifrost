@@ -168,6 +168,13 @@ of it, and each of them exists because there is no leader:
 - **Nobody confirms your `done`** — [Self-confirmation](#self-confirmation)
   below is you doing Gru's job on yourself, and it gates the stand-down.
 
+A release, and anything in a repo other than your own, goes to that repo's
+Kevin by [the spine's §8](../../standards/worker-spine.md#8-releases-and-other-repos).
+Waiting on him is not a stop: your goal keeps re-prompting you, so run one
+`hermod msg wait` on your request per turn, and confirm his line as
+[the Kevin desk](../../standards/kevin-desk.md#5-confirm) says. His `blocked`
+or `refused` is a stopping exit, `blocked <his line>`.
+
 ## Gaps
 
 [The spine](../../standards/worker-spine.md#6-gaps) decides them: fix in the

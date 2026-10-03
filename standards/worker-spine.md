@@ -6,10 +6,11 @@ doc; neither restates it. Each skill adds only what is genuinely its own —
 `/minion` its reporting to Gru, `/agnes` its self-confirmation — so the review
 gate and the merge path cannot drift between the two.
 
-`/kevin` owns no ticket, so he runs none of the ticket steps (1's bind, 3's
-verify, 5's re-verify, 6's gaps). He runs [Title your tab](#title-your-tab)'s
-mechanics, [§4's](#4-the-spine) merge-contention rule on every PR he merges,
-and [§7](#7-authority). His own skill carries the rest.
+`/kevin`, a repo's request desk, owns no ticket, so he runs none of the ticket
+steps (1's bind, 3's verify, 5's re-verify, 6's gaps). He runs
+[Title your tab](#title-your-tab)'s mechanics, [§4's](#4-the-spine)
+merge-contention rule on every PR he merges, and [§7](#7-authority). His own
+skill carries the rest. Every worker reaches him by [§8](#8-releases-and-other-repos).
 
 This doc is runtime-neutral and is shipped byte-identical to both runtimes.
 Throughout, **the repo's agent instructions file** means `CLAUDE.md` on Claude
@@ -60,12 +61,15 @@ what you ran instead.
 
 ```
 idun gh pr-open (draft) → /code-review xhigh --fix → fix or answer every
-finding → idun gh pr-merge → alfred task move STARK-n done
+finding → idun gh pr-merge → [release, through the repo's Kevin] →
+alfred task move STARK-n done
 ```
 
 The review gate is mandatory before any merge. Close the ticket yourself the
 moment the PR merges — unless the repo's agent instructions file defines done as
-*released*, in which case close at the end of its release chain instead.
+*released*. Then you do not run its release chain yourself: request `release`
+from the repo's Kevin by [§8](#8-releases-and-other-repos), confirm his
+`done`, and close the ticket then.
 
 **Merge contention is yours to resolve, not to wait out.** If `idun gh pr-merge`
 refuses — a stale base, a merge commit from main, a check that needs a fresh
@@ -110,4 +114,23 @@ overrides them. Merging a reviewed PR needs no approval, and neither does
 standing down inside the scope [the stand-down contract](stand-down.md) sets —
 it is your own session, and it is that scope, never a grant, that bounds it.
 Publishing by hand, live infrastructure, credential, and destructive actions
-keep their operator gates.
+keep their operator gates. A release through the repo's Kevin
+([§8](#8-releases-and-other-repos)), following the chain its agent
+instructions file documents, is not publishing by hand.
+
+## 8. Releases and other repos
+
+Two things you never do in your own session, and always send to a repo's
+Kevin by [the Kevin desk](kevin-desk.md): **a release** of any repo, your own
+included, and **anything in a repo other than your own** — a PR there that
+must merge before yours can go on, a review, a rerun. One Kevin per repo
+serializes its merges and releases, and your worktree session's git cannot
+leave its worktree. Find him or launch him, send the request, wait for his
+line, and confirm it on the real surface. His `blocked` or `refused` is your
+own `blocked`, quoting his line. Your own repo's PRs stay yours to merge.
+
+The repo's release chain says *what* a release is; this section says *who*
+runs it. Where the chain writes "tag", "publish" or "install" for whoever
+merged, read those steps as the Kevin's. A version bump the chain puts in
+your own PR stays in your PR, and he releases that commit. Ask with `release
+for STARK-n`, naming your ticket.

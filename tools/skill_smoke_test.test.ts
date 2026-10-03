@@ -498,7 +498,9 @@ function brokenMdLinks(file: string, res: RegExp[]): string[] {
   return broken;
 }
 
-const SHARED_WORKER_DOCS = ["stand-down.md", "worker-spine.md"];
+// `kevin-desk.md` (STARK-10506) is the requester side of a Kevin, linked by
+// the spine's §8, the worker skills and Kevin himself.
+const SHARED_WORKER_DOCS = ["kevin-desk.md", "stand-down.md", "worker-spine.md"];
 // The one directory that ships the shared worker docs. One list, because the
 // link check and the pane-count guard below both walk it — a doc dir added to
 // one and not the other is a copy nothing reads.
@@ -667,72 +669,83 @@ for (const name of ["agnes", "gru", "kevin", "minion"]) {
   });
 }
 
-// Kevin (STARK-10445, docs/specs/2026-10-03-kevin-spec.md): a Minion with no
-// ticket who takes his leader's instructions in one repo. The pins below are
-// the strings a later edit can drop without anything else going red: the
-// closed instruction set (KV9), the kickoff markers idun writes (idun spec
-// K7/K8), the merge-queue read before any push (KV12/KV18), and the
-// kevin-unpushed branch his stand-down check globs (KV14, S1).
-const KEVIN_VERBS = ["merge", "review", "rebase", "rerun", "status", "stand down"];
+// Kevin (STARK-10506, docs/specs/2026-10-03-kevin-desk-spec.md): one repo's
+// request desk, taking requests from any fleet agent. The pins below are the
+// strings a later edit can drop without anything else going red: the closed
+// verb set (KD5), the kickoff markers idun writes (idun desk spec D1/D2), the
+// merge-queue read before any push, the kevin-unpushed branch his stand-down
+// check globs, and his Claude idle check (KD8).
+const KEVIN_VERBS = ["merge", "review", "rebase", "rerun", "status", "release", "stand down"];
 
-test("skill smoke: skill/kevin — instruction set and kickoff markers", () => {
+test("skill smoke: skill/kevin — verb set and kickoff markers", () => {
   const text = fs.readFileSync(path.join(SKILLS_ROOT, "kevin", "SKILL.md"), "utf8");
   for (const verb of KEVIN_VERBS) {
     const escaped = verb.replace(/ /g, "\\s+");
     assert.match(
       text,
       new RegExp(`^(?:#{2,4} .*\`${escaped}\\b|.*\\*\\*\`${escaped}\\b)`, "m"),
-      `the instruction \`${verb}\` is no longer a heading or bold lead`,
+      `the request \`${verb}\` is no longer a heading or bold lead`,
     );
   }
-  for (const marker of ["leader peer", "leader operator", "first instruction:", "isInMergeQueue", "kevin-unpushed/"]) {
+  for (const marker of ["from peer", "from operator", "first request:", "isInMergeQueue", "kevin-unpushed/", "CronCreate", "kevin idle check", "kevin-desk.md"]) {
     assert.ok(text.includes(marker), `skill/kevin no longer names ${marker}`);
   }
+  assert.ok(!text.includes("first instruction:"), "skill/kevin still names the leader-era `first instruction:`");
+  // idun before v0.111.0 writes `leader peer`/`leader operator`; the skill reads it as `from` (rollout order).
+  assert.match(text, /`leader\s+peer <PEER>` or `leader\s+operator`[\s\S]{0,120}means the same/, "skill/kevin no longer reads the pre-0.111.0 kickoff");
 });
 
-// Every fenced `idun kevin` line, in any skill, reads its ack (`--json`) and
-// names the repo it launches into: without one, idun launches into whichever
-// repo the caller stands in. At least one must exist, or the check is vacuous.
-test("skill smoke: skill/kevin — fenced idun kevin lines carry --json and a repo", () => {
-  const lines = SKILLS.flatMap((name) =>
-    fencedLaunchLines(path.join(SKILLS_ROOT, name, "SKILL.md"), /^\s*idun kevin\b/),
-  );
-  assert.ok(lines.length > 0, "no fenced `idun kevin` line in any skill");
+// Every fenced `idun kevin` line, in a skill or a shared worker doc, reads its
+// ack (`--json`) and names the repo it launches into, as its first word or by
+// `--repo`/`--cwd`: without one, idun launches into whichever repo the caller
+// stands in. At least one must exist, or the check is vacuous.
+test("skill smoke: fenced idun kevin lines carry --json and a repo", () => {
+  const files = [
+    ...SKILLS.map((name) => path.join(SKILLS_ROOT, name, "SKILL.md")),
+    ...SHARED_WORKER_DOCS.map((name) => path.join(REPO_ROOT, "standards", name)),
+  ];
+  const lines = files.flatMap((file) => fencedLaunchLines(file, /^\s*idun kevin\b/));
+  assert.ok(lines.length > 0, "no fenced `idun kevin` line in any skill or shared doc");
   for (const line of lines) {
     assert.match(line, /--json\b/, `no --json: ${line.trim()}`);
-    assert.match(line, /--(?:repo|cwd)\b/, `no --repo or --cwd: ${line.trim()}`);
+    assert.match(line, /^\s*idun kevin\s+(?:<repo>|[A-Za-z0-9._-]+)(?:\s|$)|--(?:repo|cwd)\b/, `no repo: ${line.trim()}`);
   }
 });
 
-// Kevin owns no ticket, so the shared contracts name his terms (S1, S2): the
-// stand-down's two triggers and its glob-scoped unpushed check, and the spine
-// steps he runs. A skill-only copy would drift from the shared doc.
+// Kevin owns no ticket, so the shared contracts name his terms: the
+// stand-down's two triggers and its glob-scoped unpushed check, the spine
+// steps he runs and §8's route to him, and the desk every requester follows.
+// A skill-only copy would drift from the shared doc.
 test("skill smoke: standards — Kevin's place in the shared docs", () => {
   const standDown = fs.readFileSync(path.join(REPO_ROOT, "standards", "stand-down.md"), "utf8");
   const spine = fs.readFileSync(path.join(REPO_ROOT, "standards", "worker-spine.md"), "utf8");
+  const desk = fs.readFileSync(path.join(REPO_ROOT, "standards", "kevin-desk.md"), "utf8");
   assert.ok(standDown.includes("/kevin"), "stand-down.md no longer names /kevin");
   assert.ok(spine.includes("/kevin"), "worker-spine.md no longer names /kevin");
   assert.ok(standDown.includes("kevin-unpushed/"), "stand-down.md lost Kevin's kevin-unpushed glob");
   assert.ok(standDown.includes("--not --remotes"), "stand-down.md lost Kevin's unpushed check");
+  assert.ok(standDown.includes("idle-out"), "stand-down.md lost Kevin's idle-out trigger");
+  assert.match(spine, /^## 8\. Releases and other repos$/m, "worker-spine.md lost §8");
+  assert.ok(spine.includes("](kevin-desk.md)"), "worker-spine.md §8 no longer links the Kevin desk");
+  for (const marker of ["hermod msg peers --all --json", "hermod msg send --to", "Never send him `stand down`", "## 5. Confirm"]) {
+    assert.ok(desk.includes(marker), `kevin-desk.md no longer names ${marker}`);
+  }
 });
 
-// The hand-off (G1–G5, M1–M2): Gru launches Kevin as his leader and dismisses
-// him; step 2 waits on Kevin for a `blocked needs` ticket instead of the
-// operator; a Minion names the PR it needs and resumes on `unblocked`.
-test("skill smoke: gru and minion — Kevin hand-off", () => {
+// The desk replaces the leader hand-off (KD15, KD16): Gru neither launches nor
+// dismisses a Kevin, and a Minion asks the other repo's Kevin itself instead
+// of reporting `blocked needs … merged` and waiting for `unblocked`.
+test("skill smoke: gru and minion — the Kevin desk, not a hand-off", () => {
   const gru = fs.readFileSync(path.join(SKILLS_ROOT, "gru", "SKILL.md"), "utf8");
   const minion = fs.readFileSync(path.join(SKILLS_ROOT, "minion", "SKILL.md"), "utf8");
-  const launches = fencedLaunchLines(path.join(SKILLS_ROOT, "gru", "SKILL.md"), /^\s*idun kevin --repo\b/);
-  assert.equal(launches.length, 1, "expected exactly one fenced `idun kevin --repo` line in gru");
-  for (const flag of ["--leader", "--no-focus", "--json", "-- merge"]) {
-    assert.ok(launches[0]!.includes(flag), `gru's Kevin launch lost ${flag}`);
-  }
+  assert.deepEqual(fencedLaunchLines(path.join(SKILLS_ROOT, "gru", "SKILL.md"), /^\s*idun kevin\b/), [], "gru launches a Kevin again");
   const kevinSection = /^## Kevin\n([\s\S]*?)^## /m.exec(gru)?.[1] ?? "";
-  assert.ok(kevinSection.includes("stand down"), "gru's Kevin section no longer dismisses him");
-  const step2 = /^2\. \*\*Read the board\.\*\*([\s\S]*?)^3\. \*\*Launch\.\*\*/m.exec(gru)?.[1] ?? "";
-  assert.ok(step2.includes("blocked needs"), "gru's step 2 lost the blocked-needs carve-out");
-  assert.ok(minion.includes("blocked needs"), "minion no longer names `blocked needs`");
-  assert.ok(minion.includes("unblocked"), "minion no longer resumes on `unblocked`");
+  assert.ok(kevinSection.includes("neither launch, lead nor dismiss"), "gru's Kevin section lost its hands-off rule");
+  for (const [label, text] of [["gru", gru], ["minion", minion]] as const) {
+    assert.ok(!text.includes("blocked needs"), `${label} still names the leader-era \`blocked needs\``);
+    assert.ok(!/\bunblocked\b/.test(text), `${label} still names the leader-era \`unblocked\``);
+  }
+  assert.ok(minion.includes("worker-spine.md#8-releases-and-other-repos"), "minion no longer routes other-repo needs to a Kevin");
 });
 
 // ---------------------------------------------------------------------------
