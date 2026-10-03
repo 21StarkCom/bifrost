@@ -40,9 +40,11 @@ Hermod body is a shell argument. Name every PR and run by URL.
   and again at the merge commit if the merged tree differs from the one
   verified. He reads the steps off the ticket, skips those that name a
   required check, runs the rest only when they need nothing beyond `git`,
-  `node` and shell utilities, and posts each run as a `Kevin verification for STARK-n at <sha>` PR
-  comment (`Kevin verification FAILED …` on a failure, which merges nothing).
-  The PR's title must contain `(STARK-n)`.
+  `node` and shell utilities, and posts each run as a
+  `Kevin verification for STARK-n at <sha>` PR comment, or
+  `Kevin verification FAILED …` on a failure: before the merge he then merges
+  nothing; after it the merge stands, and his line is `blocked … verification
+  failed after merge`. The PR's title must contain `(STARK-n)`.
 - `review <PR url>`: the review gate and the repo's gate, without the merge.
 - `rebase <PR url>`: onto its base.
 - `rerun <run url>`: a failed PR check. A base-branch `push` run is the
