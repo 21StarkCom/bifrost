@@ -17,7 +17,8 @@ launch or a brief naming one names the other.
 One thing is the calling skill's, and this doc calls it by name:
 
 - **your report** — where the outcome goes before you die (a Minion's
-  native or Hermod message to its leader; Agnes's comment on the ticket).
+  native or Hermod message to its leader, or its line in its own tab under
+  `leader operator`; Agnes's comment on the ticket).
   Whatever it is, it is a completed act before you arm, and it is never the
   durable copy of your evidence: that is the PR comment the spine's step 5
   requires, because your report is a line and your scrollback is gone.

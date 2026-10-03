@@ -757,6 +757,19 @@ test("skill smoke: gru and minion — the Kevin desk, not a hand-off", () => {
   assert.ok(minion.includes("worker-spine.md#8-releases-and-other-repos"), "minion no longer routes other-repo needs to a Kevin");
 });
 
+// STARK-10523: a Minion whose brief reads `leader operator` reports in its own
+// tab, and `--new-tab --leader operator` is a launch shape of its own. The
+// leader-era rule that no shape lets the operator receive the report must not
+// come back.
+test("skill smoke: minion — the operator-leader shape", () => {
+  const minion = fs.readFileSync(path.join(SKILLS_ROOT, "minion", "SKILL.md"), "utf8");
+  const fence = fencedLaunchLines(path.join(SKILLS_ROOT, "minion", "SKILL.md"), /^\s*idun minion\b/);
+  assert.ok(fence.some((line) => /--leader <peer>\|operator\b/.test(line)), "the idun minion line no longer passes --leader operator through");
+  assert.ok(minion.includes("**`leader operator`:**"), "minion's Reporting lost the operator route");
+  assert.ok(minion.includes("**`--leader operator`**"), "minion's New tab lost the operator-leader shape");
+  assert.ok(!minion.includes("no third shape"), "minion still says no shape reports to the operator");
+});
+
 // ---------------------------------------------------------------------------
 // 5. Every distinct in-repo `tools/*.ts` CLI mentioned by any skill exits
 //    cleanly on --help. Run in parallel (~13 spawns total, ~600ms each

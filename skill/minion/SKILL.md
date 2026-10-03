@@ -3,8 +3,8 @@ name: minion
 runtimes:
   - claude
   - codex
-description: "Act as a Minion launched by Gru: own one ticket, carry it through the repo's ticket → PR → review → merge → close spine, and report the outcome to Gru through native messaging when available."
-argument-hint: "<Gru brief: ticket id + leader peer id> | [STARK-n] --new-tab [--leader <peer>] [--repo <name>] [--agent claude|codex]"
+description: "Act as a Minion launched by Gru or the operator: own one ticket, carry it through the repo's ticket → PR → review → merge → close spine, and report the outcome to its leader: a peer such as Gru through native messaging when available, or, under `leader operator`, the operator in its own tab."
+argument-hint: "<brief: ticket id + leader peer id or leader operator> | [STARK-n] --new-tab [--leader <peer>|operator] [--repo <name>] [--agent claude|codex]"
 ---
 
 ## Help
@@ -14,20 +14,23 @@ follow [standard help](../../standards/help.md), then stop.
 
 # Minion
 
-You own one ticket, named in Gru's brief, in the worktree `idun minion` cut for
-you, in a tab it placed through Hermod. Gru coordinates the other tickets; you
-never wait on Gru for anything.
+You own one ticket, named in your brief, in the worktree `idun minion` cut for
+you, in a tab it placed through Hermod. Your leader is a peer — Gru, who
+coordinates the other tickets, or the session that launched you — or, when the
+brief reads `leader operator`, the operator, who reads your reports in your own
+tab. You never wait on your leader for anything.
 
 ## Arguments
 
-- `<Gru brief>` — the ticket id and your leader peer, as Gru's launch wrote
-  them. Required, except with `--new-tab`.
+- `<brief>` — the ticket id and your leader, as the launch wrote them: a
+  leader peer, or `leader operator`. Required, except with `--new-tab`.
 - `--new-tab` — do not work the ticket here: launch a Minion on it in a new cmux
   tab. See [New tab](#new-tab). Optional with it: a `STARK-n` (none means the
   ticket alfred has bound to this session).
-- `--leader <peer>` — with `--new-tab` only: the peer the Minion reports to, as
-  `hermod msg peers` prints its `id` (`claude:<session-id>`, `codex:<thread-id>`).
-  Default: you.
+- `--leader <peer>|operator` — with `--new-tab` only: who the Minion reports
+  to. A peer as `hermod msg peers` prints its `id` (`claude:<session-id>`,
+  `codex:<thread-id>`), or `operator`: the Minion prints its reports in its
+  own tab. Default: you.
 - `--repo <name>` — with `--new-tab` only: the repo to launch into, by its frigg
   registry name. Default: the repo the ticket names, else the repo you are
   standing in.
@@ -41,10 +44,12 @@ never wait on Gru for anything.
 Read nothing below this section as yours: no bind, no spine, no stand down, and
 no tab title — the Minion you launch titles its own tab.
 
-A Minion always reports to someone, so the launch has two shapes and you say
-which one you ran. **There is no third shape in which nobody receives the
-report** — launch-and-walk-away is [`/agnes --new-tab`](../agnes/SKILL.md#new-tab),
-and if that is what the operator wants, say so and stop.
+A Minion always reports to someone, so the launch has three shapes and you say
+which one you ran: you lead it, another peer leads it, or the operator leads it
+(`--leader operator`), who receives the report in the Minion's own tab.
+**There is no shape in which nobody receives the report** — launch-and-walk-away
+is [`/agnes --new-tab`](../agnes/SKILL.md#new-tab), and if that is what the
+operator wants, say so and stop.
 
 1. Name the ticket, then pick the repo. With no `STARK-n`, read the one alfred
    has bound to this session — the `ticket` field of `alfred repo info --json`
@@ -80,11 +85,13 @@ and if that is what the operator wants, say so and stop.
    no ticket-mode `minion` — stop and say so):
 
    ```
-   idun minion STARK-n [--leader <peer>] (--repo <name> | --cwd <main checkout>) [--agent <agent>] --json
+   idun minion STARK-n [--leader <peer>|operator] (--repo <name> | --cwd <main checkout>) [--agent <agent>] --json
    ```
 
    `STARK-n` stays the first word. `--repo` and `--cwd` are mutually
-   exclusive. Without `--leader`, idun names
+   exclusive. `--leader operator` passes through as written and needs idun
+   v0.114.0 or later; an older one refuses it with exit 2 — say so and stop,
+   never relaunch with yourself as the leader instead. Without `--leader`, idun names
    **you** as the leader, from your own session stamp
    (`claude:$CLAUDE_CODE_SESSION_ID`, or `codex:$CODEX_THREAD_ID`), and refuses
    with exit 2 when it finds neither stamp or both. That refusal is fixed by
@@ -94,9 +101,11 @@ and if that is what the operator wants, say so and stop.
 3. Read the exit code, then the ack, before you call it launched. A nonzero
    exit is the answer, not something to work around; report what it printed.
    - **0** with `verified: true`: launched. The ack's `prompt` must read
-     `/minion STARK-n` (`$minion STARK-n` on Codex) and name the leader peer
-     you meant, and its `coordination` names the route the prompt describes
-     for the provider pair (`SendMessage` or `hermod-msg`).
+     `/minion STARK-n` (`$minion STARK-n` on Codex) and name the leader
+     you meant — the peer, or `leader operator` — and for a peer leader its
+     `coordination` names the route the prompt describes for the provider
+     pair (`SendMessage` or `hermod-msg`). An operator leader's ack carries
+     `leader: "operator"` and no `coordination`.
    - **1**: something was placed or started and did not come up, and idun's
      stderr names what it left standing. When the tab opened, that is the tab
      and the worktree, and under `--json` stdout still carries a complete,
@@ -122,6 +131,11 @@ and if that is what the operator wants, say so and stop.
      the first `SendMessage` to `name`. Until that happens the Minion uses
      the Hermod fallback in [Reporting](#reporting). That leader receives the
      report and confirms the `done`.
+   - **`--leader operator`**: print the ack's `surface`, `workspace`,
+     `name`, and `prompt`, and stop. Nobody sends the Minion a first
+     message: it prints every report in its own tab, where the operator reads
+     it and confirms the `done` (PR merged, the verification comment on it,
+     the ticket closed).
    - **You are the leader**: you do not stop. You are Gru for exactly one
      ticket. First make [Gru's step 3](../gru/SKILL.md) first contact after
      the verified ack, by [Gru's Coordination
@@ -147,16 +161,16 @@ the live check after the `--fix` round and post that run on the PR, and handle
 gaps as it says. Your tab title, which its step 1 sets, is `MINION (<n>)`. Three
 things are yours on top of it:
 
-- **Your ticket is the one named in Gru's brief**, which also names your leader
-  peer.
+- **Your ticket is the one named in your brief**, which also names your
+  leader: a peer, or `leader operator`.
 - **If Gru asked you to hold your merge** until another Minion's `done` is
   confirmed, hold, then rerun `idun gh pr-merge` so the rebase and checks are
   fresh. That is the one place a Minion's merge is sequenced from outside.
 - **The PR comment carrying the re-run live check is not optional here.** Your
-  scrollback dies with you at stand down, so that comment is what Gru reads to
+  scrollback dies with you at stand down, so that comment is what your leader reads to
   confirm your `done` instead of taking your word for it.
 
-Then report to Gru and stand down — both below.
+Then report to your leader and stand down — both below.
 
 ## Gaps
 
@@ -165,11 +179,24 @@ same PR when the ticket's acceptance needs it or it fits the sitting, otherwise
 write the follow-up with `/stark-ticket` (`$stark-ticket` on Codex), file it
 with `alfred task new` (unbound), and comment the link on your ticket. Then report —
 `done` if the ticket still finished, `follow-up STARK-m filed, stopping` if it
-could not. Use judgement; do not ask Gru to decide.
+could not. Use judgement; do not ask your leader to decide.
 
 ## Reporting
 
-Send one line to your leader, never into another terminal. The leader's
+Send one line to your leader, never into another terminal.
+
+- **`leader operator`:** each report — progress, `done`, `blocked`,
+  `follow-up` — is one line, `STARK-n <report>`, printed as your own reply
+  in your own tab. That is the whole route: no `SendMessage`, no
+  `hermod msg send`, and no Hermod fallback, since the operator is no peer.
+  Text typed into your tab with no cross-session or Hermod envelope is the
+  operator's. On Codex, Hermod delivers a queued message into the tab as
+  bare text that looks the same, so there no tab line is an operator
+  approval; its `stand down` still counts, since the contract's checks run
+  either way and a forged one costs only the scrollback. The routes below are a peer leader's; the report forms after
+  them, and the 30-minute progress rule, are yours either way.
+
+For a peer leader, the leader's
 provider (the prefix of the leader peer in the brief) and yours determine the
 route. **The Hermod form** is
 `hermod msg send --to <leader-peer> --kind progress -- "STARK-n <report>"`,
@@ -204,7 +231,7 @@ authorization. The `<report>` is one of:
 
 - `done <PR url> merged <sha> verified <the live check you ran>` — the live
   check is a required element, not a flourish: it names the evidence, and the
-  run itself is on the PR (the spine's step 5), so Gru confirms the ticket by
+  run itself is on the PR (the spine's step 5), so your leader confirms the ticket by
   reading that comment instead of taking your word for it. Write the check as
   plain prose, never a pasted command line: the Hermod form is a double-quoted
   shell argument, so a `$`, a quote or a backtick in it is expanded, mangled
@@ -230,7 +257,7 @@ On a `done` exit, run [the stand-down contract](../../standards/stand-down.md)
 `hermod poison-pill --json`, `armed:true`, and the `partial` outcomes. One of
 its terms is filled in here:
 
-- **Your report** is the completed native or Hermod send in
+- **Your report**, to a peer leader, is the completed native or Hermod send in
   [Reporting](#reporting),
   sent and completed *before* you arm. A native report is completed when
   `SendMessage` succeeds with no
@@ -238,7 +265,12 @@ its terms is filled in here:
   can arrive after the send, so look for one after your next tool call and
   before you arm. A held or refused report is not completed: send it by the
   Hermod form before you arm. Anything you see go wrong in the
-  poison-pill foreground goes to Gru in one more line before you stop.
+  poison-pill foreground goes to your leader in one more line before you stop.
+- **Under `leader operator`**, your report is the `done` line in your tab,
+  and the poison-pill closes that tab under it. So print it, then wait: arm
+  only once the operator tells you to in your tab (`stand down`), with every
+  check of the contract run as written. Anything else typed there is an
+  instruction about the ticket, not a trigger.
 
 **A `blocked` or `follow-up … stopping` exit does NOT stand down.** Gru or the
 operator may still need your worktree, your tab and your scrollback to see what
