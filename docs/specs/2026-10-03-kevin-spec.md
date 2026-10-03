@@ -1,6 +1,6 @@
 # kevin — spec+plan
 
-2026-10-03 · Aryeh Stark (drafted by Claude) · ticket STARK-10445 · blocked by STARK-10444 (idun `docs/specs/2026-10-03-idun-kevin-spec.md`) for the launch and the live check · accepted-base: (filled at gate)
+2026-10-03 · Aryeh Stark (drafted by Claude) · ticket STARK-10445 · blocked by STARK-10444 (idun `docs/specs/2026-10-03-idun-kevin-spec.md`) for the launch and the live check · accepted-base: 43083fa5f95d
 
 ## Intent
 
