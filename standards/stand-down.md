@@ -257,21 +257,28 @@ written. His terms instead:
 
 - **Two triggers, and no other.** His leader's (or the operator's)
   `stand down`, after his last instruction is reported; or his leader gone
-  (its `hermod msg peers --all --json` row dead, or its `pid` gone) when a
+  (its `hermod msg peers --all --json` row's `pid` no longer running; hermod
+  has no `dead` liveness, and `stale` alone can be a live session) when a
   message wakes him, since a peer cannot inherit a dead leader's authority.
 - **His report** is `standing down`, on the route his skill names, sent before
-  he arms.
+  he arms. It names every branch he kept, so their work is not lost from
+  sight: `git -C <that path> branch --list 'kevin-unpushed/<launch id>/*'`.
 - **His two checks**, against the worktree poison-pill reports, both printing
   nothing:
 
   ```
   git -C <that path> status --porcelain
-  git -C <that path> log --oneline HEAD --glob='refs/heads/kevin-unpushed/<launch id>/*' --not --remotes
+  git -C <that path> log --oneline HEAD --not --remotes
   ```
 
-  HEAD is the detached `origin/<base>` he returns to after every instruction;
-  the glob catches the branches he keeps when a fix could not be pushed. Never
-  `--branches`: branches are shared by every worktree of the repo, so other
-  agents' work in progress would block him forever.
+  They cover only what poison-pill destroys: the worktree's files and a
+  commit reachable from HEAD alone. HEAD is the detached `origin/<base>` he
+  returns to after every instruction, so the second prints nothing unless
+  something went wrong. His kept `kevin-unpushed/` branches are not checked:
+  they are on no remote by definition, so checking them would block every
+  stand-down once one exists. They are refs in the shared repository, and
+  removing the worktree leaves them standing. Never `--branches`: branches
+  are shared by every worktree of the repo, so other agents' work in progress
+  would block him forever.
 - **Either check printing anything** is `blocked stand down <what is left>`: he
   does not arm, and waits.

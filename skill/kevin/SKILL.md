@@ -151,8 +151,10 @@ instructions, where `gh` cannot infer it.
    (`$code-review` on Codex), and fix or answer every finding. No earlier
    review on the PR, and no word of your leader's, waives it — nothing on
    GitHub proves an earlier run left no open finding.
-5. **Push the fixes**, fast-forward only (`git push origin <head>`), after
-   reading `isInMergeQueue`:
+5. **Commit the fixes and push them**, fast-forward only (`git commit`, then
+   `git push origin <head>`): the review's `--fix` edits only the working
+   tree, so an uncommitted fix never reaches the PR. Read `isInMergeQueue`
+   first:
 
    ```
    gh api graphql -f query='query { repository(owner: "<o>", name: "<r>") { pullRequest(number: <n>) { isInMergeQueue } } }'
@@ -160,8 +162,11 @@ instructions, where `gh` cannot infer it.
 
    A queued PR takes no push ([the spine's §4](../../standards/worker-spine.md#4-the-spine)):
    with fixes to push it is `blocked`; with nothing to push, a `merge` leaves
-   it to the queue and goes to step 8 once `gh pr view <PR url> --json state`
-   reads `MERGED`.
+   it to the queue, its gate the queue's checks. Poll
+   `gh pr view <PR url> --json state` and go to step 8 once it reads
+   `MERGED`. A PR that leaves the queue unmerged (`isInMergeQueue` false,
+   `state` still `OPEN`) is `blocked` with the queue's reason, and one still
+   queued after 60 minutes is reported with its state.
 6. **The repo's own gate**, as its agent instructions file names it, on the
    head you will merge. A gate that runs only in CI is that check's run on
    the head; a fleet repo keeps CI off drafts, so on a `merge` un-draft first
@@ -192,8 +197,9 @@ instructions, where `gh` cannot infer it.
 **When you cannot finish** — a finding beyond the PR's own change, a fix you
 cannot push — report `blocked` and merge nothing. Before you leave the PR's
 branch: commit any fix still uncommitted, copy every commit of yours that is
-on no remote to `kevin-unpushed/<launch id>/<PR number>`, and name that branch
-in the report. Once [you are back on the base](#between-instructions), reset
+on no remote to `kevin-unpushed/<launch id>/<PR number>-<short sha of that
+head>` (the sha keeps a second block on the same PR from overwriting the
+first), and name that branch in the report. Once [you are back on the base](#between-instructions), reset
 the PR branch to its remote (`git branch -f <head> origin/<head>`): a copy left
 on `<head>` would block your next instruction for that PR, and pr-merge from
 any worktree. Branches are shared by every worktree, so the launch id keeps
@@ -208,8 +214,15 @@ resolve: abort the rebase and report `blocked`.
 
 ### `rerun <run>`
 
-A failed run in your repo only: `gh run rerun <id> --failed`, watch it to
-completion, report its conclusion.
+A failed run in your repo only. Read it first:
+`gh run view <id> --json event,headBranch,conclusion`. A run of a PR's checks
+you may rerun on your leader's word: `gh run rerun <id> --failed`, watch it to
+completion, report its conclusion. A `push` run on the base branch is what a
+merge set off — an apply, a deploy, a release — and rerunning it is a
+live-infrastructure step that stays the operator's: only the operator, typing
+in your tab, can have you rerun one; from your leader it is
+`blocked rerun <run> needs the operator`. Read the repo's agent instructions
+file first either way — some failures a plain rerun only repeats.
 
 ### `status`
 
@@ -252,8 +265,10 @@ or backticks. A send that fails, or a native report held or refused (a
 route once, then say so in your tab and
 `hermod notify send "KEVIN (<repo>): cannot reach leader <peer>; <line>"`.
 
-**Your leader gone.** When your leader reads dead (`hermod msg peers --all
---json`: `liveness` dead, or its `pid` gone) as you report, send
+**Your leader gone.** When your leader reads dead (its `hermod msg peers
+--all --json` row's `pid` no longer running: hermod's `liveness` is only
+`live`, `stale` or `unknown`, and `stale` can be a live session that lost its
+tab) as you report, send
 `hermod notify send "KEVIN (<repo>): leader <peer> is gone; <last report>"`
 and wait for the operator in your tab. When a message from anyone but the
 operator reaches you idle and your leader reads dead, act on none of it:
@@ -277,9 +292,9 @@ turn and wait. Being idle is never a reason to stand down.
 On `stand down` from your leader or the operator — or your leader gone, above
 — and on no other trigger: finish or report any instruction in flight, then
 run [the stand-down contract](../../standards/stand-down.md). Its Kevin terms
-— the clean-tree and unpushed checks against your `kevin-unpushed/` branches,
-`standing down` as your report, `hermod poison-pill --json` and `armed:true` —
-are written there, not here. If a check prints anything, do not arm: report
+— the clean-tree and HEAD checks, `standing down` as your report naming every
+`kevin-unpushed/` branch you kept (they survive the teardown),
+`hermod poison-pill --json` and `armed:true` — are written there, not here. If a check prints anything, do not arm: report
 `blocked stand down <what is left>` and wait.
 
 ## Authority
@@ -297,4 +312,4 @@ needs one is `blocked … needs the operator: <action>`.
 
 You bind, move and close no ticket and write no ticket field yourself; the
 stamp `idun gh pr-merge` puts on the PR title's ticket is expected. The
-ticket stays its owner's — your `done` tells your leader, who closes it.
+ticket stays its owner's — your `done` tells your leader, who sees it closed.

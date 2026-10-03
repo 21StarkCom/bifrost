@@ -632,6 +632,26 @@ except C5 and C11, and I made the rest:
 
   Gru's Kevin section says the same. Gru's own step-3 lookup of its peer id
   in the default peer list predates this and is untouched.
+- **2026-10-03, implementation review (#353's `/code-review xhigh`).** None
+  of these moves the scope boundary.
+  - **KV24/KV25 and S1.** The unpushed check is `HEAD --not --remotes` alone.
+    KV24's glob over `kevin-unpushed/` would have blocked every stand-down
+    once one kept branch existed, since such a branch is on no remote by
+    definition. It was also protecting nothing: those are refs in the shared
+    repo and survive poison-pill's worktree removal. The `standing down`
+    report names them instead.
+  - **KV14.** The kept branch is `kevin-unpushed/<launch id>/<PR
+    number>-<short sha>`, so a second block on the same PR cannot collide.
+  - **KV19.** A leader may have Kevin rerun only a PR's check runs. A `push`
+    run on the base branch (an apply, a deploy) is the operator's alone, typed
+    in Kevin's tab. That squares `rerun` with G2's "the operator's to fix,
+    approve or rerun" and with OUT's live-infrastructure gate. Open question
+    2's "reruns only on a `rerun` instruction" now applies to base-branch
+    runs only when the operator gives it.
+  - **G2.** `skipped` and `neutral` count as clean, like `success`.
+  - **Liveness.** Hermod reports no `dead` liveness (only `live`, `stale`,
+    `unknown`). "Reads dead" in KV22/KV22a/G4a is the `--all` row's `pid` no
+    longer running.
 
 [the spine's §4 rule]: ../../standards/worker-spine.md#4-the-spine
 [the stand-down contract]: ../../standards/stand-down.md

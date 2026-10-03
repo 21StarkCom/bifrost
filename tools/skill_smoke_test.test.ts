@@ -658,7 +658,7 @@ test("skill smoke: skill/gru — Gru is never launched on a ticket it works", ()
 });
 
 // The worker launchers moved from `hermod ticket` to idun (STARK-10154). A
-// fenced `hermod ticket` line left in any of the three skills would launch on a
+// fenced `hermod ticket` line left in any of the worker skills would launch on a
 // hermod path that bypasses idun's managed Codex account and exit-code contract.
 for (const name of ["agnes", "gru", "kevin", "minion"]) {
   test(`skill smoke: skill/${name} — no fenced \`hermod ticket\` launch line`, () => {

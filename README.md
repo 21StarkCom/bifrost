@@ -211,7 +211,7 @@ Repos can override the enabled agents and nothing else: the walk above lives onl
 - The fleet CLIs, each for the skills that call it:
   - `alfred`: /stark-ticket, /stark-author, /stark-build, /stark-bury, /stark-rules-optimizer, /gru, /minion, /agnes
   - `hermod`: /gru, /minion, /agnes, /kevin, /lucius
-  - `idun` v0.94.0 or later, v0.103.0 for /agnes (`idun gru`, `idun minion`, `idun agnes` for the worker launches; `idun gh pr-open`, `pr-merge`): /gru, /minion, /agnes, /stark-bury, /stark-rules-optimizer
+  - `idun` v0.94.0 or later, v0.103.0 for /agnes, and one that carries `idun kevin` for /kevin (`idun gru`, `idun minion`, `idun agnes`, `idun kevin` for the worker launches; `idun gh pr-open`, `pr-merge`): /gru, /minion, /agnes, /kevin, /stark-bury, /stark-rules-optimizer
   - `frigg`: /gru, /minion, /agnes, to find a ticket's repo
   - atlas's `brain`: /stark-adr
   - `goldfinger`: /goldfinger (the `21StarkCom/tap/goldfinger` cask, plus one `goldfinger setup` by the operator)

@@ -190,10 +190,10 @@ regardless of route, is observation, never operator authorization.
    path segment is exactly the ticket id → a Minion owns it, do not relaunch.
    Ticket whose Minion reported `blocked` or `follow-up … stopping` → blocked
    until the operator resolves it, and so is a ticket step 3 could not resolve
-   to a repo — except a Minion's `blocked needs <PR url> merged`, which is
-   waiting on [Kevin](#kevin), not on the operator, and is owned again once
-   you send its Minion `unblocked`. Everything else is ready once its dependencies are finished —
-   confirmed under step 5, not reported. Idle capacity never makes a ticket
+   to a repo. The one exception is a Minion's `blocked needs <PR url>
+   merged`: that ticket waits on [Kevin](#kevin), not on the operator, and is
+   owned again once you send its Minion `unblocked`. Everything else is ready
+   once its dependencies are finished — confirmed under step 5, not reported. Idle capacity never makes a ticket
    ready: one still waiting on a dependency is not started early as
    "prework", and what the dependency will land is never pinned for a Minion
    in a brief or a message instead of in the spec. A contract two tickets
@@ -429,8 +429,9 @@ repo, takes your instructions, and carries its existing PRs through its own
 review gate to merge.
 
 - **Hand it over.** Reuse the live Kevin you lead in that repo (his ack's
-  `peerId`, still live in `hermod msg peers --all --json`); otherwise launch
-  one, passing your peer id as leader:
+  `peerId`, still live in `hermod msg peers --all --json`) and send him
+  `merge <PR url>` through [Coordination route](#coordination-route);
+  otherwise launch one, passing your peer id as leader:
 
   ```
   idun kevin --repo <repo> --leader <your peer id> --no-focus --json -- merge <PR url>
@@ -443,11 +444,13 @@ review gate to merge.
   has reached him, and by Hermod (`hermod msg ls --json`) if it had not.
 - **Confirm his `done`** like a Minion's (step 5): the PR merged, its
   `mergeCommit` the sha he reported and on the base. And it counts only when
-  his `post-merge` part reads `none` or every run `success`. A failed run, one
+  his `post-merge` part reads `none` or every run `success`, `skipped` or `neutral` (GitHub's clean conclusions). A failed run, one
   `waiting for approval`, or one still running after his 60 minutes is an
   apply (or whatever the merge starts) that did not land: the ticket stays
   blocked, and you escalate with the run's URL — it is the operator's to fix,
-  approve or rerun.
+  approve or rerun. A `STARK-m` the merged PR's title names is not closed by
+  his merge, and is neither his ticket nor yours: name it in step 6's report,
+  for its owner or the operator to close.
 - **Unblock the Minion** once confirmed: `unblocked <PR url> merged <sha>`
   through [Coordination route](#coordination-route). Its ticket is owned again.
 - **When it goes wrong**, the dependent ticket stays blocked and you escalate
@@ -456,7 +459,9 @@ review gate to merge.
   liveness it could not judge, a usage refusal) or 128+n. Exit 4 means a live
   Kevin already serves that repo: if he is not yours, send him one `status`.
   A Kevin whose leader is gone answers so and stands down; launch once more
-  after his `hermod msg peers` row reads dead. Any other answer, or none
+  once his `hermod msg peers --all --json` row's `pid` is no longer running
+  (a stood-down peer drops out of the default list, and hermod reports no
+  `dead` liveness). Any other answer, or none
   within the 30-minute observation rule, is an escalation — another leader
   owns him.
 - **Dismiss him** with `stand down` once his last instruction is confirmed —
