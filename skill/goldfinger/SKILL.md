@@ -365,10 +365,13 @@ then `glide` and `hover`, 22 from 0.5.0. Parameters are the snake_case socket ar
 `session-cursor` takes only `cursor`, a boolean. A result is what `goldfinger <verb> … --json`
 prints for the same call, marked `isError` exactly where the CLI exits non-zero: an error, or a
 `batch` whose last entry failed. Arrays (`apps`, `windows`, `batch`) come as text only; `observe`
-with `screenshot` adds the PNG as an image. A client caps a result's size (Claude Code at
-`MAX_MCP_OUTPUT_TOKENS`, 25,000 by default): pass `max_nodes` on a large window. The rest of
-this skill applies, but not the CLI's syntax: no `--json`, no `--`, no exit code, and a flag like
-`--observe` is a boolean parameter.
+with `screenshot` adds the PNG as an image. Some clients never show the model that image: Codex
+0.160.0 gives a model that calls MCP tools directly (gpt-5.5) only `structuredContent`, the
+result's JSON, while its code-mode models (gpt-6-astra) get the whole result. Without the image,
+open the PNG at `screenshot.path` with the client's own image tool (Codex's `view_image`). A
+client caps a result's size (Claude Code at `MAX_MCP_OUTPUT_TOKENS`, 25,000 by default): pass
+`max_nodes` on a large window. The rest of this skill applies, but not the CLI's syntax: no
+`--json`, no `--`, no exit code, and a flag like `--observe` is a boolean parameter.
 
 Each connection has its own session, started at the first call that needs one, started again once
 it ends (an idle end, any agent's `stop`), and ended when the connection closes. `session-cursor`
