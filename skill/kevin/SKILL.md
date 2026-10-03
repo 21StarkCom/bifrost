@@ -197,6 +197,97 @@ on `<head>` would block your next request for that PR, and pr-merge from
 any worktree. Branches are shared by every worktree, so the launch id keeps
 yours apart.
 
+### `merge <PR> for STARK-n`
+
+`merge`, plus a re-run of the ticket's command Verification steps on the code
+you merge, after your review's fixes: a cloud session ran them before your
+`--fix`, so its runs prove nothing about what merges. Gru sends this form for
+a cloud ticket's PR. A PR whose title does not contain `(STARK-n)` is
+`refused merge <PR url> PR title does not name STARK-n`, read from step 1's
+`title` before anything else runs. Plain `merge <PR>` is unchanged, and
+`review` takes no `for`. Like `release … for STARK-n`, this form moves no
+ticket and writes no ticket field.
+
+Run `merge`'s steps 1–5, then steps 1–4 below before `merge`'s step 6, and
+step 5 below after `merge`'s step 8 confirms the merge. A queued PR never
+reaches `merge`'s step 6 (its step 5 waits out the queue instead) and takes no
+push, so for one, skip step 1 below and run steps 2–4 on its head as it
+stands, right after `merge`'s step 5 reads `isInMergeQueue` and before it
+polls. A failure there is step 4's `blocked`: stop, and dequeue nothing. If
+the queue merges it anyway, that comment stays its record.
+
+1. **Rebase first.** `idun gh pr-merge` rebases onto the base before it
+   merges, so verify the head it will merge: `git fetch origin <base>`,
+   rebase onto `origin/<base>`, and push as [`rebase`](#rebase-pr) does, the
+   lease's `<old head sha>` being the head you pushed in `merge`'s step 5
+   (`git rev-parse HEAD` before you rebase), not `merge`'s step 1
+   `headRefOid` (nothing to push when the head already sits on it). A
+   conflict that needs new code blocks as `rebase` says. A conflict you do
+   resolve is code your review never read: push the rebase, then run
+   `merge`'s steps 4–5 again on it before you go on.
+2. **The steps.** `alfred task show STARK-n`, and take its Verification
+   section's steps in order, numbered from 1 as the ticket lists them (`<k>`
+   below). A step that names one of the base's required checks by its check
+   name (`CI's test check passes`) is skipped: CI runs it on this head, and
+   pr-merge never merges past it red. Required means listed by either
+   source, since either alone can show nothing while the other requires a
+   check:
+
+   ```
+   gh api repos/<o>/<r>/rules/branches/<base> --jq '[.[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context]'
+   gh api repos/<o>/<r>/branches/<base> --jq '.protection.required_status_checks.contexts'
+   ```
+
+   A check named in neither gates nothing, so its step is prose to you (step
+   3). Every other step is a command to run. With none left, post nothing and
+   go on to `merge`'s step 6, whose comment is the record.
+3. **Under your [Authority](#authority).** Judge every step before you run
+   any. Each runs from your worktree's root and needs nothing beyond `git`,
+   `node` and POSIX shell utilities (`grep`, `test`, `sed`): no `npm`, `npx`,
+   `gh`, `curl`, fleet CLI or install, no write outside the worktree, nothing
+   to any remote (a push, a tag). A step that runs a file from the repo
+   (`node <its path>`, `node --test`) runs the PR's code: judge what that code
+   spawns and what it sends, not only its command line. A step outside that,
+   one that is prose rather than a command, or one your runtime refuses to
+   run, you do not run: report
+   `blocked merge <PR url> verification step <k> needs the operator` and run
+   nothing more. Such a ticket was routed to the cloud by mistake.
+4. **The record.** Run the steps in order. One passes when every command in
+   it exits 0 and its output reads as the step says it should; stop at the
+   first that fails. Then put the tree back: anything `git status
+   --porcelain` prints is the steps' own output, not a fix (`merge`'s step 5
+   committed yours), so discard it with
+   `git restore --staged --worktree . && git clean -fd`. pr-merge refuses a
+   dirty tree, and a block must not commit it. Post one PR comment
+   (`gh pr comment <PR url> --body-file <file>`, the file from `mktemp`,
+   which prints the comment's URL) whose first line, as plain text, is
+   `Kevin verification for STARK-n at <sha>` when every step passed and
+   `Kevin verification FAILED for STARK-n at <sha>` when one failed, `<sha>`
+   the full sha of the head you ran on; then one entry per step you ran,
+   headed by its `<k>` and the step as the ticket writes it, with each command
+   and its output. A failure is
+   `blocked merge <PR url> verification step <k> failed, see <comment url>`,
+   and you merge nothing. Commands and output go only in the comment; your
+   line stays plain prose.
+5. **After the merge**, fetch the base and compare
+   `git rev-parse <mergeCommit>^{tree}` with `git rev-parse <sha>^{tree}`.
+   They differ when pr-merge committed a `CHANGELOG.md` bullet (a repo with a
+   root `CHANGELOG.md`, unless the PR wrote its own), rebased onto a base
+   that moved, or a merge queue merged onto a newer one: run the steps again
+   at the detached `mergeCommit` (`git switch --detach <mergeCommit>`) and
+   post a second comment at that sha, by step 4's rules. The fetched
+   `origin/<base>` now holds the change itself, so a step that compares
+   against it (a version bump, the change's diff) runs with `<mergeCommit>^`,
+   the base the squash landed on, in its place, and its entry says so. A
+   failure there is
+   `blocked merge <PR url> verification failed after merge, see <comment url>`;
+   the merge stands, and once the tree is put back, [return to the
+   base](#between-requests): the merged branch leaves nothing of yours to
+   keep.
+
+Every `blocked` before the merge keeps **When you cannot finish**'s rules,
+`kevin-unpushed/` included.
+
 ### `rebase <PR>`
 
 Steps 1–3 above; refuse a queued PR (`isInMergeQueue`). `git fetch origin
@@ -311,7 +402,10 @@ down the desk is shared; the operator or my idle-out dismisses me`. See
 Answer every request with one final line, to that request's own sender:
 
 - `done merge <PR url> merged <sha> verified <gate> post-merge <conclusions>`
-  (`post-merge none` when no run appeared);
+  (`post-merge none` when no run appeared; on `merge … for STARK-n`,
+  `verified` also names the verification comment at the merged tree, the
+  post-merge one when you posted two, or says the ticket held no command
+  step);
 - `done release <repo> <tag> installed <version>` or `done release <repo>
   already <tag>`;
 - `done review|rebase|rerun <target> <result>`;

@@ -727,3 +727,22 @@ The PR's `/code-review xhigh --fix` pass found:
 | The brief said a session that merges or pushes anyway loses nothing | Fixed in the brief |
 
 ## Deviations (append-only)
+
+- 2026-10-04, T6 (STARK-10532), KV1 step 3: Kevin runs a step that needs
+  nothing beyond `git`, `node` and POSIX shell utilities (`grep`, `test`,
+  `sed`), not `git` and `node` alone. Every step runs through a shell, the
+  runner image (`debian:bookworm-slim`, devops-cc-environments
+  `runner/Dockerfile`) carries those as Debian essential packages, and most
+  of this spec's own done-whens are `grep` lines (T5's and T6's version
+  checks also write to `/tmp`, which stays blocked); read literally, KV1
+  would block a read-only `grep` step and send a cloud PR to a fallback for
+  nothing. Network tools (`gh`, `curl`), package managers and installs,
+  writes outside the worktree and writes to a remote stay blocked. RT2 rule
+  2 (T4) is unchanged; a ticket it routes `cloud` meets KV1 either way.
+- 2026-10-04, T6 (STARK-10532), KV1 step 5: the post-merge re-run fetches
+  the base, whose `origin/<base>` then holds the change itself, so a step
+  that compares against it (a version bump, the change's diff) runs with
+  `<mergeCommit>^`, the base the squash landed on, in its place, and its
+  entry says so. Read literally, such a step fails at every merge whose
+  tree moved, and in a repo with a root `CHANGELOG.md` pr-merge's bullet
+  commit moves it at every merge. GR10 (T5) matches that entry as the step.

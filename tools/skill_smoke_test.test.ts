@@ -690,6 +690,12 @@ test("skill smoke: skill/kevin — verb set and kickoff markers", () => {
   for (const marker of ["from peer", "from operator", "first request:", "isInMergeQueue", "kevin-unpushed/", "CronCreate", "kevin idle check", "kevin-desk.md"]) {
     assert.ok(text.includes(marker), `skill/kevin no longer names ${marker}`);
   }
+  // `merge <PR> for STARK-n` (STARK-10532, cloud-local-routing spec KV1-KV2): Gru's
+  // GR10 closes a cloud ticket only on a comment opening the pass marker at a
+  // sha whose tree matches the merge commit's, and never on the FAILED one.
+  for (const marker of ["merge <PR> for STARK-n", "alfred task show STARK-n", "PR title does not name STARK-n", "Kevin verification for STARK-n at <sha>", "Kevin verification FAILED for STARK-n at <sha>", "^{tree}", "verification step <k>", "verification failed after merge"]) {
+    assert.ok(text.includes(marker), `skill/kevin no longer names ${marker}`);
+  }
   // idun before v0.111.0 writes `leader peer`/`leader operator` and `— first instruction:`; the skill reads
   // them as `from` and `— first request:` (rollout order), and names the old marker nowhere else.
   assert.match(text, /`leader\s+peer <PEER>` or `leader\s+operator`[\s\S]{0,120}means the same/, "skill/kevin no longer reads the pre-0.111.0 kickoff");
@@ -730,7 +736,7 @@ test("skill smoke: standards — Kevin's place in the shared docs", () => {
   assert.ok(standDown.includes("idle-out"), "stand-down.md lost Kevin's idle-out trigger");
   assert.match(spine, /^## 8\. Releases and other repos$/m, "worker-spine.md lost §8");
   assert.ok(spine.includes("](kevin-desk.md)"), "worker-spine.md §8 no longer links the Kevin desk");
-  for (const marker of ["hermod msg peers --all --json", "hermod msg send --to", "Never send him `stand down`", "## 5. Confirm"]) {
+  for (const marker of ["hermod msg peers --all --json", "hermod msg send --to", "Never send him `stand down`", "## 5. Confirm", "merge <PR url> for STARK-n"]) {
     assert.ok(desk.includes(marker), `kevin-desk.md no longer names ${marker}`);
   }
 });
