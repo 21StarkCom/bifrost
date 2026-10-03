@@ -1,6 +1,6 @@
 # cloud-local-routing — spec+plan
 
-2026-10-03 · Aryeh Stark (drafted by Claude) · epic STARK-10514 · children: T2 is STARK-9754 (idun, existing); T1, T3, T4, T5 and T6 are filed from this spec once it is accepted · accepted-base: (filled at sign-off)
+2026-10-03 · Aryeh Stark (drafted by Claude) · epic STARK-10514 · children: T2 is STARK-9754 (idun, existing); T1, T3, T4, T5 and T6 are filed from this spec once it is accepted · accepted-base: e982022bcaf3 (bifrost; operator sign-off 2026-10-04)
 
 ## Intent
 
@@ -174,7 +174,16 @@ OUT:
   "Gru neither launches, leads nor dismisses a Kevin"; `AGENTS.md` says "Gru
   neither launches nor dismisses one". GR8 changes all three.
 - Gru posts ticket comments today only to quarantine a claimed approval
-  (`alfred task comment --body-file`); GR11 adds the fallback comment.
+  (`alfred task comment --body-file`); GR11 adds the fallback comment and
+  GR7 the cloud-blocked one.
+- `CLAUDE.md` says "Neither Gru, a Minion nor Kevin writes a ticket custom
+  field". Once stark-ticket passes `--field runs_in=`, a Minion or Agnes
+  filing a follow-up through it does, so T4 amends that sentence to except
+  `runs_in` at filing.
+- Gru has no timer today: step 4 wakes on Minion reports, and `/minion`
+  sends a progress note at least every 30 minutes. Kevin's idle check is the
+  fleet's `CronCreate` pattern, and a Codex session has no timer (kevin
+  "Idle out"). GR16 rests on both.
 - The worker spine re-runs verification after the review's fixes
   (`standards/worker-spine.md`). On a cloud PR, CI re-runs the required checks
   on the head Kevin merges, but nothing re-runs a `git`/`node` step the
@@ -222,14 +231,19 @@ OUT:
     empty when clean, of `{ code, text }`, where `code` is `no_source` (the
     session has no git source and can never push or open a PR), `not_byoc`
     (not on a self-hosted pool) or `other_pool`.
-  - **3:** uncertain: the submission ran, and its outcome could not be read
-    (unparseable output, a lost connection). A session may exist.
-  - **any other non-zero:** nothing was dispatched (a refusal before the
-    spawn, or claude's `ok:false`).
+  - **2:** nothing was dispatched. idun exits 2 only when it knows that: a
+    refusal before the spawn (ID4's included), or claude's parsed `ok:false`.
+  - **any other non-zero:** uncertain, a session may exist: 3 when the
+    submission ran and its outcome could not be read (unparseable output, a
+    lost connection), and any crash, interrupt or other code. Uncertain is
+    the default, so an unforeseen failure after the spawn never reads as
+    "nothing dispatched" (today's failure comment already says "nothing may
+    have been dispatched").
 - ID4. A `--ticket` dispatch picks only among pools marked able to open a PR
   (idun's choice of mechanism; proposal: `pr: true` on the
   `cc.dispatch.environments` row). IF none is marked and visible, THEN it
-  shall refuse, nothing dispatched. A free-text dispatch is unchanged.
+  shall refuse with exit 2, nothing dispatched. A free-text dispatch is
+  unchanged.
 - ID5. A `--ticket` dispatch passes claude `--ref <the repo's default
   branch>`, so the session starts from it whatever the checkout has checked
   out.
@@ -243,11 +257,15 @@ OUT:
   works.
 - ID8. `idun cc session <session_…|URL> --json` prints `{ session_id, seat,
   state, status }`, finding the owning seat as STARK-10513 does. `state` is
-  `working` while the API reports the session queued or running, `stopped`
-  for any other status the API returns, and `unknown` when no seat can read
-  it. `status` is the API's raw value. unverified: the API's status values —
-  check: read one session through its whole life during T3, and pin the
-  mapping in a test.
+  `working` while the API reports the session queued, pending or running;
+  `stopped` only for a status the T3 test pins as one the session leaves
+  only on a new message (its turn ended, released, archived, failed); and
+  `unknown` for any other status, or when no seat can read it. An unpinned
+  status is `unknown`, never `stopped`: `stopped` lets Gru fall back, and a
+  fallback while the session can still open a PR makes two PRs. `status` is
+  the API's raw value. unverified: the API's status values (`pending`
+  observed) — check: read one session through its whole life during T3, and
+  pin the mapping in a test.
 
 ### stark-ticket (RT)
 
@@ -273,7 +291,10 @@ OUT:
 - RT3. The filing call carries `--field runs_in=<verdict>`: `task start`,
   `task new` (with `--on-repo` when it applies), or `task edit` for a rewrite,
   together with `--desc-file`. A rewrite re-decides the verdict and writes the
-  field and the section in the same call.
+  field and the section in the same call. IF alfred exits non-zero naming a
+  ticket it created and the field it could not set (AL4), THEN stark-ticket
+  sets the field on that ticket with `alfred task edit <id> --field
+  runs_in=<verdict>` and never files again: a second filing is a duplicate.
 - RT4. WHERE the filing would create a Jira issue (`alfred repo info --json`
   → `binding` other than `clickup`), stark-ticket passes no `--field`, and the
   section reads `local — not a ClickUp ticket`.
@@ -286,13 +307,18 @@ Terms:
   and whose head branch starts with `claude/`. Gru finds it with
   `gh pr list --repo <o>/<r> --state all --search "STARK-n in:title" --json
   number,url,title,state,headRefName,mergeCommit`. A Minion's PR is never a
-  cloud PR.
+  cloud PR. `--search` reads GitHub's search index, which can lag a
+  just-opened PR, so GR4 confirms an absence with a plain list before it
+  falls back.
 - **Session:** the `session_id` from the dispatch's JSON, or on a rerun the
   newest `idun cc dispatch:` comment on the ticket that names one (ID7). Its
   state is `idun cc session <id> --json`'s `state` (ID8).
 - **Fallen back:** the ticket carries a comment opening `Gru: cloud
   fallback`. A fallen-back ticket is `local` for good, in this run and every
   later one, and step 2's Minion rules apply to it.
+- **Cloud-blocked:** the ticket carries a comment opening `Gru: cloud
+  blocked` (GR7). It is blocked until the operator resolves it, in this run
+  and every later one: no pass dispatches it, hands it off or falls it back.
 
 Routing:
 - GR1. In step 1 Gru reads `runs_in` (`alfred task show STARK-n --json`,
@@ -301,23 +327,35 @@ Routing:
   exactly one of them reads `cloud`, THEN the route is `local` and the step-6
   report names the ticket, the field and the section. Every other case is
   `local` with nothing to report, a Jira ticket's `local` section with no
-  field included.
+  field included. A ticket that a live Minion owns (step 2's rule), or that
+  has a PR in its repo whose title contains `(STARK-n)` and whose head does
+  not start `claude/`, is `local` whatever its field and section say: a
+  routing change between runs (a field edit, the idun upgrade GR15 reads)
+  never puts a cloud session on a ticket a Minion already holds or merged.
 
-Each pass (step 2, and step 4's 30-minute pass), for each cloud-routed ticket
-that has not fallen back, in this order:
+Each pass (step 2, and every wake GR16 gives step 4), for each cloud-routed
+ticket that has not fallen back and is not cloud-blocked, in this order, with
+the session's state read before the cloud-PR lookup so a PR opened between the
+two reads is seen:
 - GR2. **A merged cloud PR** → GR10, whatever else holds. Gru checks this
   first, before any dispatch, hand-off, fallback, or reading of a Kevin reply.
 - GR3. **An open cloud PR.** Its session `stopped`, or no session known → hand
   it to Kevin (GR8), unless a Gru request for it is in flight. Its session
   `working` or `unknown` → wait.
 - GR4. **No cloud PR, a session known.** `working` or `unknown` → wait.
-  `stopped` → fall back (GR11). A session still not `stopped` 3 hours after
-  its dispatch → tell the operator once, with its URL, and keep watching it;
-  never fall back while it is not `stopped`, since a fallback while the
-  session can still open a PR makes two PRs. The 3 hours is a heads-up, not a
-  verdict: the runner's 210-minute cap counts from the pod's spawn, so a
-  session that queued for a pod can still be working past it. GR3 and GR4 go
-  on as usual once it stops.
+  `stopped` → fall back (GR11), once a plain `gh pr list --repo <o>/<r>
+  --state open --limit 200 --json number,url,title,headRefName` (no
+  `--search`, so no index lag) also shows no cloud PR; one it shows is
+  GR3's. A session still not `stopped` 3 hours after
+  its dispatch → escalate once, with its URL. Never fall back while it is not
+  `stopped`, since a fallback while the session can still open a PR makes two
+  PRs. An escalated ticket counts as blocked for step 6, as any escalation
+  does, so it never holds the run open: Gru keeps watching it while other
+  tickets keep the run going, reports it among the blocked when the rest are
+  finished or blocked, and a rerun `start` picks it up from the board (its
+  session and PR) like any cloud ticket. The runner's 210-minute cap counts
+  from the pod's spawn, so a session that queued for a pod can still be
+  working past 3 hours; GR3 and GR4 go on as usual once it stops.
 - GR5. **A closed, unmerged cloud PR** that GR11 did not close (no fallback
   comment) → escalate; someone else closed it.
 - GR6. **No cloud PR, no session** → ready for dispatch (GR7).
@@ -334,9 +372,13 @@ Dispatch (step 3):
     back (GR11), naming it.
   - **0 with any other warning:** the session may still open a PR → escalate,
     naming it, and watch it under GR3 and GR4 like any other.
-  - **3:** escalate; the ticket is blocked. Never fall back, since a session
-    may exist.
-  - **any other:** nothing was dispatched → fall back (GR11).
+  - **2:** nothing was dispatched → fall back (GR11).
+  - **any other non-zero, or no exit code** (a killed or timed-out call): a
+    session may exist. Gru posts `alfred task comment --body-file <file>
+    STARK-n`, the file opening `Gru: cloud blocked — <why>`, and escalates.
+    Never fall back. The comment is what keeps a rerun `start`, which finds
+    no session and no cloud PR, from reading the ticket as GR6's and
+    dispatching a second session.
 
 Hand-off (step 4):
 - GR8. Gru sends `merge <PR url> for STARK-n` to the repo's Kevin by
@@ -348,8 +390,12 @@ Hand-off (step 4):
   merge slot: before sending it, Gru tells every live Minion in that repo that
   has not merged to hold its merge. Once Kevin's merge is confirmed, the repo
   returns to its one-merge-at-a-time sequence: Gru clears one held Minion at
-  a time, as Authority's hold already does. A Minion already merging contends
-  by the spine's §4 rule.
+  a time, as Authority's hold already does. The hold lifts the same way when
+  Kevin's merge does not happen: his `blocked` or `refused` line, an expired
+  request, or his loss with no reply that kevin-desk step 4 does not resend.
+  Gru clears the first held Minion before it acts under GR11, so a Kevin who
+  never merges never leaves the repo's Minions held. A Minion already merging
+  contends by the spine's §4 rule.
 - GR9. Gru reads each in-flight request once per pass, never with a blocking
   wait: `hermod msg status <request id> --json`, then on `acknowledgement`
   `replied`, `hermod msg status <replyId> --json`'s `body`. Kevin's death,
@@ -365,11 +411,15 @@ Outcomes:
   verification evidence is Kevin's gate comment (the required checks'
   conclusions) plus, when the ticket's Verification holds any command, a PR
   comment opening `Kevin verification for STARK-n at <sha>` (KV1) whose
-  `<sha>` is the PR's final `headRefOid` or its `mergeCommit`, with one entry
-  for each command step Gru itself reads off the ticket. A comment that does
-  not match all three (the opening line, the sha, every step) is no evidence:
-  a Kevin running a skill older than T6 reads `for STARK-n` as a plain merge
-  and posts no such comment. In a repo whose done is
+  `<sha>` is the PR's `mergeCommit` or a commit with the same tree
+  (`gh api repos/<o>/<r>/git/commits/<sha> --jq .tree.sha` equals the
+  `mergeCommit`'s), with one entry for each command step Gru itself reads off
+  the ticket. A comment that does not match all three (the opening line, the
+  sha or its tree, every step) is no evidence: a Kevin running a skill older
+  than T6 reads `for STARK-n` as a plain merge and posts no such comment. A
+  comment opening `Kevin verification FAILED for STARK-n` is never evidence,
+  so a rerun that reaches GR10 through GR2, with no Kevin line to read,
+  cannot close a ticket whose verification failed. In a repo whose done is
   *released*, Gru then sends Kevin `release for STARK-n` and confirms it by
   kevin-desk step 5. Then Gru runs `alfred task move STARK-n done` and checks
   that `alfred task show` reads `done`. IF the evidence is missing or does not
@@ -381,9 +431,12 @@ Outcomes:
   says so, Gru does three things in order:
   1. Posts `alfred task comment --body-file <file> STARK-n`, the file opening
      `Gru: cloud fallback — <why>`, with the session URL when there is one.
-  2. Closes the open cloud PR, if there is one, with `gh pr close <url>
-     --comment '<why, quoting Kevin's line>; Gru is redoing STARK-n with a
-     local Minion.'`. Gru never closes any PR that is not a cloud PR.
+  2. Closes the open cloud PR, if there is one: `gh pr comment <url>
+     --body-file <file>`, the file giving the why, quoting Kevin's line, and
+     `Gru is redoing STARK-n with a local Minion.`, then `gh pr close <url>`.
+     A file, not an inline quoted argument, so no quote in Kevin's line or
+     in pr-merge's stderr can break the command. Gru never closes any PR
+     that is not a cloud PR.
   3. Treats the ticket as a ready `local` ticket that waits for a Minion slot.
 - GR12. **Stray.** At a fallen-back ticket's Minion `done`, IF an open cloud
   PR for it exists, THEN Gru escalates its URL and closes nothing.
@@ -395,6 +448,15 @@ Outcomes:
 - GR15. Cloud routing needs the idun release that ships T3 (T5 names its
   version). IF `idun --version` is older, THEN every ticket routes `local`,
   and the report says why once.
+- GR16. **The wake.** Nothing a cloud session does reaches Gru: today it wakes
+  on Minion reports and progress notes, and GR9 reads Kevin's replies only
+  when it polls. So while any cloud ticket is unfinished, a Claude Gru keeps
+  one recurring `CronCreate` job, every 30 minutes on off-minutes
+  (`13,43 * * * *`), prompt `gru cloud pass`. It fires only while Gru is idle,
+  and each firing runs one pass (GR2-GR6, GR9). Gru deletes it once no cloud
+  ticket is unfinished, and arms it again if `CronList` ever shows none (a
+  recurring job expires after 7 days). A Codex Gru has no session timer, so
+  every ticket routes `local` there, and the report says why once.
 
 ### Kevin (KV)
 
@@ -403,7 +465,9 @@ Outcomes:
   1. **Rebase first.** `idun gh pr-merge` rebases onto the base before it
      merges, so Kevin rebases the PR onto `origin/<base>` and pushes it the
      way his `rebase` verb does. The head he verifies is then the head
-     pr-merge merges, unless the base moves again.
+     pr-merge merges, unless the base moves again. On a merge-queue repo
+     pr-merge does not rebase, and the queue merges onto the base it holds
+     then; step 5 catches both by comparing trees, not heads.
   2. **The steps.** He reads the ticket (`alfred task show STARK-n`) and takes
      each Verification step that is a command. A step that names a required
      check is skipped: CI runs it on that head.
@@ -413,22 +477,27 @@ Outcomes:
      does not run it, reports `blocked … verification step <k> needs the
      operator`, and runs nothing more. Such a ticket was routed to the cloud
      by mistake.
-  4. **The record.** He posts one PR comment opening `Kevin verification for
-     STARK-n at <sha>`, `<sha>` being the head he ran on, with each command
-     and its output. IF a step fails, THEN he reports `blocked … verification
-     step <k> failed, see <comment url>` and merges nothing. Commands and
-     output go only in the PR comment, never in his reply line, which stays
-     plain prose.
-  5. **After the merge** (step 8), IF the PR's final `headRefOid` is not that
-     `<sha>` (pr-merge rebased onto a base that moved), THEN he runs the steps
-     again at the detached `mergeCommit` and posts a second comment with the
-     same opening line at that sha. A failure there is `blocked …
-     verification failed after merge, see <comment url>`; the merge stands.
+  4. **The record.** He posts one PR comment, `<sha>` being the head he ran
+     on, with each command and its output. It opens `Kevin verification for
+     STARK-n at <sha>` when every step passed, and `Kevin verification FAILED
+     for STARK-n at <sha>` when one failed, so a failed run never matches
+     GR10. IF a step fails, THEN he reports `blocked … verification step <k>
+     failed, see <comment url>` and merges nothing. Commands and output go
+     only in the PR comment, never in his reply line, which stays plain
+     prose.
+  5. **After the merge** (step 8), IF the merged tree is not the tree he
+     verified (`git rev-parse <mergeCommit>^{tree}` differs from
+     `<sha>^{tree}`: pr-merge rebased onto a base that moved, or a merge
+     queue merged onto a newer base), THEN he runs the steps again at the
+     detached `mergeCommit` and posts a second comment at that sha, opened
+     by step 4's rule. A failure there is `blocked … verification failed
+     after merge, see <comment url>`; the merge stands.
 
   Every `blocked` keeps `merge`'s existing rules for a block,
   `kevin-unpushed/` included.
 - KV2. IF the PR's title does not contain `(STARK-n)`, THEN Kevin replies
-  `refused … PR is not STARK-n's` and runs nothing.
+  `refused … PR title does not name STARK-n` and runs nothing. No
+  apostrophe: a Hermod line carries no quotes.
 - KV3. `merge <PR>` without `for STARK-n` is unchanged, and `review <PR>`
   takes no `for`. Like `release … for STARK-n`, the form moves no ticket and
   writes no ticket field.
@@ -442,7 +511,7 @@ Outcomes:
 - KD2. Its "When" names Gru's use: a cloud ticket's PR and its release. "The
   requests" gains `merge <PR url> for STARK-n`: `merge`, plus a re-run of the
   ticket's command Verification steps on the rebased head, and again at the
-  merge commit if the head moved (KV1).
+  merge commit if the merged tree differs from the one verified (KV1).
 
 ## Tasks (DAG)
 
@@ -464,10 +533,13 @@ Each task ships as its own PR in its own repo, through that repo's spine.
   ```
   `go test -run` matching nothing exits 0, hence the check per name. Depends
   on nothing.
-- **T2 — idun (STARK-9754): ID1.** Its tests' names contain `headless`. Done
-  when `bun test src/cc -t 'headless'` passes (bun refuses a filter that
-  matches no test) and that ticket's live probe output is pasted on it.
-  Depends on nothing.
+- **T2 — idun (STARK-9754): ID1.** Its tests' names contain
+  `headless dispatch`. Done when `bun test src/cc -t 'headless dispatch'`
+  passes (bun refuses a filter that matches no test) and that ticket's live
+  probe output is pasted on it. Not plain `headless`: eleven tests in
+  `src/cc/cc.test.ts` already carry it (`refresh`, `prune`, `reset`, `use`
+  and `next` "stay headless"), so that filter passes on today's code. No test
+  name holds `headless dispatch` today. Depends on nothing.
 - **T3 — idun (child C3b): ID2-ID8.** Files: `src/cc/cc.ts`,
   `src/cc/cc_dispatch.ts`, `src/cc/cc_ticket.ts`, `src/lib/ticket_launch.ts`,
   `src/claude/claude_lib.ts`, a new `src/cc/cc_session.ts` (+ tests),
@@ -491,15 +563,18 @@ Each task ships as its own PR in its own repo, through that repo's spine.
   ```
   for p in 'Hub origin' 'required PR check' 'Keychain' 'not an epic' '1 CPU' 'runs_in=' '## Runs in' 'binding'; do
     grep -q -F -e "$p" skill/stark-ticket/SKILL.md || { echo "missing: $p"; exit 1; }
-  done
+  done && grep -q -F -e 'runs_in' CLAUDE.md
   git show origin/main:.claude-plugin/marketplace.json > /tmp/stark-plan-base.json
   node -e 'const v=(f)=>JSON.parse(require("node:fs").readFileSync(f,"utf8")).plugins.find((p)=>p.name==="stark-plan").version;process.exit(v("/tmp/stark-plan-base.json")===v(".claude-plugin/marketplace.json")?1:0)'
   ```
   Three separate commands, each of which must succeed: a worktree session's
   guard refuses a `git` call nested in `$(…)` or in a `node` string
   (measured), and the implementer runs in a worktree.
-  Depends on T1: until `--field` exists on `task start`/`new`, the skill's
-  filing line fails.
+  Depends on T1 **released and installed**, not just merged: skills run the
+  Homebrew `alfred`, and one without `--field` on `task start`/`new` refuses
+  the flag, so every filing through the skill, a Minion's follow-up
+  included, would fail. T4 names that alfred version, and merges only once
+  `alfred --version` on this machine prints it.
 - **T6 — bifrost (child C5): KV1-KV3, KD2.** Files: `skill/kevin/SKILL.md`,
   `standards/kevin-desk.md`, `.claude-plugin/marketplace.json` (stark-ops
   bump), `CLAUDE.md`, `AGENTS.md`. Done when `(cd tools && npm test)` passes
@@ -507,8 +582,10 @@ Each task ships as its own PR in its own repo, through that repo's spine.
   ```
   grep -q -F -e 'merge <PR> for STARK-n' skill/kevin/SKILL.md
   grep -q -F -e 'alfred task show STARK-n' skill/kevin/SKILL.md
-  grep -q -F -e 'PR is not STARK-n' skill/kevin/SKILL.md
+  grep -q -F -e 'PR title does not name STARK-n' skill/kevin/SKILL.md
   grep -q -F -e 'Kevin verification for STARK-n' skill/kevin/SKILL.md
+  grep -q -F -e 'Kevin verification FAILED for STARK-n' skill/kevin/SKILL.md
+  grep -q -F -e '^{tree}' skill/kevin/SKILL.md
   grep -q -F -e 'verification step' skill/kevin/SKILL.md
   grep -q -F -e 'verification failed after merge' skill/kevin/SKILL.md
   grep -q -F -e 'merge <PR url> for STARK-n' standards/kevin-desk.md
@@ -517,13 +594,13 @@ Each task ships as its own PR in its own repo, through that repo's spine.
   node -e 'const v=(f)=>JSON.parse(require("node:fs").readFileSync(f,"utf8")).plugins.find((p)=>p.name==="stark-ops").version;process.exit(v("/tmp/stark-ops-base.json")===v(".claude-plugin/marketplace.json")?1:0)'
   ```
   Depends on nothing.
-- **T5 — bifrost (child C4): GR1-GR15, KD1.** Files:
+- **T5 — bifrost (child C4): GR1-GR16, KD1.** Files:
   `skill/gru/SKILL.md`, `standards/kevin-desk.md`,
   `.claude-plugin/marketplace.json` (stark-ops bump), `CLAUDE.md`,
   `AGENTS.md`. Done when `(cd tools && npm test)` passes and, from the repo
   root:
   ```
-  for p in 'cc dispatch --ticket' 'runs_in' 'Gru: cloud fallback' 'gh pr close' 'claude/' 'idun cc session' 'state all' 'merge <PR url> for STARK-n' 'Kevin verification for STARK-n' 'no_source'; do
+  for p in 'cc dispatch --ticket' 'runs_in' 'Gru: cloud fallback' 'Gru: cloud blocked' 'gh pr close' 'claude/' 'idun cc session' 'state all' 'merge <PR url> for STARK-n' 'Kevin verification for STARK-n' 'Kevin verification FAILED' 'no_source' 'CronCreate'; do
     grep -q -F -e "$p" skill/gru/SKILL.md || { echo "missing: $p"; exit 1; }
   done &&
   grep -q -F -e "Gru's loop" standards/kevin-desk.md &&
@@ -627,5 +704,26 @@ today's files (all fail) and found:
 | GR8 lifted the hold on every held Minion at once | Fixed: back to one merge at a time |
 | T3 checked "both" ID6 sentences after ID6 grew to three | Fixed |
 | T6 pinned neither of KV1's `blocked` forms nor KD2's "When" text | Fixed: phrase checks for the marker, both `blocked` forms and the "When" text |
+
+The PR's `/code-review xhigh --fix` pass found:
+
+| Finding | Disposition |
+|---|---|
+| ID3 read every non-zero exit but 3 as "nothing dispatched", so a crash or a killed call after the spawn fell back with a session alive | Fixed: only exit 2 means nothing dispatched; every other non-zero is uncertain |
+| ID8 mapped every unlisted status, `pending` included, to `stopped`, which lets GR4 fall back on a live session | Fixed: `stopped` only for pinned statuses; anything else is `unknown` |
+| GR10 matched a verification comment on its line, sha and steps, never on pass or fail, so a rerun could close a ticket whose post-merge run failed | Fixed: a failed run opens `Kevin verification FAILED`, which is never evidence |
+| GR8's hold lifted only on a confirmed merge, leaving held Minions held after a `blocked`, `refused` or expired Kevin request | Fixed: the hold lifts on every outcome |
+| Nothing woke Gru for a pass: it wakes on Minion messages, and a cloud session sends none | Fixed: GR16's `CronCreate` pass; a Codex Gru routes `local` |
+| An uncertain dispatch was escalated in memory only, so a rerun found no session and no PR and dispatched again | Fixed: the `Gru: cloud blocked` comment |
+| GR4 trusted `--search`, whose index lags a new PR, and read the PR list before the session state | Fixed: state first, then a plain `gh pr list` before any fallback |
+| KV1 re-verified only when the head moved, but a merge queue merges onto a newer base without moving the head | Fixed: KV1 and GR10 compare trees |
+| T4 depended on T1 merged, but skills run the installed alfred | Fixed: T1 released and installed |
+| T2's `-t 'headless'` already matched eleven tests | Fixed: `-t 'headless dispatch'` |
+| Routing ignored a live Minion or a Minion's PR, so a field edit or an idun upgrade between runs could dispatch onto a held ticket | Fixed: GR1 keeps such a ticket `local` |
+| GR11 put Kevin's line inside a single-quoted `--comment`, and KV2's mandated line held an apostrophe | Fixed: `--body-file`, and KV2 reworded |
+| `CLAUDE.md` says no Minion writes a ticket field; stark-ticket's `--field` makes a Minion's follow-up do so | Fixed: T4 amends it, and its check reads `runs_in` there |
+| A session that never stops, or reads `unknown` forever, is never finished or blocked, so step 6 never reports | Fixed within the operator's "3 hr, escalate": the escalated ticket counts as blocked for step 6, is watched while the run lasts, and a rerun resumes it from the board. "Keep watching forever" was the author's wording, not the operator's |
+| (beyond the review's 15-finding cap) AL4's partial failure left stark-ticket free to file again | Fixed: RT3 sets the field on the ticket alfred named and never refiles |
+| The brief said a session that merges or pushes anyway loses nothing | Fixed in the brief |
 
 ## Deviations (append-only)
