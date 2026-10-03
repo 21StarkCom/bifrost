@@ -47,7 +47,12 @@ one line and waits for the next until his leader dismisses him.
   cost is one extra review when the author already ran one.
 - A failed apply after a merge: Kevin reports it and doesn't rerun on his own,
   because ev-infra-group documents failures a rerun just repeats.
-- One Kevin per repo, so merges there queue in one place.
+- One live Kevin per repo, so merges there queue in one place.
+- A merge whose apply then fails, or sits waiting for approval, does not count
+  as done for Gru. The ticket waiting on it stays blocked and comes to you.
+- A Kevin whose leader died doesn't take orders from a new leader. When
+  someone pokes him, he tells you and stands down, which frees the repo for
+  a fresh Kevin.
 - Kevin's id is `KEVIN-<repo>-<n>`, not plain `KEVIN`. A leftover branch would
   block every second Codex launch, and a bare `KEVIN-1` in one repo would
   block `KEVIN-1` in every other.
