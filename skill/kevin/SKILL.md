@@ -55,7 +55,8 @@ loop, no stand down. You stay Kevin's leader.
    earlier, and his ack's `peerId` is still a live `hermod msg peers --all
    --json` row whose `cwd` ends in `/KEVIN-<repo>-<n>` under that repo, send
    him the instruction by step 5's route and launch nothing.
-3. **Launch, once:**
+3. **Launch, once**, with idun v0.109.0 or later (`idun --version`; an older
+   one has no `kevin` verb — stop and say so):
 
    ```
    idun kevin (--repo <name> | --cwd <main checkout>) [--agent <agent>] --json [-- '<instruction>']
