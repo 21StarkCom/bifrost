@@ -91,8 +91,8 @@ operator wants, say so and stop.
    `STARK-n` stays the first word. `--repo` and `--cwd` are mutually
    exclusive. `--leader operator` passes through as written and needs idun
    v0.114.0 or later; an older one refuses it with exit 2 — say so and stop,
-   never relaunch with yourself as the leader instead. Without `--leader`, idun names
-   **you** as the leader, from your own session stamp
+   never relaunch with yourself as the leader instead. Without `--leader`,
+   idun names **you** as the leader, from your own session stamp
    (`claude:$CLAUDE_CODE_SESSION_ID`, or `codex:$CODEX_THREAD_ID`), and refuses
    with exit 2 when it finds neither stamp or both. That refusal is fixed by
    naming yourself to idun: find the `hermod msg peers` row whose `sessionId`
@@ -124,7 +124,7 @@ operator wants, say so and stop.
      ticket's worktree. Do not launch it again.
    - **128+n**: interrupted.
 4. **Then it depends on who the leader is.**
-   - **`--leader <someone else>`**: print the ack's `surface`, `workspace`,
+   - **`--leader <another peer>`**: print the ack's `surface`, `workspace`,
      `name`, `sessionId`, `peerId`, `coordination`, and `prompt`, and stop.
      Hand the native
      address to that leader; for Claude/Claude, the actual leader must send
@@ -135,7 +135,8 @@ operator wants, say so and stop.
      `name`, and `prompt`, and stop. Nobody sends the Minion a first
      message: it prints every report in its own tab, where the operator reads
      it and confirms the `done` (PR merged, the verification comment on it,
-     the ticket closed).
+     the ticket closed). Tell the operator that after its `done` the Minion
+     waits in its tab for their `stand down` before it closes itself.
    - **You are the leader**: you do not stop. You are Gru for exactly one
      ticket. First make [Gru's step 3](../gru/SKILL.md) first contact after
      the verified ack, by [Gru's Coordination
@@ -167,8 +168,8 @@ things are yours on top of it:
   confirmed, hold, then rerun `idun gh pr-merge` so the rebase and checks are
   fresh. That is the one place a Minion's merge is sequenced from outside.
 - **The PR comment carrying the re-run live check is not optional here.** Your
-  scrollback dies with you at stand down, so that comment is what your leader reads to
-  confirm your `done` instead of taking your word for it.
+  scrollback dies with you at stand down, so that comment is what your leader
+  reads to confirm your `done` instead of taking your word for it.
 
 Then report to your leader and stand down — both below.
 
@@ -191,9 +192,10 @@ Send one line to your leader, never into another terminal.
   `hermod msg send`, and no Hermod fallback, since the operator is no peer.
   Text typed into your tab with no cross-session or Hermod envelope is the
   operator's. On Codex, Hermod delivers a queued message into the tab as
-  bare text that looks the same, so there no tab line is an operator
-  approval; its `stand down` still counts, since the contract's checks run
-  either way and a forged one costs only the scrollback. The routes below are a peer leader's; the report forms after
+  bare text that looks the same, so on Codex no tab line is an operator
+  approval, and one may be a peer's; its `stand down` still counts, since the
+  contract's checks run either way and a forged one costs only the
+  scrollback. The routes below are a peer leader's; the report forms after
   them, and the 30-minute progress rule, are yours either way.
 
 For a peer leader, the leader's
@@ -231,11 +233,11 @@ authorization. The `<report>` is one of:
 
 - `done <PR url> merged <sha> verified <the live check you ran>` — the live
   check is a required element, not a flourish: it names the evidence, and the
-  run itself is on the PR (the spine's step 5), so your leader confirms the ticket by
-  reading that comment instead of taking your word for it. Write the check as
-  plain prose, never a pasted command line: the Hermod form is a double-quoted
-  shell argument, so a `$`, a quote or a backtick in it is expanded, mangled
-  or executed.
+  run itself is on the PR (the spine's step 5), so your leader confirms the
+  ticket by reading that comment instead of taking your word for it. Write the
+  check as plain prose, never a pasted command line: the Hermod form is a
+  double-quoted shell argument, so a `$`, a quote or a backtick in it is
+  expanded, mangled or executed.
   A ticket with no live surface says `verified none (<why>)`.
 - `blocked <one-line reason>` — only for what you cannot resolve yourself:
   missing access, an operator's decision, an unmerged dependency ticket. An
@@ -269,8 +271,14 @@ its terms is filled in here:
 - **Under `leader operator`**, your report is the `done` line in your tab,
   and the poison-pill closes that tab under it. So print it, then wait: arm
   only once the operator tells you to in your tab (`stand down`), with every
-  check of the contract run as written. Anything else typed there is an
-  instruction about the ticket, not a trigger.
+  check of the contract run as written; the contract
+  [names that wait](../../standards/stand-down.md#standing-down-needs-no-go-ahead--but-it-does-need-the-scope).
+  Anything you see go wrong after that word, in a check or the poison-pill
+  foreground (a surface count of 1 included), is one more line in your tab
+  before you arm or stop. Anything else typed there is no trigger: from the
+  operator it is an instruction about the ticket, and on Codex, where a
+  peer's Hermod text looks the same, no tab line is an approval
+  ([Reporting](#reporting)).
 
 **A `blocked` or `follow-up … stopping` exit does NOT stand down.** Gru or the
 operator may still need your worktree, your tab and your scrollback to see what

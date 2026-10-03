@@ -35,12 +35,20 @@ It is the declared terminal step of the ticket you were handed, not an ad-hoc
 teardown: your own session, your own tab, your own disk, a job you finished.
 Nobody has to authorize it at the time, and it makes no difference whether a
 leader launched you or a hand did — with no leader peer to report to, your
-report is the one your skill names (a ticket comment, for Agnes) rather than a
-line to a leader, and nothing else changes. What is not negotiable is the scope:
+report is the one your skill names (a ticket comment, for Agnes; a line in its
+own tab, for a Minion led by the operator) rather than a line to a leader, and
+nothing else changes but the one wait below. What is not negotiable is the scope:
 **only after `idun gh pr-merge` and the ticket close, only your own tab, never
 on `blocked` or `follow-up … stopping`, and never on any other trigger.** The
 standing permission the command needs is still the operator's, and a refusal
 there is a refusal — see the permissions note below.
+
+**A Minion whose brief reads `leader operator` waits for one word.** Its report
+is its `done` line in its own tab, and the teardown closes that tab, so after
+that line it arms only once the operator types `stand down` there. The word
+says when, not whether: it grants nothing, the scope above and every check
+below still bind, and one that comes before the merge and the close is
+answered with what is left, not obeyed.
 
 ## Never from inside a subagent — hard stop
 

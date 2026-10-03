@@ -759,15 +759,19 @@ test("skill smoke: gru and minion — the Kevin desk, not a hand-off", () => {
 
 // STARK-10523: a Minion whose brief reads `leader operator` reports in its own
 // tab, and `--new-tab --leader operator` is a launch shape of its own. The
-// leader-era rule that no shape lets the operator receive the report must not
-// come back.
+// two-shape count ("no third shape") must not come back, while the rule that
+// some shape always receives the report stays. Its wait for the operator's
+// `stand down` is a stand-down term, so the shared contract carries it.
 test("skill smoke: minion — the operator-leader shape", () => {
   const minion = fs.readFileSync(path.join(SKILLS_ROOT, "minion", "SKILL.md"), "utf8");
+  const standDown = fs.readFileSync(path.join(REPO_ROOT, "standards", "stand-down.md"), "utf8");
   const fence = fencedLaunchLines(path.join(SKILLS_ROOT, "minion", "SKILL.md"), /^\s*idun minion\b/);
   assert.ok(fence.some((line) => /--leader <peer>\|operator\b/.test(line)), "the idun minion line no longer passes --leader operator through");
   assert.ok(minion.includes("**`leader operator`:**"), "minion's Reporting lost the operator route");
   assert.ok(minion.includes("**`--leader operator`**"), "minion's New tab lost the operator-leader shape");
-  assert.ok(!minion.includes("no third shape"), "minion still says no shape reports to the operator");
+  assert.ok(!minion.includes("no third shape"), "minion still counts two launch shapes");
+  assert.ok(minion.includes("no shape in which nobody receives the report"), "minion lost the rule that some shape receives the report");
+  assert.ok(standDown.includes("brief reads `leader operator` waits for one word"), "stand-down.md lost the operator-led Minion's wait");
 });
 
 // ---------------------------------------------------------------------------
