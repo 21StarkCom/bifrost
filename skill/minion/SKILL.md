@@ -216,7 +216,8 @@ authorization. The `<report>` is one of:
   `merge <PR url>` from that repo's [Kevin](../kevin/SKILL.md) by
   [the spine's §8](../../standards/worker-spine.md#8-releases-and-other-repos),
   and so is a release. While you wait on him, send `progress waiting on
-  KEVIN-<repo>-<n>: <request>`. Only his `blocked` or `refused` blocks you:
+  KEVIN-<repo>-<n>: <request>`. Only his `blocked` or `refused` blocks you
+  (not his stand-down's `refused … ask again`, which the desk resends):
   report `blocked <his line>`.
 - `follow-up STARK-m filed, stopping`.
 

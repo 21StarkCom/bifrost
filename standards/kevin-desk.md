@@ -69,9 +69,10 @@ before the ack:
 - **0** with `verified: true`: launched. Take his `peerId` from the ack and
   go to step 3.
 - **4**: a live Kevin already serves the repo, and stderr names him. Go back
-  to step 1. If step 1 finds his row but his `pid` is not running, a dead
-  Kevin still holds the name: your own `blocked … needs the operator to clean
-  up <the path idun named>`.
+  to step 1, once. If step 1 then finds no live row for him (his `pid` is not
+  running, or no row at all), a dead Kevin or a stray tab still holds the
+  name: your own `blocked … needs the operator to clean up <the path idun
+  named>`, never a second launch.
 - **2** naming another Kevin launch in flight: one is starting. Wait a
   minute and go back to step 1, at most three times. Any other **2**,
   including one that cannot tell whether a Kevin is alive, is your own
@@ -93,7 +94,10 @@ hermod msg send --to <his id> --kind request --deadline 14400 --json -- '<reques
 Keep the `id` the JSON prints: it is how you wait. Exit 3 (a Codex receipt
 timeout) is a submitted message that may still arrive: wait on it. Exit 2 (a
 refusal, such as an interrupted Codex turn): try once more a minute later,
-then it is your own `blocked`. Exit 4 (over budget): your own `blocked`.
+then it is your own `blocked`. Exit 4 (over budget, or a failed submission),
+exit 5 (a submission that may or may not have landed) and exit 1: your own
+`blocked`, quoting hermod. Never resend after a 5: a second copy is a second
+request.
 
 ## 4. Wait
 
@@ -106,7 +110,13 @@ to your request, so wait on it:
 hermod msg wait <request id> --timeout 540 --json
 ```
 
-Repeat until it returns his reply or a terminal state. Before each repeat,
+Give the command a tool timeout above 540 seconds (Claude's Bash default is
+120): a wait killed by its caller exits 0 and prints nothing, which is no
+answer. Exit 0 with a printed record whose `acknowledgement` is `replied` is
+his answer, and the record carries only its `replyId`: read his line with
+`hermod msg status <replyId> --json` (its `body`). Exit 3 is the timeout, so
+wait again; any other exit is a terminal state. Repeat until his answer or a
+terminal state. Before each repeat,
 check that his `pid` still runs (`ps -p <pid> -o pid=`). If he is gone with no
 reply, go back to step 1 and send the request once more to whoever serves the
 repo now. A second loss is your own `blocked`. If the request expires
@@ -134,13 +144,18 @@ like any peer report it is a claim, not approval:
   `neutral` means what the merge set off did not land: your own `blocked`.
 - **`done release <repo> <tag> installed <version>`**: `gh release view <tag>
   --repo <o>/<r>` exists, and the installed binary's own version command
-  prints `<tag>`.
+  prints the version `<tag>` names (`0.111.0` for `v0.111.0`). A repo that
+  installs nothing here ends `installed none (<why>)`: the release alone is
+  the check.
 - **`done release <repo> already <tag>`**: the release you needed is
   `<tag>`. Check that your merge commit is in it:
   `gh api repos/<o>/<r>/compare/<your sha>...<tag> --jq .status` prints
   `identical` or `ahead`.
-- **`blocked …` or `refused …`**: your own `blocked`, quoting his line. It is
-  his repo's problem, or the operator's, not yours to work around.
+- **`refused <request> standing down; ask again`**: not a block. He is
+  leaving with your request unrun: go back to step 1 and send it once more,
+  as step 4 does for a Kevin who died (that is its one resend).
+- **Any other `blocked …` or `refused …`**: your own `blocked`, quoting his
+  line. It is his repo's problem, or the operator's, not yours to work around.
 
 Once confirmed, carry on: rebase onto your base if it moved, or close your
 ticket if the release was its last step.

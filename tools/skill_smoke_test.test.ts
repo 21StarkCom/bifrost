@@ -690,9 +690,11 @@ test("skill smoke: skill/kevin — verb set and kickoff markers", () => {
   for (const marker of ["from peer", "from operator", "first request:", "isInMergeQueue", "kevin-unpushed/", "CronCreate", "kevin idle check", "kevin-desk.md"]) {
     assert.ok(text.includes(marker), `skill/kevin no longer names ${marker}`);
   }
-  assert.ok(!text.includes("first instruction:"), "skill/kevin still names the leader-era `first instruction:`");
-  // idun before v0.111.0 writes `leader peer`/`leader operator`; the skill reads it as `from` (rollout order).
+  // idun before v0.111.0 writes `leader peer`/`leader operator` and `— first instruction:`; the skill reads
+  // them as `from` and `— first request:` (rollout order), and names the old marker nowhere else.
   assert.match(text, /`leader\s+peer <PEER>` or `leader\s+operator`[\s\S]{0,120}means the same/, "skill/kevin no longer reads the pre-0.111.0 kickoff");
+  assert.match(text, /` — first instruction:` the same as\s+` — first request:`/, "skill/kevin no longer reads the pre-0.111.0 first-instruction marker");
+  assert.equal(text.split("first instruction:").length - 1, 1, "skill/kevin names the leader-era `first instruction:` outside its compatibility line");
 });
 
 // Every fenced `idun kevin` line, in a skill or a shared worker doc, reads its
@@ -708,7 +710,8 @@ test("skill smoke: fenced idun kevin lines carry --json and a repo", () => {
   assert.ok(lines.length > 0, "no fenced `idun kevin` line in any skill or shared doc");
   for (const line of lines) {
     assert.match(line, /--json\b/, `no --json: ${line.trim()}`);
-    assert.match(line, /^\s*idun kevin\s+(?:<repo>|[A-Za-z0-9._-]+)(?:\s|$)|--(?:repo|cwd)\b/, `no repo: ${line.trim()}`);
+    // The repo word never starts with `-`, or `idun kevin --json` would pass as naming one.
+    assert.match(line, /^\s*idun kevin\s+(?:<repo>|[A-Za-z0-9._][A-Za-z0-9._-]*)(?:\s|$)|--(?:repo|cwd)\b/, `no repo: ${line.trim()}`);
   }
 });
 

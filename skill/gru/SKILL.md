@@ -430,7 +430,10 @@ merge before theirs can go on. You neither launch, lead nor dismiss a Kevin.
   like any other: the operator's, with the Kevin's line in your escalation.
 - **Step 5's confirmation is unchanged.** In a repo whose done is *released*,
   the Minion closes after the Kevin's `release` is confirmed, so wait for
-  that.
+  that. A no-queue repo's merge hold ([Authority](#authority)) lifts once its
+  PR is confirmed merged (the PR `MERGED`, its `mergeCommit` on the base), not
+  at its `done`: a release can take an hour, and the next Minion's merge
+  joins it rather than waiting it out.
 - **You may ask a Kevin too**, by [the Kevin desk](../../standards/kevin-desk.md),
   when the operator hands you work in a repo no ticket covers. Never send one
   `stand down`; never `poison-pill` or `close-session` him. The desk is shared,
@@ -537,7 +540,8 @@ session's guard refuses a `hermod` line carrying a variable
   - **No queue** (`mergeQueue` null), or a read that failed (nonzero exit,
     `repository` null): let one Minion per repo run `idun gh pr-merge` at a
     time; tell the next to hold its merge until the previous `done` is
-    confirmed. That holds on every such repo, whatever its branch protection
+    confirmed (in a repo whose done is *released*, until the previous PR is
+    confirmed merged: [Kevin](#kevin)). That holds on every such repo, whatever its branch protection
     says. pr-merge is strict on its own: it rebases, waits for green, and exits
     27 BASE_MOVED when the base moved meanwhile, so two concurrent runs keep
     rebasing each other whether or not the ruleset requires up-to-date

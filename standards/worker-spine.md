@@ -14,7 +14,9 @@ skill carries the rest. Every worker reaches him by [§8](#8-releases-and-other-
 
 This doc is runtime-neutral and is shipped byte-identical to both runtimes.
 Throughout, **the repo's agent instructions file** means `CLAUDE.md` on Claude
-and `AGENTS.md` on Codex. Where it and this doc disagree, it wins. And **a
+and `AGENTS.md` on Codex. Where it and this doc disagree, it wins, except on
+[§8](#8-releases-and-other-repos)'s who runs a release: a chain that has the
+merger tag, publish or install still goes through the repo's Kevin. And **a
 skill is written in its Claude form** (`/minion`); the same skill is `$minion`
 on Codex, so a brief or a launch naming one names the other.
 
@@ -127,7 +129,9 @@ must merge before yours can go on, a review, a rerun. One Kevin per repo
 serializes its merges and releases, and your worktree session's git cannot
 leave its worktree. Find him or launch him, send the request, wait for his
 line, and confirm it on the real surface. His `blocked` or `refused` is your
-own `blocked`, quoting his line. Your own repo's PRs stay yours to merge.
+own `blocked`, quoting his line, except his stand-down's `refused … ask
+again`, which [the desk](kevin-desk.md#5-confirm) resends. Your own repo's PRs
+stay yours to merge.
 
 The repo's release chain says *what* a release is; this section says *who*
 runs it. Where the chain writes "tag", "publish" or "install" for whoever

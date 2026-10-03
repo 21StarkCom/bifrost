@@ -356,3 +356,27 @@ over any KD item above that it contradicts.
     - the Intent no longer claims every merge is serialized.
 
 ## Deviations (append-only)
+
+- 2026-10-03, the merge-gate review (`/code-review xhigh`, 15 findings on
+  #355). Fixed:
+  - `refused … standing down; ask again` is a resend, not a block;
+  - Agnes's Hermod ban spares a desk request;
+  - `hermod msg wait` takes a tool timeout above 540 s, and his line is read
+    through `hermod msg status <replyId>`;
+  - Kevin reads a request's `from` through `hermod msg status`;
+  - any major, bumped or bot-chosen, needs the operator;
+  - spine §8 is the stated exception to "the repo's file wins";
+  - held bot runs are approved through `gh api …/approve`;
+  - Gru's per-repo merge hold lifts at the merge in a released repo;
+  - the version is compared without the tag's `v`, and `installed none` is
+    handled;
+  - the pre-0.111.0 ` — first instruction:` reads as ` — first request:`;
+  - hermod send exits 1, 4 and 5 are handled;
+  - coalesced tickets: the earliest names the PR, and the others go in its
+    body;
+  - the smoke-test repo regex refuses a flag.
+
+  The one design call: a Codex Kevin sees a queued Hermod message as bare text
+  in his tab, the same as the operator typing. So he takes no `major` and no
+  base-branch rerun from his tab, and only `stand down`, whose forgery costs a
+  relaunch, still counts there.
