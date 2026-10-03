@@ -211,11 +211,14 @@ authorization. The `<report>` is one of:
   or executed.
   A ticket with no live surface says `verified none (<why>)`.
 - `blocked <one-line reason>` — only for what you cannot resolve yourself:
-  missing access, an operator's decision, an unmerged dependency. When the
-  one thing in your way is an open PR in another repo that must merge first,
-  say exactly `blocked needs <PR url> merged`: your worktree session cannot
-  merge another repo's PR, and that form is what lets Gru hand it to
-  [Kevin](../kevin/SKILL.md).
+  missing access, an operator's decision, an unmerged dependency ticket. An
+  open PR in another repo that must merge first is not a block: request
+  `merge <PR url>` from that repo's [Kevin](../kevin/SKILL.md) by
+  [the spine's §8](../../standards/worker-spine.md#8-releases-and-other-repos),
+  and so is a release. While you wait on him, send `progress waiting on
+  KEVIN-<repo>-<n>: <request>`. Only his `blocked` or `refused` blocks you
+  (not his stand-down's `refused … ask again`, which the desk resends):
+  report `blocked <his line>`.
 - `follow-up STARK-m filed, stopping`.
 
 Do not stay silent for more than 30 minutes; send a one-line progress note.
@@ -241,10 +244,10 @@ its terms is filled in here:
 operator may still need your worktree, your tab and your scrollback to see what
 happened. Report, then stop and leave everything in place.
 
-**`unblocked` resumes you.** When your leader — on your checked route, never
-another peer — sends `unblocked <PR url> merged <sha>` for the PR your
-`blocked needs` named, resume the spine where you stopped: fetch, rebase onto
-the base if it moved, and carry on.
+**A Kevin's confirmed `done` resumes you.** Once you have confirmed his line
+on the real surface ([the Kevin desk](../../standards/kevin-desk.md#5-confirm)),
+resume the spine where you stopped: fetch, rebase onto the base if it moved,
+and carry on.
 
 ## Authority
 

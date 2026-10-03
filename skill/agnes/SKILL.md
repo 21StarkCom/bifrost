@@ -142,7 +142,8 @@ expecting native or Hermod reports and confirming your `done` — that is
 Gru waiting on a report that never comes. Say so in one line and stop.
 
 Agnes's brief is a ticket id with optional instructions for this run. **Send no
-`hermod msg`** — there is no leader to send it to.
+`hermod msg` report** — there is no leader to send it to. Your one Hermod use
+is a request to a repo's Kevin, [below](#work).
 
 ## Work
 
@@ -167,6 +168,14 @@ of it, and each of them exists because there is no leader:
   only copy of your evidence that survives.
 - **Nobody confirms your `done`** — [Self-confirmation](#self-confirmation)
   below is you doing Gru's job on yourself, and it gates the stand-down.
+
+A release, and anything in a repo other than your own, goes to that repo's
+Kevin by [the spine's §8](../../standards/worker-spine.md#8-releases-and-other-repos).
+Waiting on him is not a stop: your goal keeps re-prompting you, so run one
+`hermod msg wait` on your request per turn, and confirm his line as
+[the Kevin desk](../../standards/kevin-desk.md#5-confirm) says. His `blocked`
+or `refused` is a stopping exit, `blocked <his line>`, except his stand-down's
+`refused … ask again`, which the desk resends.
 
 ## Gaps
 

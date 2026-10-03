@@ -13,6 +13,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=355 runId=355 sha=b6b9a3b4 -->
+- Kevin is now a repo's request desk: any verified fleet agent can ask him, and a new `release` verb runs the repo's release chain to an installed, verified version.
 <!-- idun:pr-merge pr=354 runId=354 sha=bea1f844 -->
 - goldfinger skill: note that Codex direct-call models get no observe screenshot image; open the PNG with `view_image`; stark-ops 0.18.1.
 <!-- idun:pr-merge pr=353 runId=353 sha=f04978ff -->

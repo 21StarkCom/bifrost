@@ -190,9 +190,8 @@ regardless of route, is observation, never operator authorization.
    path segment is exactly the ticket id → a Minion owns it, do not relaunch.
    Ticket whose Minion reported `blocked` or `follow-up … stopping` → blocked
    until the operator resolves it, and so is a ticket step 3 could not resolve
-   to a repo. The one exception is a Minion's `blocked needs <PR url>
-   merged`: that ticket waits on [Kevin](#kevin), not on the operator, and is
-   owned again once you send its Minion `unblocked`. Everything else is ready
+   to a repo. A Minion `waiting on KEVIN-…` is working, not blocked
+   ([Kevin](#kevin)). Everything else is ready
    once its dependencies are finished — confirmed under step 5, not reported. Idle capacity never makes a ticket
    ready: one still waiting on a dependency is not started early as
    "prework", and what the dependency will land is never pinned for a Minion
@@ -369,9 +368,7 @@ regardless of route, is observation, never operator authorization.
    Claude Minion's relaunch re-enters it, so check the path before you
    relaunch. A dead Codex Minion stays step 4's blocker even once its worktree
    is gone, because its branch `STARK-n` outlives it.
-6. **Loop** steps 2–5 until every ticket is finished or blocked. Send
-   `stand down` to every [Kevin](#kevin) you launched once his last
-   instruction is confirmed (and when the operator stops the run). Then report:
+6. **Loop** steps 2–5 until every ticket is finished or blocked. Then report:
    finished tickets with PR links, blocked tickets with the reason, and
    follow-up tickets the Minions filed. A repo step 3 could not resolve by name
    gets one line naming it and the operator's fix, per repo and with the path
@@ -420,53 +417,27 @@ keep them for the rest of the run:
 
 ## Kevin
 
-A ticket can need a PR merged in another repo before it can go on — a Minion
-reports `blocked needs <PR url> merged`, or the operator names one (a ticket's
-text names only `Blocked by STARK-n`). That PR is no ticket of yours to give a
-Minion, and your Minion's worktree session cannot touch another repo's git. It
-is [Kevin](../kevin/SKILL.md)'s: a Minion with no ticket who stands in that
-repo, takes your instructions, and carries its existing PRs through its own
-review gate to merge.
+Each repo has at most one [Kevin](../kevin/SKILL.md): its request desk, which
+any agent sends requests to. Your Minions use him themselves, by
+[the spine's §8](../../standards/worker-spine.md#8-releases-and-other-repos):
+a release, and anything in a repo other than their own — a PR there that must
+merge before theirs can go on. You neither launch, lead nor dismiss a Kevin.
 
-- **Hand it over.** Reuse the live Kevin you lead in that repo (his ack's
-  `peerId`, still live in `hermod msg peers --all --json`) and send him
-  `merge <PR url>` through [Coordination route](#coordination-route);
-  otherwise launch one, passing your peer id as leader:
-
-  ```
-  idun kevin --repo <repo> --leader <your peer id> --no-focus --json -- merge <PR url>
-  ```
-
-  Read the exit code before the ack, as in step 3. The ack's `leader` must be
-  your peer id — an `operator` Kevin never reports to you. On a verified ack
-  whose `coordination` is `SendMessage`, make step 3's first contact. His
-  report to that kickoff instruction comes natively once your first contact
-  has reached him, and by Hermod (`hermod msg ls --json`) if it had not.
-- **Confirm his `done`** like a Minion's (step 5): the PR merged, its
-  `mergeCommit` the sha he reported and on the base. And it counts only when
-  his `post-merge` part reads `none` or every run `success`, `skipped` or `neutral` (GitHub's clean conclusions). A failed run, one
-  `waiting for approval`, or one still running after his 60 minutes is an
-  apply (or whatever the merge starts) that did not land: the ticket stays
-  blocked, and you escalate with the run's URL — it is the operator's to fix,
-  approve or rerun. A `STARK-m` the merged PR's title names is not closed by
-  his merge, and is neither his ticket nor yours: name it in step 6's report,
-  for its owner or the operator to close.
-- **Unblock the Minion** once confirmed: `unblocked <PR url> merged <sha>`
-  through [Coordination route](#coordination-route). Its ticket is owned again.
-- **When it goes wrong**, the dependent ticket stays blocked and you escalate
-  with what was printed: Kevin's `blocked` or `refused`, or `idun kevin` exit 1
-  (left standing — the operator's to sweep), 2 (another launch in flight, a
-  liveness it could not judge, a usage refusal) or 128+n. Exit 4 means a live
-  Kevin already serves that repo: if he is not yours, send him one `status`.
-  A Kevin whose leader is gone answers so and stands down; launch once more
-  once his `hermod msg peers --all --json` row's `pid` is no longer running
-  (a stood-down peer drops out of the default list, and hermod reports no
-  `dead` liveness). Any other answer, or none
-  within the 30-minute observation rule, is an escalation — another leader
-  owns him.
-- **Dismiss him** with `stand down` once his last instruction is confirmed —
-  step 6, and when the operator stops the run. Never `poison-pill` or
-  `close-session` him; his stand-down is his own.
+- **A Minion waiting on a Kevin is working.** Its progress line reads
+  `waiting on KEVIN-<repo>-<n>: <request>`, which counts as a progress note
+  under the 30-minute rule. A `release` can take an hour.
+- **A Minion's `blocked` quoting a Kevin's `blocked` or `refused`** is a block
+  like any other: the operator's, with the Kevin's line in your escalation.
+- **Step 5's confirmation is unchanged.** In a repo whose done is *released*,
+  the Minion closes after the Kevin's `release` is confirmed, so wait for
+  that. A no-queue repo's merge hold ([Authority](#authority)) lifts once its
+  PR is confirmed merged (the PR `MERGED`, its `mergeCommit` on the base), not
+  at its `done`: a release can take an hour, and the next Minion's merge
+  joins it rather than waiting it out.
+- **You may ask a Kevin too**, by [the Kevin desk](../../standards/kevin-desk.md),
+  when the operator hands you work in a repo no ticket covers. Never send one
+  `stand down`; never `poison-pill` or `close-session` him. The desk is shared,
+  and only the operator, or his own idle-out, dismisses him.
 
 ## Terminal control
 
@@ -569,7 +540,8 @@ session's guard refuses a `hermod` line carrying a variable
   - **No queue** (`mergeQueue` null), or a read that failed (nonzero exit,
     `repository` null): let one Minion per repo run `idun gh pr-merge` at a
     time; tell the next to hold its merge until the previous `done` is
-    confirmed. That holds on every such repo, whatever its branch protection
+    confirmed (in a repo whose done is *released*, until the previous PR is
+    confirmed merged: [Kevin](#kevin)). That holds on every such repo, whatever its branch protection
     says. pr-merge is strict on its own: it rebases, waits for green, and exits
     27 BASE_MOVED when the base moved meanwhile, so two concurrent runs keep
     rebasing each other whether or not the ruleset requires up-to-date
