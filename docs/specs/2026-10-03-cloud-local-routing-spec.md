@@ -727,3 +727,15 @@ The PR's `/code-review xhigh --fix` pass found:
 | The brief said a session that merges or pushes anyway loses nothing | Fixed in the brief |
 
 ## Deviations (append-only)
+
+- 2026-10-04, T6 (STARK-10532), KV1 step 3: Kevin runs a step that needs
+  nothing beyond `git`, `node` and POSIX shell utilities (`grep`, `test`,
+  `sed`), not `git` and `node` alone. Every step runs through a shell, the
+  runner image (`debian:bookworm-slim`, devops-cc-environments
+  `runner/Dockerfile`) carries those as Debian essential packages, and this
+  spec's own done-whens are `grep`
+  lines; read literally, KV1 would block a read-only `grep` step and send a
+  cloud PR to a fallback for nothing. Network tools (`gh`, `curl`), package
+  managers and installs, writes outside the worktree and writes to a remote
+  stay blocked. RT2 rule 2 (T4) is unchanged; a ticket it routes `cloud`
+  meets KV1 either way.
