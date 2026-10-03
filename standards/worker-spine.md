@@ -1,10 +1,11 @@
 # The Worker Spine
 
 The ticket → PR → review → merge → close path every solo ticket worker runs.
-`/minion` (led by Gru) and `/agnes` (unattended, no leader) both execute this
-doc; neither restates it. Each skill adds only what is genuinely its own —
-`/minion` its reporting to Gru, `/agnes` its self-confirmation — so the review
-gate and the merge path cannot drift between the two.
+`/minion` (led by Gru, another peer or the operator) and `/agnes` (unattended,
+no leader) both execute this doc; neither restates it. Each skill adds only
+what is genuinely its own — `/minion` its reporting to its leader, `/agnes` its
+self-confirmation — so the review gate and the merge path cannot drift
+between the two.
 
 `/kevin`, a repo's request desk, owns no ticket, so he runs none of the ticket
 steps (1's bind, 3's verify, 5's re-verify, 6's gaps). He runs
