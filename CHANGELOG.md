@@ -13,6 +13,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=353 runId=353 sha=f04978ff -->
+- Add `/kevin`, a ticketless worker that takes its leader's instructions to review, merge and watch a repo's existing PRs; Gru hands it `blocked needs … merged`.
 <!-- idun:pr-merge pr=352 runId=352 sha=d49f6add -->
 - Spec for Kevin, a ticketless worker that takes instructions from its leader and shepherds one repo's PRs to merge; `docs/specs/` returns to bifrost.
 <!-- idun:pr-merge pr=351 runId=351 sha=834d66ae -->
