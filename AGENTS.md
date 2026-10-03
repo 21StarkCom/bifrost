@@ -15,6 +15,7 @@ This is the Codex/Cursor entry point. **Read [CLAUDE.md](CLAUDE.md) before chang
 | `scripts/` | `healer_patterns.json`. |
 | `data/persona/` | Persona roster. |
 | `docs/operations/` | Branch protection and the source entrypoint help audit. |
+| `docs/specs/` | This repo's own specs, each with its plan and a plain-English `.human.md` brief. |
 | `.claude-plugin/marketplace.json` | Hand-maintained marketplace manifest. |
 | `.github/workflows/` | CI and the fleet secret-scan caller. |
 
@@ -47,7 +48,7 @@ This is the Codex/Cursor entry point. **Read [CLAUDE.md](CLAUDE.md) before chang
 - Config is JSON; prompts are Markdown. Config sections are read from the global `global/config.json` only; the org → repo `.code-review/config.json` walk (`discoverConfig`) feeds preflight's `agents` and nothing else, so a per-repo override of any other section is ignored.
 - Keep dispatch credentials filtered through the shared environment helpers. Resolve Vertex project and location at runtime; never hardcode them. Use the shared bounded subprocess helpers for GitHub calls and agent dispatch.
 - Preserve `generated_paths.repos["21StarkCom/bifrost"].paths = ["__none__/**"]` in configuration and defaults: every file here is hand-maintained, including the marketplace manifest. See `CLAUDE.md` for review transport contracts.
-- Specs include their implementation plan under `docs/specs/`; never create `docs/plans/`. The document scaffold for target repos is defined by `/stark-init-docs`; this repo's standing operational docs are under `docs/operations/`.
+- Specs include their implementation plan under `docs/specs/`; never create `docs/plans/`. The document scaffold for target repos is defined by `/stark-init-docs`; this repo's standing operational docs are under `docs/operations/`, its own specs under `docs/specs/`.
 
 ## CI and verification
 
