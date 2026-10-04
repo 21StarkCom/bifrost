@@ -302,7 +302,8 @@ regardless of route, is observation, never operator authorization.
 4. **Wait.** Minions report `done <PR> merged <sha> verified <check>`,
    `blocked <reason>`, or
    `follow-up STARK-m filed, stopping`. Between reports check `hermod msg peers`.
-   A cloud session sends nothing: while one is unfinished you also wake on
+   A cloud session sends nothing: while any ticket is in
+   [the cloud pass](#each-pass), its session stopped or not, you also wake on
    [the wake](#the-wake), and each wake runs one cloud pass.
    A peer is dead only when Hermod reports its `liveness` dead or its `pid`
    gone, never because it is missing from the list (a fresh Claude session is
@@ -461,13 +462,19 @@ ticket and never two PRs.
   reads `created cloud session session_…`). Its state is
   `idun cc session <session_id> --json`'s `state`: `working` (queued, pending
   or running), `stopped` (it leaves that only on a new message) or `unknown`.
-  Its dispatch time is your dispatch's, or that comment's `at`.
+  A non-zero exit (an id the API rejects, an unknown seat) reads `unknown`
+  too: never `stopped`, and never "no session known", which would let case 5
+  dispatch a second one. Its dispatch time is your dispatch's, or that
+  comment's `at`.
 - **Fallen back:** the ticket carries a comment opening `Gru: cloud fallback`.
   It is `local` for good, in this run and every later one, and step 2's
   Minion rules apply to it.
 - **Cloud-blocked:** the ticket carries a comment opening `Gru: cloud
   blocked`. It is blocked until the operator resolves it, in this run and
-  every later one: no pass dispatches it, hands it off or falls it back.
+  every later one: no pass dispatches it, hands it off or falls it back. The
+  operator resolves it on the ticket. A `runs_in` set to anything but `cloud`
+  routes it `local` ([Route](#route)), out of the pass. A deleted comment
+  puts it back in the pass, read like any cloud ticket.
 
 ### Route
 
@@ -482,9 +489,12 @@ The route is `cloud` only when both read `cloud`. When exactly one does, it is
 mismatch. Every other case is `local` with nothing to report, a Jira ticket's
 `local` section with no field among them. Whatever both say, a ticket is
 `local` when a live Minion owns it (step 2's rule), when its repo has a PR
-whose title contains `(STARK-n)` and whose head does not start `claude/`, or
-when it has fallen back: a field edited, or idun upgraded, between runs never
-puts a cloud session on a ticket a Minion already holds or merged.
+whose title contains `(STARK-n)` and whose head starts with neither `claude/`
+nor `kevin-release/`, or when it has fallen back: a field edited, or idun
+upgraded, between runs never puts a cloud session on a ticket a Minion
+already holds or merged. The `kevin-release/` bump PR is Kevin's for your
+`release for STARK-n` ([Done](#done)) and carries the ticket's scope too; read
+as a Minion's, it would send a rerun's merged cloud ticket to a fresh Minion.
 
 Every ticket routes `local`, and step 6's report says why once, when
 `idun --version` is older than 0.116.0 (no `cc dispatch --ticket --repo
@@ -512,7 +522,8 @@ seen. Then the first case that holds decides:
    open a PR, and a fallback then makes two.
 4. **A closed, unmerged cloud PR** you did not close (the ticket carries no
    `Gru: cloud fallback` comment) → escalate: someone else closed it.
-5. **No cloud PR and no session** → ready: [dispatch](#dispatch) it. Not
+5. **No cloud PR and no session** → ready once its dependencies are finished
+   (step 2's rule, on a wake's pass too): [dispatch](#dispatch) it. Not
    when the newest `idun cc dispatch:` comment is a receipt (`cloud session
    requested`) with no outcome after it, or a failure saying a session may
    have been created: that is Dispatch's uncertain case, so post its comment
@@ -527,6 +538,13 @@ it among the blocked when the rest are finished or blocked, and a rerun
 210-minute cap counts from the pod's spawn, not from your dispatch, so a
 session that queued for a pod can still be working past 3 hours; cases 2 and
 3 go on as usual once it stops.
+
+**Each escalation here is raised once per run**, not on every pass. A ticket
+escalated under case 4 or [Done](#done) has nothing left to watch until the
+operator acts, so it leaves the pass for the rest of the run, a blocked
+ticket for step 6; a rerun `start` reads it again. A long session's or a
+dispatch warning's escalation keeps its ticket in the pass, since the session
+can still move.
 
 ### Dispatch
 
@@ -566,12 +584,16 @@ Send `merge <PR url> for STARK-n` to the repo's Kevin by
 [the Kevin desk](../../standards/kevin-desk.md): find him, launch him bare if
 none is live, and send with `--deadline 14400`. At most one request of yours
 per repo's Kevin is in flight; another cloud PR in that repo waits for a
-later pass.
+later pass. In a repo whose gate binds a fixed host resource
+([Preflight](#preflight)), Kevin runs that gate in his worktree on the same
+host, so his request counts as that repo's one Minion: send it only while no
+Minion of yours is live there, and launch none there while it is in flight.
 
 **The merge slot.** In a no-queue repo ([Authority](#authority)) Kevin's merge
 takes that repo's one merge slot. Before you send the request, tell every live
-Minion in that repo that has not merged to hold its merge: a Minion merges on
-its own and says nothing first, so a hold sent later can come too late. Once
+Minion in that repo that has not merged, and each one you launch there while
+the request is in flight, to hold its merge: a Minion merges on its own and
+says nothing first, so a hold sent later can come too late. Once
 Kevin's merge is confirmed, the repo goes back to one merge at a time: clear
 one held Minion at a time, as Authority's hold does. The hold lifts the same
 way when Kevin's merge does not happen: his `blocked` or `refused` line, an
@@ -586,7 +608,11 @@ ticket. Read each request in flight once per pass, by the desk's
 [step 4](../../standards/kevin-desk.md#4-wait) "under Gru's loop":
 `hermod msg status <request id> --json`, then, on `acknowledgement`
 `replied`, `hermod msg status <replyId> --json`'s `body`. His death, an
-expired request and his stand-down resend follow that step. His
+expired request and his stand-down resend follow that step. Whatever the desk
+calls your own `blocked` (a launch it refuses, a send that exits 1, 4 or 5, a
+second loss, an expiry with no `re <request id>:` line) is an escalation,
+never another send: no later pass of this run hands that PR off again, since
+a send that exited 5 may yet land and a second copy is a second request. His
 `done merge <PR url> merged <sha> …` → [Done](#done). Any other `blocked …`
 or `refused …`, read after case 1 of the pass → [fall back](#fall-back). A
 rerun `start` holds no request ids: case 2 sends again, and Kevin answers a
@@ -606,7 +632,9 @@ before you close:
 - **The runs the merge started.** None failed, by the desk's step 5:
   `gh run list --repo <o>/<r> --commit <mergeCommit> --json name,status,conclusion,url`,
   each completed run's `conclusion` `success`, `skipped` or `neutral`. One
-  still running is read again on the next pass.
+  still running is read again on the next pass. One `waiting` is held for an
+  environment approval, the operator's, and never completes on its own:
+  escalate it with its URL.
 - **The evidence**, from `gh pr view <url> --comments`: Kevin's gate comment
   (the required checks' conclusions) and, when the ticket's Verification
   holds any command step, a comment whose first line is
@@ -625,7 +653,12 @@ before you close:
   ticket whose verification failed.
 
 In a repo whose done is *released*, then send Kevin `release for STARK-n` and
-confirm it by the desk's step 5. Then run `alfred task move STARK-n done` and
+confirm it by the desk's step 5. Send it once: it is your one request in
+flight to that Kevin, and later passes read its reply as
+[Hand-off](#hand-off) reads his merge reply, never sending it again (a
+release that starts after his current one is a second release). A ticket
+already `done` (step 2's confirm on a rerun) gets no release: you closed it
+only after its release. Then run `alfred task move STARK-n done` and
 check that `alfred task show STARK-n` reads `done`. When the evidence is
 missing or does not match, Kevin reported `verification failed after merge`,
 a post-merge run failed, or the release failed, the ticket stays open and you

@@ -164,8 +164,9 @@ things are yours on top of it:
 
 - **Your ticket is the one named in your brief**, which also names your
   leader: a peer, or `leader operator`.
-- **If Gru asked you to hold your merge** until another Minion's `done` is
-  confirmed, hold, then rerun `idun gh pr-merge` so the rebase and checks are
+- **If Gru asked you to hold your merge** until another merge is confirmed
+  (another Minion's `done`, or a Kevin merge Gru sent for a cloud ticket),
+  hold, then rerun `idun gh pr-merge` so the rebase and checks are
   fresh. That is the one place a Minion's merge is sequenced from outside.
 - **The PR comment carrying the re-run live check is not optional here.** Your
   scrollback dies with you at stand down, so that comment is what your leader

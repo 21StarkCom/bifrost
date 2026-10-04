@@ -758,3 +758,15 @@ The PR's `/code-review xhigh --fix` pass found:
   escalation). Without that rule, a dispatch whose outcome never posted,
   such as a Gru killed mid-call before its own comment, reads as GR6's case
   on a rerun and dispatches a second session.
+- 2026-10-04, T5 (STARK-10535), the PR's `/code-review xhigh --fix` pass:
+  GR1's non-`claude/` PR excludes a `kevin-release/` head, the bump PR Kevin
+  opens for GR10's `release for STARK-n`, which carries the ticket's scope
+  and would otherwise send a rerun's merged ticket to a Minion. GR10 sends
+  that release once and reads its reply by GR9, never on a closed ticket, and
+  escalates a `waiting` post-merge run. GR6 dispatches only once the
+  ticket's dependencies are finished. An `idun cc session` non-zero exit
+  reads `unknown`. GR8's request counts as a host-resource repo's one
+  Minion, its hold covers Minions launched while it is in flight, and a
+  kevin-desk outcome that is the sender's own `blocked` is an escalation,
+  never a second send. Each escalation is raised once per run, and a ticket
+  escalated under GR5 or GR10 leaves the pass (GR16) until a rerun.
