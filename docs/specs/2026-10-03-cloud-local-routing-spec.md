@@ -746,3 +746,27 @@ The PR's `/code-review xhigh --fix` pass found:
   entry says so. Read literally, such a step fails at every merge whose
   tree moved, and in a repo with a root `CHANGELOG.md` pr-merge's bullet
   commit moves it at every merge. GR10 (T5) matches that entry as the step.
+- 2026-10-04, T5 (STARK-10535), GR4: the 3-hour heads-up covers any session
+  not `stopped` 3 hours after dispatch, an open cloud PR's (GR3) included, as
+  the operator's decision reads ("once it has run 3 hours without
+  stopping"). Under GR4 alone, a session that opened its PR and kept working
+  would hold GR3's wait with no report, and the run would never finish.
+- 2026-10-04, T5 (STARK-10535), GR6: no cloud PR and no session is not ready
+  when the newest `idun cc dispatch:` comment is a receipt with no outcome
+  after it, or an outcome saying a session may have been created. Either
+  one is GR7's uncertain case (a `Gru: cloud blocked` comment and an
+  escalation). Without that rule, a dispatch whose outcome never posted,
+  such as a Gru killed mid-call before its own comment, reads as GR6's case
+  on a rerun and dispatches a second session.
+- 2026-10-04, T5 (STARK-10535), the PR's `/code-review xhigh --fix` pass:
+  GR1's non-`claude/` PR excludes a `kevin-release/` head, the bump PR Kevin
+  opens for GR10's `release for STARK-n`, which carries the ticket's scope
+  and would otherwise send a rerun's merged ticket to a Minion. GR10 sends
+  that release once and reads its reply by GR9, never on a closed ticket, and
+  escalates a `waiting` post-merge run. GR6 dispatches only once the
+  ticket's dependencies are finished. An `idun cc session` non-zero exit
+  reads `unknown`. GR8's request counts as a host-resource repo's one
+  Minion, its hold covers Minions launched while it is in flight, and a
+  kevin-desk outcome that is the sender's own `blocked` is an escalation,
+  never a second send. Each escalation is raised once per run, and a ticket
+  escalated under GR5 or GR10 leaves the pass (GR16) until a rerun.

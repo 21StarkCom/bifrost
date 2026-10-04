@@ -736,20 +736,28 @@ test("skill smoke: standards — Kevin's place in the shared docs", () => {
   assert.ok(standDown.includes("idle-out"), "stand-down.md lost Kevin's idle-out trigger");
   assert.match(spine, /^## 8\. Releases and other repos$/m, "worker-spine.md lost §8");
   assert.ok(spine.includes("](kevin-desk.md)"), "worker-spine.md §8 no longer links the Kevin desk");
-  for (const marker of ["hermod msg peers --all --json", "hermod msg send --to", "Never send him `stand down`", "## 5. Confirm", "merge <PR url> for STARK-n"]) {
+  for (const marker of ["hermod msg peers --all --json", "hermod msg send --to", "Never send him `stand down`", "## 5. Confirm", "merge <PR url> for STARK-n", "**Under Gru's loop**"]) {
     assert.ok(desk.includes(marker), `kevin-desk.md no longer names ${marker}`);
   }
 });
 
-// The desk replaces the leader hand-off (KD15, KD16): Gru neither launches nor
-// dismisses a Kevin, and a Minion asks the other repo's Kevin itself instead
-// of reporting `blocked needs … merged` and waiting for `unblocked`.
+// The desk replaces the leader hand-off (KD15, KD16): Gru never leads or
+// dismisses a Kevin and launches one only through the desk, for a cloud
+// ticket's PR (GR8), and a Minion asks the other repo's Kevin itself instead
+// of reporting `blocked needs … merged` and waiting for `unblocked`. Gru's two
+// cloud comment openers are the state a rerun reads off the board, so a
+// reworded one would strand every ticket an earlier run marked.
 test("skill smoke: gru and minion — the Kevin desk, not a hand-off", () => {
   const gru = fs.readFileSync(path.join(SKILLS_ROOT, "gru", "SKILL.md"), "utf8");
   const minion = fs.readFileSync(path.join(SKILLS_ROOT, "minion", "SKILL.md"), "utf8");
-  assert.deepEqual(fencedLaunchLines(path.join(SKILLS_ROOT, "gru", "SKILL.md"), /^\s*idun kevin\b/), [], "gru launches a Kevin again");
+  assert.deepEqual(fencedLaunchLines(path.join(SKILLS_ROOT, "gru", "SKILL.md"), /^\s*idun kevin\b/), [], "gru launches a Kevin outside the desk");
   const kevinSection = /^## Kevin\n([\s\S]*?)^## /m.exec(gru)?.[1] ?? "";
-  assert.ok(kevinSection.includes("neither launch, lead nor dismiss"), "gru's Kevin section lost its hands-off rule");
+  assert.ok(kevinSection.includes("You never lead or dismiss a Kevin."), "gru's Kevin section lost its never-lead-or-dismiss rule");
+  assert.match(kevinSection, /launch a bare one through the\s+desk/, "gru's Kevin section no longer launches a Kevin through the desk");
+  assert.ok(!gru.includes("neither launch, lead nor dismiss"), "gru still says it never launches a Kevin");
+  for (const marker of ["`Gru: cloud fallback", "`Gru: cloud blocked", "merge <PR url> for STARK-n"]) {
+    assert.ok(gru.includes(marker), `gru no longer names ${marker}`);
+  }
   for (const [label, text] of [["gru", gru], ["minion", minion]] as const) {
     assert.ok(!text.includes("blocked needs"), `${label} still names the leader-era \`blocked needs\``);
     assert.ok(!/\bunblocked\b/.test(text), `${label} still names the leader-era \`unblocked\``);
