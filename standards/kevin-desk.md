@@ -118,7 +118,7 @@ request.
 He acks your request when it arrives, and sends a progress line if others are
 ahead of you. He works one request at a time, and a `release` can take an
 hour. Progress lines come as separate messages. His final line is the reply
-to your request, so wait on it:
+to your request, so wait on it (Gru reads it instead, under its loop, below):
 
 ```
 hermod msg wait <request id> --timeout 540 --json
@@ -142,6 +142,12 @@ starts `re <request id>:`: he sends that when a reply can no longer go.
   any wait.
 - **Under a goal** (Agnes): the wait above is your turn's work. Run one
   `hermod msg wait` per turn, not a loop of reads.
+- **Under Gru's loop** (Gru, for a cloud ticket's PR): Gru watches many
+  tickets and cannot block on one, so never `hermod msg wait`. Read each
+  request once per pass instead: `hermod msg status <request id> --json`,
+  then, once its `acknowledgement` is `replied`, his line is
+  `hermod msg status <replyId> --json`'s `body`. The `pid` check before each
+  read and the one resend are as above.
 
 Never send him `stand down`. The desk is shared, and only the operator, or
 his own idle-out, dismisses him.
