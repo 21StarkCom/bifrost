@@ -66,8 +66,9 @@ Read the PAT into the env; never print it. This ranks one month's spend
 shows GHAS seat usage. Almost always one or two repos dominate. Rank by
 **gross**: net is gross minus the included minutes, a pool the enterprise draws
 down through the month, so the same run nets $0 on the 2nd and full price on
-the 28th; a public repo bills gross and nets $0. Run a few months to see the
-trend.
+the 28th. Public repos bill gross but net $0, so they are listed apart from the
+ranking. Each repo's minutes are split by runner SKU, since macOS bills 10× Linux.
+Run a few months to see the trend.
 
 Then drill the top repo:
 

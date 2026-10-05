@@ -118,7 +118,7 @@ argument: …" — wording alone cannot tell a working help from a broken one.
 | Shell / other executable | Boundary |
 | --- | --- |
 | `tools/check-rest-only.sh` | no argv; help before directory change/scanner |
-| `skill/stark-gha-cost/scripts/gha-cost-breakdown.sh` | enterprise/org/month options; help before token check, date or gh; missing or malformed values refused |
+| `skill/stark-gha-cost/scripts/gha-cost-breakdown.sh` | enterprise/org/month options; help before token check, date or gh; missing values, an empty or malformed month and a second scope refused |
 | `skill/stark-gha-cost/scripts/gha-repo-actions-drill.sh` | owner/repo, optional date; surplus args/unsupported flags refused before date/credentials/gh |
 | `skill/stark-build/references/hooks/protect-paths.sh` | leading help; exact positional arity, then list/task data and stdin protocol |
 | `skill/stark-build/references/hooks/stop-gate.sh` | leading help; bounded positional arity before running the check; later task/path words are literal data |
