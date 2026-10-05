@@ -57,11 +57,17 @@ Never guess. Run the breakdown before proposing anything:
 
 ```bash
 GH_TOKEN=<admin:enterprise or admin:org PAT> \
-  scripts/gha-cost-breakdown.sh --enterprise <slug>
+  scripts/gha-cost-breakdown.sh --enterprise <slug> [--month YYYY-MM]
+# or --org <login> for one org inside an enterprise
 ```
 
-Read the PAT into the env; never print it. This ranks spend by product → SKU →
-repo, and shows GHAS seat usage. Almost always one or two repos dominate.
+Read the PAT into the env; never print it. This ranks one month's spend
+(default: the current UTC month) by product → SKU → repo, gross and net, and
+shows GHAS seat usage. Almost always one or two repos dominate. Rank by
+**gross**: net is gross minus the included minutes, a pool the enterprise draws
+down through the month, so the same run nets $0 on the 2nd and full price on
+the 28th; a public repo bills gross and nets $0. Run a few months to see the
+trend.
 
 Then drill the top repo:
 
