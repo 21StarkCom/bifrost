@@ -39,6 +39,8 @@ before quoting hard prices (GitHub changed them twice in 2025–2026).
 - **Where the data actually is:**
   - `GET /settings/billing/usage` is the **only supported billing endpoint**
     (repo/SKU grain, **daily**, 24 months; the `hour` param was removed Nov 2025).
+    Pass `year` + `month`: without a period its repo labels name other orgs'
+    repos (`levers.md`, gotchas).
     Per-**workflow** cost exists **only in the downloadable CSV usage report** (its
     API is enterprise-only, public preview Feb 2026). **Dead:**
     `/billing/{actions,packages,shared-storage}` (retired 2025-09-26) and the

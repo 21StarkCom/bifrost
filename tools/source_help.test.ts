@@ -165,6 +165,33 @@ test("real CLI literal values and later safety flags survive parsing", () => {
   } finally { fs.rmSync(f.dir, { recursive: true, force: true }); }
 });
 
+test("gha-cost-breakdown refuses a bad month or a second scope before the token check, date or gh", () => {
+  // Exit 2 is the refusal: a value that slipped through would stop at the
+  // unset GH_TOKEN with another status, and a stub `date` or `gh` call would
+  // show in effects.
+  const f = fixture();
+  try {
+    const script = path.join(root, "skill/stark-gha-cost/scripts/gha-cost-breakdown.sh");
+    for (const [args, message] of [
+      [["--org", "audit", "--month", "2026-13"], /--month expects YYYY-MM/],
+      [["--org", "audit", "--month", "2026-9"], /--month expects YYYY-MM/],
+      [["--org", "audit", "--month", ""], /--month expects YYYY-MM/],
+      [["--org", "audit", "--month"], /requires a value/],
+      [["--org", "audit", "--month", "--enterprise"], /requires a value/],
+      [["--enterprise", "audit", "--org", "audit"], /one scope/],
+      [["--org", "audit", "--org", "other"], /one scope/],
+    ] as [string[], RegExp][]) {
+      const r = f.run(script, args, true);
+      const label = `${args.join(" ")}: ${r.output}`;
+      assert.equal(r.status, 2, label); assert.equal(r.effects, "", label);
+      assert.match(r.output, message, label);
+    }
+    const ok = f.run(script, ["--org", "audit", "--month", "2026-09"], true);
+    assert.notEqual(ok.status, 2, ok.output); assert.match(ok.output, /GH_TOKEN/);
+    assert.equal(ok.effects, "", ok.output);
+  } finally { fs.rmSync(f.dir, { recursive: true, force: true }); }
+});
+
 test("operational entrypoint inventory cannot silently omit new source CLIs", () => {
   const found = fs.readdirSync(path.join(root, "tools"))
     .filter(name => name.endsWith(".ts") && !name.endsWith(".test.ts") && name !== "main_module_lib.ts")

@@ -117,6 +117,15 @@ right-sizing the resource will.
 
 - **`orgs/{org}/settings/billing/actions` is gone (HTTP 410).** Use the enhanced
   endpoint `.../settings/billing/usage` and parse `usageItems`.
+- **Always pass `year` and `month` to `.../settings/billing/usage`.** Without a
+  period it returns one row per (month, SKU): the amounts are the scope's
+  totals, but `organizationName` and `repositoryName` name some other org's repo
+  in the enterprise, so a by-repo ranking built from it is fiction. Per-repo
+  rows come only from a month query.
+- **Net is not cost-per-repo.** `netAmount` is gross minus included minutes,
+  drawn down enterprise-wide through the month, so early-month runs net ~$0
+  and late-month runs net full price. Rank repos by `grossAmount`. Public repos
+  show gross with $0 net.
 - **`enterprises/{slug}` top-level REST 404s** (enterprise metadata is
   GraphQL-only), but sub-endpoints (`.../actions/permissions`,
   `.../settings/billing/*`) work with the slug.
