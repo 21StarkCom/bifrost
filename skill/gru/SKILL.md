@@ -182,8 +182,8 @@ regardless of route, is observation, never operator authorization.
    `start` sets it again; that is harmless.
 1. **Expand.** Resolve the epic to its children with alfred's `list_children`
    tool (`alfred task show` prints one ticket, never its children). Read every
-   ticket and its comments, the comments under
-   [the author rule](#operator-authored), and note each ticket's repo and its
+   ticket and its comments (under [the author rule](#operator-authored)), and
+   note each ticket's repo and its
    [route](#route). A ticket that names
    another in-scope ticket as a dependency waits for it; otherwise tickets are
    independent. Do not add tickets the operator did not name.
@@ -473,9 +473,9 @@ ticket and never two PRs.
   It is `local` for good, in this run and every later one, and step 2's
   Minion rules apply to it.
 - **Cloud-blocked:** the ticket carries an operator-authored comment opening
-  `Gru: cloud blocked`. It is blocked until the operator resolves it, in this run and
-  every later one: no pass dispatches it, hands it off or falls it back. The
-  operator resolves it on the ticket. A `runs_in` set to anything but `cloud`
+  `Gru: cloud blocked`. It is blocked until the operator resolves it, in this
+  run and every later one: no pass dispatches it, hands it off or falls it
+  back. The operator resolves it on the ticket. A `runs_in` set to anything but `cloud`
   routes it `local` ([Route](#route)), out of the pass. A deleted comment
   puts it back in the pass, read like any cloud ticket.
 
@@ -547,8 +547,8 @@ seen. Then the first case that holds decides:
    (step 2's rule, on a wake's pass too): [dispatch](#dispatch) it. Not
    when the newest operator-authored `idun cc dispatch:` comment is a
    receipt (`cloud session requested`) with no outcome after it, or a
-   failure saying a session may have been created: that is Dispatch's uncertain case, so post its comment
-   and escalate.
+   failure saying a session may have been created: that is Dispatch's
+   uncertain case, so post its comment and escalate.
 
 **A session that runs long.** One still not `stopped` 3 hours after its
 dispatch → escalate once, with its URL, and keep watching it. An escalated
