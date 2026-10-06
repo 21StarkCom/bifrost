@@ -13,6 +13,7 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+- Gru, Minion, Agnes and Kevin follow only ticket comments by the operator's ClickUp user; any other author's comment is fenced as untrusted data, and Gru's `Gru:` and `idun cc dispatch:` control lines count only from the operator (stark-ops 0.22.0).
 <!-- idun:pr-merge pr=360 runId=360 sha=a3919b05 -->
 - Gru routes cloud-marked tickets to `idun cc dispatch` and hands their PRs to the repo's Kevin, falling back to a Minion only when no cloud PR can appear.
 <!-- idun:pr-merge pr=359 runId=359 sha=9e1c0462 -->
