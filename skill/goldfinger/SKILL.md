@@ -25,7 +25,8 @@ background web content outside Chromium, `truncated` on a cut `observe`, a first
 waits for a Chromium app's tree, and one spelling for each public name (see Old names). An older
 goldfinger has no `hover` or `glide`, as a verb or an MCP tool, and takes the eight commands under
 Old names only as two words, so calls written as this skill writes them fail `usage` there: tell
-the user the task needs goldfinger 0.5.0 (`brew upgrade --cask goldfinger`).
+the user the task needs goldfinger 0.5.0 (`brew upgrade --cask goldfinger`, theirs to run, as it
+quits the daemon every agent shares).
 
 ## Arguments
 
@@ -64,7 +65,8 @@ text or value itself, else a usage error, printed as plain text on stderr when i
    (2,000 nodes, or `--max-nodes`) returns `"truncated": true`, after the whole `tree` as
    `--json` sorts the keys, and prints `observe: tree cut at <n> nodes` on stderr; a walk it did
    not cut has neither. A cut tree is not the whole window, so a node missing from it may still
-   be there. Before 0.5.0 nothing marks a cut.
+   be there. Nor is every uncut one: the walk takes nothing past level 25 (a group or scroll area
+   counts as no level), and that limit never sets `truncated`. Before 0.5.0 nothing marks a cut.
 3. **Act on a target from that snapshot:**
    - `goldfinger click <target> [--right] [--double] --json`
    - `goldfinger type <target> <text> --json`: the text arrives exactly once
@@ -78,8 +80,9 @@ text or value itself, else a usage error, printed as plain text on stderr when i
    - `goldfinger set-value <target> <value> --json`: element targets only, read back, compared
 4. **Observe again** once the UI may have changed, or add `--observe` to one of these five (not
    `launch` or `quit`) to get the window's new observe result back as `observe` in the same call.
+   A cut one holds its `truncated` there, and prints no line on stderr.
 
-Every action (these five, `window-frame`, `clipboard-write`, `menu`, `drag`, `hover` (0.5.0),
+Every action (these five, `window-frame`, `clipboard-write`, `menu`, `drag`, `hover` from 0.5.0,
 each `batch` step) and every `launch` takes at least 1 s, its guard.
 `goldfinger quit <pid> [--force] --json` returns `exited`: `false`, still running after 15 s, is
 not an error. `goldfinger stop` stops the daemon every agent shares, staling all snapshots and
@@ -316,13 +319,13 @@ A session marks an agent's calls as its own, and its cursor shows the operator w
   display only), glides to where each action aims before it runs; from 0.5.0 it then tracks a
   `drag` from `from` to `to`, and stays there. It is not the mouse pointer, and clicks pass
   through it.
-- `goldfinger glide <target> --session <id> --json` (0.5.0) glides that cursor to where an action
-  on the target would aim, and sends nothing to the app: for a demo or a recording, to show where
-  the agent will act or what it reads. Without `--session` it is `usage`; with the cursor off it is
-  `ok` and nothing moves. It returns `{"warnings": []}` once the cursor arrives, taking the glide's
-  0.25–0.75 s and no 1 s guard; it takes no `--observe` and is no `batch` step. An element with no
-  visible part or position is `action_failed`, the cursor unmoved; a session that is not live
-  `session_not_live`. MCP's `glide` takes `target` alone, in the connection's session.
+- `goldfinger glide <target> --session <id> --json` (from 0.5.0) glides that cursor to where an
+  action on the target would aim, and sends nothing to the app: for a demo or a recording, to show
+  where the agent will act or what it reads. Without `--session` it is `usage`; with the cursor off
+  it is `ok` and nothing moves. It returns `{"warnings": []}` once the cursor arrives, taking the
+  glide's 0.25–0.75 s and no 1 s guard; it takes no `--observe` and is no `batch` step. An element
+  with no visible part or position is `action_failed`, the cursor unmoved; a session that is not
+  live `session_not_live`. MCP's `glide` takes `target` alone, in the connection's session.
 - **The end.** A session idles out when no call has carried its id for its idle timeout (default
   300 s, 1 to 86,400; `session-list` does not count), and every daemon exit (`stop`, `setup`'s
   restart, a newer client) ends them all. An id that is not live (ended, idled out, never started
@@ -381,10 +384,11 @@ result has both (all but the arrays), while its code-mode models (gpt-6-astra) g
 result. Without the image, open the PNG at `screenshot.path` with the client's own image tool
 (Codex's `view_image`) while its snapshot is kept (see Targets and staleness), as eviction
 deletes the file. A client caps a result's size (Claude Code at `MAX_MCP_OUTPUT_TOKENS`, 25,000
-by default): pass `max_nodes` on a large window. From 0.5.0 a walk the node limit cut adds its
-`observe: tree cut at <n> nodes` line as a second text block, beside the result's
-`truncated: true`. The rest of this skill applies, but not the CLI's syntax: no `--json`, no
-`--`, no exit code, and a flag like `--observe` is a boolean parameter.
+by default): pass `max_nodes` on a large window. From 0.5.0 an `observe` the node limit cut adds
+its `observe: tree cut at <n> nodes` line as a second text block, beside the result's
+`truncated: true`; an action with `observe: true` adds no such block, its `observe` holding the
+key alone. The rest of this skill applies, but not the CLI's syntax: no `--json`, no `--`, no exit
+code, and a flag like `--observe` is a boolean parameter.
 
 Each connection has its own session, started at the first call that needs one, started again once
 it ends (an idle end, any agent's `stop`), and ended when the connection closes. `session-cursor`
@@ -439,12 +443,7 @@ as usual, and fix the call.
 | Old | New |
 |---|---|
 | `session start`, `session end`, `session list`, `session cursor`, `clipboard read`, `clipboard write`, `record start`, `record stop` | The two words joined by a hyphen: `session-start`, `session-end`, `session-list`, `session-cursor`, `clipboard-read`, `clipboard-write`, `record-start`, `record-stop`. A bare `session`, `clipboard` or `record` is `usage`. |
-| A session id as an operand: `session end <id>`, `session cursor <id> on\|off` | `--session <id>`. An operand and a `--session` naming different ids is `usage`. |
+| A session id as an operand, under either spelling: `session-end <id>`, `session-cursor <id> on\|off` | `--session <id>`. An operand and a `--session` naming different ids is `usage`. |
 | MCP `menu`'s argument `path` | `menu_path`. A call gives exactly one of the two, else `usage`; `path` adds its deprecation line to the result as one more text block. |
-| `steps`, the count in `record-stop`'s and `replay`'s results | `step_count`, printed beside it with the same value. `steps` stays the name of `batch`'s list. |
+| `steps`, the count in `record-stop`'s and `replay`'s results | `step_count`, printed beside it with the same value. Before 0.5.0 `replay` prints `steps` alone. `steps` stays the name of `batch`'s list. |
 | A trajectory in format 1, as recorded before 0.5.0 | Record it again. 0.5.0 replays it and says so on stderr; 0.6.0 refuses it (`usage`). |
-
-Three changes have no old form, so 0.5.0 switched them: a session that is not live fails
-`session_not_live`, not `not_found`; `record-start` on a session already recording fails
-`action_failed` (exit 1), not `usage` (exit 2); and a recording is written in trajectory format 2,
-which 0.4.0's `replay` refuses (`usage`).

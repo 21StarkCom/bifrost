@@ -214,7 +214,7 @@ Repos can override the enabled agents and nothing else: the walk above lives onl
   - `idun` v0.94.0 or later, v0.103.0 for /agnes, and v0.109.0 for /kevin, whose `from` kickoff v0.111.0 writes (`idun gru`, `idun minion`, `idun agnes`, `idun kevin` for the worker launches; `idun gh pr-open`, `pr-merge`): /gru, /minion, /agnes, /kevin, /stark-bury, /stark-rules-optimizer
   - `frigg`: /gru, /minion, /agnes, to find a ticket's repo
   - atlas's `brain`: /stark-adr
-  - `goldfinger`: /goldfinger (the `21StarkCom/tap/goldfinger` cask, plus one `goldfinger setup` by the operator)
+  - `goldfinger` 0.5.0 or later: /goldfinger (the `21StarkCom/tap/goldfinger` cask, plus one `goldfinger setup` by the operator)
   - `lucius`: /lucius
 
 ## Fleet Fit
