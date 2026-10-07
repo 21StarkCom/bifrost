@@ -19,10 +19,10 @@ starts it on demand (`stop` never does). No verb activates an app or raises a wi
 activates during an action's 1 s guard, goldfinger puts back the app that was in front, even over
 the user's switch.
 
-This skill teaches 0.6.0 (`goldfinger --version`). An older goldfinger can fail calls written as
-this skill writes them with `usage`, or answer them otherwise: tell the user the task needs
-goldfinger 0.6.0 (`brew upgrade --cask goldfinger`, theirs to run, as it quits the daemon every
-agent shares).
+This skill teaches 0.6.0: run `goldfinger --version` once before the first call. An older
+goldfinger can fail calls written as this skill writes them with `usage`, or answer them
+otherwise, so below 0.6.0 act on nothing: tell the user the task needs goldfinger 0.6.0
+(`brew upgrade --cask goldfinger`, theirs to run, as it quits the daemon every agent shares).
 
 ## Arguments
 
@@ -350,8 +350,9 @@ A session marks an agent's calls as its own, and its cursor shows the operator w
   `not_found` with nothing clicked, and a `glide` is skipped, uncounted, without `--session`. The
   first step that fails stops it, its error prefixed `step <k>: ` and not retryable, as a retry
   repeats the steps before. A file that is no trajectory to the goldfinger replaying it is refused
-  whole (`usage`), with nothing sent. One in trajectory format 1, an old goldfinger's recording,
-  is refused so too, its message saying so: record it again.
+  whole (`usage`), with nothing sent. One in trajectory format 1, whose line 1 holds
+  `"trajectory": 1` in place of `"format"`, is refused so too, its message saying so: record it
+  again.
 
 ## MCP
 
@@ -371,17 +372,17 @@ the array its stdin takes, `menu`'s path is `menu_path`, `menu` and `drag` need
 `goldfinger <verb> … --json` prints for the same call, marked `isError` exactly where the CLI
 exits non-zero: an error, or a `batch` whose last entry failed. Arrays (`apps`, `windows`,
 `batch`) come as text only; `observe` with `screenshot` adds the PNG as an image. Not every model
-sees that image: Codex 0.160.0 gives a model that calls MCP
-tools directly (gpt-5.5) `structuredContent`, the result's JSON, in place of `content` wherever a
-result has both (all but the arrays), while its code-mode models (gpt-6-astra) get the whole
-result. Without the image, open the PNG at `screenshot.path` with the client's own image tool
-(Codex's `view_image`) while its snapshot is kept (see Targets and staleness), as eviction
-deletes the file. A client caps a result's size (Claude Code at `MAX_MCP_OUTPUT_TOKENS`, 25,000
-by default): pass `max_nodes` on a large window. An `observe` the node limit cut adds its
-`observe: tree cut at <n> nodes` line as a second text block, beside the result's
-`truncated: true`; an action with `observe: true` adds no such block, its `observe` holding the
-key alone. The rest of this skill applies, but not the CLI's syntax: no `--json`, no `--`, no exit
-code, and a flag like `--observe` is a boolean parameter.
+sees that image: Codex 0.160.0 gives a model that calls MCP tools directly (gpt-5.5)
+`structuredContent`, the result's JSON, in place of `content` wherever a result has both (all but
+the arrays), while its code-mode models (gpt-6-astra) get the whole result. Without the image,
+open the PNG at `screenshot.path` with the client's own image tool (Codex's `view_image`) while
+its snapshot is kept (see Targets and staleness), as eviction deletes the file. A client caps a
+result's size (Claude Code at `MAX_MCP_OUTPUT_TOKENS`, 25,000 by default): pass `max_nodes` on a
+large window. An `observe` the node limit cut adds its `observe: tree cut at <n> nodes` line as a
+second text block, beside the result's `truncated: true`; an action with `observe: true` adds no
+such block, its `observe` holding the key alone. The rest of this skill applies, but not the
+CLI's syntax: no `--json`, no `--`, no exit code, and a flag like `--observe` is a boolean
+parameter.
 
 Each connection has its own session, started at the first call that needs one, started again once
 it ends (an idle end, any agent's `stop`), and ended when the connection closes. `session-cursor`
@@ -415,7 +416,7 @@ Actions return `"warnings": [...]`, usually empty. With each, the action happene
 | `invalid_target` | Fix the target: a malformed id, an index past the snapshot, a pixel target without a screenshot or outside it, a pixel target for `set-value`, a `step<k>:` target outside a `batch`, a `drag` whose `to` is in another window than its `from`, or a `hover --click` index past the observe taken in its hold. |
 | `background_unavailable` | Nothing was activated or sent. A `cmd` combo (a menu shortcut reaches only the active app): click the control, or press its menu-bar command with `menu … --foreground`. `menu` or `drag` without `--foreground`: add it, which switches the user's front app for the action. A mouse event this platform cannot aim into a background window: use an element target, another route, or ask the user; for a `drag` refused even with `--foreground`, no flag or target lifts it. A single click into background web content outside Chromium, WebKit's or Firefox's (see Targets), a `hover --click` press's mouse fallback included: target an element whose press lands. |
 | `action_failed` | The app rejected the action or value: observe the state before another try. An element that needed mouse events has no visible part in its window (nothing sent): scroll it into view, observe again, act on the new snapshot. `window-frame`: the window is not movable or resizable (nothing written), a write was rejected (part may have landed), or the app or platform clamped it (a minimum size, a title bar kept below the menu bar), the message naming both frames: run `windows`. `clipboard-read`, `clipboard-write`: clipboard access is denied (nothing written), or the user refused the read at the paste alert: ask the operator to allow the setting the message names. A write refused after the clipboard was cleared left it empty, and says so. `menu`, `drag`: the app did not come frontmost within 1 s (nothing sent; the app before was put back if the focus moved). `menu`: nothing pressed, as the path ends at an item that opens a menu, like a menu bar title (end it at a command inside), or at a disabled one (it needs a state the app is not in, say a selection: observe, change it, press again). `record-start`: the session is already recording (that recording goes on: `record-stop` first), its files or video would not start, or another session's recording has video. `hover`: refused before the pointer moved, as another window, or none, is at the point, the hit test went unanswered, or a button is held; or the platform would not move the pointer, the message saying where it was left (see Hover); or its `--click` press failed as `click`'s does. `glide`: the element has no visible part or position, and the cursor did not move. |
-| `usage` | Malformed arguments (exit 2): fix the call; `goldfinger --help` lists the verbs. Also a refused `batch` (a step's own bad args fail only that step, after the ones before it ran), a `replay` file that is not a trajectory its version replays (format 1 included: record it again), a command that requires `--session` run without it (see Sessions), and on an older goldfinger a call written as this skill writes it: tell the user the task needs goldfinger 0.6.0. |
+| `usage` | Malformed arguments (exit 2): fix the call; `goldfinger --help` lists the verbs. Also a refused `batch` (a step's own bad args fail only that step, after the ones before it ran), a `replay` file that is not a trajectory its version replays (format 1 included: record it again), a command that requires `--session` run without it (see Sessions), and, when `goldfinger --version` is below 0.6.0, a call written as this skill writes it: tell the user the task needs goldfinger 0.6.0. |
 | `timeout` | Reads (`status`, `apps`, `windows`, `observe`, `clipboard-read`, `session-list`), `session-cursor` and `glide` may be retried. Anything else may have landed and is not retryable: observe before repeating an action, list apps before a `launch` (it may still open), check a `window-frame` with `windows`, a `clipboard-write` with `clipboard-read` and a `session-start` with `session-list`. A `batch` timeout has no entries: observe before repeating any step. A `menu` timeout says whether it came while the menus were walked (nothing pressed) or at the press; after the press, observe the app's windows first. |
 | `daemon_unavailable` | Retry when `retryable` is true. When the message says the action may have landed, check it as for `timeout` first: a `batch` may have run steps, a `record-start` started a recording. |
 | `version_mismatch` | Two goldfinger versions met. Use the newer `goldfinger`. `goldfinger stop` and a retry also clears it, but stops the daemon other agents share. |
