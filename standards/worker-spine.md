@@ -83,11 +83,17 @@ finding → idun gh pr-merge → [release, through the repo's Kevin] →
 alfred task move STARK-n done
 ```
 
-The review gate is mandatory before any merge. Close the ticket yourself the
-moment the PR merges — unless the repo's agent instructions file defines done as
-*released*. Then you do not run its release chain yourself: request `release`
-from the repo's Kevin by [§8](#8-releases-and-other-repos), confirm his
-`done`, and close the ticket then.
+The review gate is mandatory before any merge that changes code; a PR with no
+code change (docs, prose) skips it. So does a release bot's own PR that
+changes only version manifests and changelogs: it takes a diff check that it
+touches nothing else, and the repo's tests, instead
+([Kevin's step 4](../skill/kevin/SKILL.md#merge-pr-and-review-pr) runs it).
+Your PR that skips the review still posts its step 3 run on the PR, as §5
+says. Close the ticket yourself the moment the PR merges — unless the repo's
+agent instructions file defines done as *released*. Then you do not run its
+release chain yourself: request `release` from the repo's Kevin by
+[§8](#8-releases-and-other-repos), confirm his `done`, and close the ticket
+then.
 
 **Merge contention is yours to resolve, not to wait out.** If `idun gh pr-merge`
 refuses — a stale base, a merge commit from main, a check that needs a fresh

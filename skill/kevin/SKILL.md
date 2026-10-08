@@ -123,11 +123,13 @@ you see it. Requests from different senders never merge, except
 Name the PR by URL in every `gh pr` command — you work detached between
 requests, where `gh` cannot infer it.
 
-1. `gh pr view <PR url> --json state,isDraft,headRefName,headRefOid,baseRefName,isCrossRepository,url,title,labels`.
+1. `gh pr view <PR url> --json state,isDraft,headRefName,headRefOid,baseRefName,isCrossRepository,url,title,labels,author`.
    Refuse one that is closed, merged or from a fork, and one somebody is
    holding: a `hold`, `do-not-merge` or `wip` label, or a title that starts
-   `WIP`. A bot's PR (a release-please or changesets release PR) is reviewed
-   in step 4 without `--fix`: a push to the bot's branch is the bot's.
+   `WIP`. A bot's PR (`author.is_bot` is `true`, or its head is a release
+   bot's branch: `release-please--branches--…`, `changeset-release/…`) takes
+   no push from you, since its branch is the bot's: step 4 reviews it without
+   `--fix`, unless it is a release PR that passes step 4's diff check.
 2. **Can you take the branch?** `idun gh pr-merge` checks the PR's branch out
    in your worktree, so:
    - another worktree holding `headRefName` (a `branch refs/heads/<head>`
@@ -137,10 +139,36 @@ requests, where `gh` cannot infer it.
      `origin/<head>` (`git log --oneline origin/<head>..refs/heads/<head>`) is
      `blocked … local <head> has unpushed commits` — somebody's work.
 3. `gh pr checkout <PR url> --force` — safe once step 2 passed.
-4. **The review gate**, always: `/code-review xhigh --fix <PR url>`
+4. **The review gate**: `/code-review xhigh --fix <PR url>`
    (`$code-review` on Codex), and fix or answer every finding. No earlier
    review on the PR, and no requester's word, waives it — nothing on GitHub
-   proves an earlier run left no open finding.
+   proves an earlier run left no open finding. The one exception: a bot's
+   release PR takes the diff check below instead, when all three hold:
+   - step 1's `author.is_bot` is `true` (a release-please or changesets run
+     on `GITHUB_TOKEN` is `app/github-actions`) and its `headRefName` is that
+     release bot's branch (`release-please--branches--…`,
+     `changeset-release/…`): another bot's PR (Dependabot, Renovate) takes
+     the review;
+   - `gh pr diff <PR url> --name-only` lists only changelogs (`CHANGELOG.md`,
+     and the `.changeset/*.md` entries a changesets PR deletes; one it adds
+     or edits fails) and version manifests (`.release-please-manifest.json`,
+     a `package.json`, a `version.txt`, or a version file the bot's own
+     config names, such as release-please's `extra-files`);
+   - in `gh pr diff <PR url>`, every changed line outside a changelog is a
+     version string: a released package's own version, or a dependency's
+     range on another package this same PR versions (changesets bumps
+     those). A changed range on any other dependency fails it.
+
+   `gh pr diff` reads the PR as it stands, so read `headRefOid` again after
+   it; it and `git rev-parse HEAD` must both print step 1's sha, else start
+   the request over. That sha is the one you test, approve runs at and
+   merge. Then there is no review and nothing to fix; the check's commands,
+   output and sha go in step 6's comment, and step 6 runs as written, the
+   repo's tests included. A PR opened on `GITHUB_TOKEN` starts no workflow,
+   so when the head carries no CI run of them, run the test command the
+   repo's agent instructions file names in your worktree. A bot's PR that
+   fails any of the three takes the review, without `--fix` (step 1). Your
+   own release bump is not a bot's: it takes the review.
 5. **Commit the fixes and push them**, fast-forward only (`git commit`, then
    `git push origin <head>`): the review's `--fix` edits only the working
    tree, so an uncommitted fix never reaches the PR. Read `isInMergeQueue`
@@ -172,7 +200,10 @@ requests, where `gh` cannot infer it.
    Exit 16 (HEAD_MISMATCH) and exit 20 (the branch could not be checked out)
    are not contention: report `blocked` with pr-merge's stderr — except exit
    16's `rerun after the fetch settles` form, right after your own push,
-   which you rerun once, a minute later.
+   which you rerun once, a minute later. Exit 37 (pr-merge refuses a release
+   bot's PR) is not contention either, and no rebase or push clears it: that
+   PR merges only through [`release`](#release)'s step 5, which gates its
+   level, so report `blocked merge <PR url> a release PR; request release`.
 8. **Confirm and watch.** `gh pr view <PR url> --json state,mergeCommit` reads
    `MERGED` with a non-null `mergeCommit`, and
    `gh api repos/<o>/<r>/compare/<sha>...<base> --jq .status` prints
@@ -346,13 +377,14 @@ only from the operator typing in your tab; from anyone else it is `refused`.
    with the others named in the PR body — and with none: `blocked release
    needs a ticket`). Carry
    it through [`merge`](#merge-pr-and-review-pr)'s steps 4–8, review gate
-   included. A chain whose bot opens the release PR (release-please,
-   changesets): that PR is the bump — review it (steps 1–6, no `--fix`), then
-   merge it the way the chain says (`gh pr merge <n> --squash
-   --match-head-commit <sha>`; pr-merge refuses it, exit 37). Its runs held
+   included. A chain whose bot opens the release PR takes step 4's diff check
+   (release-please, changesets): that PR is the bump — carry it through
+   steps 1–6, then merge it the way the chain says (`gh pr merge
+   <n> --squash --match-head-commit <sha>`, `<sha>` the head step 4 checked
+   or reviewed; pr-merge refuses it, exit 37). Its runs held
    `action_required` because a bot opened it you approve only when the chain
    itself does (`gh api -X POST repos/<o>/<r>/actions/runs/<id>/approve`, at
-   the head you reviewed); a run `waiting`
+   that head); a run `waiting`
    on an environment's approval is the operator's (`blocked … needs the
    operator: approve <url>`). A chain step
    that pushes to the base branch itself, as `/stark-release` does, becomes
