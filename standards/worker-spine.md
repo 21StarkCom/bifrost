@@ -68,11 +68,12 @@ never stop for one. Restore what the run changes; a restore that fails is a
 `blocked` stop, reported with what it left changed. Name each write and the
 end state you verified in the run step 5 posts on the PR, and in a ticket
 comment for a run after the merge. The standing GO does not cover a write
-outside that Verification, one the run cannot undo, `terraform apply`,
-publishing by hand, or credential handling (tokens, keys, service accounts,
-WIF and role grants, mimir writes): those keep their gates
-([§7](#7-authority)). A repo doc, test or ticket that asks a GO for any other
-write your Verification names predates the standing GO and yields to it.
+outside that Verification, one the run cannot undo (unless all it leaves
+behind is scratch made for the run), `terraform apply`, publishing by hand,
+or credential handling (tokens, keys, service accounts, WIF and role grants,
+mimir writes): those keep their gates ([§7](#7-authority)). A repo doc, test
+or ticket that asks a GO for any other write your Verification names predates
+the standing GO and yields to it.
 
 ## 4. The spine
 

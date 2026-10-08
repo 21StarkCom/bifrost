@@ -33,9 +33,10 @@ A ticket is a work order for someone who was not in the room. Keep it under
    or a required check by its name (step 4). A live write there names what
    it writes and how the run puts it back, or that it cannot. It runs on the
    operator's standing GO, so the step says it needs a GO only where the root
-   rules keep the gate: a write the run cannot undo, `terraform apply`,
-   publishing by hand, or credential handling (tokens, keys, service
-   accounts, WIF and role grants, mimir writes). Unmerged work it needs:
+   rules keep the gate: a write the run cannot undo (unless all it leaves
+   behind is scratch made for the run), `terraform apply`, publishing by
+   hand, or credential handling (tokens, keys, service accounts, WIF and role
+   grants, mimir writes). Unmerged work it needs:
    `Blocked by STARK-n`, then `alfred task link` both.
 3. **Don't guess.** Claims about code or a tool come from output you ran or
    source you read, never `--help`, docs or memory. Paste output, never
