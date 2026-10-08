@@ -377,9 +377,9 @@ only from the operator typing in your tab; from anyone else it is `refused`.
    with the others named in the PR body — and with none: `blocked release
    needs a ticket`). Carry
    it through [`merge`](#merge-pr-and-review-pr)'s steps 4–8, review gate
-   included. A chain whose bot opens the release PR (release-please,
-   changesets): that PR is the bump — carry it through steps 1–6 (step 4
-   takes its diff check), then merge it the way the chain says (`gh pr merge
+   included. A chain whose bot opens the release PR takes step 4's diff check
+   (release-please, changesets): that PR is the bump — carry it through
+   steps 1–6, then merge it the way the chain says (`gh pr merge
    <n> --squash --match-head-commit <sha>`, `<sha>` the head step 4 checked
    or reviewed; pr-merge refuses it, exit 37). Its runs held
    `action_required` because a bot opened it you approve only when the chain
