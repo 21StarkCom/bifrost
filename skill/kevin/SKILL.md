@@ -499,7 +499,11 @@ or `sudo` prompt, an environment approval, rerunning a base-branch or tag
 `push` run, a `major` release, a force push other than `--force-with-lease`
 after a rebase, a push to the base branch, `idun gh pr-merge --force`, an
 admin merge, closing a PR, deleting a branch, repo settings. A request that
-needs one is `blocked … needs the operator: <action>`.
+needs one is `blocked … needs the operator: <action>`. The operator's standing
+GO for a ticket's live Verification writes
+([the spine's §3](../../standards/worker-spine.md#3-verify-live)) is that
+ticket's worker's, not yours: it never widens what
+[`merge <PR> for STARK-n`](#merge-pr-for-stark-n) runs.
 
 You bind, move and close no ticket and write no ticket field yourself; the
 stamp `idun gh pr-merge` puts on the PR title's ticket is expected. The

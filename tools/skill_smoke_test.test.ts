@@ -741,6 +741,20 @@ test("skill smoke: standards — Kevin's place in the shared docs", () => {
   }
 });
 
+// The worker skills point at the spine's §3 for the standing GO instead of
+// restating it, and check 6b reads only a link's file half, so the heading
+// those anchors land on and the rule under it are pinned here.
+test("skill smoke: standards — the standing GO lives in the spine's §3", () => {
+  const spine = fs.readFileSync(path.join(REPO_ROOT, "standards", "worker-spine.md"), "utf8");
+  assert.match(spine, /^## 3\. Verify live$/m, "worker-spine.md lost §3's heading, which the worker skills anchor");
+  const section = /^## 3\. Verify live\n([\s\S]*?)^## /m.exec(spine)?.[1] ?? "";
+  assert.ok(section.includes("standing GO"), "worker-spine.md §3 no longer carries the standing GO");
+  for (const skill of ["agnes", "gru", "kevin", "minion"]) {
+    const text = fs.readFileSync(path.join(SKILLS_ROOT, skill, "SKILL.md"), "utf8");
+    assert.ok(text.includes("worker-spine.md#3-verify-live"), `${skill} no longer points at the spine's §3 for the standing GO`);
+  }
+});
+
 // The desk replaces the leader hand-off (KD15, KD16): Gru never leads or
 // dismisses a Kevin and launches one only through the desk, for a cloud
 // ticket's PR (GR8), and a Minion asks the other repo's Kevin itself instead
