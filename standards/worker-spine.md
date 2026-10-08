@@ -62,9 +62,13 @@ what you ran instead.
 
 The live writes your ticket's Verification names run on the operator's
 standing GO (2026-10-08): ask for no GO, on the ticket or in your tab, and
-never stop for one. Restore what the run changes, and name each write and the
-end state you verified in the run step 5 posts. A write outside that
-Verification gets no standing GO ([§7](#7-authority)).
+never stop for one. Restore what the run changes; a restore that fails is a
+stop, reported with what it left changed. Name each write and the end state
+you verified in the run step 5 posts. The standing GO does not cover a write
+outside that Verification, one the run cannot undo, `terraform apply`,
+publishing by hand, or credential handling (tokens, keys, service accounts,
+WIF and role grants, mimir writes): those keep their gates
+([§7](#7-authority)).
 
 ## 4. The spine
 
@@ -123,8 +127,8 @@ overrides them. Merging a reviewed PR needs no approval, and neither does
 standing down inside the scope [the stand-down contract](stand-down.md) sets —
 it is your own session, and it is that scope, never a grant, that bounds it.
 Publishing by hand and credential actions keep their operator gates. So do
-live-infrastructure and destructive actions, except your ticket's own
-Verification writes, which run on the standing GO in [§3](#3-verify-live). A
+live-infrastructure and destructive actions, except the Verification writes
+the standing GO in [§3](#3-verify-live) covers. A
 release through the repo's Kevin
 ([§8](#8-releases-and-other-repos)), following the chain its agent
 instructions file documents, is not publishing by hand.

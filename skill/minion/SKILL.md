@@ -298,6 +298,6 @@ standing down inside the scope [the stand-down
 contract](../../standards/stand-down.md) sets — it is your own session, and it
 is that scope, never a grant, that bounds it. Publishing by hand and credential
 actions keep their operator gates. So do live-infrastructure and destructive
-actions, except your ticket's own Verification writes: they run on the
-operator's standing GO ([the spine's §3](../../standards/worker-spine.md#3-verify-live)),
-so you ask your leader for no GO and report none as a block.
+actions, except the Verification writes the operator's standing GO covers
+([the spine's §3](../../standards/worker-spine.md#3-verify-live)): for those
+you ask your leader for no GO and report none as a block.

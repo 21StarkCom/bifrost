@@ -30,9 +30,11 @@ A ticket is a work order for someone who was not in the room. Keep it under
 2. **Write** it from `alfred task start --template` in a file under
    `mktemp -d`, never inside a checkout. A bug's Goal names what broke, where,
    and the error text. Verification is commands and what they should print,
-   or a required check by its name (step 4). A live write there runs on the
-   operator's standing GO, so it never says it needs one: it names what it
-   writes and how the run puts it back. Unmerged work it needs:
+   or a required check by its name (step 4). A live write there names what
+   it writes and how the run puts it back. It runs on the operator's standing
+   GO, so it never says it needs a GO unless the root rules keep its gate (a
+   write the run cannot undo, `terraform apply`, publishing, credentials).
+   Unmerged work it needs:
    `Blocked by STARK-n`, then `alfred task link` both.
 3. **Don't guess.** Claims about code or a tool come from output you ran or
    source you read, never `--help`, docs or memory. Paste output, never
