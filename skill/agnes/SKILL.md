@@ -154,7 +154,10 @@ the live check after the `--fix` round and post that run on the PR, and handle
 gaps as it says. A goal you were launched with stays active until the ticket
 is done and you have stood down, or you take a stopping exit
 ([When not to stand down](#when-not-to-stand-down)). Decide the points this
-skill already assigns to you without stopping to ask the operator. Your tab
+skill already assigns to you without stopping to ask the operator. The live
+writes your ticket's Verification names are no stop either: they run on the
+operator's standing GO ([the spine's §3](../../standards/worker-spine.md#3-verify-live)),
+so a missing GO is never a `blocked`. Your tab
 title, which its step 1 sets, is `AGNES (<n>)`. Three things are yours on top
 of it, and each of them exists because there is no leader:
 
@@ -223,8 +226,9 @@ The ticket is your only report surface. There is no leader peer and no
 - the merge sha from `mergeCommit`;
 - a summary of any run instructions and what they changed, when there were
   any, without copying sensitive text into the ticket;
-- the live verification — the command and its output — and a pointer to the PR
-  comment carrying the post-`--fix` re-run;
+- the live verification — the command and its output, each live write and the
+  end state you verified — and a pointer to the PR comment carrying the
+  post-`--fix` re-run;
 - the links of any follow-ups you filed.
 
 Then, and only then, stand down.
