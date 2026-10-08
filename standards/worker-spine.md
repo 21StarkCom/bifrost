@@ -16,10 +16,12 @@ skill carries the rest. Every worker reaches him by [§8](#8-releases-and-other-
 This doc is runtime-neutral and is shipped byte-identical to both runtimes.
 Throughout, **the repo's agent instructions file** means `CLAUDE.md` on Claude
 and `AGENTS.md` on Codex. Where it and this doc disagree, it wins, except on
-[§8](#8-releases-and-other-repos)'s who runs a release: a chain that has the
-merger tag, publish or install still goes through the repo's Kevin. And **a
-skill is written in its Claude form** (`/minion`); the same skill is `$minion`
-on Codex, so a brief or a launch naming one names the other.
+two points: [§8](#8-releases-and-other-repos)'s who runs a release (a chain
+that has the merger tag, publish or install still goes through the repo's
+Kevin), and [§3](#3-verify-live)'s standing GO (a repo text that asks a GO for
+a write it covers yields to it). And **a skill is written in its Claude
+form** (`/minion`); the same skill is `$minion` on Codex, so a brief or a
+launch naming one names the other.
 
 ## 1. Bind and read
 
@@ -63,12 +65,14 @@ what you ran instead.
 The live writes your ticket's Verification names run on the operator's
 standing GO (2026-10-08): ask for no GO, on the ticket or in your tab, and
 never stop for one. Restore what the run changes; a restore that fails is a
-stop, reported with what it left changed. Name each write and the end state
-you verified in the run step 5 posts. The standing GO does not cover a write
+`blocked` stop, reported with what it left changed. Name each write and the
+end state you verified in the run step 5 posts on the PR, and in a ticket
+comment for a run after the merge. The standing GO does not cover a write
 outside that Verification, one the run cannot undo, `terraform apply`,
 publishing by hand, or credential handling (tokens, keys, service accounts,
 WIF and role grants, mimir writes): those keep their gates
-([§7](#7-authority)).
+([§7](#7-authority)). A repo doc, test or ticket that asks a GO for any other
+write your Verification names predates the standing GO and yields to it.
 
 ## 4. The spine
 
@@ -127,11 +131,11 @@ overrides them. Merging a reviewed PR needs no approval, and neither does
 standing down inside the scope [the stand-down contract](stand-down.md) sets —
 it is your own session, and it is that scope, never a grant, that bounds it.
 Publishing by hand and credential actions keep their operator gates. So do
-live-infrastructure and destructive actions, except the Verification writes
-the standing GO in [§3](#3-verify-live) covers. A
-release through the repo's Kevin
-([§8](#8-releases-and-other-repos)), following the chain its agent
-instructions file documents, is not publishing by hand.
+live-infrastructure and destructive actions, except your own ticket's
+Verification writes that the standing GO in [§3](#3-verify-live) covers. A
+release through the repo's Kevin ([§8](#8-releases-and-other-repos)),
+following the chain its agent instructions file documents, is not publishing
+by hand.
 
 ## 8. Releases and other repos
 
