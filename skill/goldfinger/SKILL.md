@@ -105,8 +105,10 @@ ending all sessions; run it only as the errors say.
 - While the Mac is locked, apps show goldfinger no windows: a window has no accessibility
   counterpart, so `observe` answers `not_found`, its message ending `; the screen is locked, and
   apps show goldfinger no windows until it is unlocked`, as does a `replay` step's window or
-  element lookup. An element target taken before the lock is `stale_snapshot` (Chrome Canary,
-  probe P4). The first `observe` after the unlock has the tree: wait for it.
+  element lookup. `window-frame` answers the same `not_found` without the clause, its message
+  saying the window may be on another Space. An element target taken before the lock is
+  `stale_snapshot` (Chrome Canary, probe P4). Only the operator can unlock: tell them, and wait.
+  The first `observe` after the unlock has the tree.
 - A single left click into web content of a background app outside the Chromium family (Safari or
   any other app built on WebKit, and Firefox too, as the tree names no engine) is refused
   `background_unavailable`, with nothing sent: a `click` without `--double` or `--right`, an
@@ -210,10 +212,10 @@ These take no target and no `--observe`; the clipboard verbs need no grant and r
   `y` at least 0, `w` and `h` at least 1, else `usage`. So a window left of or above the primary
   display (a negative `x` or `y` in `windows`) cannot be framed there. It returns
   `{"frame": {"x", "y", "width", "height"}, "warnings": []}`, `frame` being the window server's
-  read-back once it matched the request within 2 points, never the request, as `windows` reports.
-  An app can hold the window at a size of its own (its size steps, a minimum or a maximum): with
-  the position matched and the size held, it is still `ok`, `frame` has the app's size, and
-  `warnings` holds `frame_adjusted`.
+  read-back, never the request, as `windows` reports. It is `ok` once that read-back matches the
+  request within 2 points, or when an app holds the window at a size of its own (its size steps,
+  a minimum or a maximum): with the position matched and the size held, `frame` has the app's
+  size, and `warnings` holds `frame_adjusted`.
 - `goldfinger clipboard-read --json` returns the plain text as `{"text": "…"}`, or `{}` when the
   clipboard holds no plain text or an empty string. It holds no 1 s guard, but may put the
   platform's paste alert in front of the user, which is not background: read it only when the
@@ -417,7 +419,7 @@ Actions return `"warnings": [...]`, usually empty. With each, the action happene
 | Code | Do this |
 |---|---|
 | `permission_missing` | A grant is missing, which the message names: ask the operator to run `goldfinger setup`, and do not retry. |
-| `not_found` | The pid, window or bundle id (`launch`) is gone, or the window has no accessibility tree (another desktop; for `window-frame`, no accessibility counterpart) or closed while `window-frame` moved it: list apps or windows again. A message ending `the screen is locked, …` (`observe`, `replay`): the Mac is locked, so wait for the unlock (see Targets and staleness). `record-stop` on a live session that is not recording. `replay`: a missing file, or a step's app, window or element not found, a replayed `hover`'s pressed element included. `hover --click`: the observe in its hold found no window or tree, and nothing was clicked. `menu`: no menu bar, an item gone while the menus were walked, or a segment matching no item: fix the path from the titles the message lists. |
+| `not_found` | The pid, window or bundle id (`launch`) is gone, or the window has no accessibility tree (another desktop; for `window-frame`, no accessibility counterpart) or closed while `window-frame` moved it: list apps or windows again. A message ending `the screen is locked, …` (`observe`, `replay`): the Mac is locked, which only the operator can undo: tell them, and wait for the unlock (see Targets and staleness). A `replay` stopped there had already run its steps before `k`, and running the file again repeats them. `record-stop` on a live session that is not recording. `replay`: a missing file, or a step's app, window or element not found, a replayed `hover`'s pressed element included. `hover --click`: the observe in its hold found no window or tree, and nothing was clicked. `menu`: no menu bar, an item gone while the menus were walked, or a segment matching no item: fix the path from the titles the message lists. |
 | `stale_snapshot` | Observe again, then act on the new snapshot. |
 | `invalid_target` | Fix the target: a malformed id, an index past the snapshot, a pixel target without a screenshot or outside it, a pixel target for `set-value`, a `step<k>:` target outside a `batch`, a `drag` whose `to` is in another window than its `from`, or a `hover --click` index past the observe taken in its hold. |
 | `background_unavailable` | Nothing was activated or sent. A `cmd` combo (a menu shortcut reaches only the active app): click the control, or press its menu-bar command with `menu … --foreground`. `menu` or `drag` without `--foreground`: add it, which switches the user's front app for the action. A mouse event this platform cannot aim into a background window: use an element target, another route, or ask the user; for a `drag` refused even with `--foreground`, no flag or target lifts it. A single click into background web content outside Chromium, WebKit's or Firefox's (see Targets), a `hover --click` press's mouse fallback included: target an element whose press lands. |
