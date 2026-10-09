@@ -19,9 +19,9 @@ starts it on demand (`stop` never does). No verb activates an app or raises a wi
 activates during an action's 1 s guard, goldfinger puts back the app that was in front, even over
 the user's switch.
 
-This skill teaches 0.6.0: run `goldfinger --version` once before the first call. An older
+This skill teaches 0.7.0: run `goldfinger --version` once before the first call. An older
 goldfinger can fail calls written as this skill writes them with `usage`, or answer them
-otherwise, so below 0.6.0 act on nothing: tell the user the task needs goldfinger 0.6.0
+otherwise, so below 0.7.0 act on nothing: tell the user the task needs goldfinger 0.7.0
 (`brew upgrade --cask goldfinger`, theirs to run, as it quits the daemon every agent shares).
 
 ## Arguments
@@ -101,10 +101,14 @@ ending all sessions; run it only as the errors say.
   most 4 s, and returns a partial tree when the build takes longer: observe again. Read a
   background Chrome tab through Huginn (below), but not while the operator types in that Chrome:
   wait, or ask them. In another Chromium browser, an element `click` on the tab makes it the
-  active one, as probe P4 did, and changes the tab the operator sees. While the Mac is locked,
-  Chrome Canary's window has no accessibility counterpart (probe P4): `observe` answers
-  `not_found`, and an element target taken before the lock `stale_snapshot`. The first `observe`
-  after the unlock has the tree: wait for it.
+  active one, as probe P4 did, and changes the tab the operator sees.
+- While the Mac is locked, apps show goldfinger no windows: a window has no accessibility
+  counterpart, so `observe` answers `not_found`, its message ending `; the screen is locked, and
+  apps show goldfinger no windows until it is unlocked`, as does a `replay` step's window or
+  element lookup. `window-frame` answers the same `not_found` without the clause, its message
+  saying the window may be on another Space. An element target taken before the lock is
+  `stale_snapshot` (Chrome Canary, probe P4). Only the operator can unlock: tell them, and wait.
+  The first `observe` after the unlock has the tree.
 - A single left click into web content of a background app outside the Chromium family (Safari or
   any other app built on WebKit, and Firefox too, as the tree names no engine) is refused
   `background_unavailable`, with nothing sent: a `click` without `--double` or `--right`, an
@@ -208,7 +212,10 @@ These take no target and no `--observe`; the clipboard verbs need no grant and r
   `y` at least 0, `w` and `h` at least 1, else `usage`. So a window left of or above the primary
   display (a negative `x` or `y` in `windows`) cannot be framed there. It returns
   `{"frame": {"x", "y", "width", "height"}, "warnings": []}`, `frame` being the window server's
-  read-back once it matched the request within 2 points, never the request, as `windows` reports.
+  read-back, never the request, as `windows` reports. It is `ok` once that read-back matches the
+  request within 2 points, or when an app holds the window at a size of its own (its size steps,
+  a minimum or a maximum): with the position matched and the size held, `frame` has the app's
+  size, and `warnings` holds `frame_adjusted`.
 - `goldfinger clipboard-read --json` returns the plain text as `{"text": "…"}`, or `{}` when the
   clipboard holds no plain text or an empty string. It holds no 1 s guard, but may put the
   platform's paste alert in front of the user, which is not background: read it only when the
@@ -405,18 +412,19 @@ Actions return `"warnings": [...]`, usually empty. With each, the action happene
 | `restore_failed` | A `--foreground` `menu` or `drag` acted, but the app frontmost before had quit or did not come back to the front within 1 s, so there is no `restored`. The target's app may still be in front and no verb brings the user's app back: tell the user. |
 | `record_failed` | Its line could not be written, so replaying the recording skips that step. |
 | `hover_interrupted` | Someone moved the mouse pointer off `hover`'s point during its hold, or held a button at its end, so it was left where it was: what ran inside the hold may have run without the hover, and its `observe` may not show what the hover reveals. Observe before another hover. |
+| `frame_adjusted` | `window-frame` put the window at the position asked for, but its app holds it at another size (its size steps, a minimum or a maximum), so `frame` has that size, not the one asked for: work with the size in `frame`. A replayed `window-frame` adds it to replay's `warnings` the same way. |
 
 ## Errors: what to do
 
 | Code | Do this |
 |---|---|
 | `permission_missing` | A grant is missing, which the message names: ask the operator to run `goldfinger setup`, and do not retry. |
-| `not_found` | The pid, window or bundle id (`launch`) is gone, or the window has no accessibility tree (another desktop; for `window-frame`, no accessibility counterpart) or closed while `window-frame` moved it: list apps or windows again. `record-stop` on a live session that is not recording. `replay`: a missing file, or a step's app, window or element not found, a replayed `hover`'s pressed element included. `hover --click`: the observe in its hold found no window or tree, and nothing was clicked. `menu`: no menu bar, an item gone while the menus were walked, or a segment matching no item: fix the path from the titles the message lists. |
+| `not_found` | The pid, window or bundle id (`launch`) is gone, or the window has no accessibility tree (another desktop; for `window-frame`, no accessibility counterpart) or closed while `window-frame` moved it: list apps or windows again. A message ending `the screen is locked, …` (`observe`, `replay`): the Mac is locked, which only the operator can undo: tell them, and wait for the unlock (see Targets and staleness). A `replay` stopped there had already run its steps before `k`, and running the file again repeats them. `record-stop` on a live session that is not recording. `replay`: a missing file, or a step's app, window or element not found, a replayed `hover`'s pressed element included. `hover --click`: the observe in its hold found no window or tree, and nothing was clicked. `menu`: no menu bar, an item gone while the menus were walked, or a segment matching no item: fix the path from the titles the message lists. |
 | `stale_snapshot` | Observe again, then act on the new snapshot. |
 | `invalid_target` | Fix the target: a malformed id, an index past the snapshot, a pixel target without a screenshot or outside it, a pixel target for `set-value`, a `step<k>:` target outside a `batch`, a `drag` whose `to` is in another window than its `from`, or a `hover --click` index past the observe taken in its hold. |
 | `background_unavailable` | Nothing was activated or sent. A `cmd` combo (a menu shortcut reaches only the active app): click the control, or press its menu-bar command with `menu … --foreground`. `menu` or `drag` without `--foreground`: add it, which switches the user's front app for the action. A mouse event this platform cannot aim into a background window: use an element target, another route, or ask the user; for a `drag` refused even with `--foreground`, no flag or target lifts it. A single click into background web content outside Chromium, WebKit's or Firefox's (see Targets), a `hover --click` press's mouse fallback included: target an element whose press lands. |
-| `action_failed` | The app rejected the action or value: observe the state before another try. An element that needed mouse events has no visible part in its window (nothing sent): scroll it into view, observe again, act on the new snapshot. `window-frame`: the window is not movable or resizable (nothing written), a write was rejected (part may have landed), or the app or platform clamped it (a minimum size, a title bar kept below the menu bar), the message naming both frames: run `windows`. `clipboard-read`, `clipboard-write`: clipboard access is denied (nothing written), or the user refused the read at the paste alert: ask the operator to allow the setting the message names. A write refused after the clipboard was cleared left it empty, and says so. `menu`, `drag`: the app did not come frontmost within 1 s (nothing sent; the app before was put back if the focus moved). `menu`: nothing pressed, as the path ends at an item that opens a menu, like a menu bar title (end it at a command inside), or at a disabled one (it needs a state the app is not in, say a selection: observe, change it, press again). `record-start`: the session is already recording (that recording goes on: `record-stop` first), its files or video would not start, or another session's recording has video. `hover`: refused before the pointer moved, as another window, or none, is at the point, the hit test went unanswered, or a button is held; or the platform would not move the pointer, the message saying where it was left (see Hover); or its `--click` press failed as `click`'s does. `glide`: the element has no visible part or position, and the cursor did not move. |
-| `usage` | Malformed arguments (exit 2): fix the call; `goldfinger --help` lists the verbs. Also a refused `batch` (a step's own bad args fail only that step, after the ones before it ran), a `replay` file that is not a trajectory its version replays (format 1 included: record it again), a command that requires `--session` run without it (see Sessions), and, when `goldfinger --version` is below 0.6.0, a call written as this skill writes it: tell the user the task needs goldfinger 0.6.0. |
+| `action_failed` | The app rejected the action or value: observe the state before another try. An element that needed mouse events has no visible part in its window (nothing sent): scroll it into view, observe again, act on the new snapshot. `window-frame`: the window is not movable or resizable (nothing written), a write was rejected (part may have landed), or no read-back matched: the platform held its position off the request (a title bar kept below the menu bar), or its frame kept changing, the message naming both frames: run `windows`. `clipboard-read`, `clipboard-write`: clipboard access is denied (nothing written), or the user refused the read at the paste alert: ask the operator to allow the setting the message names. A write refused after the clipboard was cleared left it empty, and says so. `menu`, `drag`: the app did not come frontmost within 1 s (nothing sent; the app before was put back if the focus moved). `menu`: nothing pressed, as the path ends at an item that opens a menu, like a menu bar title (end it at a command inside), or at a disabled one (it needs a state the app is not in, say a selection: observe, change it, press again). `record-start`: the session is already recording (that recording goes on: `record-stop` first), its files or video would not start, or another session's recording has video. `hover`: refused before the pointer moved, as another window, or none, is at the point, the hit test went unanswered, or a button is held; or the platform would not move the pointer, the message saying where it was left (see Hover); or its `--click` press failed as `click`'s does. `glide`: the element has no visible part or position, and the cursor did not move. |
+| `usage` | Malformed arguments (exit 2): fix the call; `goldfinger --help` lists the verbs. Also a refused `batch` (a step's own bad args fail only that step, after the ones before it ran), a `replay` file that is not a trajectory its version replays (format 1 included: record it again), a command that requires `--session` run without it (see Sessions), and, when `goldfinger --version` is below 0.7.0, a call written as this skill writes it: tell the user the task needs goldfinger 0.7.0. |
 | `timeout` | Reads (`status`, `apps`, `windows`, `observe`, `clipboard-read`, `session-list`), `session-cursor` and `glide` may be retried. Anything else may have landed and is not retryable: observe before repeating an action, list apps before a `launch` (it may still open), check a `window-frame` with `windows`, a `clipboard-write` with `clipboard-read` and a `session-start` with `session-list`. A `batch` timeout has no entries: observe before repeating any step. A `menu` timeout says whether it came while the menus were walked (nothing pressed) or at the press; after the press, observe the app's windows first. |
 | `daemon_unavailable` | Retry when `retryable` is true. When the message says the action may have landed, check it as for `timeout` first: a `batch` may have run steps, a `record-start` started a recording. |
 | `version_mismatch` | Two goldfinger versions met. Use the newer `goldfinger`. `goldfinger stop` and a retry also clears it, but stops the daemon other agents share. |
