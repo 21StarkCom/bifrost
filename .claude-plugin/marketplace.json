@@ -102,7 +102,7 @@
       "name": "stark-ops",
       "source": "./",
       "description": "Repository operations beyond the spec-driven pipeline — coordinate Minions with Gru, cut releases, run session start/end, hand off work across sessions, run one ticket solo and unattended with Agnes, run Kevin, a repo's request desk that any agent asks for merges and releases, open a Lucius brainstorm in a tab of its own, and operate desktop apps in the background with goldfinger.",
-      "version": "0.21.6",
+      "version": "0.21.7",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"

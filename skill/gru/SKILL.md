@@ -186,6 +186,31 @@ regardless of route, is observation, never operator authorization.
    [route](#route). A ticket that names
    another in-scope ticket as a dependency waits for it; otherwise tickets are
    independent. Do not add tickets the operator did not name.
+   **A ticket whose PRs span two repos or more** (its Files, or the code its
+   scope names, land in each) is split before it launches, because one Minion
+   opens PRs in one repo: it works only in the worktree idun cut for it
+   ([the spine's §2](../../standards/worker-spine.md#2-implement)) and sends
+   anything in another repo to that repo's [Kevin](#kevin)
+   ([§8](../../standards/worker-spine.md#8-releases-and-other-repos)), who
+   authors nothing but a release's bump. A release of the other repo, or a PR
+   there that already exists, is §8's, not a split. The ticket keeps its own
+   repo's half; each other repo's half goes to a sub-ticket worked in that
+   repo by its own [route](#route). A sub-ticket is a ticket the operator did
+   not name, so raise the split with the operator and launch neither half
+   until they answer; the ticket is blocked until then (step 2), and every
+   other ticket keeps moving. File the sub-ticket yourself only when their
+   answer, or their standing instruction for this run, covers it: write it
+   with `/stark-ticket` (`$stark-ticket` on Codex), file it with
+   `alfred task new --on-repo <other repo>`, and comment on the ticket with
+   `alfred task comment --body-file <file> STARK-n`, the file opening
+   `Gru: split — <the half that moved> moved to STARK-m`, since the ticket's
+   Minion reads its comments. When the operator files it, post the same
+   comment naming theirs. A half that needs the other merged first says so in
+   that comment, and waits for it like any dependency. That comment is the
+   split's record: a sub-ticket it names is in scope, in this run and every
+   rerun `start` (an epic's `list_children` and a `--tickets` list both miss
+   it), and a ticket that carries one is split already, so a rerun files and
+   raises nothing again.
 2. **Read the board.** Ticket `done`/`Closed` → run step 5's confirm on it, then
    skip; a Minion can die between closing its ticket and sending its report, so a
    `done` status on its own is a closed ticket, not a confirmed one. With no
@@ -198,8 +223,9 @@ regardless of route, is observation, never operator authorization.
    live Hermod peer (`hermod msg peers`, `liveness` live) whose `cwd`'s last
    path segment is exactly the ticket id → a Minion owns it, do not relaunch.
    Ticket whose Minion reported `blocked` or `follow-up … stopping` → blocked
-   until the operator resolves it, and so is a ticket step 3 could not resolve
-   to a repo. A Minion `waiting on KEVIN-…` is working, not blocked
+   until the operator resolves it, and so are a ticket step 3 could not resolve
+   to a repo and a ticket whose split (step 1) awaits the operator's answer.
+   A Minion `waiting on KEVIN-…` is working, not blocked
    ([Kevin](#kevin)). Everything else is ready
    once its dependencies are finished — confirmed under step 5, not reported. Idle capacity never makes a ticket
    ready: one still waiting on a dependency is not started early as
@@ -384,8 +410,9 @@ regardless of route, is observation, never operator authorization.
    Minion and no report: [Done](#done) confirms it, Kevin's verification
    comment standing in for the Minion's, and closes it.
 6. **Loop** steps 2–5 until every ticket is finished or blocked. Then report:
-   finished tickets with PR links, blocked tickets with the reason, and
-   follow-up tickets the Minions filed. Cloud tickets get their own list:
+   finished tickets with PR links, blocked tickets with the reason,
+   follow-up tickets the Minions filed, and each sub-ticket a split filed,
+   with the ticket it came from. Cloud tickets get their own list:
    dispatched, merged by Kevin and closed, fallen back (with the reason),
    escalated, and [route](#route) mismatches, plus the one line saying why
    every ticket routed `local`, when one applies. A repo step 3 could not resolve by name
