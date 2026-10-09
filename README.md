@@ -133,7 +133,7 @@ stark-ops also ships one hook: a PostToolUse `tools/fact_routing_hook.ts` that r
 | [`/stark-init-docs`](skill/stark-init-docs/SKILL.md) | Scaffolds a repo's docs layout (`docs/adr/`, `docs/specs/`, `docs/retros/`). Modes: template, backfill, upgrade, clean. |
 | [`/stark-adr`](skill/stark-adr/SKILL.md) | Records and supersedes Architecture Decision Records under `docs/adr/`, through `brain adr`. |
 | [`/stark-rules-optimizer`](skill/stark-rules-optimizer/SKILL.md) | Audits one repo's `.claude/rules`, CLAUDE.md and AGENTS.md against how Claude Code and Codex load them. Read-only by default; `--apply` stops at a reviewed draft PR. |
-| [`/stark-agent-docs`](skill/stark-agent-docs/SKILL.md) | How to write anything another agent reads, and where each line belongs: a hook or permission, CLAUDE.md, a `paths:` rule, a skill, memory, or nowhere. Loads on its own when an agent edits an instruction file, a skill or a doc they point to. |
+| [`/stark-agent-docs`](skill/stark-agent-docs/SKILL.md) | How to write anything another agent reads, and where each line belongs: branch protection, a hook or a permission, CLAUDE.md, a `paths:` rule, a skill, memory, or nowhere. Loads on its own when an agent edits an instruction file, a skill or a doc they point to. |
 | [`/stark-persona`](skill/stark-persona/SKILL.md) | Assigns the session a character voice by weighted random selection. |
 
 ### stark-write: long-form writing

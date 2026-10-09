@@ -31,15 +31,18 @@ so it changes what the agent does, then check that it loaded.
 
 | The line is | Put it in | The agent gets it |
 |---|---|---|
-| something that must always or never happen | the remote's branch protection or a git hook for every client; a Claude hook or `permissions.deny` covers Claude alone; prose may point at them | enforced, whatever the model decides |
+| something that must always or never happen | the remote's branch protection or a git hook for every client; a Claude hook or `permissions.deny` covers Claude alone; prose may point at them | enforced, not advised |
 | needed in every session in this repo, and not readable from the code | the repo's CLAUDE.md; where Codex also works in the repo, AGENTS.md shares it | at start-up |
 | true only for some paths | `.claude/rules/<topic>.md`, scoped with `paths:` | when Claude reads or writes a matching file |
 | a procedure of more than a few steps | a skill, or a doc behind a one-line pointer | when invoked, or when the pointer fires |
-| one person's preference | `~/.claude/CLAUDE.md`, or a gitignored CLAUDE.local.md | at start-up, for that person |
-| a correction or preference learned in a session | auto-memory, in the harness's own format | its index at start-up |
+| an instruction one person writes for their own sessions | `~/.claude/CLAUDE.md`, or a gitignored CLAUDE.local.md | at start-up, for that person |
+| what the agent learned in a session: a correction, a confirmed approach, a stated preference | auto-memory, in the harness's own format | its index at start-up |
 | how fleet repos relate, or when to reach one | the vault-ecosystem corpus (`repos/<slug>/index.md`) | when looked up |
 | a secret | Mímir | never from a file |
 | readable from the code, config, `--help` or git history | nowhere | the agent looks it up |
+
+On Codex the only path scope is an AGENTS.md in that directory, and the
+personal file is `~/.codex/AGENTS.md`.
 
 Before you write a rule, an import, an AGENTS.md, a symlink, a hook or a skill
 description, read that file's section of [load facts](references/load-facts.md):
@@ -66,7 +69,11 @@ the loaders differ from what the file names suggest.
   ([recipe](references/load-facts.md#check-what-loaded)).
 - **It changes behaviour**: run the task the line is for in a fresh session; a
   line that changes nothing is a candidate to cut.
-- **The repo stays sound**: `/stark-rules-optimizer` (`$stark-rules-optimizer`
-  on Codex) measures load scope, globs, budgets, dead references and
-  duplication across a repo's instruction files; `/stark-memory` measures
-  auto-memory against its caps.
+- **The repo stays sound**: run the read-only measurer below. Its judged pass,
+  `/stark-rules-optimizer`, starts only when the operator types it.
+
+```bash
+TOOLS="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/code-review}/tools"
+# load scope, globs, size budgets, dead references
+node --no-warnings "$TOOLS/rules_audit.ts" --repo .
+```
