@@ -186,6 +186,20 @@ regardless of route, is observation, never operator authorization.
    [route](#route). A ticket that names
    another in-scope ticket as a dependency waits for it; otherwise tickets are
    independent. Do not add tickets the operator did not name.
+   **A ticket whose PRs span two repos** (its Files, or the work its scope
+   names, land in both) is split before it launches, because one Minion opens
+   PRs in one repo: a Claude Minion's worktree guard refuses git outside its
+   own worktree, and a repo's [Kevin](#kevin) authors nothing but a release's
+   bump. The ticket keeps its own repo's half; the second repo's half goes to
+   a sub-ticket with its own Minion in that repo. That sub-ticket is a ticket
+   the operator did not name, so raise the split with the operator and launch
+   neither half until they answer, keeping every other ticket moving. File it
+   yourself only when the operator's standing instruction for this run covers
+   it: write it with `/stark-ticket` (`$stark-ticket` on Codex), file it with
+   `alfred task new --on-repo <second repo>`, and comment its link on the
+   ticket, naming the half that moved, since the ticket's Minion reads its
+   comments. A half that needs the other merged first says so in that comment,
+   and waits for it like any dependency.
 2. **Read the board.** Ticket `done`/`Closed` → run step 5's confirm on it, then
    skip; a Minion can die between closing its ticket and sending its report, so a
    `done` status on its own is a closed ticket, not a confirmed one. With no
