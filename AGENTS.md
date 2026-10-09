@@ -1,6 +1,6 @@
 # AGENTS.md — bifrost
 
-`21StarkCom/bifrost` contains 30 runtime-neutral skills, their TypeScript tools, and a Claude Code marketplace serving seven plugins. This is a personal repository with one user.
+`21StarkCom/bifrost` contains 31 runtime-neutral skills, their TypeScript tools, and a Claude Code marketplace serving seven plugins. This is a personal repository with one user.
 
 This is the Codex/Cursor entry point. **Read [CLAUDE.md](CLAUDE.md) before changing the repo**; it is the detailed reference and wins on conflict. Keep both files consistent and limited to current structure, commands, and rules. Do not add incident narratives, migration history, or ticket records. Codex loads at most 32 KiB of project instructions, so keep this file a short index: put detail in `CLAUDE.md`.
 
@@ -33,7 +33,7 @@ This is the Codex/Cursor entry point. **Read [CLAUDE.md](CLAUDE.md) before chang
 ## Skills and plugins
 
 - Edit the canonical `skill/` and `tools/` trees; never write a Codex-specific copy. Claude Code is the only install target, Codex runs the same trees, and Codex and Gemini are also dispatched as review agents. Keep shared instructions runtime-neutral. A Claude skill invocation such as `/agnes` is `$agnes` on Codex.
-- The manifest stays at the repo root. Every plugin uses `"source": "./"` and an explicit `skills` list; the seven lists partition the 30 skills. Keep the directory named `skill/` so discovery follows those lists. Recheck discovery after a Claude CLI upgrade.
+- The manifest stays at the repo root. Every plugin uses `"source": "./"` and an explicit `skills` list; the seven lists partition the 31 skills. Keep the directory named `skill/` so discovery follows those lists. Recheck discovery after a Claude CLI upgrade.
 - A hook that serves a skill ships as an inline `hooks` object on its one plugin entry, running `node "${CLAUDE_PLUGIN_ROOT}/tools/<tool>.ts"` (today: stark-ops' PostToolUse fact-routing hook, whose fleet slugs are the vault-ecosystem checkout's `repos/<slug>/index.md` and `systems/<slug>/index.md` folders less scaffold names, which never matches `21stark` (the org and workspace name) in prose, and which says so when it falls back to its built-in list). An edit to that tool or its imports bumps the owning plugin's version, like a skill edit. Never add a root `hooks/`, `skills/`, `commands/`, `agents/`, `output-styles/`, `themes/`, `workflows/`, `monitors/`, `.mcp.json`, `.lsp.json`, `settings.json` or `.claude-plugin/plugin.json`; all seven plugins would load it.
 - When changing a skill, bump every owning plugin's manifest version **in the same PR**. Installed plugins use versioned caches: bump → merge → `/plugin update`. Direct checkout invocations read edits immediately.
 - Resolve shipped assets through `tools/asset_root_lib.ts` (`assetRoot()`); keep mutable state under `stateRoot()`. Skills use `${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/code-review}`. Do not hardcode asset subdirectories under the home fallback.
