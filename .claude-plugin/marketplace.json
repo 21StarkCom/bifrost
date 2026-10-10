@@ -203,7 +203,7 @@
       "name": "stark-progress",
       "source": "./mods/stark-progress",
       "description": "Live progress bars above the Claude Code prompt for Gru, Minion and Agnes runs, drawn from the state files under ~/.cache/stark-progress/ the skills write.",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"

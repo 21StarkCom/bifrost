@@ -10,6 +10,26 @@ Install it on its own; the seven skill plugins do not need it:
 /plugin install stark-progress@bifrost
 ```
 
+## What it looks like
+
+Gru's tab, above the prompt (each bar is 20 cells, a fifth per stage, and
+draws green when `closed`, red when `blocked` and cyan otherwise; the header
+is bold and each ticket's title dim):
+
+```
+Gru · STARK-1200 · 1/4 closed
+████████████████████ STARK-1201  closed  Add the export command
+████████████░░░░░░░░ STARK-1202  review  Document the export flags
+████████░░░░░░░░░░░░ STARK-1203  pr      Cache the export index
+░░░░░░░░░░░░░░░░░░░░ STARK-1204  blocked Sign the export bundle
+```
+
+A Minion's or Agnes's tab, its own ticket's bar and no header:
+
+```
+████████████░░░░░░░░ STARK-1202  review  Document the export flags
+```
+
 ## The state contract
 
 The skills write these files; the mod only reads them. They are runtime-neutral:
