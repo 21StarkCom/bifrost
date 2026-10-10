@@ -70,10 +70,17 @@ import { REPO_ROOT, blankWholeLineComments, readRepoFile } from "./repo_files_li
 //               twice under two names;
 //   self-hosted — every `source` stays `"./"`, the one value that means "this
 //               checkout"; anything else silently points installs at another tree.
+//
+// The one exception is a mod: a Claude Code plugin of function hooks, which carries
+// its own `.claude-plugin/plugin.json` and `hooks/` and so cannot share the root.
+// Each sits under `mods/<name>/`, is its own entry sourced from there, and is named
+// in MOD_SOURCES; it claims no skill and declares no inline hooks. Any other
+// non-"./" entry still fails.
 
 const MARKETPLACE_REL = ".claude-plugin/marketplace.json";
 const SKILL_ROOT_REL = "skill";
 const EXPECTED_PLUGIN_COUNT = 7;
+const MOD_SOURCES: Record<string, string> = { "stark-progress": "./mods/stark-progress" };
 
 interface Plugin {
   name: string;
@@ -83,7 +90,10 @@ interface Plugin {
   hooks?: unknown;
 }
 
-/** Parses the manifest into the fields these gates care about, failing loudly on any shape surprise. */
+/**
+ * Parses the manifest into the fields these gates care about, failing loudly on any shape surprise.
+ * Returns the skill bundles only: each mod entry is checked against MOD_SOURCES here and left out.
+ */
 function readMarketplace(): Plugin[] {
   const raw = readRepoFile(
     MARKETPLACE_REL,
@@ -102,7 +112,60 @@ function readMarketplace(): Plugin[] {
   const plugins = (parsed as { plugins?: unknown }).plugins;
   assert.ok(Array.isArray(plugins), `${MARKETPLACE_REL}: \`plugins\` is missing or not an array`);
 
-  return plugins.map((entry, i) => {
+  const isMod = (entry: unknown): boolean => {
+    const name = (entry as { name?: unknown }).name;
+    return typeof name === "string" && Object.hasOwn(MOD_SOURCES, name);
+  };
+  const mods = plugins.filter(isMod) as {
+    name: string;
+    version?: unknown;
+    source?: unknown;
+    skills?: unknown;
+    hooks?: unknown;
+  }[];
+  assert.deepEqual(
+    mods.map((m) => m.name).sort(),
+    Object.keys(MOD_SOURCES).sort(),
+    `${MARKETPLACE_REL}: every mod in MOD_SOURCES needs exactly one entry`,
+  );
+  const modDirs = fs
+    .readdirSync(path.join(REPO_ROOT, "mods"), { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .sort();
+  assert.deepEqual(
+    modDirs,
+    Object.keys(MOD_SOURCES).sort(),
+    `mods/ and MOD_SOURCES disagree: a mod folder with no entry ships to nobody, and an entry with no ` +
+      `folder installs nothing.`,
+  );
+  for (const m of mods) {
+    assert.equal(
+      m.source,
+      MOD_SOURCES[m.name],
+      `${MARKETPLACE_REL}: mod \`${m.name}\` must be sourced from ${MOD_SOURCES[m.name]}`,
+    );
+    assert.ok(
+      m.skills === undefined && m.hooks === undefined,
+      `${MARKETPLACE_REL}: mod \`${m.name}\` claims skills or inline hooks. A mod ships its own hooks/ ` +
+        `and no skill; skills stay in the seven bundles.`,
+    );
+    // A mod states its version twice, and an install keys its cache by one of
+    // them: a bump in one place alone may never reach the machine.
+    const manifestRel = `${(MOD_SOURCES[m.name] as string).slice(2)}/.claude-plugin/plugin.json`;
+    const manifest = JSON.parse(readRepoFile(manifestRel, `It is mod \`${m.name}\`'s own manifest.`)) as {
+      name?: unknown;
+      version?: unknown;
+    };
+    assert.deepEqual(
+      { name: manifest.name, version: manifest.version },
+      { name: m.name, version: m.version },
+      `${manifestRel} and mod \`${m.name}\`'s ${MARKETPLACE_REL} entry disagree on name or version; ` +
+        `bump both in the same change.`,
+    );
+  }
+
+  return plugins.flatMap((entry, i) => (isMod(entry) ? [] : [{ entry, i }])).map(({ entry, i }) => {
     const p = entry as { name?: unknown; source?: unknown; skills?: unknown; hooks?: unknown };
     assert.equal(typeof p.name, "string", `${MARKETPLACE_REL}: plugins[${i}] has no string \`name\``);
     assert.equal(

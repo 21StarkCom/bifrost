@@ -13,6 +13,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=370 runId=370 sha=db1bfa34 -->
+- Added the `stark-progress` mod: a prompt band of per-ticket progress bars from a documented state contract, with Gru writing a run file.
 <!-- idun:pr-merge pr=369 runId=369 sha=ac515449 -->
 - Add model-invocable `/stark-agent-docs` skill (stark-constitution 0.3.0): where each line an agent reads belongs, how to write it, and how Claude Code and Codex load it.
 <!-- idun:pr-merge pr=368 runId=368 sha=7a0e12b6 -->

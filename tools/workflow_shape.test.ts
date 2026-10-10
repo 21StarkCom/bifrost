@@ -376,8 +376,11 @@ const SCAN_SCOPES = [
   "scripts",
   "global",
   "standards",
+  "mods",
 ];
-const SCAN_EXTENSIONS = new Set([".sh", ".ts", ".yml", ".yaml"]);
+// `.tsx` is a mod's hooks module (`mods/<name>/hooks/*.tsx`), which can run
+// `gh` through `$.process.run` as any tool can.
+const SCAN_EXTENSIONS = new Set([".sh", ".ts", ".tsx", ".yml", ".yaml"]);
 
 /**
  * Never descended into. `tools/node_modules` appears the moment anyone runs the
