@@ -251,8 +251,9 @@ Then, and only then, stand down.
 Run [the stand-down contract](../../standards/stand-down.md) — the scope that
 bounds it, the subagent hard stop, its four rules about when (report first;
 strictly after the merge and the close; a clean tree and no unpushed commits
-against **your own branch**; the pane surface count), `hermod poison-pill
---json`, `armed:true` as the only proof it took, and the `partial` outcomes.
+against **your own branch**; the count of what closes with you),
+`hermod poison-pill --json`, `armed:true` as the only proof it took, and the
+`partial` outcomes.
 Delete your [progress file](#progress-band) once those checks pass, right
 before the poison-pill.
 Once it reads `armed:true`, say so and end the turn; if a goal sends you back,

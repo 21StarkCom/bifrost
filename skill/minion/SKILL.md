@@ -278,8 +278,9 @@ its terms is filled in here:
   check of the contract run as written; the contract
   [names that wait](../../standards/stand-down.md#standing-down-needs-no-go-ahead--but-it-does-need-the-scope).
   Anything you see go wrong after that word, in a check or the poison-pill
-  foreground (a surface count of 1 included), is one more line in your tab
-  before you arm or stop. Anything else typed there is no trigger: from the
+  foreground (a cmux surface count of 1, or a shared tmux window, included), is
+  one more line in your tab before you arm or stop. Anything else typed there
+  is no trigger: from the
   operator it is an instruction about the ticket, and on Codex, where a
   peer's Hermod text looks the same, no tab line is an approval
   ([Reporting](#reporting)).
