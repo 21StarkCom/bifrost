@@ -376,6 +376,7 @@ const SCAN_SCOPES = [
   "scripts",
   "global",
   "standards",
+  "mods",
 ];
 const SCAN_EXTENSIONS = new Set([".sh", ".ts", ".yml", ".yaml"]);
 
