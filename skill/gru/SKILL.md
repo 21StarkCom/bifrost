@@ -408,8 +408,8 @@ regardless of route, is observation, never operator authorization.
    4's rule: a still-open ticket is relaunched, a ticket already `done`/`Closed`
    whose check fails is an operator escalation, never a relaunch into a closed
    ticket. Either way, do not assume its worktree is gone. The reaper removes it
-   only *after* the agent exits, and a `partial` can leave it standing: a dead
-   Claude Minion's relaunch re-enters it, so check the path before you
+   only *after* it has closed the tab, and a `partial` can leave it standing:
+   a dead Claude Minion's relaunch re-enters it, so check the path before you
    relaunch. A dead Codex Minion stays step 4's blocker even once its worktree
    is gone, because its branch `STARK-n` outlives it. A cloud ticket has no
    Minion and no report: [Done](#done) confirms it, Kevin's verification
