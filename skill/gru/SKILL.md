@@ -211,6 +211,8 @@ regardless of route, is observation, never operator authorization.
    rerun `start` (an epic's `list_children` and a `--tickets` list both miss
    it), and a ticket that carries one is split already, so a rerun files and
    raises nothing again.
+   Then write the run's [progress file](#progress-band) with every ticket in
+   scope, and write it again whenever a split adds one.
 2. **Read the board.** Ticket `done`/`Closed` → run step 5's confirm on it, then
    skip; a Minion can die between closing its ticket and sending its report, so a
    `done` status on its own is a closed ticket, not a confirmed one. With no
@@ -327,7 +329,8 @@ regardless of route, is observation, never operator authorization.
    **128+n**: interrupted; report it.
 4. **Wait.** Minions report `done <PR> merged <sha> verified <check>`,
    `blocked <reason>`, or
-   `follow-up STARK-m filed, stopping`. Between reports check `hermod msg peers`.
+   `follow-up STARK-m filed, stopping`. On a `blocked`, stamp the ticket's
+   [progress file](#progress-band) `blocked`. Between reports check `hermod msg peers`.
    A cloud session sends nothing: while any ticket is in
    [the cloud pass](#each-pass), its session stopped or not, you also wake on
    [the wake](#the-wake), and each wake runs one cloud pass.
@@ -419,7 +422,26 @@ regardless of route, is observation, never operator authorization.
    gets one line naming it and the operator's fix, per repo and with the path
    you already resolved: `frigg repos set <repo> --path <p>` — the only
    command that reaches a checkout outside the fleet root that
-   `frigg repos scan <root>` would sweep.
+   `frigg repos scan <root>` would sweep. Last, delete the run's
+   [progress file](#progress-band).
+
+## Progress band
+
+The `stark-progress` mod (`mods/stark-progress/`, its own install) draws a
+bar per ticket above your prompt from files under `~/.cache/stark-progress/`;
+its README is the contract. The files are yours to write whether or not the
+mod is installed, on either runtime; a write that fails costs one line and
+never holds the run. Write each file whole.
+
+- **The run file**, `~/.cache/stark-progress/run-<launch id>.json`, the launch
+  id being the epic's or idun's `GRU-<n>`:
+  `{"epic":"<STARK-epic, or the first ticket>","session":"<your session id>","tickets":["STARK-a",…]}`.
+  Your session id is `echo "$CLAUDE_CODE_SESSION_ID"` (`$CODEX_THREAD_ID` on
+  Codex), run as its own command and pasted in. Step 1 writes it, a split
+  rewrites it, and step 6 deletes it.
+- **A ticket's file**, `~/.cache/stark-progress/<STARK-n>.json`, is its
+  worker's to write, with one exception: on a `blocked` report, write
+  `{"id":"STARK-n","title":"<title>","stage":"blocked","pr":<its PR url or null>,"updated":"<now, ISO 8601>"}`.
 
 ## Preflight
 

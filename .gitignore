@@ -30,3 +30,6 @@ artifacts/
 .env.*
 .DS_Store
 *.log
+
+# ── Mod type files the engine writes on load ──────────────────────────
+mods/*/.claude-plugin/types/
