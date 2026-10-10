@@ -782,6 +782,41 @@ test("skill smoke: standards — the progress-file rule lives in the spine", () 
   }
 });
 
+// All four workers title their own tab by the spine's one step: cmux first,
+// then tmux (the Linux devbox has no cmux), so neither path can drop out of
+// the step the skills anchor. A tmux window is the worker's own tab only when
+// it holds one pane, so the pane count is read before the rename. Claude's
+// worktree guard refuses a `hermod` or `tmux` line carrying a variable, so no
+// line of the step may hold a `$`. Each skill's `#title-your-tab` link alone proves nothing: every launcher
+// paragraph cites the anchor for the guard measurement, so the step itself is
+// pinned (Gru's and Kevin's own lines; Minion and Agnes run the spine whole).
+test("skill smoke: standards — the spine titles a cmux tab, else a tmux window", () => {
+  const spine = fs.readFileSync(path.join(REPO_ROOT, "standards", "worker-spine.md"), "utf8");
+  assert.match(spine, /^### Title your tab$/m, "worker-spine.md lost its Title your tab heading, which the worker skills anchor");
+  const section = /^### Title your tab\n([\s\S]*?)^### /m.exec(spine)?.[1] ?? "";
+  const lines = section.split("\n").map((line) => line.trim());
+  const cmux = lines.indexOf(`hermod rename <surface UUID> "<ROLE> (<n>)"`);
+  const panes = lines.indexOf(`tmux display -p -t <pane id> '#{window_panes}'`);
+  const tmux = lines.indexOf(`tmux rename-window -t <pane id> "<ROLE> (<n>)"`);
+  assert.ok(cmux >= 0, "worker-spine.md's Title your tab lost its cmux rename");
+  assert.ok(panes >= 0, "worker-spine.md's Title your tab lost its tmux pane count");
+  assert.ok(tmux >= 0, "worker-spine.md's Title your tab lost its tmux rename");
+  assert.ok(cmux < panes && panes < tmux, "worker-spine.md's Title your tab must try cmux, then count the tmux window's panes, then rename it");
+  for (const line of lines.filter((l) => l.startsWith("hermod ") || l.startsWith("tmux "))) {
+    assert.ok(!line.includes("$"), `worker-spine.md's Title your tab line carries a variable, which Claude's worktree guard refuses: ${line}`);
+  }
+  const step: Record<string, string> = {
+    agnes: "Run [the worker spine](../../standards/worker-spine.md) — bind and read",
+    gru: "**Title your tab**, if you are in cmux or tmux — the mechanics are [the worker spine's](../../standards/worker-spine.md#title-your-tab)",
+    kevin: "Title your tab `KEVIN (<repo>)`, `<repo>` the basename of the main checkout, by [the spine's mechanics](../../standards/worker-spine.md#title-your-tab)",
+    minion: "Run [the worker spine](../../standards/worker-spine.md) — bind and read",
+  };
+  for (const [skill, phrase] of Object.entries(step)) {
+    const text = fs.readFileSync(path.join(SKILLS_ROOT, skill, "SKILL.md"), "utf8").replace(/\s+/g, " ");
+    assert.ok(text.includes(phrase), `${skill} no longer titles its tab by the spine's step: ${phrase}`);
+  }
+});
+
 // The desk replaces the leader hand-off (KD15, KD16): Gru never leads or
 // dismisses a Kevin and launches one only through the desk, for a cloud
 // ticket's PR (GR8), and a Minion asks the other repo's Kevin itself instead

@@ -31,22 +31,44 @@ too — what it is landing is context you need before you touch the same files.
 
 ### Title your tab
 
-Only if you are in cmux. The `cmux-autoname` SessionStart hook named your tab
-after its worktree folder — the bare ticket id — which does not say what is
-running in it. `echo "$CMUX_SURFACE_ID"` as its own command; empty means you
-are not in cmux, so skip this. Otherwise paste the UUID in literally — on
-Claude, a worktree session's guard refuses a `hermod` line carrying a variable
-— and quote the title, since its parentheses are shell syntax:
+In cmux or tmux, rename your own tab, since its name does not say what is
+running in it: cmux's `cmux-autoname` SessionStart hook named it after its
+worktree folder — the bare ticket id — and tmux names a window for whatever
+its launcher chose or the program running in it. Paste each id in literally —
+on Claude, a worktree session's guard refuses a `hermod` or `tmux` line
+carrying a variable — and quote the title, since its parentheses are shell
+syntax.
 
-```
-hermod rename <surface UUID> "<ROLE> (<n>)"
-```
+1. **cmux.** `echo "$CMUX_SURFACE_ID"` as its own command. If it prints a
+   UUID, run this and stop, even inside tmux:
+
+   ```
+   hermod rename <surface UUID> "<ROLE> (<n>)"
+   ```
+
+   Pass the bare UUID — cmux refuses `surface:<UUID>`.
+2. **tmux.** Otherwise `echo "$TMUX_PANE"` as its own command. If it prints a
+   pane id (`%` and a number), the window that holds that pane is your tab
+   only while it holds no other pane, so read its pane count:
+
+   ```
+   tmux display -p -t <pane id> '#{window_panes}'
+   ```
+
+   On `1`, rename it, which turns its `automatic-rename` off, so the title
+   stays:
+
+   ```
+   tmux rename-window -t <pane id> "<ROLE> (<n>)"
+   ```
+
+   On more, the window is shared: skip this.
+3. **Neither** prints anything: skip this.
 
 `<ROLE>` is your skill's name in capitals and `<n>` is the ticket number without
-its `STARK-` prefix: `MINION (1234)`, `AGNES (1234)`. Pass the bare UUID — cmux
-refuses `surface:<UUID>`. Your own tab only, never another's. The title is
-cosmetic: a rename that fails costs one line saying so and never holds the
-ticket.
+its `STARK-` prefix: `MINION (1234)`, `AGNES (1234)`. Your own tab only, never
+another's. The title is cosmetic: a rename that fails costs one line saying so
+and never holds the ticket.
 
 ### Progress file
 
