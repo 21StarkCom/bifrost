@@ -267,8 +267,10 @@ comment instead of a Hermod line. What still bounds you is the contract's
 scope, plus one term of your own:
 
 - **Your report** is the ticket comment above, posted and complete before you
-  arm. Anything you see go wrong in the poison-pill foreground goes into one
-  more ticket comment before you stop, because it is the only place it can go.
+  arm. Anything you see go wrong in a check or the poison-pill foreground (a
+  cmux surface count of 1, or a shared tmux window, included) goes into one
+  more ticket comment before you arm or stop, because it is the only place it
+  can go.
 - **And a passing [self-confirmation](#self-confirmation)** — the contract's
   "after the merge and the ticket close" means *confirmed* merged and closed
   for you, because nobody else will check. That is Agnes's one addition to the

@@ -507,7 +507,7 @@ function brokenMdLinks(file: string, res: RegExp[]): string[] {
 // the spine's §8, the worker skills and Kevin himself.
 const SHARED_WORKER_DOCS = ["kevin-desk.md", "stand-down.md", "worker-spine.md"];
 // The one directory that ships the shared worker docs. One list, because the
-// link check and the pane-count guard below both walk it — a doc dir added to
+// link check and the pane-count guards below all walk it — a doc dir added to
 // one and not the other is a copy nothing reads.
 const SHARED_DOC_DIRS = ["standards"];
 
@@ -635,19 +635,21 @@ for (const dir of SHARED_DOC_DIRS) {
 // cannot stand in for it, since its tmux transport makes every pane a cmux pane of
 // one surface. Claude's worktree guard refuses a `tmux` line carrying a variable,
 // and a subagent inherits `$TMUX_PANE` as it does `$CMUX_SURFACE_ID`.
-test("skill smoke: standards/stand-down.md — the count tries cmux, then tmux", () => {
-  const text = fs.readFileSync(path.join(REPO_ROOT, "standards", "stand-down.md"), "utf8");
-  const commands = fencedLines(text).map((line) => line.trim());
-  const whoami = commands.indexOf("hermod whoami --json");
-  const tmux = commands.indexOf(`tmux display -p -t <pane id> '#{pane_id} #{window_panes}'`);
-  assert.ok(tmux >= 0, "stand-down.md lost its tmux pane count, which reads back the pane id");
-  assert.ok(whoami >= 0 && whoami < tmux, "stand-down.md must count in cmux first, then in tmux");
-  for (const line of commands.filter((l) => l.startsWith("tmux "))) {
-    assert.ok(!line.includes("$"), `stand-down.md's tmux line carries a variable, which Claude's worktree guard refuses: ${line}`);
-  }
-  const subagent = /^## Never from inside a subagent.*\n([\s\S]*?)^## /m.exec(text)?.[1] ?? "";
-  assert.ok(subagent.includes("$TMUX_PANE"), "stand-down.md's subagent hard stop no longer names $TMUX_PANE");
-});
+for (const dir of SHARED_DOC_DIRS) {
+  test(`skill smoke: ${dir}/stand-down.md — the count tries cmux, then tmux`, () => {
+    const text = fs.readFileSync(path.join(REPO_ROOT, ...dir.split("/"), "stand-down.md"), "utf8");
+    const commands = fencedLines(text).map((line) => line.trim());
+    const whoami = commands.indexOf("hermod whoami --json");
+    const tmux = commands.indexOf(`tmux display -p -t <pane id> '#{pane_id} #{window_panes}'`);
+    assert.ok(tmux >= 0, "stand-down.md lost its tmux pane count, which reads back the pane id");
+    assert.ok(whoami >= 0 && whoami < tmux, "stand-down.md must count in cmux first, then in tmux");
+    for (const line of commands.filter((l) => l.startsWith("tmux "))) {
+      assert.ok(!line.includes("$"), `stand-down.md's tmux line carries a variable, which Claude's worktree guard refuses: ${line}`);
+    }
+    const subagent = /^## Never from inside a subagent.*\n([\s\S]*?)^## /m.exec(text)?.[1] ?? "";
+    assert.ok(subagent.includes("$TMUX_PANE"), "stand-down.md's subagent hard stop no longer names $TMUX_PANE");
+  });
+}
 
 // Gru's launch line (STARK-7122, STARK-7540, STARK-10154). The rule a tidy-up
 // can drop without anything else going red: Gru is never launched on the id of
