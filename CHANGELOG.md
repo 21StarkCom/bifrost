@@ -13,6 +13,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=377 runId=377 sha=207fe144 -->
+- Stand-down doc: the poison-pill reaper does not wait for idle; it quits at once, then closes the tab and worktree after `--timeout`.
 <!-- idun:pr-merge pr=376 runId=376 sha=7209a701 -->
 - Workers (Minion, Agnes, Kevin) now stand down from their own tmux window when no cmux is present, with a tmux pane-count check and a smoke pin.
 <!-- idun:pr-merge pr=373 runId=373 sha=dad5f985 -->

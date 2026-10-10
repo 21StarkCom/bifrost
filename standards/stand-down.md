@@ -9,7 +9,8 @@ tmux pane, and with it the window when the pane is the window's only one.
 The full hermod behaviour below was live-verified against hermod's TS engine
 (`close-session.ts`, `poison-pill.ts`, `bin/hermod.ts`) plus an observed real
 run under STARK-6166 — it is spec, not hints. The tmux facts were measured on
-tmux 3.8 and hermod's tmux transport.
+tmux 3.8 and hermod's tmux transport, and the reaper's timing on Claude Code
+2.1.296 with hermod built at `e1f2c5a`.
 
 This doc is runtime-neutral and is shipped byte-identical to both runtimes, so
 read two conventions into it throughout. **The repo's agent instructions file**
@@ -68,11 +69,18 @@ hermod poison-pill --json
 
 It targets your own tab (your cmux surface, `$CMUX_SURFACE_ID`, else your tmux
 pane, `$TMUX_PANE` on the server `$TMUX` names), validates in the foreground
-and returns at once,
-then a detached reaper waits for you to go idle, sends your agent's quit verb,
-removes the worktree, and closes the tab. In tmux, closing it kills your pane,
-and with it the window when your pane is that window's only one. The quit verb
-is hermod's problem, not yours (`/exit` on Claude, `/quit` on Codex), so both
+and returns at once. A detached reaper then sends your agent's quit verb
+straight away, or, when a menu is open (a permission prompt, say) or your
+screen cannot be read, sends nothing and closes the tab at once. It does not
+wait for you to go idle, so a turn still running gets the quit mid-turn. It
+waits up to its `--timeout` (30 s by default) for the agent to exit, then
+closes the tab and removes the worktree, whether or not the agent exited. It
+closes the tab before it touches the worktree: a refused close leaves the
+worktree in place, and a failed removal comes after the tab is gone. Measured
+on Claude, the quit landed inside a running `sleep 120`, and the teardown was
+done about a second after the arm. In tmux, closing it kills your pane, and
+with it the window when your pane is that window's only one. The quit verb is
+hermod's problem, not yours (`/exit` on Claude, `/quit` on Codex), so both
 runtimes run this identical line. The tmux pane needs a hermod after v0.37.0
 (STARK-11364, merge commit `e1f2c5a`): v0.37.0 and earlier refuse a tmux pane
 in the foreground, exit 2, which is the report-and-stop in
@@ -81,7 +89,8 @@ in the foreground, exit 2, which is the report-and-stop in
 ## Four rules about when
 
 - **Report first, then poison-pill**, so your report is a completed act and
-  never a race against the reaper's idle detection.
+  never a race against the reaper's quit, which reaches you moments after the
+  arm.
 - **Strictly after `idun gh pr-merge` and the ticket close.** Poison-pill
   deliberately skips the dirty/unpushed safety gate — the tab chose to die —
   which is safe only because everything you did is pushed and merged by then. It
@@ -150,13 +159,14 @@ in the foreground, exit 2, which is the report-and-stop in
   your surface did not resolve, which the `whoami` step already reports.
 
   Read it as three outcomes, not two. **More than 1** and the last-surface
-  refusal is not what will stop you — the claude-lock `partial` below still
-  can, so this is one failure mode ruled out, not a guarantee the close lands.
-  **Exactly 1** and the tab will survive as a bare shell (`"Cannot close the
-  last surface"`): **arm anyway** and say so in your report. Do not skip the
-  stand-down over it — that `partial` still exits your agent and removes your
-  worktree, which is the whole point of the mandate above, and not arming
-  leaves a live agent, a live worktree *and* the same tab. **Unresolvable**
+  refusal is not what will stop you — the failed-removal `partial` below
+  still can, so this is one failure mode ruled out, not a guarantee the
+  teardown lands. **Exactly 1** and the tab will survive as a bare shell
+  (`"Cannot close the last surface"`), and your worktree with it, since the
+  reaper closes the tab before it touches the worktree: **arm anyway** and
+  say so in your report. Do not skip the stand-down over it — that `partial`
+  still sends your agent its quit, and not arming leaves a live agent, a live
+  worktree *and* the same tab. **Unresolvable**
   is not a count, and it has three shapes. `whoami` exits 1 with a named error
   when `$CMUX_SURFACE_ID` is unset (`no CMUX_SURFACE_ID in env`) or your
   surface is gone (`surface … not found in tree`) — loud, where the old
@@ -275,12 +285,16 @@ your ticket; the ids live on the ticket, not in your `done` line.
 **Never fire it twice — and it is printed only under `--json`.** Bare, the
 foreground prints a prose line with no `armed` field at all, so "did it take?"
 becomes unanswerable, which is exactly how a second firing gets rationalised.
-Under `--json` the ack echoes the validation plan verbatim, so a live run prints
-the same `"detail":"dry-run: would exit …"` string a `--dry-run` does and
-`"armed":true` beside it is the *only* thing telling them apart. Re-running
-"because nothing happened" arms a **second reaper**. Nothing is supposed to
-happen yet: the reaper waits for you to go **idle**, so as long as you keep
-working it simply sits there. Report, arm, go quiet, die — in that order.
+Under `--json` a live run echoes the validation plan's fields, the same ones a
+`--dry-run` prints, and adds `"armed":true` beside them, with
+`"outcome":"armed"` and a `detail` saying the teardown is pending; a dry run
+prints `"outcome":"completed"` and `"detail":"dry-run: would exit …"` and no
+`armed`. Re-running "because nothing happened" arms a **second reaper**. The
+ack returns before the reaper acts, and the reaper does not wait for you to
+finish: its quit reaches you moments later, mid-turn if you are still working,
+and the tab closes by its `--timeout` at the latest, whether or not you
+exited. Anything you start after arming may be cut off. Report, arm, go quiet,
+die — in that order.
 
 ## The ack is what was planned, not what happened
 
@@ -298,21 +312,24 @@ tell which worktree is yours — you are still alive: say so in your report, the
 stop and leave everything in place. If it arms and the teardown comes back
 `partial`, the tab, the worktree, or both survive:
 
-- claude holds a git lock on its worktree for the session's life, and the reaper
-  refuses to remove one whose lock owner is still alive. It gives up *before*
-  closing the tab, so this `partial` leaves the worktree **and** the tab behind
-  — the agent dead, both still there;
+- the worktree removal fails after the tab is gone. The reaper closes the tab
+  first, then unlocks claude's worktree lock and runs
+  `git worktree remove --force`, even while the lock's owner is still alive;
+  when that removal fails, or the main worktree it runs from cannot be found,
+  this `partial` leaves the worktree behind with the tab already closed;
 - cmux refuses to close a window's **only** surface —
-  `"Cannot close the last surface"`, leaving the agent dead, the worktree gone
-  and the tab alive as a bare shell. tmux has no counterpart: `kill-pane`
-  closes a window's only pane, and the window with it. Measured on a tmux
-  server's last pane too, where the close takes the server down: the
+  `"Cannot close the last surface"`, leaving the tab alive as a bare shell and
+  the worktree in place, since the reaper stops before the removal when the
+  close fails; the agent is gone if its quit landed. tmux has no counterpart:
+  `kill-pane` closes a window's only pane, and the window with it. Measured on
+  a tmux server's last pane too, where the close takes the server down: the
   teardown still came back `completed`, worktree removed.
 
 Both are the operator's to sweep, and a `partial` does not heal itself. Do not
-try to resume into it: `claude --worktree X --resume` **recreates** the removed
-worktree and re-locks it, turning a stale tab into a live one holding a worktree
-nobody expected to exist. Report the surface and the path; stop there.
+try to resume into it: `claude --worktree X --resume` re-enters the worktree
+left behind, or **recreates** it if it is gone, and re-locks it, turning a
+stale tab into a live one holding a worktree nobody expected to be in use.
+Report the surface and the path; stop there.
 
 ## One permissions note, because it is a real tradeoff, not a detail
 
