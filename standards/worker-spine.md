@@ -48,13 +48,21 @@ syntax.
 
    Pass the bare UUID — cmux refuses `surface:<UUID>`.
 2. **tmux.** Otherwise `echo "$TMUX_PANE"` as its own command. If it prints a
-   pane id (`%` and a number), rename the window that holds that pane:
+   pane id (`%` and a number), the window that holds that pane is your tab
+   only while it holds no other pane, so read its pane count:
+
+   ```
+   tmux display -p -t <pane id> '#{window_panes}'
+   ```
+
+   On `1`, rename it, which turns its `automatic-rename` off, so the title
+   stays:
 
    ```
    tmux rename-window -t <pane id> "<ROLE> (<n>)"
    ```
 
-   This turns the window's `automatic-rename` off, so the title stays.
+   On more, the window is shared: skip this.
 3. **Neither** prints anything: skip this.
 
 `<ROLE>` is your skill's name in capitals and `<n>` is the ticket number without
