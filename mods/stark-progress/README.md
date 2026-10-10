@@ -12,8 +12,9 @@ Install it on its own; the seven skill plugins do not need it:
 
 ## What it looks like
 
-Gru's tab, above the prompt (the bar is 20 cells, a fifth per stage; `closed`
-draws green, `blocked` red, the rest cyan, and the title dim):
+Gru's tab, above the prompt (each bar is 20 cells, a fifth per stage, and
+draws green when `closed`, red when `blocked` and cyan otherwise; the header
+is bold and each ticket's title dim):
 
 ```
 Gru · STARK-1200 · 1/4 closed
