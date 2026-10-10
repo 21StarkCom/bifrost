@@ -760,6 +760,28 @@ test("skill smoke: standards — the standing GO lives in the spine's §3", () =
   }
 });
 
+// Minion, Agnes and Gru's stamps write a ticket's stark-progress file by the
+// spine's one command instead of restating it, and check 6b reads only a
+// link's file half, so the heading those anchors land on and the atomic,
+// guard-safe command under it are pinned here. Claude's worktree guard refuses
+// a command carrying a backslash, so the quoting rule must not be `'\''`.
+test("skill smoke: standards — the progress-file rule lives in the spine", () => {
+  const spine = fs.readFileSync(path.join(REPO_ROOT, "standards", "worker-spine.md"), "utf8");
+  assert.match(spine, /^### Progress file$/m, "worker-spine.md lost its Progress file heading, which the worker skills anchor");
+  const section = /^### Progress file\n([\s\S]*?)^## /m.exec(spine)?.[1] ?? "";
+  assert.match(
+    section,
+    /^mkdir -p ~\/\.cache\/stark-progress && jq -n .* > ~\/\.cache\/stark-progress\/STARK-n\.json\.tmp && mv ~\/\.cache\/stark-progress\/STARK-n\.json\.tmp ~\/\.cache\/stark-progress\/STARK-n\.json$/m,
+    "worker-spine.md's Progress file no longer writes a .tmp and renames it over the file",
+  );
+  assert.ok(section.includes(`'"'"'`), "worker-spine.md's Progress file no longer quotes a ' as '\"'\"'");
+  assert.ok(!section.includes(`'\\''`), "worker-spine.md's Progress file quotes a ' with a backslash, which Claude's worktree guard refuses");
+  for (const file of ["skill/agnes/SKILL.md", "skill/gru/SKILL.md", "skill/minion/SKILL.md", "mods/stark-progress/README.md"]) {
+    const text = fs.readFileSync(path.join(REPO_ROOT, ...file.split("/")), "utf8");
+    assert.ok(text.includes("worker-spine.md#progress-file"), `${file} no longer points at the spine's progress-file rule`);
+  }
+});
+
 // The desk replaces the leader hand-off (KD15, KD16): Gru never leads or
 // dismisses a Kevin and launches one only through the desk, for a cloud
 // ticket's PR (GR8), and a Minion asks the other repo's Kevin itself instead

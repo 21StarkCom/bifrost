@@ -444,9 +444,12 @@ does for a ticket's file.
   Codex), run as its own command and pasted in. Step 1 writes it, a split
   rewrites it, and step 6 deletes it.
 - **A ticket's file**, `~/.cache/stark-progress/<STARK-n>.json`, is its
-  worker's to write, with two stamps of yours, each the whole file
-  `{"id":"STARK-n","title":"<title>","stage":"<stage>","pr":"<its PR url>","updated":"<now, ISO 8601>"}`
-  (`"pr":null` while it has none): `blocked` on a `blocked` or
+  worker's to write, with two stamps of yours, each the ticket's title and PR
+  url (`pr` empty while it has none) written by
+  [the spine's command](../../standards/worker-spine.md#progress-file) under
+  its quoting rule, never as JSON you assemble yourself: a `"` in the title
+  would leave a file the mod cannot parse, drawn as `ticket` and left out of
+  the closed count. The stamps: `blocked` on a `blocked` or
   `follow-up … stopping` report (step 4), and `closed` once you confirm the
   ticket finished (step 5, or [Done](#done) for a cloud ticket). The `closed`
   stamp is what counts a ticket no local worker writes for: a cloud

@@ -187,7 +187,8 @@ for the `stark-progress` mod to draw. Your `closed` is once
 [self-confirmation](#self-confirmation) passes; one that stays wrong after its
 fix is a stopping exit, so `blocked`.
 
-Delete it (`rm -f ~/.cache/stark-progress/STARK-n.json`) at the
+Delete it, with any `.tmp` a failed write left beside it
+(`rm -f ~/.cache/stark-progress/STARK-n.json ~/.cache/stark-progress/STARK-n.json.tmp`), at the
 [stand-down](#stand-down), once the contract's checks pass and right before
 `hermod poison-pill --json`, which takes your session with it. A check that
 stops you there leaves the file, and the tab, standing.

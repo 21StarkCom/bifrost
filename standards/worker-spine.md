@@ -61,9 +61,12 @@ file:
 mkdir -p ~/.cache/stark-progress && jq -n --arg title '<ticket title>' --arg stage '<stage>' --arg pr '<PR url, or empty>' '{id: "STARK-n", title: $title, stage: $stage, pr: ($pr | select(. != "") // null), updated: (now | todate)}' > ~/.cache/stark-progress/STARK-n.json.tmp && mv ~/.cache/stark-progress/STARK-n.json.tmp ~/.cache/stark-progress/STARK-n.json
 ```
 
-Single-quote each value with every `'` inside it written `'\''`, and leave
-`pr` empty until you have one (it writes `"pr":null`); `jq` does the JSON
-quoting, so a quote in the title cannot break the file. The stages, in order:
+Single-quote each value, with every `'` inside it written `'"'"'` and any
+backslash dropped: on Claude a worktree session's guard refuses a command
+carrying a backslash, so the backslash-escaped form of a quote never runs
+there. Leave `pr` empty until you have one (it writes `"pr":null`); `jq` does
+the JSON quoting, so a quote in the title cannot break the file. The stages,
+in order:
 
 - `ticket` — once you have bound and read the ticket (step 1).
 - `pr` — once `idun gh pr-open` prints the draft.
@@ -76,8 +79,11 @@ quoting, so a quote in the title cannot break the file. The stages, in order:
 
 A relaunch that finds its PR open already, or a resume after a `blocked`
 stop, writes the stage it picks up at, never `ticket` or a stale `blocked`.
-The file is extra, never a report, and a write that fails costs one line and
-never holds the ticket; never ask for an approval to make it.
+The file is outside your worktree: the write runs unprompted on Claude in a
+bypass-mode session or under an allowlist entry for it, and on Codex only
+under a sandbox that can write `~/.cache` (`workspace-write` cannot). The file
+is extra, never a report, and a write that fails costs one line and never
+holds the ticket; never ask for an approval to make it.
 
 ## 2. Implement
 
