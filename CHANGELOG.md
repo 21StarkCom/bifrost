@@ -13,6 +13,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=374 runId=374 sha=0c694847 -->
+- Worker spine now holds the one atomic progress-file rule (temp file + rename); minion, agnes and gru link it instead of keeping copies (stark-ops 0.21.12).
 <!-- idun:pr-merge pr=371 runId=371 sha=61a141d2 -->
 - Agnes writes its ticket's stark-progress file at each stage, leaves it `blocked` on a stopping exit and deletes it before stand-down (stark-ops 0.21.9).
 <!-- idun:pr-merge pr=372 runId=372 sha=1cd0fe7b -->

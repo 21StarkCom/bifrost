@@ -48,6 +48,43 @@ refuses `surface:<UUID>`. Your own tab only, never another's. The title is
 cosmetic: a rename that fails costs one line saying so and never holds the
 ticket.
 
+### Progress file
+
+Keep `~/.cache/stark-progress/<STARK-n>.json`, the
+[stark-progress contract](../mods/stark-progress/README.md#the-state-contract)'s
+ticket file, current at each stage change, on either runtime and whether or
+not the mod is installed. Write it with this one command, which writes a temp
+file and renames it over the old one, so the mod never reads a half-written
+file:
+
+```
+mkdir -p ~/.cache/stark-progress && jq -n --arg title '<ticket title>' --arg stage '<stage>' --arg pr '<PR url, or empty>' '{id: "STARK-n", title: $title, stage: $stage, pr: ($pr | select(. != "") // null), updated: (now | todate)}' > ~/.cache/stark-progress/STARK-n.json.tmp && mv ~/.cache/stark-progress/STARK-n.json.tmp ~/.cache/stark-progress/STARK-n.json
+```
+
+Single-quote each value, with every `'` inside it written `'"'"'` and any
+backslash dropped: on Claude a worktree session's guard refuses a command
+carrying a backslash, so the backslash-escaped form of a quote never runs
+there. Leave `pr` empty until you have one (it writes `"pr":null`); `jq` does
+the JSON quoting, so a quote in the title cannot break the file. The stages,
+in order:
+
+- `ticket` — once you have bound and read the ticket (step 1).
+- `pr` — once `idun gh pr-open` prints the draft.
+- `review` — as `/code-review xhigh --fix` starts; a PR [§4](#4-the-spine)
+  lets skip the review skips this stage.
+- `merged` — once `idun gh pr-merge` merges it.
+- `closed` — once the close lands (your skill names when that is).
+- `blocked` — on a stopping exit; the file stays, and the red bar is part of
+  the record you leave standing.
+
+A relaunch that finds its PR open already, or a resume after a `blocked`
+stop, writes the stage it picks up at, never `ticket` or a stale `blocked`.
+The file is outside your worktree: the write runs unprompted on Claude in a
+bypass-mode session or under an allowlist entry for it, and on Codex only
+under a sandbox that can write `~/.cache` (`workspace-write` cannot). The file
+is extra, never a report, and a write that fails costs one line and never
+holds the ticket; never ask for an approval to make it.
+
 ## 2. Implement
 
 In the worktree idun's launcher cut for you, in the tab it placed through

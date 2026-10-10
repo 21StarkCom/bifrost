@@ -433,7 +433,9 @@ The `stark-progress` mod (`mods/stark-progress/`, its own install) draws a
 bar per ticket above your prompt from files under `~/.cache/stark-progress/`;
 its README is the contract. The files are yours to write whether or not the
 mod is installed, on either runtime; a write that fails costs one line and
-never holds the run. Write each file whole.
+never holds the run. Write each file whole, to a `.tmp` beside it renamed over
+it, as [the spine's command](../../standards/worker-spine.md#progress-file)
+does for a ticket's file.
 
 - **The run file**, `~/.cache/stark-progress/run-<launch id>.json`, the launch
   id being the epic's or idun's `GRU-<n>`:
@@ -442,9 +444,12 @@ never holds the run. Write each file whole.
   Codex), run as its own command and pasted in. Step 1 writes it, a split
   rewrites it, and step 6 deletes it.
 - **A ticket's file**, `~/.cache/stark-progress/<STARK-n>.json`, is its
-  worker's to write, with two stamps of yours, each the whole file
-  `{"id":"STARK-n","title":"<title>","stage":"<stage>","pr":"<its PR url>","updated":"<now, ISO 8601>"}`
-  (`"pr":null` while it has none): `blocked` on a `blocked` or
+  worker's to write, with two stamps of yours, each the ticket's title and PR
+  url (`pr` empty while it has none) written by
+  [the spine's command](../../standards/worker-spine.md#progress-file) under
+  its quoting rule, never as JSON you assemble yourself: a `"` in the title
+  would leave a file the mod cannot parse, drawn as `ticket` and left out of
+  the closed count. The stamps: `blocked` on a `blocked` or
   `follow-up … stopping` report (step 4), and `closed` once you confirm the
   ticket finished (step 5, or [Done](#done) for a cloud ticket). The `closed`
   stamp is what counts a ticket no local worker writes for: a cloud

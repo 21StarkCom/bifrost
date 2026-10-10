@@ -182,32 +182,13 @@ or `refused` is a stopping exit, `blocked <his line>`, except his stand-down's
 
 ## Progress band
 
-The `stark-progress` mod (`mods/stark-progress/`, its own install) draws your
-ticket's bar in your tab from `~/.cache/stark-progress/<STARK-n>.json`;
-[its README](../../mods/stark-progress/README.md#the-state-contract) is the
-contract. The file is yours to write whether or not the mod is installed, on
-either runtime; a write that fails costs one line and never holds the ticket.
-Write it whole and in one go, at each stage change, with this one command:
+Keep your ticket's progress file by [the spine's rule](../../standards/worker-spine.md#progress-file),
+for the `stark-progress` mod to draw. Your `closed` is once
+[self-confirmation](#self-confirmation) passes; one that stays wrong after its
+fix is a stopping exit, so `blocked`.
 
-```
-mkdir -p ~/.cache/stark-progress && jq -n --arg title '<ticket title>' --arg stage '<stage>' --arg pr '<PR url, or empty>' '{id: "STARK-n", title: $title, stage: $stage, pr: ($pr | select(. != "") // null), updated: (now | todate)}' > ~/.cache/stark-progress/STARK-n.json.tmp && mv ~/.cache/stark-progress/STARK-n.json.tmp ~/.cache/stark-progress/STARK-n.json
-```
-
-Single-quote each value with every `'` inside it written `'\''`, and leave
-`pr` empty until you have one (it writes `"pr":null`). `jq` does the JSON
-quoting, so a quote in the title cannot break the file, and the rename keeps
-the mod's once-a-second poll off a half-written one. The stages:
-
-- `ticket` once you have bound and read the ticket;
-- `pr` once `idun gh pr-open` prints the PR;
-- `review` when `/code-review xhigh --fix` starts;
-- `merged` once `idun gh pr-merge` lands;
-- `closed` once [self-confirmation](#self-confirmation) passes; one that stays
-  wrong after its fix is a stopping exit, so `blocked`;
-- `blocked` on any [stopping exit](#when-not-to-stand-down), and the file
-  stays: the red bar is part of the record you leave standing.
-
-Delete it (`rm -f ~/.cache/stark-progress/STARK-n.json`) at the
+Delete it, with any `.tmp` a failed write left beside it
+(`rm -f ~/.cache/stark-progress/STARK-n.json ~/.cache/stark-progress/STARK-n.json.tmp`), at the
 [stand-down](#stand-down), once the contract's checks pass and right before
 `hermod poison-pill --json`, which takes your session with it. A check that
 stops you there leaves the file, and the tab, standing.
