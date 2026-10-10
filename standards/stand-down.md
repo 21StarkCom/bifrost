@@ -9,7 +9,8 @@ tmux pane, and with it the window when the pane is the window's only one.
 The full hermod behaviour below was live-verified against hermod's TS engine
 (`close-session.ts`, `poison-pill.ts`, `bin/hermod.ts`) plus an observed real
 run under STARK-6166 — it is spec, not hints. The tmux facts were measured on
-tmux 3.8 and hermod's tmux transport.
+tmux 3.8 and hermod's tmux transport, and the reaper's timing on Claude Code
+2.1.296 with hermod built at `e1f2c5a`.
 
 This doc is runtime-neutral and is shipped byte-identical to both runtimes, so
 read two conventions into it throughout. **The repo's agent instructions file**
@@ -68,20 +69,25 @@ hermod poison-pill --json
 
 It targets your own tab (your cmux surface, `$CMUX_SURFACE_ID`, else your tmux
 pane, `$TMUX_PANE` on the server `$TMUX` names), validates in the foreground
-and returns at once,
-then a detached reaper waits for you to go idle, sends your agent's quit verb,
-removes the worktree, and closes the tab. In tmux, closing it kills your pane,
-and with it the window when your pane is that window's only one. The quit verb
-is hermod's problem, not yours (`/exit` on Claude, `/quit` on Codex), so both
-runtimes run this identical line. The tmux pane needs a hermod after v0.37.0
-(STARK-11364, merge commit `e1f2c5a`): v0.37.0 and earlier refuse a tmux pane
-in the foreground, exit 2, which is the report-and-stop in
+and returns at once. A detached reaper then sends your agent's quit verb
+straight away. It does not wait for you to go idle, so a turn still running
+gets the quit mid-turn. It waits up to its `--timeout` (30 s by default) for
+the agent to exit, then closes the tab and removes the worktree, whether or
+not the agent exited. Measured on Claude, the quit landed inside a running
+`sleep 120`, and the teardown was done about a second after the arm. In tmux,
+closing it kills your pane, and with it the window when your pane is that
+window's only one. The quit verb is hermod's problem, not yours (`/exit` on
+Claude, `/quit` on Codex), so both runtimes run this identical line. The tmux
+pane needs a hermod after v0.37.0 (STARK-11364, merge commit `e1f2c5a`):
+v0.37.0 and earlier refuse a tmux pane in the foreground, exit 2, which is the
+report-and-stop in
 [It can still fall short](#it-can-still-fall-short-and-no-answer-to-that-is---force).
 
 ## Four rules about when
 
 - **Report first, then poison-pill**, so your report is a completed act and
-  never a race against the reaper's idle detection.
+  never a race against the reaper's quit, which reaches you moments after the
+  arm.
 - **Strictly after `idun gh pr-merge` and the ticket close.** Poison-pill
   deliberately skips the dirty/unpushed safety gate — the tab chose to die —
   which is safe only because everything you did is pushed and merged by then. It
@@ -278,9 +284,11 @@ becomes unanswerable, which is exactly how a second firing gets rationalised.
 Under `--json` the ack echoes the validation plan verbatim, so a live run prints
 the same `"detail":"dry-run: would exit …"` string a `--dry-run` does and
 `"armed":true` beside it is the *only* thing telling them apart. Re-running
-"because nothing happened" arms a **second reaper**. Nothing is supposed to
-happen yet: the reaper waits for you to go **idle**, so as long as you keep
-working it simply sits there. Report, arm, go quiet, die — in that order.
+"because nothing happened" arms a **second reaper**. The ack returns before the
+reaper acts, and the reaper does not wait for you to finish: its quit reaches
+you moments later, mid-turn if you are still working, and the tab closes at
+its `--timeout` whether or not you exited. Anything you start after arming may
+be cut off. Report, arm, go quiet, die — in that order.
 
 ## The ack is what was planned, not what happened
 

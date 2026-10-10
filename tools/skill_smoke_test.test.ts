@@ -769,6 +769,15 @@ test("skill smoke: standards — Kevin's place in the shared docs", () => {
   }
 });
 
+// STARK-11402: poison-pill's reaper always runs forced. It sends the quit at
+// once and closes the tab at its --timeout whether or not the agent exited, so
+// the contract names that timeout and never says the reaper waits for idle.
+test("skill smoke: standards — the poison-pill reaper does not wait for idle", () => {
+  const standDown = fs.readFileSync(path.join(REPO_ROOT, "standards", "stand-down.md"), "utf8");
+  assert.ok(standDown.includes("`--timeout` (30 s by default)"), "stand-down.md no longer names the reaper's timeout");
+  assert.doesNotMatch(standDown, /waits for you to go \**idle|idle detection|simply sits there/, "stand-down.md says the reaper waits for idle again");
+});
+
 // The worker skills point at the spine's §3 for the standing GO instead of
 // restating it, and check 6b reads only a link's file half, so the heading
 // those anchors land on and the rule under it are pinned here.
