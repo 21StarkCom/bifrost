@@ -159,7 +159,7 @@ Run [the worker spine](../../standards/worker-spine.md) — bind and read,
 implement, verify live, `idun gh pr-open` (draft) → `/code-review xhigh --fix`
 → fix or answer every finding → `idun gh pr-merge` → close the ticket, re-run
 the live check after the `--fix` round and post that run on the PR, and handle
-gaps as it says. Your tab title, which its step 1 sets, is `MINION (<n>)`. Three
+gaps as it says. Your tab title, which its step 1 sets, is `MINION (<n>)`. Four
 things are yours on top of it:
 
 - **Your ticket is the one named in your brief**, which also names your
@@ -173,6 +173,8 @@ things are yours on top of it:
   reads to confirm your `done` instead of taking your word for it.
 - **Keep your ticket's progress file current**, below.
 
+Then report to your leader and stand down — both below.
+
 ### Progress file
 
 Write `~/.cache/stark-progress/<STARK-n>.json`, the
@@ -180,19 +182,25 @@ Write `~/.cache/stark-progress/<STARK-n>.json`, the
 ticket file, at each stage change, on either runtime and whether or not the
 mod is installed. Write it whole, in one go, as
 `{"id":"STARK-n","title":"<ticket title>","stage":"<stage>","pr":"<PR url>","updated":"<now, ISO 8601>"}`,
-with `"pr":null` until the PR exists. The stages, in order:
+with `"pr":null` until the PR exists, the title JSON-escaped (a bare `"` or
+`\` in it leaves a file the mod cannot parse, drawn as `ticket` with no
+title), and `updated` from `date -u +%Y-%m-%dT%H:%M:%SZ`. Create
+`~/.cache/stark-progress/` first if it is missing. The stages, in order:
 
 - `ticket` — once you bind the ticket (the spine's step 1).
 - `pr` — once `idun gh pr-open` opens the draft.
-- `review` — as `/code-review xhigh --fix` starts.
+- `review` — as `/code-review xhigh --fix` starts. A PR the spine lets skip
+  the review skips this stage.
 - `merged` — once `idun gh pr-merge` merges it.
 - `closed` — once `alfred task move STARK-n done` lands.
 - `blocked` — when you stop on a `blocked` or `follow-up … stopping` report.
 
-The file is extra, never a report: every report below still goes to your
-leader. A write that fails costs one line and never holds the ticket.
+A relaunch that finds its PR open already, or a resume after a `blocked`
+stop, writes the stage it picks up at, never `ticket` or a stale `blocked`.
 
-Then report to your leader and stand down — both below.
+The file is extra, never a report: every report below still goes to your
+leader. A write that fails costs one line and never holds the ticket; never
+ask for an approval to make it.
 
 ## Gaps
 
