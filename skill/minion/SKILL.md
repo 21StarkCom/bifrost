@@ -171,6 +171,26 @@ things are yours on top of it:
 - **The PR comment carrying the re-run live check is not optional here.** Your
   scrollback dies with you at stand down, so that comment is what your leader
   reads to confirm your `done` instead of taking your word for it.
+- **Keep your ticket's progress file current**, below.
+
+### Progress file
+
+Write `~/.cache/stark-progress/<STARK-n>.json`, the
+[stark-progress contract](../../mods/stark-progress/README.md#the-state-contract)'s
+ticket file, at each stage change, on either runtime and whether or not the
+mod is installed. Write it whole, in one go, as
+`{"id":"STARK-n","title":"<ticket title>","stage":"<stage>","pr":"<PR url>","updated":"<now, ISO 8601>"}`,
+with `"pr":null` until the PR exists. The stages, in order:
+
+- `ticket` — once you bind the ticket (the spine's step 1).
+- `pr` — once `idun gh pr-open` opens the draft.
+- `review` — as `/code-review xhigh --fix` starts.
+- `merged` — once `idun gh pr-merge` merges it.
+- `closed` — once `alfred task move STARK-n done` lands.
+- `blocked` — when you stop on a `blocked` or `follow-up … stopping` report.
+
+The file is extra, never a report: every report below still goes to your
+leader. A write that fails costs one line and never holds the ticket.
 
 Then report to your leader and stand down — both below.
 
