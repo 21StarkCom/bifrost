@@ -1,6 +1,6 @@
 {
   "name": "stark-progress",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Live progress bars above the prompt for Gru, Minion and Agnes runs, read from ~/.cache/stark-progress/",
   "types": "./types/index.d.ts",
   "author": {
