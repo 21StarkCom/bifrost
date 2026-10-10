@@ -180,6 +180,38 @@ Waiting on him is not a stop: your goal keeps re-prompting you, so run one
 or `refused` is a stopping exit, `blocked <his line>`, except his stand-down's
 `refused … ask again`, which the desk resends.
 
+## Progress band
+
+The `stark-progress` mod (`mods/stark-progress/`, its own install) draws your
+ticket's bar in your tab from `~/.cache/stark-progress/<STARK-n>.json`;
+[its README](../../mods/stark-progress/README.md#the-state-contract) is the
+contract. The file is yours to write whether or not the mod is installed, on
+either runtime; a write that fails costs one line and never holds the ticket.
+Write it whole and in one go, at each stage change, with this one command:
+
+```
+mkdir -p ~/.cache/stark-progress && jq -n --arg title '<ticket title>' --arg stage '<stage>' --arg pr '<PR url, or empty>' '{id: "STARK-n", title: $title, stage: $stage, pr: ($pr | select(. != "") // null), updated: (now | todate)}' > ~/.cache/stark-progress/STARK-n.json.tmp && mv ~/.cache/stark-progress/STARK-n.json.tmp ~/.cache/stark-progress/STARK-n.json
+```
+
+Single-quote each value with every `'` inside it written `'\''`, and leave
+`pr` empty until you have one (it writes `"pr":null`). `jq` does the JSON
+quoting, so a quote in the title cannot break the file, and the rename keeps
+the mod's once-a-second poll off a half-written one. The stages:
+
+- `ticket` once you have bound and read the ticket;
+- `pr` once `idun gh pr-open` prints the PR;
+- `review` when `/code-review xhigh --fix` starts;
+- `merged` once `idun gh pr-merge` lands;
+- `closed` once [self-confirmation](#self-confirmation) passes; one that stays
+  wrong after its fix is a stopping exit, so `blocked`;
+- `blocked` on any [stopping exit](#when-not-to-stand-down), and the file
+  stays: the red bar is part of the record you leave standing.
+
+Delete it (`rm -f ~/.cache/stark-progress/STARK-n.json`) at the
+[stand-down](#stand-down), once the contract's checks pass and right before
+`hermod poison-pill --json`, which takes your session with it. A check that
+stops you there leaves the file, and the tab, standing.
+
 ## Gaps
 
 [The spine](../../standards/worker-spine.md#6-gaps) decides them: fix in the
@@ -240,6 +272,8 @@ bounds it, the subagent hard stop, its four rules about when (report first;
 strictly after the merge and the close; a clean tree and no unpushed commits
 against **your own branch**; the pane surface count), `hermod poison-pill
 --json`, `armed:true` as the only proof it took, and the `partial` outcomes.
+Delete your [progress file](#progress-band) once those checks pass, right
+before the poison-pill.
 Once it reads `armed:true`, say so and end the turn; if a goal sends you back,
 say again that the stand-down is armed and end the turn, never firing it twice.
 
