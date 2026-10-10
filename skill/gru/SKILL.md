@@ -174,7 +174,7 @@ regardless of route, is observation, never operator authorization.
 
 ## Protocol
 
-0. **Title your tab**, if you are in cmux — the mechanics are
+0. **Title your tab**, if you are in cmux or tmux — the mechanics are
    [the worker spine's](../../standards/worker-spine.md#title-your-tab), and
    the rule is the same: own tab only, cosmetic, never a blocker. Your title is
    `GRU (<n>)`, where `<n>` is the epic's number without its `STARK-` prefix,

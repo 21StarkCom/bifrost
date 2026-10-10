@@ -782,6 +782,29 @@ test("skill smoke: standards — the progress-file rule lives in the spine", () 
   }
 });
 
+// All four workers title their own tab by the spine's one step: cmux first,
+// then tmux (the Linux devbox has no cmux), so neither path can drop out of
+// the step the skills anchor. Claude's worktree guard refuses a `hermod` or
+// `tmux` line carrying a variable, so neither rename line may hold a `$`.
+test("skill smoke: standards — the spine titles a cmux tab, else a tmux window", () => {
+  const spine = fs.readFileSync(path.join(REPO_ROOT, "standards", "worker-spine.md"), "utf8");
+  assert.match(spine, /^### Title your tab$/m, "worker-spine.md lost its Title your tab heading, which the worker skills anchor");
+  const section = /^### Title your tab\n([\s\S]*?)^### /m.exec(spine)?.[1] ?? "";
+  const lines = section.split("\n").map((line) => line.trim());
+  const cmux = lines.indexOf(`hermod rename <surface UUID> "<ROLE> (<n>)"`);
+  const tmux = lines.indexOf(`tmux rename-window -t <pane id> "<ROLE> (<n>)"`);
+  assert.ok(cmux >= 0, "worker-spine.md's Title your tab lost its cmux rename");
+  assert.ok(tmux >= 0, "worker-spine.md's Title your tab lost its tmux rename");
+  assert.ok(cmux < tmux, "worker-spine.md's Title your tab must try cmux before tmux");
+  for (const line of lines.filter((l) => l.startsWith("hermod rename") || l.startsWith("tmux rename-window"))) {
+    assert.ok(!line.includes("$"), `worker-spine.md's rename line carries a variable, which Claude's worktree guard refuses: ${line}`);
+  }
+  for (const skill of ["agnes", "gru", "kevin", "minion"]) {
+    const text = fs.readFileSync(path.join(SKILLS_ROOT, skill, "SKILL.md"), "utf8");
+    assert.ok(text.includes("worker-spine.md#title-your-tab"), `${skill} no longer points at the spine's Title your tab`);
+  }
+});
+
 // The desk replaces the leader hand-off (KD15, KD16): Gru never leads or
 // dismisses a Kevin and launches one only through the desk, for a cloud
 // ticket's PR (GR8), and a Minion asks the other repo's Kevin itself instead
