@@ -180,6 +180,28 @@ Waiting on him is not a stop: your goal keeps re-prompting you, so run one
 or `refused` is a stopping exit, `blocked <his line>`, except his stand-down's
 `refused … ask again`, which the desk resends.
 
+## Progress band
+
+The `stark-progress` mod (`mods/stark-progress/`, its own install) draws your
+ticket's bar in your tab from `~/.cache/stark-progress/<STARK-n>.json`; its
+README is the contract. The file is yours to write whether or not the mod is
+installed, on either runtime; a write that fails costs one line and never
+holds the ticket. Write it whole, each time, as
+`{"id":"STARK-n","title":"<ticket title>","stage":"<stage>","pr":"<PR url>","updated":"<now, ISO 8601>"}`
+(`"pr":null` while you have none), at each stage change:
+
+- `ticket` once you have bound and read the ticket;
+- `pr` once `idun gh pr-open` prints the PR;
+- `review` when `/code-review xhigh --fix` starts;
+- `merged` once `idun gh pr-merge` lands;
+- `closed` once [self-confirmation](#self-confirmation) passes; one that
+  comes back wrong stamps `blocked` instead;
+- `blocked` on any [stopping exit](#when-not-to-stand-down), and the file
+  stays: the red bar is part of the record you leave standing.
+
+Delete it after your [report](#report) and before you arm the stand-down,
+which takes your session with it.
+
 ## Gaps
 
 [The spine](../../standards/worker-spine.md#6-gaps) decides them: fix in the
@@ -231,7 +253,7 @@ The ticket is your only report surface. There is no leader peer and no
   post-`--fix` re-run;
 - the links of any follow-ups you filed.
 
-Then, and only then, stand down.
+Then delete your [progress file](#progress-band), and only then stand down.
 
 ## Stand down
 
