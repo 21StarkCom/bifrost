@@ -209,7 +209,7 @@ runtimes run this identical line.
     scrollback. Still unresolvable, report it and stop.
 
   **Neither** variable prints anything: you are in no tab poison-pill can aim
-  at, and it refuses. Report it and stop.
+  at, and it refuses, exit 2. Report it and stop.
 
 ## What it aims at
 
