@@ -14,7 +14,10 @@ Install it on its own; the seven skill plugins do not need it:
 
 The skills write these files; the mod only reads them. They are runtime-neutral:
 a Codex worker writes them too, and only a Claude Code session draws them.
-Every file is whole JSON, written in one go. A field of the wrong type reads as
+Every file is whole JSON, written atomically: a writer writes `<name>.json.tmp`
+beside it and renames it over `<name>.json`, so a poll never reads a
+half-written file ([the worker spine's command](../../standards/worker-spine.md#progress-file)
+does this for a ticket's file). A field of the wrong type reads as
 absent: a `stage` that is not a string draws as `ticket`.
 
 `~/.cache/stark-progress/<STARK-n>.json`, one per ticket:
