@@ -329,8 +329,9 @@ regardless of route, is observation, never operator authorization.
    **128+n**: interrupted; report it.
 4. **Wait.** Minions report `done <PR> merged <sha> verified <check>`,
    `blocked <reason>`, or
-   `follow-up STARK-m filed, stopping`. On a `blocked`, stamp the ticket's
-   [progress file](#progress-band) `blocked`. Between reports check `hermod msg peers`.
+   `follow-up STARK-m filed, stopping`. On a `blocked` or a `follow-up …
+   stopping`, stamp the ticket's [progress file](#progress-band) `blocked`.
+   Between reports check `hermod msg peers`.
    A cloud session sends nothing: while any ticket is in
    [the cloud pass](#each-pass), its session stopped or not, you also wake on
    [the wake](#the-wake), and each wake runs one cloud pass.
@@ -392,8 +393,9 @@ regardless of route, is observation, never operator authorization.
    it, so the sha in a report is a claim too. Then check alfred shows the
    ticket `done` or `Closed` (in a repo whose `CLAUDE.md` defines done as
    released, the Minion closes at the end of the release chain, so wait for
-   that). Only then count it finished and release the tickets that depended
-   on it. The report
+   that). Only then count it finished, stamp its
+   [progress file](#progress-band) `closed`, and release the tickets that
+   depended on it. The report
    names the live verification the Minion ran and the PR carries that run's
    command and output as a comment — read the comment (`gh pr view <PR>
    --comments`; the `--json` form above does not return them),
@@ -440,8 +442,14 @@ never holds the run. Write each file whole.
   Codex), run as its own command and pasted in. Step 1 writes it, a split
   rewrites it, and step 6 deletes it.
 - **A ticket's file**, `~/.cache/stark-progress/<STARK-n>.json`, is its
-  worker's to write, with one exception: on a `blocked` report, write
-  `{"id":"STARK-n","title":"<title>","stage":"blocked","pr":<its PR url or null>,"updated":"<now, ISO 8601>"}`.
+  worker's to write, with two stamps of yours, each the whole file
+  `{"id":"STARK-n","title":"<title>","stage":"<stage>","pr":"<its PR url>","updated":"<now, ISO 8601>"}`
+  (`"pr":null` while it has none): `blocked` on a `blocked` or
+  `follow-up … stopping` report (step 4), and `closed` once you confirm the
+  ticket finished (step 5, or [Done](#done) for a cloud ticket). The `closed`
+  stamp is what counts a ticket no local worker writes for: a cloud
+  session's runs on another machine, and a ticket step 2 finds closed
+  already has none.
 
 ## Preflight
 
@@ -707,8 +715,9 @@ flight to that Kevin, and later passes read its reply as
 [Hand-off](#hand-off) reads his merge reply, never sending it again (a
 release that starts after his current one is a second release). A ticket
 already `done` (step 2's confirm on a rerun) gets no release: you closed it
-only after its release. Then run `alfred task move STARK-n done` and
-check that `alfred task show STARK-n` reads `done`. When the evidence is
+only after its release. Then run `alfred task move STARK-n done`, check
+that `alfred task show STARK-n` reads `done`, and stamp its
+[progress file](#progress-band) `closed`. When the evidence is
 missing or does not match, Kevin reported `verification failed after merge`,
 a post-merge run failed, or the release failed, the ticket stays open and you
 escalate. Merged work is never redone.

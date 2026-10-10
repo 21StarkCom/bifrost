@@ -19,69 +19,112 @@ export function bar(stage: string): string {
   return '█'.repeat(filled) + '░'.repeat(WIDTH - filled)
 }
 
-function parse<T>(text: string | undefined): T | null {
+function parse<T>(text: string | undefined): Partial<T> | null {
   if (!text) return null
   try {
-    return JSON.parse(text) as T
+    const value: unknown = JSON.parse(text)
+
+    return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Partial<T>) : null
   } catch {
     return null
   }
 }
 
+/** A ticket's row; a field of the wrong type reads as absent, so drawing never throws. */
 function row(id: string, text: string | undefined): Row {
   const t = parse<TicketFile>(text)
 
-  return { id, title: t?.title ?? '', stage: t?.stage ?? 'ticket' }
+  return {
+    id,
+    title: typeof t?.title === 'string' ? t.title : '',
+    stage: typeof t?.stage === 'string' ? t.stage : 'ticket',
+  }
+}
+
+const isRunName = (name: string) => name.startsWith('run-') && name.endsWith('.json')
+
+/** The first run file, by name, whose `session` is this session's: Gru's run. */
+export function ownRun(session: string, files: Record<string, string>): RunFile | null {
+  for (const name of Object.keys(files).filter(isRunName).sort()) {
+    const run = parse<RunFile>(files[name])
+    if (run?.session !== session || !Array.isArray(run.tickets)) continue
+    const tickets = run.tickets.filter((id): id is string => typeof id === 'string')
+
+    return { epic: typeof run.epic === 'string' ? run.epic : '', session, tickets: [...new Set(tickets)] }
+  }
+
+  return null
+}
+
+/** The ticket a worker's worktree is named for, from the session's project root. */
+export function ticketOf(root: string): string | null {
+  const base = root.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? ''
+
+  return TICKET_ID.test(base) ? base : null
 }
 
 /**
- * What this tab shows, from the session's cwd and id and the contract
- * directory's files by name. A worker's worktree is named for its ticket, so
- * its tab shows that ticket's file; any other tab shows the run files whose
- * `session` is this session's: Gru's run.
+ * What this tab shows, from the session's project root and id and the contract
+ * directory's files by name. A run file whose `session` is this session's wins
+ * (Gru's tab, which stands in a worktree named for its launch id, the epic's
+ * own `STARK-n` included); otherwise a worker's worktree is named for its
+ * ticket, so its tab shows that ticket's file.
  */
-export function buildView(cwd: string, session: string, files: Record<string, string>): View | null {
-  const base = cwd.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? ''
-  if (TICKET_ID.test(base)) {
-    const text = files[`${base}.json`]
+export function buildView(root: string, session: string, files: Record<string, string>): View | null {
+  const run = ownRun(session, files)
+  if (run !== null) {
+    const rows = run.tickets.map(id => row(id, files[`${id}.json`]))
+    const closed = rows.filter(r => r.stage === 'closed').length
 
-    return text === undefined ? null : { heading: null, rows: [row(base, text)] }
+    return { heading: `Gru · ${run.epic} · ${closed}/${rows.length} closed`, rows }
   }
 
-  const runs = Object.keys(files)
-    .filter(name => name.startsWith('run-') && name.endsWith('.json'))
-    .sort()
-    .map(name => parse<RunFile>(files[name]))
-    .filter((r): r is RunFile => r !== null && r.session === session && Array.isArray(r.tickets))
-  if (runs.length === 0) return null
+  const id = ticketOf(root)
+  const text = id === null ? undefined : files[`${id}.json`]
 
-  const run = runs[0]
-  const rows = run.tickets.map(id => row(id, files[`${id}.json`]))
-  const closed = rows.filter(r => r.stage === 'closed').length
-
-  return { heading: `Gru · ${run.epic} · ${closed}/${rows.length} closed`, rows }
+  return id === null || text === undefined ? null : { heading: null, rows: [row(id, text)] }
 }
 
 export const register: Register = on => {
   let last = ''
+  let isPolling = false
 
   on('session.start', async ($, e, next) => {
     const home = await $.env.get('HOME')
+    if (!home) return next(e)
     const dir = `${home}/.cache/stark-progress`
 
     $.clock.every(POLL_MS, async () => {
-      const files: Record<string, string> = {}
-      const entries = await $.fs.list(dir).catch(() => [])
-      for (const entry of entries) {
-        if (entry.kind !== 'file' || !entry.name.endsWith('.json')) continue
-        const text = await $.fs.read(`${dir}/${entry.name}`).catch(() => undefined)
-        if (typeof text === 'string') files[entry.name] = text
+      // A slow tick must not overlap the next one and write an older view last.
+      if (isPolling) return
+      isPolling = true
+      try {
+        const listed = await $.fs.list(dir).catch(() => [])
+        const names = new Set(listed.filter(f => f.kind === 'file' && f.name.endsWith('.json')).map(f => f.name))
+        const files: Record<string, string> = {}
+        const load = async (name: string) => {
+          if (!names.has(name)) return
+          const text = await $.fs.read(`${dir}/${name}`).catch(() => undefined)
+          if (typeof text === 'string') files[name] = text
+        }
+
+        // The run files first; then only the ticket files this tab draws, so a
+        // directory of old tickets costs a listing, not a read of each.
+        const [root, session] = await Promise.all([$.session.root(), $.session.id()])
+        await Promise.all([...names].filter(isRunName).map(load))
+        const run = ownRun(session, files)
+        const ticket = ticketOf(root)
+        const wanted = run !== null ? run.tickets : ticket === null ? [] : [ticket]
+        await Promise.all(wanted.map(id => load(`${id}.json`)))
+
+        const fresh = buildView(root, session, files)
+        const key = JSON.stringify(fresh)
+        if (key === last) return
+        last = key
+        await update($, view, () => fresh)
+      } finally {
+        isPolling = false
       }
-      const fresh = buildView(await $.session.cwd(), await $.session.id(), files)
-      const key = JSON.stringify(fresh)
-      if (key === last) return
-      last = key
-      await update($, view, () => fresh)
     })
 
     return next(e)

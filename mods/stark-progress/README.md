@@ -14,7 +14,8 @@ Install it on its own; the seven skill plugins do not need it:
 
 The skills write these files; the mod only reads them. They are runtime-neutral:
 a Codex worker writes them too, and only a Claude Code session draws them.
-Every file is whole JSON, written in one go.
+Every file is whole JSON, written in one go. A field of the wrong type reads as
+absent: a `stage` that is not a string draws as `ticket`.
 
 `~/.cache/stark-progress/<STARK-n>.json`, one per ticket:
 
@@ -37,10 +38,16 @@ launch id (the epic's, or `GRU-n`):
 
 ## Which tab shows what
 
-- A session whose working directory is a folder named `STARK-n` (a worker's
-  worktree) shows that ticket's bar, once its file exists.
-- Any other session shows the run file whose `session` is its own: Gru's run.
+- A session that a run file names as its `session` shows that run: Gru's tab,
+  even though it stands in a worktree named for its launch id (the epic's own
+  `STARK-n`, or `GRU-n`).
+- Any other session whose project root (where it started, or the worktree it
+  moved to; a shell `cd` does not move it) is a folder named `STARK-n`, a
+  worker's worktree, shows that ticket's bar, once its file exists.
 - Nothing matching draws nothing.
+
+Each poll lists the directory and reads the run files, then only the ticket
+files the tab draws, so old ticket files cost a listing and nothing more.
 
 ## Develop
 

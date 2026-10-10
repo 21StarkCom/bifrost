@@ -116,11 +116,28 @@ function readMarketplace(): Plugin[] {
     const name = (entry as { name?: unknown }).name;
     return typeof name === "string" && Object.hasOwn(MOD_SOURCES, name);
   };
-  const mods = plugins.filter(isMod) as { name: string; source?: unknown; skills?: unknown; hooks?: unknown }[];
+  const mods = plugins.filter(isMod) as {
+    name: string;
+    version?: unknown;
+    source?: unknown;
+    skills?: unknown;
+    hooks?: unknown;
+  }[];
   assert.deepEqual(
     mods.map((m) => m.name).sort(),
     Object.keys(MOD_SOURCES).sort(),
     `${MARKETPLACE_REL}: every mod in MOD_SOURCES needs exactly one entry`,
+  );
+  const modDirs = fs
+    .readdirSync(path.join(REPO_ROOT, "mods"), { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .sort();
+  assert.deepEqual(
+    modDirs,
+    Object.keys(MOD_SOURCES).sort(),
+    `mods/ and MOD_SOURCES disagree: a mod folder with no entry ships to nobody, and an entry with no ` +
+      `folder installs nothing.`,
   );
   for (const m of mods) {
     assert.equal(
@@ -133,9 +150,22 @@ function readMarketplace(): Plugin[] {
       `${MARKETPLACE_REL}: mod \`${m.name}\` claims skills or inline hooks. A mod ships its own hooks/ ` +
         `and no skill; skills stay in the seven bundles.`,
     );
+    // A mod states its version twice, and an install keys its cache by one of
+    // them: a bump in one place alone may never reach the machine.
+    const manifestRel = `${(MOD_SOURCES[m.name] as string).slice(2)}/.claude-plugin/plugin.json`;
+    const manifest = JSON.parse(readRepoFile(manifestRel, `It is mod \`${m.name}\`'s own manifest.`)) as {
+      name?: unknown;
+      version?: unknown;
+    };
+    assert.deepEqual(
+      { name: manifest.name, version: manifest.version },
+      { name: m.name, version: m.version },
+      `${manifestRel} and mod \`${m.name}\`'s ${MARKETPLACE_REL} entry disagree on name or version; ` +
+        `bump both in the same change.`,
+    );
   }
 
-  return plugins.filter((entry) => !isMod(entry)).map((entry, i) => {
+  return plugins.flatMap((entry, i) => (isMod(entry) ? [] : [{ entry, i }])).map(({ entry, i }) => {
     const p = entry as { name?: unknown; source?: unknown; skills?: unknown; hooks?: unknown };
     assert.equal(typeof p.name, "string", `${MARKETPLACE_REL}: plugins[${i}] has no string \`name\``);
     assert.equal(
