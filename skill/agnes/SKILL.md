@@ -251,8 +251,9 @@ Then, and only then, stand down.
 Run [the stand-down contract](../../standards/stand-down.md) — the scope that
 bounds it, the subagent hard stop, its four rules about when (report first;
 strictly after the merge and the close; a clean tree and no unpushed commits
-against **your own branch**; the pane surface count), `hermod poison-pill
---json`, `armed:true` as the only proof it took, and the `partial` outcomes.
+against **your own branch**; the count of what closes with you),
+`hermod poison-pill --json`, `armed:true` as the only proof it took, and the
+`partial` outcomes.
 Delete your [progress file](#progress-band) once those checks pass, right
 before the poison-pill.
 Once it reads `armed:true`, say so and end the turn; if a goal sends you back,
@@ -266,8 +267,10 @@ comment instead of a Hermod line. What still bounds you is the contract's
 scope, plus one term of your own:
 
 - **Your report** is the ticket comment above, posted and complete before you
-  arm. Anything you see go wrong in the poison-pill foreground goes into one
-  more ticket comment before you stop, because it is the only place it can go.
+  arm. Anything you see go wrong in a check or the poison-pill foreground (a
+  cmux surface count of 1, or a shared tmux window, included) goes into one
+  more ticket comment before you arm or stop, because it is the only place it
+  can go.
 - **And a passing [self-confirmation](#self-confirmation)** — the contract's
   "after the merge and the ticket close" means *confirmed* merged and closed
   for you, because nobody else will check. That is Agnes's one addition to the

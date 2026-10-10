@@ -1,12 +1,15 @@
 # The Stand-Down Contract
 
-How a solo ticket worker closes its own session, worktree and cmux tab when its
-ticket is finished. `/minion` and `/agnes` both run this; neither restates it.
+How a solo ticket worker closes its own session, worktree and tab when its
+ticket is finished: a cmux tab, or in tmux without cmux (the Linux devbox) its
+tmux pane, and with it the window when the pane is the window's only one.
+`/minion` and `/agnes` both run this; neither restates it.
 `/kevin`, who owns no ticket, runs it too, on the terms in
 [Kevin, who owns no ticket](#kevin-who-owns-no-ticket).
 The full hermod behaviour below was live-verified against hermod's TS engine
 (`close-session.ts`, `poison-pill.ts`, `bin/hermod.ts`) plus an observed real
-run under STARK-6166 — it is spec, not hints.
+run under STARK-6166 — it is spec, not hints. The tmux facts were measured on
+tmux 3.8 and hermod's tmux transport.
 
 This doc is runtime-neutral and is shipped byte-identical to both runtimes, so
 read two conventions into it throughout. **The repo's agent instructions file**
@@ -52,9 +55,10 @@ answered with what is left, not obeyed.
 
 ## Never from inside a subagent — hard stop
 
-A subagent shares `$CMUX_SURFACE_ID` with its parent, so poison-pill fired there
-tears down *the parent's* tab. If you dispatch a subagent, it never stands down;
-you do, from your own session.
+A subagent shares `$CMUX_SURFACE_ID` with its parent, and in tmux `$TMUX_PANE`
+(measured: a Claude subagent printed its parent's pane id), so poison-pill
+fired there tears down *the parent's* tab. If you dispatch a subagent, it never
+stands down; you do, from your own session.
 
 ## The command
 
@@ -62,11 +66,17 @@ you do, from your own session.
 hermod poison-pill --json
 ```
 
-It targets your own surface, validates in the foreground and returns at once,
+It targets your own tab (your cmux surface, `$CMUX_SURFACE_ID`, else your tmux
+pane, `$TMUX_PANE` on the server `$TMUX` names), validates in the foreground
+and returns at once,
 then a detached reaper waits for you to go idle, sends your agent's quit verb,
-removes the worktree, and closes the tab. The quit verb is hermod's problem, not
-yours (`/exit` on Claude, `/quit` on Codex), so both runtimes run this identical
-line.
+removes the worktree, and closes the tab. In tmux, closing it kills your pane,
+and with it the window when your pane is that window's only one. The quit verb
+is hermod's problem, not yours (`/exit` on Claude, `/quit` on Codex), so both
+runtimes run this identical line. The tmux pane needs a hermod after v0.37.0
+(STARK-11364, merge commit `e1f2c5a`): v0.37.0 and earlier refuse a tmux pane
+in the foreground, exit 2, which is the report-and-stop in
+[It can still fall short](#it-can-still-fall-short-and-no-answer-to-that-is---force).
 
 ## Four rules about when
 
@@ -92,11 +102,16 @@ line.
   `idun gh pr-merge` both checks are empty, which is why they are cheap, and why
   a non-empty one means something went wrong upstream rather than that the gate
   is noise. Fix that first.
-- **Count the surfaces in your pane before you arm**, because cmux refuses to
-  close a window's only one and that failure is invisible until after you are
-  dead (see `partial`, below). It is two steps, because `hermod panes` lists
-  only the workspace `$CMUX_WORKSPACE_ID` names and that stamp goes stale the
-  moment a tab is moved between workspaces (`hermod v0.19.0`, measured: a moved
+- **Count what closes with you before you arm**, in the order
+  [the spine's Title your tab](worker-spine.md#title-your-tab) uses: cmux
+  first, then tmux. Run `echo "$CMUX_SURFACE_ID"` as its own command. If it
+  prints nothing, skip to **In tmux without cmux**, below: the cmux steps here
+  end in a report-and-stop that does not hold there. If it prints a UUID you
+  are in cmux, even inside tmux: count the surfaces in your pane, because cmux
+  refuses to close a window's only one and that failure is invisible until
+  after you are dead (see `partial`, below). It is two steps, because
+  `hermod panes` lists only the workspace `$CMUX_WORKSPACE_ID` names and that
+  stamp goes stale the moment a tab is moved between workspaces (`hermod v0.19.0`, measured: a moved
   tab's bare `hermod panes` check printed nothing, rc 0, over a real count of
   2). First ask where you really are — `whoami` resolves `$CMUX_SURFACE_ID`
   against the live tree, so its answer is right even under a stale stamp:
@@ -104,6 +119,11 @@ line.
   ```
   hermod whoami --json
   ```
+
+  If the `id` it prints is a pane id (`%` and a number) rather than the UUID
+  you echoed, hermod is on its tmux transport, where cmux is not installed: it
+  ignores that UUID, an outer cmux's stamp, and aims at your tmux pane, so
+  count as in tmux, below.
 
   Then count, pasting the `workspaceId` it printed as a **literal**:
 
@@ -140,8 +160,9 @@ line.
   is not a count, and it has three shapes. `whoami` exits 1 with a named error
   when `$CMUX_SURFACE_ID` is unset (`no CMUX_SURFACE_ID in env`) or your
   surface is gone (`surface … not found in tree`) — loud, where the old
-  one-step check was silent. Poison-pill refuses on both of those itself, so
-  there is nothing left to arm: report it and stop. Or the second step
+  one-step check was silent. An unset one means you are not in cmux: count as
+  in tmux, below. A gone surface poison-pill refuses on itself, so there is
+  nothing left to arm: report it and stop. Or the second step
   **errors** — hermod answers `not_found: Workspace not found`, exit 1, and jq
   dies on `Cannot iterate over null`, exit 5 — because what you pasted is not
   a workspace id: `whoami` prints three UUIDs (`id`, `workspaceId`,
@@ -156,19 +177,64 @@ line.
 
   A stale workspace stamp is **not** a ground poison-pill itself refuses on,
   so a clean dry run does not stand in for this count. Its foreground
-  validation (`--dry-run --json`) refuses, exit 2, on an unset
-  `$CMUX_SURFACE_ID`, on no active session on the surface, and on a session
-  store that cannot name one supported agent and one worktree cwd; and it
+  validation (`--dry-run --json`) refuses, exit 2, with neither
+  `$CMUX_SURFACE_ID` nor a tmux pane to aim at, on no active session on the
+  surface, and on a session store that cannot name one supported agent and
+  one worktree cwd; and it
   answers `aborted-not-worktree`, exit 1, when that cwd is not a git
   repository. A stale stamp is none of those: measured, the dry run answers
   `completed` under one.
 
+  **In tmux without cmux**, `$CMUX_SURFACE_ID` printed nothing (or `whoami`
+  named a pane id); run `echo "$TMUX_PANE"` as its own command. If it prints
+  a pane id (`%` and a number), count the panes in your window instead. The cmux steps cannot do it
+  there: hermod's tmux transport makes every tmux pane a cmux pane of one
+  surface, so `hermod panes` reports a `surface_count` of 1 and no
+  `surface_ids` for every pane, two that share a window included, and the jq
+  above dies on `Cannot index null with null`, exit 5; and the `workspaceId`
+  `whoami` prints is a tmux session id such as `$1`, which a shell expands.
+  Nor is there a stamp to go stale: tmux resolves a pane id wherever its
+  window has moved (measured: after a `move-window` into another session the
+  count followed the pane, while the session index in the pane's `$TMUX` did
+  not change). Paste the pane id in literally, since on Claude a worktree
+  session's guard refuses a `tmux` line carrying a variable:
+
+  ```
+  tmux display -p -t <pane id> '#{pane_id} #{window_panes}'
+  ```
+
+  The first field must read back your pane id, because over a pane id that
+  names no pane `display` prints a blank line and exits 0. Nothing in tmux
+  refuses the close: `kill-pane`, which the reaper runs to close a pane,
+  removed every pane it was given, `remain-on-exit` on or off. So the count
+  never decides whether you arm; it says what closes with you, for your
+  report:
+
+  - **1**: the window is yours alone and closes with your pane, and so does
+    its session when it was that session's only window, and the tmux server
+    when that was its last session.
+  - **More than 1**: the window is shared. Only your pane closes, and the
+    window stays with the other panes, which are not yours to close. Arm, and
+    say so in your report.
+  - **Unresolvable**: a blank line, or a pane id other than the one
+    `$TMUX_PANE` printed. That is a slip, not a count: run both commands
+    again, once, re-reading `$TMUX_PANE` rather than re-pasting from
+    scrollback. Still unresolvable, report it and stop.
+
+  **Neither** variable prints anything: you are in no tab poison-pill can aim
+  at, and it refuses, exit 2. Report it and stop. It refuses the same way on a
+  pane id with `$TMUX` empty, since `$TMUX` names the pane's server, and
+  without it `tmux display` looks the id up on the default server instead.
+
 ## What it aims at
 
-Poison-pill removes the worktree your **session** was launched in — the cwd
-hermod recorded in its session store, not the directory you happen to be
-standing in — and it resolves that cwd up to the git toplevel, so a subdirectory
-is never what gets *removed* and there is no `cd` ritual to perform.
+Poison-pill removes the worktree your **session** was launched in — in cmux
+the cwd hermod recorded in its session store, in tmux (where hermod keeps none)
+the cwd of the Claude or Codex process in your pane, never the directory your
+shell happens to be standing in — and it resolves that cwd up to the git
+toplevel, so a subdirectory is never what gets *removed* and there is no `cd`
+ritual to perform. (Measured on Claude: its process stayed at the worktree root
+while its shell worked in a subdirectory.)
 
 **But on `hermod v0.19.0` the path it PRINTS is not that toplevel** — it is the
 raw recorded cwd, which drifts into a subdirectory the moment anything in your
@@ -218,16 +284,19 @@ working it simply sits there. Report, arm, go quiet, die — in that order.
 
 ## The ack is what was planned, not what happened
 
-The outcome lands in `$TMPDIR/hermod-poison-pill-<pid>-<stamp>.log`, newest
-wins, and by then you are gone — which is why anything you can see going wrong
-in the foreground goes into your report before you stop.
+The outcome lands in `$TMPDIR/hermod-poison-pill-<pid>-<stamp>.log` (`/tmp`
+where `$TMPDIR` is unset, as on the Linux devbox), newest wins, and by then
+you are gone — which is why anything you can see going wrong in the
+foreground goes into your report before you stop.
 
 ## It can still fall short, and no answer to that is `--force`
 
-If poison-pill fails in the foreground — no `$CMUX_SURFACE_ID`, or a session
-store that cannot tell which worktree is yours — you are still alive: say so in
-your report, then stop and leave everything in place. If it arms and the
-teardown comes back `partial`, the tab, the worktree, or both survive:
+If poison-pill fails in the foreground — neither `$CMUX_SURFACE_ID` nor
+`$TMUX_PANE` beside `$TMUX`, a hermod too old for a tmux pane, or a session
+store (in tmux, your pane's processes) that cannot
+tell which worktree is yours — you are still alive: say so in your report, then
+stop and leave everything in place. If it arms and the teardown comes back
+`partial`, the tab, the worktree, or both survive:
 
 - claude holds a git lock on its worktree for the session's life, and the reaper
   refuses to remove one whose lock owner is still alive. It gives up *before*
@@ -235,7 +304,10 @@ teardown comes back `partial`, the tab, the worktree, or both survive:
   — the agent dead, both still there;
 - cmux refuses to close a window's **only** surface —
   `"Cannot close the last surface"`, leaving the agent dead, the worktree gone
-  and the tab alive as a bare shell.
+  and the tab alive as a bare shell. tmux has no counterpart: `kill-pane`
+  closes a window's only pane, and the window with it. Measured on a tmux
+  server's last pane too, where the close takes the server down: the
+  teardown still came back `completed`, worktree removed.
 
 Both are the operator's to sweep, and a `partial` does not heal itself. Do not
 try to resume into it: `claude --worktree X --resume` **recreates** the removed
