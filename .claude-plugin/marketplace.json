@@ -218,8 +218,8 @@
     {
       "name": "kevin-idle",
       "source": "./mods/kevin-idle",
-      "description": "Wakes an idle Kevin with `kevin idle check` once he has gone kevin.idle_seconds (the stark config, two hours by default) without a turn, so he arms no idle timer of his own.",
-      "version": "0.1.0",
+      "description": "Wakes an idle Kevin with `kevin idle check` once he has gone kevin.idle_seconds (the stark config, two hours by default) without a turn, so he arms no idle timer of his own, and draws that idle clock as a band above his prompt.",
+      "version": "0.2.0",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
