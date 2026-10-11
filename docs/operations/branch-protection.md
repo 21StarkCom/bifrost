@@ -477,10 +477,14 @@ point revisit this section, because the reasoning for two approvals on
 instruction-text and code-execution surfaces holds, it just has no one to spend a
 second approval.
 
-**What actually holds the high-trust paths is the mandatory
-`/code-review xhigh --fix` round on every PR**, plus `idun gh pr-merge`, which
-refuses a red or `skipped` required check whatever the ruleset allows. Those are
-exercised per PR. Note there is no longer any workflow-side attestation: the
+**What actually holds the high-trust paths is the review tier each PR's diff
+calls for** (the worker spine's §4: `/code-review xhigh --fix` for code, a
+reread of the diff for scripts and config, none for prose), plus
+`idun gh pr-merge`, which refuses a red or `skipped` required check whatever
+the ruleset allows. Those are exercised per PR. A PR that changes only
+instruction text (a `SKILL.md`, a standards doc, an agent instructions file)
+takes no review under the root rules, so for that surface CI and the
+smoke tests are the only gate. Note there is no longer any workflow-side attestation: the
 `publish-sync-pr` operator-attestation gate was deleted with the marketplace
 machinery, and nothing replaced it. Every merge is a hand merge now.
 
