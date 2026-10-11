@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { idleSeconds, isDue, lastActivityMs, peerState, pollMs } from "./kevin_idle.ts";
+import { hermodEnv, idleSeconds, isDue, lastActivityMs, peerState, pollMs } from "./kevin_idle.ts";
 
 const peers = (...rows: object[]) => JSON.stringify({ peers: rows });
 const running = (pid: number) => pid === 1;
@@ -8,9 +8,20 @@ const running = (pid: number) => pid === 1;
 test("Kevin's row is found by sessionName, and a row whose pid is dead is gone", () => {
   const kevin = { id: "claude:k", sessionName: "KEVIN-bifrost-1", pid: 1 };
   const other = { id: "claude:o", sessionName: "KEVIN-other-1", pid: 1 };
-  assert.deepEqual(peerState(peers(other, kevin), "KEVIN-bifrost-1", running), { state: "live", id: "claude:k" });
+  assert.deepEqual(peerState(peers(other, kevin), "KEVIN-bifrost-1", running), { state: "live", id: "claude:k", pid: 1, busy: false });
   assert.deepEqual(peerState(peers(other, { ...kevin, pid: 2 }), "KEVIN-bifrost-1", running), { state: "gone" });
   assert.deepEqual(peerState(peers(other), "KEVIN-bifrost-1", running), { state: "gone" });
+});
+
+test("a Codex row with no sessionName is found by name, and hermod's busy activity is carried", () => {
+  const codex = { id: "codex:t", name: "KEVIN-bifrost-1", pid: 1, activity: "busy" };
+  assert.deepEqual(peerState(peers(codex), "KEVIN-bifrost-1", running), { state: "live", id: "codex:t", pid: 1, busy: true });
+  assert.equal(peerState(peers({ ...codex, activity: "idle" }), "KEVIN-bifrost-1", running).busy, false);
+});
+
+test("hermod runs without the caller stamps that would make the waker Kevin himself", () => {
+  const env = hermodEnv({ PATH: "/bin", HOME: "/h", CMUX_SURFACE_ID: "s", CODEX_THREAD_ID: "t" });
+  assert.deepEqual(env, { PATH: "/bin", HOME: "/h" });
 });
 
 test("output hermod did not shape as peers is unknown, never gone", () => {

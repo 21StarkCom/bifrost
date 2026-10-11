@@ -64,8 +64,12 @@ test('a Kevin is woken once at the configured threshold, and a turn restarts the
   expect(submitted).toEqual([])
   await clock.advance(2 * MINUTE)
   expect(submitted).toEqual([WAKE_TEXT])
-  await clock.advance(30 * MINUTE)
+  await clock.advance(8 * MINUTE)
   expect(submitted).toEqual([WAKE_TEXT])
+  // This harness's submit starts no turn, as when another hook refuses the
+  // wake: it goes again a whole period later, never sooner.
+  await clock.advance(2 * MINUTE)
+  expect(submitted).toEqual([WAKE_TEXT, WAKE_TEXT])
 })
 
 test('a turn still running is never idle', async ($, on) => {

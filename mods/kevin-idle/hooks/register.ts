@@ -45,7 +45,9 @@ export function idleSeconds(text: string | undefined): number {
 export const register: Register = on => {
   let section: PromptComposeSection | null = null
   let isBusy = false
-  let isWoken = false
+  // When the last wake went out: a wake that never became a turn (another hook
+  // refused it) goes again a period later, not never.
+  let wakeMs = 0
   let lastMs = 0
 
   on('session.start', async ($, e, next) => {
@@ -61,9 +63,10 @@ export const register: Register = on => {
     lastMs = await $.clock.now()
 
     $.clock.every(POLL_MS, async () => {
-      if (isBusy || isWoken || (await $.clock.now()) - lastMs < seconds * 1000) return
-      // Once per idle period: the wake's own turn clears it and restarts the clock.
-      isWoken = true
+      const now = await $.clock.now()
+      if (isBusy || now - Math.max(lastMs, wakeMs) < seconds * 1000) return
+      // Once per idle period: the wake's own turn restarts the clock.
+      wakeMs = now
       await $.prompt.submit({ text: WAKE_TEXT })
     })
 
@@ -72,7 +75,6 @@ export const register: Register = on => {
 
   on('turn.start', async ($, e, next) => {
     isBusy = true
-    isWoken = false
     lastMs = await $.clock.now()
 
     return next(e)

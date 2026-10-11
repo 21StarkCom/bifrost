@@ -4,9 +4,10 @@
  * or a Claude without the mod). It polls `kevin-last` in his worktree's git
  * dir (or, before his first report, the waker's start) and, once that is
  * `kevin.idle_seconds` old (the stark config), sends him `kevin idle check` by
- * hermod; he runs his own check and decides. It wakes him at most once per
- * idle period, and exits once hermod answers with no live row whose
- * `sessionName` is his name.
+ * hermod while hermod reads him idle; he runs his own check and decides. It
+ * wakes him at most once per idle period, and exits once hermod answers with
+ * no live row whose `sessionName` or `name` is his name, or with one held by
+ * another process than the Kevin it first saw.
  *
  *   node tools/kevin_idle.ts --name KEVIN-<repo>-<n> --git-dir <path> [--detach]
  *
@@ -36,12 +37,17 @@ background and prints its pid.`;
 
 export type PeerState = "live" | "gone" | "unknown";
 
-/** Kevin's live row by name, from `hermod msg peers --all --json`; a row whose pid is not running is gone. */
+/**
+ * Kevin's live row by name, from `hermod msg peers --all --json`: its
+ * `sessionName` (Claude, and a Codex thread idun named) or its `name` (a Codex
+ * row that carries no `sessionName`). A row whose pid is not running is gone;
+ * `busy` is hermod's `activity` reading a turn in progress.
+ */
 export function peerState(
   stdout: string,
   name: string,
   isRunning: (pid: number) => boolean,
-): { state: PeerState; id?: string } {
+): { state: PeerState; id?: string; pid?: number; busy?: boolean } {
   let peers: unknown;
   try {
     peers = (JSON.parse(stdout) as { peers?: unknown }).peers;
@@ -50,10 +56,20 @@ export function peerState(
   }
   if (!Array.isArray(peers)) return { state: "unknown" };
   for (const p of peers as Array<Record<string, unknown>>) {
-    if (p?.sessionName !== name || typeof p.id !== "string" || typeof p.pid !== "number") continue;
-    if (isRunning(p.pid)) return { state: "live", id: p.id };
+    if ((p?.sessionName !== name && p?.name !== name) || typeof p.id !== "string" || typeof p.pid !== "number") continue;
+    if (isRunning(p.pid)) return { state: "live", id: p.id, pid: p.pid, busy: p.activity === "busy" };
   }
   return { state: "gone" };
+}
+
+/**
+ * The env hermod runs in: Kevin's own, less the two stamps hermod reads the
+ * caller's identity from. Inherited from his shell they make the waker Kevin
+ * himself, and hermod refuses every wake with "Cannot message your own session".
+ */
+export function hermodEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const { CMUX_SURFACE_ID: _surface, CODEX_THREAD_ID: _thread, ...rest } = env;
+  return rest;
 }
 
 /** Kevin's last activity in ms: `kevin-last`'s epoch seconds, else the waker's start. */
@@ -96,28 +112,42 @@ function readText(file: string): string | undefined {
 
 const log = (line: string) => process.stdout.write(`${new Date().toISOString()} kevin_idle: ${line}\n`);
 
+/** One hermod call; a spawn that fails outright (hermod missing, EAGAIN) reads as no answer, never a crash. */
+async function hermod(args: string[]): Promise<{ status: number | null; stdout: string; signal?: string | null; error?: Error }> {
+  try {
+    return await spawnBounded("hermod", args, { timeoutMs: HERMOD_TIMEOUT_MS, env: hermodEnv(process.env) });
+  } catch (err) {
+    return { status: null, stdout: "", error: err as Error };
+  }
+}
+
 async function run(name: string, gitDir: string, idleMs: number): Promise<void> {
   const pidFile = path.join(gitDir, "kevin-idle.pid");
   fs.writeFileSync(pidFile, `${process.pid}\n`);
   const startedMs = Date.now();
   let lastWakeMs: number | null = null;
+  // The Kevin this waker serves, by his process: a later Kevin reusing the
+  // name after a teardown has his own waker.
+  let watchedPid: number | null = null;
   log(`watching ${name}, idle after ${idleMs / 1000}s`);
   try {
     for (;;) {
-      const peers = await spawnBounded("hermod", ["msg", "peers", "--all", "--json"], { timeoutMs: HERMOD_TIMEOUT_MS });
+      const peers = await hermod(["msg", "peers", "--all", "--json"]);
       const peer = peers.status === 0 ? peerState(peers.stdout, name, isRunning) : { state: "unknown" as const };
-      if (peer.state === "gone") {
-        log(`${name} has no live row; exiting`);
+      if (peer.state === "gone" || (peer.state === "live" && watchedPid !== null && peer.pid !== watchedPid)) {
+        log(`${name} has no live row of pid ${watchedPid ?? "any"}; exiting`);
         return;
       }
+      if (peer.state === "live") watchedPid ??= peer.pid!;
       const lastMs = lastActivityMs(readText(path.join(gitDir, "kevin-last")), startedMs);
-      if (peer.state === "live" && isDue(Date.now(), lastMs, lastWakeMs, idleMs)) {
+      // A busy Kevin is mid-request: a wake delivered into his turn is noise at best.
+      if (peer.state === "live" && !peer.busy && isDue(Date.now(), lastMs, lastWakeMs, idleMs)) {
         // A wake that may not have landed still counts: a second copy a poll
         // later is a second turn, and the next period resends anyway.
         lastWakeMs = Date.now();
         // A note, not a request: a request's delivery tells him to reply, and the wake wants none.
-        const sent = await spawnBounded("hermod", ["msg", "send", "--to", peer.id!, "--kind", "note", "--json", "--", WAKE_TEXT], { timeoutMs: HERMOD_TIMEOUT_MS });
-        log(`woke ${peer.id} (hermod exit ${sent.status ?? sent.signal})`);
+        const sent = await hermod(["msg", "send", "--to", peer.id!, "--kind", "note", "--json", "--", WAKE_TEXT]);
+        log(`woke ${peer.id} (hermod exit ${sent.status ?? sent.signal ?? sent.error?.message})`);
       }
       await new Promise(r => setTimeout(r, pollMs(idleMs)));
     }
@@ -138,6 +168,8 @@ function detach(argv: string[], gitDir: string): void {
     stdio: ["ignore", out, out],
   });
   child.unref();
+  // Claimed here, not only once the child runs, so a second --detach right after finds it.
+  if (child.pid !== undefined) fs.writeFileSync(path.join(gitDir, "kevin-idle.pid"), `${child.pid}\n`);
   process.stdout.write(`kevin_idle: started, pid ${child.pid}\n`);
 }
 

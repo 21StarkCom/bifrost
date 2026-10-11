@@ -511,8 +511,10 @@ Something outside your turns watches the clock for you, armed at launch:
   watches you. It sends you `kevin idle check` by hermod once `kevin-last` is
   that old, and exits on its own once you are gone.
 
-`kevin idle check` is never a request, whoever it comes from: run the check,
-answer nobody, and end your turn unless the check says to stand down. Idle for
+`kevin idle check` is never a request, whoever it comes from: run the check
+and answer nobody. If it reaches you mid-request, the request is in flight, so
+you are not idle: carry on with it. Otherwise end your turn unless the check
+says to stand down. Idle for
 the threshold, [stand down](#stand-down). Idle for less is never a reason to.
 
 ## Stand down
