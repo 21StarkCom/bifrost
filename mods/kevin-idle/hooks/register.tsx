@@ -72,7 +72,7 @@ export function shade(i: number): string {
   return `#${LIGHT.map((a, k) => hex(a, DARK[k]!)).join('')}`
 }
 
-/** Whole minutes as the status line writes them: `<1m`, `48m`, `1h05m`, `2h`. */
+/** Whole minutes, at the status line's minute grain: `<1m`, `48m`, `1h05m`, `2h`. */
 export function duration(ms: number): string {
   const minutes = Math.floor(ms / 60_000)
   if (minutes < 1) return '<1m'
@@ -89,9 +89,14 @@ export function clockTime(ms: number): string {
   return `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`
 }
 
-/** Publishes the band's state; a write redraws the band. */
-async function publish($: StateDollar, value: Idle | null): Promise<void> {
-  await update($, idle, () => value)
+/**
+ * Publishes the band's state; a write redraws the band. `value` is worked out
+ * as the write lands, and again on update's retry, so a retry never puts back
+ * a state a turn hook has since replaced. A failed write costs the band alone,
+ * never the wake.
+ */
+async function publish($: StateDollar, value: () => Idle | null): Promise<void> {
+  await update($, idle, value).catch(() => undefined)
 }
 
 export const register: Register = on => {
@@ -104,8 +109,10 @@ export const register: Register = on => {
   let wakeMs = 0
   let lastMs = 0
 
-  // What the band draws as of `now`: nothing while a turn runs.
-  const idleAt = (now: number): Idle | null => (isBusy ? null : { since: Math.max(lastMs, wakeMs), seconds, now })
+  // What the band draws as of `now`, read from the turn state when the write
+  // lands: nothing while a turn runs.
+  const idleAt = (now: number) => (): Idle | null =>
+    isBusy ? null : { since: Math.max(lastMs, wakeMs), seconds, now }
 
   on('session.start', async ($, e, next) => {
     if (!isKevinRoot(await $.session.root())) return next(e)
@@ -119,16 +126,18 @@ export const register: Register = on => {
     seconds = idleSeconds(text)
     section = armed(seconds)
     lastMs = await $.clock.now()
-    await publish($, idleAt(lastMs))
 
     $.clock.every(POLL_MS, async () => {
       const now = await $.clock.now()
-      if (isBusy || now - Math.max(lastMs, wakeMs) < seconds * 1000) return publish($, idleAt(now))
+      // A running turn's band is already hidden; turn.complete shows it again.
+      if (isBusy) return
+      if (now - Math.max(lastMs, wakeMs) < seconds * 1000) return publish($, idleAt(now))
       // Once per idle period: the wake's own turn restarts the clock.
       wakeMs = now
       await publish($, idleAt(now))
       await $.prompt.submit({ text: WAKE_TEXT })
     })
+    await publish($, idleAt(lastMs))
 
     return next(e)
   })
@@ -160,7 +169,8 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const state = await read($, idle)
-    if (e.props.hasSurvey || state === null) return next(e)
+    // The engine's isWorking too: a reload mid-turn restarts this module idle.
+    if (e.props.hasSurvey || e.props.isWorking || state === null) return next(e)
 
     const { Text } = $.ui.resolve(e)
     const n = filled(state)

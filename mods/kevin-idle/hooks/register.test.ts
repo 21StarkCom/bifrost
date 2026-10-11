@@ -111,7 +111,7 @@ test('the cells fade from light to dark red', () => {
   expect(shade(4)).toBe('#c85d5d')
 })
 
-test('durations read as the status line writes them', () => {
+test('durations read in whole minutes', () => {
   expect([0, 59_000, MINUTE, 48 * MINUTE, 65 * MINUTE, 72 * MINUTE, 120 * MINUTE].map(duration)).toEqual([
     '<1m',
     '<1m',
@@ -149,6 +149,18 @@ test('an idle Kevin sees the band, hidden while a turn runs and restarted after 
   await ui.unmount()
 })
 
+test('the band yields to a survey and to a turn the engine says is running', async ($, on) => {
+  const clock = mock.clock(on)
+  session(on, KEVIN_ROOT, '{"kevin":{"idle_seconds":600}}')
+  await start($)
+  await clock.advance(4 * MINUTE)
+  for (const flag of ['hasSurvey', 'isWorking'] as const) {
+    const ui = await $.ui.mount({ plugin: 'kevin-idle', ...BAND, props: { ...BAND.props, [flag]: true } })
+    expect(await ui.find(IDLE)).toBeUndefined()
+    await ui.unmount()
+  }
+})
+
 test('no band outside a Kevin session', async ($, on) => {
   const clock = mock.clock(on)
   session(on, '/r/.claude/worktrees/STARK-12', null)
@@ -156,4 +168,5 @@ test('no band outside a Kevin session', async ($, on) => {
   await clock.advance(5 * MINUTE)
   const ui = await band($)
   expect(await ui.find(IDLE)).toBeUndefined()
+  await ui.unmount()
 })
