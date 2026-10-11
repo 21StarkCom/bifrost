@@ -24,6 +24,21 @@ at session start from `config.json` (then `global/config.json`) under
 value that is not a whole number of seconds reads as 7200. A change reaches
 the next Kevin launched.
 
+## The idle band
+
+Between turns, a Kevin session shows the idle clock above the prompt, in the
+operator's status-line gauge style:
+
+```
+IDLE ▐████░░░░░░▌ 48m / 2h · wakes 16:12
+```
+
+The 10 cells fade from light red to dark red and round down, so the bar is
+full only once the wake is due; `wakes` is local time. The band is hidden
+while a turn runs (the wake's own included) and while a survey shows, and
+restarts at `<1m` when the turn ends. It refreshes on the mod's one-minute
+tick. Other sessions get no band.
+
 ## How Kevin knows it is armed
 
 It adds one section to the system prompt, in Kevin sessions only:

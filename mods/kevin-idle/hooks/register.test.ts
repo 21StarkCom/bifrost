@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { WAKE_TEXT, configPaths, idleSeconds, isKevinRoot } from './register'
+import { CELLS, WAKE_TEXT, clockTime, configPaths, duration, filled, idleSeconds, isKevinRoot, shade } from './register'
 
 const KEVIN_ROOT = '/r/.claude/worktrees/KEVIN-bifrost-1'
 const MINUTE = 60_000
@@ -20,6 +20,7 @@ function session(on: On, root: string, config: string | null) {
   on('turn.start', ($, e) => ({ turnId: e.turnId }))
   on('turn.complete', () => ({ text: '' }))
   on('prompt.compose', () => ({ sections: [] }))
+  on('ui.render', () => ({ type: 'Box', props: {}, children: [] }))
   on('prompt.submit', ($, e) => {
     submitted.push(e.text)
     return { text: e.text }
@@ -88,4 +89,71 @@ test('any other session is left alone', async ($, on) => {
   await clock.advance(3 * 60 * MINUTE)
   expect(submitted).toEqual([])
   expect((await $.prompt.compose(COMPOSE)).sections).toEqual([])
+})
+
+const BAND = {
+  surface: 'terminal',
+  component: 'AbovePrompt',
+  props: { hasSurvey: false, isWorking: false, maxRows: 20, bodyColumns: 100, scroll: { offset: 0, bodyRows: 19 }, view: {} },
+} as const
+const band = ($: Engine) => $.ui.mount({ plugin: 'kevin-idle', ...BAND })
+const IDLE = { type: 'Text', text: /^IDLE / } as const
+
+test('the bar fills by whole cells, full only once the wake is due', () => {
+  const at = (minutes: number) => filled({ since: 0, seconds: 7200, now: minutes * MINUTE })
+  expect([0, 11, 12, 48, 119, 120, 500].map(at)).toEqual([0, 0, 1, 4, 9, CELLS, CELLS])
+  expect(filled({ since: 10, seconds: 60, now: 0 })).toBe(0)
+})
+
+test('the cells fade from light to dark red', () => {
+  expect(shade(0)).toBe('#f8a8a8')
+  expect(shade(CELLS - 1)).toBe('#8b0000')
+  expect(shade(4)).toBe('#c85d5d')
+})
+
+test('durations read as the status line writes them', () => {
+  expect([0, 59_000, MINUTE, 48 * MINUTE, 65 * MINUTE, 72 * MINUTE, 120 * MINUTE].map(duration)).toEqual([
+    '<1m',
+    '<1m',
+    '1m',
+    '48m',
+    '1h05m',
+    '1h12m',
+    '2h',
+  ])
+  expect(clockTime(new Date(2026, 9, 11, 9, 5).getTime())).toBe('09:05')
+})
+
+test('an idle Kevin sees the band, hidden while a turn runs and restarted after one', async ($, on) => {
+  const clock = mock.clock(on)
+  session(on, KEVIN_ROOT, '{"kevin":{"idle_seconds":600}}')
+  await start($)
+  const since = clock.now()
+
+  await clock.advance(4 * MINUTE)
+  let ui = await band($)
+  const text = (await ui.find(IDLE))?.text
+  expect(text).toContain('4m / 10m')
+  expect(text).toContain(`wakes ${clockTime(since + 10 * MINUTE)}`)
+  expect(await ui.findAll({ type: 'Text', text: /^█$/ })).toHaveLength(4)
+  await ui.unmount()
+
+  await $.turn.start({ text: '', turnId: 't1' })
+  ui = await band($)
+  expect(await ui.find(IDLE)).toBeUndefined()
+  await ui.unmount()
+
+  await $.turn.complete({ reason: 'answer', answer: '', durationMs: 0, turnId: 't1', isAborted: false })
+  ui = await band($)
+  expect((await ui.find(IDLE))?.text).toContain('<1m / 10m')
+  await ui.unmount()
+})
+
+test('no band outside a Kevin session', async ($, on) => {
+  const clock = mock.clock(on)
+  session(on, '/r/.claude/worktrees/STARK-12', null)
+  await start($)
+  await clock.advance(5 * MINUTE)
+  const ui = await band($)
+  expect(await ui.find(IDLE)).toBeUndefined()
 })
