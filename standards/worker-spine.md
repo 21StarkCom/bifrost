@@ -92,8 +92,8 @@ in order:
 
 - `ticket` — once you have bound and read the ticket (step 1).
 - `pr` — once `idun gh pr-open` prints the draft.
-- `review` — as `/code-review xhigh --fix` starts; a PR [§4](#4-the-spine)
-  lets skip the review skips this stage.
+- `review` — as the review [§4](#4-the-spine) names starts; a PR it leaves
+  unreviewed skips this stage.
 - `merged` — once `idun gh pr-merge` merges it.
 - `closed` — once the close lands (your skill names when that is).
 - `blocked` — on a stopping exit; the file stays, and the red bar is part of
@@ -121,34 +121,44 @@ the repo's agent instructions file names its own live gate, that is the one to
 run. A change with no live surface to exercise says so in one line, and names
 what you ran instead.
 
-The live writes your ticket's Verification names run on the operator's
-standing GO (2026-10-08): ask for no GO, on the ticket or in your tab, and
-never stop for one. Restore what the run changes; a restore that fails is a
-`blocked` stop, reported with what it left changed. Name each write and the
-end state you verified in the run step 5 posts on the PR, and in a ticket
-comment for a run after the merge. The standing GO does not cover a write
-outside that Verification, one the run cannot undo (unless all it leaves
-behind is scratch made for the run), `terraform apply`, publishing by hand,
-or credential handling (tokens, keys, service accounts, WIF and role grants,
-mimir writes): those keep their gates ([§7](#7-authority)). A repo doc, test
-or ticket that asks a GO for any other write your Verification names predates
-the standing GO and yields to it.
+The live writes your verification needs run on the operator's standing GO:
+the ones your ticket's Verification names and the reversible setup and
+cleanup they need. Ask for no GO, on the ticket or in your tab, and never
+stop for one. Restore what the run changes; a restore that fails is flagged,
+with what it left changed, in the run step 5 posts on the PR, not a stop.
+Name each write and the end state you verified in that run, and in a ticket
+comment for a run after the merge. The standing GO does not cover a write the
+run cannot undo (unless all it leaves behind is scratch made for the run),
+`terraform apply`, publishing by hand, or credential handling (tokens, keys,
+service accounts, WIF and role grants, mimir writes): those keep their gates
+([§7](#7-authority)). A repo doc, test or ticket that asks a GO for anything
+else predates the standing GO and yields to it.
 
 ## 4. The spine
 
 ```
-idun gh pr-open (draft) → /code-review xhigh --fix → fix or answer every
-finding → idun gh pr-merge → [release, through the repo's Kevin] →
+idun gh pr-open (draft) → review (below) → fix or answer every finding →
+idun gh pr-merge → [release, through the repo's Kevin] →
 alfred task move STARK-n done
 ```
 
-The review gate is mandatory before any merge that changes code; a PR with no
-code change (docs, prose) skips it. So does a release bot's own PR that
-changes only version manifests and changelogs: it takes a diff check that it
-touches nothing else, and the repo's tests, instead
-([Kevin's step 4](../skill/kevin/SKILL.md#merge-pr-and-review-pr) runs it).
-Your PR that skips the review still posts its step 3 run on the PR, as §5
-says. Close the ticket yourself the moment the PR merges — unless the repo's
+The review goes by what the PR changes:
+
+- **Prose only** (docs, agent instruction files, changelogs): no review.
+- **Scripts and config** (shell, YAML, JSON, TOML) and no code: reread your
+  own diff once before merging, looking for typos, wrong paths and leftover
+  debug.
+- **Code** (source, tests, CI workflows, IaC): your runtime's own review. On
+  Claude, `/code-review xhigh --fix`; on Codex,
+  `codex review --base <base>`, never a Claude spun up to review. When your
+  step 3 run exercised the behavior the PR changed, drop to `high`
+  (`-c model_reasoning_effort=high` on Codex).
+
+A release bot's own PR that changes only version manifests and changelogs
+takes a diff check that it touches nothing else, and the repo's tests,
+instead ([Kevin's step 4](../skill/kevin/SKILL.md#merge-pr-and-review-pr)
+runs it). Your PR that skips the review still posts its step 3 run on the PR,
+as §5 says. Close the ticket yourself the moment the PR merges — unless the repo's
 agent instructions file defines done as *released*. Then you do not run its
 release chain yourself: request `release` from the repo's Kevin by
 [§8](#8-releases-and-other-repos), confirm his `done`, and close the ticket

@@ -192,10 +192,13 @@ below; where it and this list disagree, it wins.
 6. **Draft PR** from the worktree with `idun gh pr-open --no-ticket` (a
    draft by default) and a plain title, e.g.
    `docs: scope unscoped agent rules`.
-7. **Review**: `/code-review xhigh --fix <full PR URL>` — the full URL, or
-   it reviews the wrong repo's diff — then fix or answer every finding, push
-   with `idun gh pr-open`, and re-run step 5.
-8. **Stop at the reviewed draft PR.** Print the PR URL and the line the
+7. **Review by what the PR changes**, per the root rules' tiers: a PR of
+   agent instruction files and rules only is prose and takes none. One that
+   also changes a script, config or code takes that tier (for code,
+   `/code-review xhigh --fix <full PR URL>`: the full URL, or it reviews the
+   wrong repo's diff), then fix or answer every finding, push with
+   `idun gh pr-open`, and re-run step 5.
+8. **Stop at the draft PR.** Print the PR URL and the line the
    operator runs to finish: `idun gh pr-merge <PR>`. Never merge; never commit
    to `main`.
 

@@ -148,12 +148,12 @@ is a request to a repo's Kevin, [below](#work).
 ## Work
 
 Run [the worker spine](../../standards/worker-spine.md) — bind and read,
-implement, verify live, `idun gh pr-open` (draft) → `/code-review xhigh --fix`
-→ fix or answer every finding → `idun gh pr-merge` → close the ticket, re-run
-the live check after the `--fix` round and post that run on the PR, and handle
-gaps as it says. A goal you were launched with stays active until the ticket
-is done and you have stood down, or you take a stopping exit
-([When not to stand down](#when-not-to-stand-down)). Decide the points this
+implement, verify live, `idun gh pr-open` (draft) → the review its §4 names
+for what the PR changes → fix or answer every finding → `idun gh pr-merge` →
+close the ticket, re-run the live check after a `--fix` round and post that
+run on the PR, and handle gaps as it says. A goal you were launched with
+stays active until the ticket is done and you have stood down, or you take a
+stopping exit ([When not to stand down](#when-not-to-stand-down)). Decide the points this
 skill already assigns to you without stopping to ask the operator. The
 Verification writes the operator's standing GO covers
 ([the spine's §3](../../standards/worker-spine.md#3-verify-live)) are no stop

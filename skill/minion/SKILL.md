@@ -156,11 +156,11 @@ and the operator asked for it to run in a tab of its own.
 ## Work
 
 Run [the worker spine](../../standards/worker-spine.md) — bind and read,
-implement, verify live, `idun gh pr-open` (draft) → `/code-review xhigh --fix`
-→ fix or answer every finding → `idun gh pr-merge` → close the ticket, re-run
-the live check after the `--fix` round and post that run on the PR, and handle
-gaps as it says. Your tab title, which its step 1 sets, is `MINION (<n>)`. Four
-things are yours on top of it:
+implement, verify live, `idun gh pr-open` (draft) → the review its §4 names
+for what the PR changes → fix or answer every finding → `idun gh pr-merge` →
+close the ticket, re-run the live check after a `--fix` round and post that
+run on the PR, and handle gaps as it says. Your tab title, which its step 1
+sets, is `MINION (<n>)`. Four things are yours on top of it:
 
 - **Your ticket is the one named in your brief**, which also names your
   leader: a peer, or `leader operator`.

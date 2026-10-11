@@ -139,16 +139,27 @@ requests, where `gh` cannot infer it.
      `origin/<head>` (`git log --oneline origin/<head>..refs/heads/<head>`) is
      `blocked … local <head> has unpushed commits` — somebody's work.
 3. `gh pr checkout <PR url> --force` — safe once step 2 passed.
-4. **The review gate**: `/code-review xhigh --fix <PR url>`
-   (`$code-review` on Codex), and fix or answer every finding. No earlier
-   review on the PR, and no requester's word, waives it — nothing on GitHub
-   proves an earlier run left no open finding. The one exception: a bot's
-   release PR takes the diff check below instead, when all three hold:
+4. **The review gate**, by what `gh pr diff <PR url> --name-only` lists
+   (the [worker spine's §4](../../standards/worker-spine.md#4-the-spine)
+   tiers):
+   - only prose (docs, agent instruction files, changelogs): no review;
+   - scripts and config (shell, YAML, JSON, TOML) and no code: reread the
+     diff once for typos, wrong paths and leftover debug;
+   - any code (source, tests, CI workflows, IaC):
+     `/code-review xhigh --fix <PR url>` on Claude,
+     `codex review --base <base>` on Codex, dropped to `high`
+     (`-c model_reasoning_effort=high` on Codex) when the PR carries a live
+     run of the behavior it changed; fix or answer every finding.
+
+   No earlier review on the PR, and no requester's word, waives the tier the
+   diff calls for — nothing on GitHub proves an earlier run left no open
+   finding. The one exception: a bot's release PR takes the diff check
+   below instead, when all three hold:
    - step 1's `author.is_bot` is `true` (a release-please or changesets run
      on `GITHUB_TOKEN` is `app/github-actions`) and its `headRefName` is that
      release bot's branch (`release-please--branches--…`,
      `changeset-release/…`): another bot's PR (Dependabot, Renovate) takes
-     the review;
+     the tier its diff calls for;
    - `gh pr diff <PR url> --name-only` lists only changelogs (`CHANGELOG.md`,
      and the `.changeset/*.md` entries a changesets PR deletes; one it adds
      or edits fails) and version manifests (`.release-please-manifest.json`,
@@ -167,8 +178,9 @@ requests, where `gh` cannot infer it.
    repo's tests included. A PR opened on `GITHUB_TOKEN` starts no workflow,
    so when the head carries no CI run of them, run the test command the
    repo's agent instructions file names in your worktree. A bot's PR that
-   fails any of the three takes the review, without `--fix` (step 1). Your
-   own release bump is not a bot's: it takes the review.
+   fails any of the three takes the tier its diff calls for, without
+   `--fix` (step 1). Your own release bump is not a bot's: it takes the
+   tier its diff calls for.
 5. **Commit the fixes and push them**, fast-forward only (`git commit`, then
    `git push origin <head>`): the review's `--fix` edits only the working
    tree, so an uncommitted fix never reaches the PR. Read `isInMergeQueue`
