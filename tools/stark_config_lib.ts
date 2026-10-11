@@ -201,6 +201,15 @@ export const DEFAULT_HANDOVER = {
 };
 
 /**
+ * kevin — config for `/kevin`, a repo's request desk. `idle_seconds` is how
+ * long he goes with nothing in flight or queued before he stands down; the
+ * kevin-idle mod and `tools/kevin_idle.ts` wake him to check at that age.
+ */
+export const DEFAULT_KEVIN = {
+  idle_seconds: 7200,
+};
+
+/**
  * iac_review — config for the multi-agent Terraform/Terragrunt reviewers.
  * `agents` lists the LLMs that each run the review as their own subagent,
  * e.g. ["gemini","codex"]. Overridable via the `iac_review` config section.
@@ -439,6 +448,9 @@ export function getHandoverConfig(): typeof DEFAULT_HANDOVER {
 }
 export function getCostConfig(): typeof DEFAULT_COST {
   return getSection(DEFAULT_COST, "cost");
+}
+export function getKevinConfig(): typeof DEFAULT_KEVIN {
+  return getSection(DEFAULT_KEVIN, "kevin");
 }
 export function getIacReviewConfig(): typeof DEFAULT_IAC_REVIEW {
   return getSection(DEFAULT_IAC_REVIEW, "iac_review");

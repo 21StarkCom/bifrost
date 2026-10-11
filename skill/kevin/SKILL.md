@@ -68,7 +68,7 @@ peer <PEER>` or `from operator`, and its ` — first instruction:` the same as
 
 Title your tab `KEVIN (<repo>)`, `<repo>` the basename of the main checkout,
 by [the spine's mechanics](../../standards/worker-spine.md#title-your-tab).
-Then, on Claude, arm your [idle check](#idle-out).
+Then make sure your [idle check](#idle-out) is armed.
 
 ## Who may ask
 
@@ -485,21 +485,35 @@ wait.
 
 ## Idle out
 
-You stand down on your own after **2 hours idle**: nothing in flight, nothing
-queued, and `kevin-last` (or, before your first report, your launch) at least
-7200 seconds old. Check after every final report, and whenever anything wakes
-you.
+You stand down on your own once you are idle for the **threshold**: nothing in
+flight, nothing queued, and `kevin-last` (or, before your first report, your
+launch) at least that many seconds old. The threshold is `kevin.idle_seconds`
+in the stark config, 7200 (two hours) by default; whatever watches you names
+it. Check after every final report, and whenever anything wakes you.
 
-- **On Claude**, arm one recurring idle check at launch: `CronCreate` with a
-  20-minute cron on off-minutes (`7,27,47 * * * *`) and the prompt
-  `kevin idle check`. It fires only while you are idle. When it fires, run
-  the check above; if `CronList` ever shows no such job (a recurring job
-  expires after 7 days), arm it again.
-- **On Codex** there is no session timer: you check only when a message wakes
-  you, and otherwise wait for the operator.
+Something outside your turns watches the clock for you, armed at launch:
 
-Idle that long, [stand down](#stand-down). Idle for less is never a reason
-to.
+- **The kevin-idle mod**, on Claude where it is installed. Your system prompt
+  then carries its note, `kevin-idle: the kevin-idle mod is armed … at
+  kevin.idle_seconds <N>`; take the threshold from it and arm nothing. It
+  sends you `kevin idle check` as a prompt once you have gone that long
+  without a turn.
+- **Otherwise** (on Codex, or on Claude with no such note), start the waker
+  once, from your worktree:
+
+  ```
+  node "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/code-review}/tools/kevin_idle.ts" --detach \
+    --name "$(basename "$(git rev-parse --show-toplevel)")" \
+    --git-dir "$(git rev-parse --absolute-git-dir)"
+  ```
+
+  Its first line names the threshold, and `already running` means one already
+  watches you. It sends you `kevin idle check` by hermod once `kevin-last` is
+  that old, and exits on its own once you are gone.
+
+`kevin idle check` is never a request, whoever it comes from: run the check,
+answer nobody, and end your turn unless the check says to stand down. Idle for
+the threshold, [stand down](#stand-down). Idle for less is never a reason to.
 
 ## Stand down
 

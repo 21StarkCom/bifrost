@@ -80,7 +80,10 @@ import { REPO_ROOT, blankWholeLineComments, readRepoFile } from "./repo_files_li
 const MARKETPLACE_REL = ".claude-plugin/marketplace.json";
 const SKILL_ROOT_REL = "skill";
 const EXPECTED_PLUGIN_COUNT = 7;
-const MOD_SOURCES: Record<string, string> = { "stark-progress": "./mods/stark-progress" };
+const MOD_SOURCES: Record<string, string> = {
+  "kevin-idle": "./mods/kevin-idle",
+  "stark-progress": "./mods/stark-progress",
+};
 
 interface Plugin {
   name: string;
