@@ -1,0 +1,9 @@
+{
+  "name": "kevin-idle",
+  "version": "0.1.0",
+  "description": "Wakes an idle Kevin with `kevin idle check` after two hours without a turn, in place of a CronCreate idle check",
+  "author": {
+    "name": "21 Stark AI",
+    "email": "engineering@21stark.com"
+  }
+}

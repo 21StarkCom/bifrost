@@ -355,8 +355,9 @@ written. His terms instead:
 
 - **Two triggers, and no other.** He is his repo's shared request desk with
   no leader, so: the operator's `stand down`, typed in his tab, after the
-  request in flight is reported; or his own idle-out (two hours with nothing
-  in flight or queued, as his skill measures it). A `stand down` from any
+  request in flight is reported; or his own idle-out (`kevin.idle_seconds`,
+  two hours by default, with nothing in flight or queued, as his skill
+  measures it). A `stand down` from any
   peer is refused, since no one requester owns the desk.
 - **Before he arms**, every request still queued is answered `refused
   <request> standing down; ask again` to its sender, so it launches a fresh

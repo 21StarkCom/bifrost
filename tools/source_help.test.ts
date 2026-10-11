@@ -16,6 +16,7 @@ const routes: Record<string, string[]> = {
   github_projects: ["", "find-project", "add-issue", "get-field-ids", "get-items", "get-item-fields", "set-field", "set-fields", "find-item", "get-issue-node-id", "transition-status", "is-legal-transition", "check-spec-completeness", "load-config"],
   healer_canary: ["", "--status", "--check", "--promote audit", "--demote audit", "--explain audit", "--close-circuit audit"],
   iac_review: ["", "--kind terraform", "--kind terragrunt"], jury: ["", "run", "list", "show"],
+  kevin_idle: [""],
   memory_tidy: [""], optimize_skill_description: [""], preflight: [""],
   refactor_planner: ["", "--mode run", "--mode validate", "--mode dry-run"], release_changelog: [""], release_version_bump: [""],
   rules_audit: [""],

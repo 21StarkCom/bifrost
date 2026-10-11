@@ -30,6 +30,9 @@
       }
     }
   },
+  "kevin": {
+    "idle_seconds": 7200
+  },
   "session": {
     "health_checks": [],
     "doc_paths": [

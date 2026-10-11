@@ -94,6 +94,7 @@ argument: …" — wording alone cannot tell a working help from a broken one.
 | `healer_canary.ts` | status, check, promote, demote, explain, close-circuit |
 | `iac_review.ts` | terraform and terragrunt |
 | `jury.ts` | run, list, show |
+| `kevin_idle.ts` | default, detach |
 | `memory_tidy.ts` | default, project/all, dry-run/apply; bare positional help is a safe refusal |
 | `optimize_skill_description.ts` | skill-path/eval-set optimizer |
 | `preflight.ts` | workflow, skip-check, JSON |

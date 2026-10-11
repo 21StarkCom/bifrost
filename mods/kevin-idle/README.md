@@ -1,0 +1,44 @@
+# kevin-idle
+
+A Claude Code mod that wakes an idle Kevin (`/kevin`, a repo's request desk)
+so he can idle out without arming a timer of his own. In a session whose
+project root is a `KEVIN-<repo>-<n>` worktree, it notes when each main-loop
+turn starts and ends, and once he has gone `kevin.idle_seconds` without a
+turn it submits one prompt, `kevin idle check`. Kevin runs his own check
+(`skill/kevin/SKILL.md`, "Idle out") and decides; the wake's own turn
+restarts the clock, so an idle Kevin is woken once per idle period, never
+more. Every other session is left alone.
+
+Install it on its own; the seven skill plugins do not need it:
+
+```
+/plugin install kevin-idle@bifrost
+```
+
+## Threshold
+
+`kevin.idle_seconds` in the stark config, 7200 (two hours) by default, read
+at session start from `config.json` (then `global/config.json`) under
+`STARK_ASSET_ROOT`, else from `~/.claude/code-review/config.json`, the link
+`tools/asset_links.ts` makes into the bifrost checkout. A missing file or a
+value that is not a whole number of seconds reads as 7200. A change reaches
+the next Kevin launched.
+
+## How Kevin knows it is armed
+
+It adds one section to the system prompt, in Kevin sessions only:
+
+```
+kevin-idle: the kevin-idle mod is armed in this session, at kevin.idle_seconds 7200. It sends you `kevin idle check` once you have gone 7200 seconds without a turn, so start no idle waker of your own.
+```
+
+With no such note (a Codex Kevin, or a Claude without this mod) Kevin starts
+`tools/kevin_idle.ts --detach` at launch instead, which wakes him by hermod at
+the same threshold.
+
+## Checking it
+
+```
+claude plugin validate mods/kevin-idle
+claude plugin test mods/kevin-idle
+```

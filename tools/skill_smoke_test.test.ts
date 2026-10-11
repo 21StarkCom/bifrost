@@ -702,7 +702,8 @@ for (const name of ["agnes", "gru", "kevin", "minion"]) {
 // strings a later edit can drop without anything else going red: the closed
 // verb set (KD5), the kickoff markers idun writes (idun desk spec D1/D2), the
 // merge-queue read before any push, the kevin-unpushed branch his stand-down
-// check globs, and his Claude idle check (KD8).
+// check globs, and his idle check (KD8): the kevin-idle mod's note, else the
+// tools/kevin_idle.ts waker, at kevin.idle_seconds, and no CronCreate (STARK-11451).
 const KEVIN_VERBS = ["merge", "review", "rebase", "rerun", "status", "release", "stand down"];
 
 test("skill smoke: skill/kevin — verb set and kickoff markers", () => {
@@ -715,9 +716,10 @@ test("skill smoke: skill/kevin — verb set and kickoff markers", () => {
       `the request \`${verb}\` is no longer a heading or bold lead`,
     );
   }
-  for (const marker of ["from peer", "from operator", "first request:", "isInMergeQueue", "kevin-unpushed/", "CronCreate", "kevin idle check", "kevin-desk.md"]) {
+  for (const marker of ["from peer", "from operator", "first request:", "isInMergeQueue", "kevin-unpushed/", "kevin idle check", "kevin-idle: the kevin-idle mod is armed", "tools/kevin_idle.ts\" --detach", "kevin.idle_seconds", "kevin-desk.md"]) {
     assert.ok(text.includes(marker), `skill/kevin no longer names ${marker}`);
   }
+  assert.ok(!text.includes("CronCreate"), "skill/kevin arms a CronCreate idle check again");
   // `merge <PR> for STARK-n` (STARK-10532, cloud-local-routing spec KV1-KV2): Gru's
   // GR10 closes a cloud ticket only on a comment opening the pass marker at a
   // sha whose tree matches the merge commit's, and never on the FAILED one.
