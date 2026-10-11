@@ -13,6 +13,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=381 runId=381 sha=da5bdf64 -->
+- Kevin now idles out after 30 minutes instead of two hours (`kevin.idle_seconds` is 1800 in the default config).
 <!-- idun:pr-merge pr=380 runId=380 sha=11e6a75f -->
 - `kevin-idle` 0.2.0 draws an idle countdown band above Kevin's prompt, with wake time, hidden during turns and surveys (STARK-11466).
 <!-- idun:pr-merge pr=379 runId=379 sha=8ae3b457 -->
