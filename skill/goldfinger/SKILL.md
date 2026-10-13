@@ -1,6 +1,6 @@
 ---
 name: goldfinger
-description: "Operate desktop apps in the background with the goldfinger CLI: list apps and windows, observe a window's accessibility tree, then click, type, press keys, scroll or set a value, move or resize a window, and read or write the clipboard's text, without taking the user's focus; hover a target with the mouse pointer, held there and then put back, so hover-only UI shows; press a menu-bar command or drag, which briefly bring the app to the front; batch actions, and record a session to replay it. Use when a task needs a native app that has no API, CLI or browser route, a menu-bar command, a drag or a hover in one, a window moved or resized, or the clipboard read or written; and before acting in a Chrome window, since Chrome page work goes to Huginn."
+description: "Operate desktop apps in the background with the goldfinger CLI: list apps and windows, observe a window's accessibility tree, then click, type, press keys, scroll or set a value, move or resize a window, and read or write the clipboard's text, without taking the user's focus; hover a target with the mouse pointer, held there and then put back, so hover-only UI shows; press a menu-bar command or drag, which briefly bring the app to the front; batch actions, record a session to replay it, take a full-resolution screenshot, and diagnose goldfinger itself with `goldfinger doctor`. Use when a task needs a native app that has no API, CLI or browser route, a menu-bar command, a drag or a hover in one, a window moved or resized, or the clipboard read or written; and before acting in a Chrome window, since Chrome page work goes to Huginn."
 argument-hint: "[help]"
 ---
 
@@ -13,16 +13,17 @@ If `$ARGUMENTS` holds a standalone `--help`, `-h` or `help` token, follow
 
 `goldfinger` gives an agent in any terminal background computer use. One daemon, shared by every
 agent on the machine, holds the OS grants and does the work; every other command is a client that
-starts it on demand (`stop` never does). No verb activates an app or raises a window but `setup`
-(interactive), `quit` of the frontmost app, and `menu` and `drag` under `--foreground`, and only
-`hover` moves the mouse pointer, for its hold alone. So the user keeps working, but when any app
-activates during an action's 1 s guard, goldfinger puts back the app that was in front, even over
-the user's switch.
+starts it on demand (`stop`, `watch` and `doctor` without `--fix` never do). No verb activates an
+app or raises a window but `setup` (interactive), `quit` of the frontmost app, and `menu` and
+`drag` under `--foreground`, and only `hover` moves the mouse pointer, for its hold alone. So the
+user keeps working, but when any app activates during an action's 1 s guard, goldfinger puts back
+the app that was in front, even over the user's switch.
 
-This skill teaches 0.7.0: run `goldfinger --version` once before the first call. An older
+This skill teaches 0.8.0: run `goldfinger --version` once before the first call. An older
 goldfinger can fail calls written as this skill writes them with `usage`, or answer them
-otherwise, so below 0.7.0 act on nothing: tell the user the task needs goldfinger 0.7.0
-(`brew upgrade --cask goldfinger`, theirs to run, as it quits the daemon every agent shares).
+otherwise, so below 0.8.0 act on nothing: tell the user the task needs goldfinger 0.8.0
+(`brew upgrade --cask goldfinger`, then `goldfinger doctor --fix` once, both theirs to run, as the
+upgrade quits the daemon every agent shares).
 
 ## Arguments
 
@@ -30,20 +31,24 @@ No arguments: the work happens through `goldfinger` itself.
 
 ## Install, once
 
-- **macOS:** `brew install --cask 21StarkCom/tap/goldfinger`, with `HOMEBREW_GITHUB_API_TOKEN`
-  set to a GitHub token that can read 21StarkCom (the tap is private). It installs the helper
-  app and puts `goldfinger` on `PATH`. Linux is not built yet.
+- **macOS:** the operator's, in the order goldfinger's README gives:
+  `brew tap 21StarkCom/tap git@github.com:21StarkCom/homebrew-tap.git` (the tap is private, read
+  over SSH), `brew install --cask 21StarkCom/tap/goldfinger`, which installs `Goldfinger.app` and
+  puts `goldfinger` on `PATH`, then `goldfinger doctor --fix`, which starts the daemon and
+  Goldfinger Control and lists what is left. Linux is not built yet.
 - **Grants:** the operator runs `goldfinger setup` once, in a terminal they watch: it asks for the
   Accessibility and Screen Recording grants, opens each settings pane in turn, and waits up to
-  5 minutes for both, else fails `permission_missing`. Ask the operator; never click a grant.
-- **Check:** `goldfinger status --json` shows `"permissions": {"accessibility": true,
-  "screen_recording": true}`, and never raises a prompt.
+  5 minutes for both, else fails `permission_missing`. It restarts the daemon, ending every live
+  session. Ask the operator; never click a grant.
+- **Check:** `goldfinger doctor --json` (see Diagnose), or `goldfinger status --json`, which shows
+  `"permissions": {"accessibility": true, "screen_recording": true}`. Neither raises a prompt.
 
 ## Output
 
 Pass `--json` on every call. Success prints the result itself, object or array; an error prints
 `{"ok": false, "error": {"code", "message", "retryable"}}`. Exit `0` is ok, `1` an error, `2` a
-usage error; a `batch` whose step failed exits `1` with its entries array, not an error object.
+usage error; a `batch` whose step failed exits `1` with its entries array, and a `doctor` whose
+check failed exits `1` with its report, neither an error object.
 `--` ends the flags, so flags go before it and text that starts with `-` after it:
 `goldfinger type k7.12:3 --json -- -x`. After it, `--json` and `--observe` are operands too: the
 text or value itself, else a usage error, printed as plain text on stderr when it was `--json`.
@@ -62,7 +67,10 @@ text or value itself, else a usage error, printed as plain text on stderr when i
    keys, and prints `observe: tree cut at <n> nodes` on stderr; a walk it did not cut has
    neither. A cut tree is not the whole window, so a node missing from it may still be there.
    Nor is every uncut one: the walk takes nothing past level 25 (a group or scroll area counts as
-   no level), and that limit never sets `truncated`.
+   no level), and that limit never sets `truncated`. For a picture alone,
+   `goldfinger screenshot [<window_id>] --json` writes a PNG of the main display, or of that window,
+   at its native pixels with no cap, and returns `{"path", "width", "height"}`: a read under the
+   Screen Recording grant, whose pixels no target names, in a file that is yours to delete.
 3. **Act on a target from that snapshot:**
    - `goldfinger click <target> [--right] [--double] --json`
    - `goldfinger type <target> <text> --json`: the text arrives exactly once
@@ -313,8 +321,8 @@ A session marks an agent's calls as its own, and its cursor shows the operator w
 - `goldfinger session-start [--idle-timeout <seconds>] --json` returns `{"session": "k7.s1",
   "color": "orange", "idle_timeout": 300, "cursor": true}`. Pass `--session <id>` on each call
   that belongs in it (one without runs in no session): every command takes it but
-  `session-start`, `session-list`, `serve` and `mcp`, and `glide`, `record-start`, `record-stop`,
-  `session-end` and `session-cursor` require it.
+  `session-start`, `session-list`, `watch`, `doctor`, `serve` and `mcp`, and `glide`,
+  `record-start`, `record-stop`, `session-end` and `session-cursor` require it.
 - `goldfinger session-end --session <id> --json` ends it, `goldfinger session-list --json` lists
   the live ones, and `goldfinger session-cursor --session <id> on|off --json` shows or hides its
   cursor, on from the start: for a session without one, run `off` right after `session-start`.
@@ -329,8 +337,9 @@ A session marks an agent's calls as its own, and its cursor shows the operator w
   with no visible part or position is `action_failed`, the cursor unmoved; a session that is not
   live `session_not_live`. MCP's `glide` takes `target` alone, in the connection's session.
 - **The end.** A session idles out when no call has carried its id for its idle timeout (default
-  300 s, 1 to 86,400; `session-list` does not count), and every daemon exit (`stop`, `setup`'s
-  restart, a newer client) ends them all. An id that is not live (ended, idled out, never started
+  300 s, 1 to 86,400; `session-list` does not count), and every daemon exit ends them all:
+  `stop`, `setup`'s restart, a newer client, and a person's Stop, Restart or Force quit in
+  Goldfinger Control's panel (see Diagnose). An id that is not live (ended, idled out, never started
   or an earlier daemon's) fails `session_not_live`, with nothing run: `session-start`, and use
   the new id. Six can be live, one per color; a seventh `session-start` is `session_limit`.
 
@@ -361,6 +370,43 @@ A session marks an agent's calls as its own, and its cursor shows the operator w
   `"trajectory": 1` in place of `"format"`, is refused so too, its message saying so: record it
   again.
 
+## Diagnose: doctor, watch and Goldfinger Control
+
+- **`goldfinger doctor --json`** checks the install its binary belongs to and prints one report,
+  `{"checks": […], "fail_count", "warn_count"}`, with nine checks always in this order: `app`,
+  `signature`, `notarization`, `path`, `daemon`, `versions`, `grants`, `orphans`, `control`. Each
+  has `id`, `status` (`ok`, `warn`, `fail` or `skip`) and `summary`; one that warns, fails or skips
+  may carry `remedy`, `{"kind": "auto" | "manual", "text"}`. Exit `0` when no check failed; `1`
+  when one did, the report on stdout as on success, not an error object, so read `checks` either
+  way; `2` for `usage` (an operand, `--session`, any flag but `--fix` and `--json`). It needs no
+  grant, sends nothing to any app, and changes nothing: it starts, stops and replaces no daemon,
+  asking it only `watch` and `status`. Give it a minute: it waits up to 30 s for a daemon that is
+  starting or stopping, and reads a missing grant again 3 s later.
+- **Run `goldfinger doctor --json` to diagnose** when goldfinger itself looks wrong: a
+  `daemon_unavailable` or a read's `timeout` that comes back on retry, a `permission_missing`, a
+  `version_mismatch`, or before you tell the user goldfinger is broken. `daemon` names a stuck
+  daemon's reading and pid, `grants` a missing grant, `versions` a client and daemon apart.
+- **Leave `--fix`, `setup` and the panel to a person.** Tell the operator each failing or warning
+  check's `summary` and `remedy.text`, the `auto` ones as `goldfinger doctor --fix`, and run none
+  of them yourself: `--fix` starts a daemon and registers and opens Goldfinger Control, `setup`
+  restarts the daemon, and the manual remedies (`goldfinger stop`, `kill -9 <pid>`, a reinstall)
+  stop or kill the daemon every agent shares, ending every live session.
+- **`goldfinger watch --json`** prints the daemon's state as it changes, one object per line:
+  `state` (`idle`, `working` or `exiting`), the verb `running` with its `elapsed` seconds,
+  `waiting_count`, `main_age` and the live `sessions`, one line at once and one at least every
+  2 s. It never queues behind a running verb, starts no daemon, holds no session and takes no
+  `--session`; it runs until the daemon exits (exit `0`) or 25 s pass with no line (exit `1`,
+  `daemon_unavailable`, also when no daemon runs), so end it once you have the line you need.
+- **Goldfinger Control** is the menu bar app inside `Goldfinger.app`. Its icon shows whether the
+  daemon is offline, idle, working or unresponsive; its panel, the verb running, the requests
+  waiting and the live sessions, and a person's click there starts, stops, restarts or
+  force-quits the daemon. It never starts one on its own. The panel is the person's: never press
+  it with goldfinger. Its Stop, Restart and Force quit are daemon exits, which end every session
+  and stale every snapshot: after one, a call fails `session_not_live` (start a new session) or,
+  while the old daemon exits, `daemon_unavailable`. A Force quit kills the daemon mid-verb, so a
+  `drag` can leave the mouse button held, a `hover` the pointer off its place, and a
+  `--foreground` verb its app in front: observe before you act again.
+
 ## MCP
 
 `goldfinger mcp` serves the same client as an MCP server on stdio. Register it once, and its
@@ -371,11 +417,12 @@ tools appear in agent sessions started after that (in one already running, use t
 
 Its tools are named as the socket verbs: `status`, `setup`, `apps`, `windows`, `observe`,
 `launch`, `quit`, `click`, `type`, `keys`, `scroll`, `set-value`, `stop`, `window-frame`,
-`clipboard-read`, `clipboard-write`, `menu`, `drag`, `batch`, `session-cursor`, `glide` and
-`hover`: 22. Parameters are the snake_case socket args (`window_id`, `max_nodes`,
-`new_instance`); `window-frame`'s `frame` is `{"x", "y", "width", "height"}`, `batch`'s `steps`
-the array its stdin takes, `menu`'s path is `menu_path`, `menu` and `drag` need
-`foreground: true`, and `session-cursor` takes only `cursor`, a boolean. A result is what
+`clipboard-read`, `clipboard-write`, `menu`, `drag`, `batch`, `session-cursor`, `glide`, `hover`
+and `screenshot`: 23, with no `watch` or `doctor` tool (run those through the CLI). `screenshot`
+returns its path and no image: read the file. Parameters are the snake_case socket args
+(`window_id`, `max_nodes`, `new_instance`); `window-frame`'s `frame` is
+`{"x", "y", "width", "height"}`, `batch`'s `steps` the array its stdin takes, `menu`'s path is
+`menu_path`, `menu` and `drag` need `foreground: true`, and `session-cursor` takes only `cursor`, a boolean. A result is what
 `goldfinger <verb> … --json` prints for the same call, marked `isError` exactly where the CLI
 exits non-zero: an error, or a `batch` whose last entry failed. Arrays (`apps`, `windows`,
 `batch`) come as text only; `observe` with `screenshot` adds the PNG as an image. Not every model
@@ -424,9 +471,9 @@ Actions return `"warnings": [...]`, usually empty. With each, the action happene
 | `invalid_target` | Fix the target: a malformed id, an index past the snapshot, a pixel target without a screenshot or outside it, a pixel target for `set-value`, a `step<k>:` target outside a `batch`, a `drag` whose `to` is in another window than its `from`, or a `hover --click` index past the observe taken in its hold. |
 | `background_unavailable` | Nothing was activated or sent. A `cmd` combo (a menu shortcut reaches only the active app): click the control, or press its menu-bar command with `menu … --foreground`. `menu` or `drag` without `--foreground`: add it, which switches the user's front app for the action. A mouse event this platform cannot aim into a background window: use an element target, another route, or ask the user; for a `drag` refused even with `--foreground`, no flag or target lifts it. A single click into background web content outside Chromium, WebKit's or Firefox's (see Targets), a `hover --click` press's mouse fallback included: target an element whose press lands. |
 | `action_failed` | The app rejected the action or value: observe the state before another try. An element that needed mouse events has no visible part in its window (nothing sent): scroll it into view, observe again, act on the new snapshot. `window-frame`: the window is not movable or resizable (nothing written), a write was rejected (part may have landed), or no read-back matched: the platform held its position off the request (a title bar kept below the menu bar), or its frame kept changing, the message naming both frames: run `windows`. `clipboard-read`, `clipboard-write`: clipboard access is denied (nothing written), or the user refused the read at the paste alert: ask the operator to allow the setting the message names. A write refused after the clipboard was cleared left it empty, and says so. `menu`, `drag`: the app did not come frontmost within 1 s (nothing sent; the app before was put back if the focus moved). `menu`: nothing pressed, as the path ends at an item that opens a menu, like a menu bar title (end it at a command inside), or at a disabled one (it needs a state the app is not in, say a selection: observe, change it, press again). `record-start`: the session is already recording (that recording goes on: `record-stop` first), its files or video would not start, or another session's recording has video. `hover`: refused before the pointer moved, as another window, or none, is at the point, the hit test went unanswered, or a button is held; or the platform would not move the pointer, the message saying where it was left (see Hover); or its `--click` press failed as `click`'s does. `glide`: the element has no visible part or position, and the cursor did not move. |
-| `usage` | Malformed arguments (exit 2): fix the call; `goldfinger --help` lists the verbs. Also a refused `batch` (a step's own bad args fail only that step, after the ones before it ran), a `replay` file that is not a trajectory its version replays (format 1 included: record it again), a command that requires `--session` run without it (see Sessions), and, when `goldfinger --version` is below 0.7.0, a call written as this skill writes it: tell the user the task needs goldfinger 0.7.0. |
-| `timeout` | Reads (`status`, `apps`, `windows`, `observe`, `clipboard-read`, `session-list`), `session-cursor` and `glide` may be retried. Anything else may have landed and is not retryable: observe before repeating an action, list apps before a `launch` (it may still open), check a `window-frame` with `windows`, a `clipboard-write` with `clipboard-read` and a `session-start` with `session-list`. A `batch` timeout has no entries: observe before repeating any step. A `menu` timeout says whether it came while the menus were walked (nothing pressed) or at the press; after the press, observe the app's windows first. |
-| `daemon_unavailable` | Retry when `retryable` is true. When the message says the action may have landed, check it as for `timeout` first: a `batch` may have run steps, a `record-start` started a recording. |
+| `usage` | Malformed arguments (exit 2): fix the call; `goldfinger --help` lists the verbs. Also a refused `batch` (a step's own bad args fail only that step, after the ones before it ran), a `replay` file that is not a trajectory its version replays (format 1 included: record it again), a command that requires `--session` run without it (see Sessions), and, when `goldfinger --version` is below 0.8.0, a call written as this skill writes it: tell the user the task needs goldfinger 0.8.0. |
+| `timeout` | Reads (`status`, `apps`, `windows`, `observe`, `screenshot`, `clipboard-read`, `session-list`), `session-cursor` and `glide` may be retried. Anything else may have landed and is not retryable: observe before repeating an action, list apps before a `launch` (it may still open), check a `window-frame` with `windows`, a `clipboard-write` with `clipboard-read` and a `session-start` with `session-list`. A `batch` timeout has no entries: observe before repeating any step. A `menu` timeout says whether it came while the menus were walked (nothing pressed) or at the press; after the press, observe the app's windows first. |
+| `daemon_unavailable` | Retry when `retryable` is true. When the message says the action may have landed, check it as for `timeout` first: a `batch` may have run steps, a `record-start` started a recording. When it comes back on retry, run `goldfinger doctor --json` (see Diagnose). |
 | `version_mismatch` | Two goldfinger versions met. Use the newer `goldfinger`. `goldfinger stop` and a retry also clears it, but stops the daemon other agents share. |
 | `session_limit` | All six session colors are held, so `session-start` started nothing. End a session of yours, or wait for one to idle out, then retry. |
 | `session_not_live` | The `--session` id is not live: never started, ended, idled out (its recording closed too) or an earlier daemon's. Nothing ran, and the same id fails again: run `goldfinger session-start`, and use the new id. |
