@@ -13,11 +13,11 @@ If `$ARGUMENTS` holds a standalone `--help`, `-h` or `help` token, follow
 
 `goldfinger` gives an agent in any terminal background computer use. One daemon, shared by every
 agent on the machine, holds the OS grants and does the work; every other command is a client that
-starts it on demand (`stop`, `watch` and `doctor` without `--fix` never do). No verb activates an app or raises a window but `setup`
-(interactive), `quit` of the frontmost app, and `menu` and `drag` under `--foreground`, and only
-`hover` moves the mouse pointer, for its hold alone. So the user keeps working, but when any app
-activates during an action's 1 s guard, goldfinger puts back the app that was in front, even over
-the user's switch.
+starts it on demand (`stop`, `watch` and `doctor` without `--fix` never do). No verb activates an
+app or raises a window but `setup` (interactive), `quit` of the frontmost app, and `menu` and
+`drag` under `--foreground`, and only `hover` moves the mouse pointer, for its hold alone. So the
+user keeps working, but when any app activates during an action's 1 s guard, goldfinger puts back
+the app that was in front, even over the user's switch.
 
 This skill teaches 0.8.0: run `goldfinger --version` once before the first call. An older
 goldfinger can fail calls written as this skill writes them with `usage`, or answer them
@@ -321,8 +321,8 @@ A session marks an agent's calls as its own, and its cursor shows the operator w
 - `goldfinger session-start [--idle-timeout <seconds>] --json` returns `{"session": "k7.s1",
   "color": "orange", "idle_timeout": 300, "cursor": true}`. Pass `--session <id>` on each call
   that belongs in it (one without runs in no session): every command takes it but
-  `session-start`, `session-list`, `watch`, `doctor`, `serve` and `mcp`, and `glide`, `record-start`, `record-stop`,
-  `session-end` and `session-cursor` require it.
+  `session-start`, `session-list`, `watch`, `doctor`, `serve` and `mcp`, and `glide`,
+  `record-start`, `record-stop`, `session-end` and `session-cursor` require it.
 - `goldfinger session-end --session <id> --json` ends it, `goldfinger session-list --json` lists
   the live ones, and `goldfinger session-cursor --session <id> on|off --json` shows or hides its
   cursor, on from the start: for a session without one, run `off` right after `session-start`.
@@ -381,7 +381,7 @@ A session marks an agent's calls as its own, and its cursor shows the operator w
   way; `2` for `usage` (an operand, `--session`, any flag but `--fix` and `--json`). It needs no
   grant, sends nothing to any app, and changes nothing: it starts, stops and replaces no daemon,
   asking it only `watch` and `status`. Give it a minute: it waits up to 30 s for a daemon that is
-  starting or stopping, and reads the grants twice, 3 s apart.
+  starting or stopping, and reads a missing grant again 3 s later.
 - **Run `goldfinger doctor --json` to diagnose** when goldfinger itself looks wrong: a
   `daemon_unavailable` or a read's `timeout` that comes back on retry, a `permission_missing`, a
   `version_mismatch`, or before you tell the user goldfinger is broken. `daemon` names a stuck
@@ -419,10 +419,10 @@ Its tools are named as the socket verbs: `status`, `setup`, `apps`, `windows`, `
 `launch`, `quit`, `click`, `type`, `keys`, `scroll`, `set-value`, `stop`, `window-frame`,
 `clipboard-read`, `clipboard-write`, `menu`, `drag`, `batch`, `session-cursor`, `glide`, `hover`
 and `screenshot`: 23, with no `watch` or `doctor` tool (run those through the CLI). `screenshot`
-returns its path and no image: read the file. Parameters are the snake_case socket args (`window_id`, `max_nodes`,
-`new_instance`); `window-frame`'s `frame` is `{"x", "y", "width", "height"}`, `batch`'s `steps`
-the array its stdin takes, `menu`'s path is `menu_path`, `menu` and `drag` need
-`foreground: true`, and `session-cursor` takes only `cursor`, a boolean. A result is what
+returns its path and no image: read the file. Parameters are the snake_case socket args
+(`window_id`, `max_nodes`, `new_instance`); `window-frame`'s `frame` is
+`{"x", "y", "width", "height"}`, `batch`'s `steps` the array its stdin takes, `menu`'s path is
+`menu_path`, `menu` and `drag` need `foreground: true`, and `session-cursor` takes only `cursor`, a boolean. A result is what
 `goldfinger <verb> … --json` prints for the same call, marked `isError` exactly where the CLI
 exits non-zero: an error, or a `batch` whose last entry failed. Arrays (`apps`, `windows`,
 `batch`) come as text only; `observe` with `screenshot` adds the PNG as an image. Not every model
