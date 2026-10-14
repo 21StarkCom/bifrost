@@ -92,19 +92,42 @@ text or value itself, else a usage error, printed as plain text on stderr when i
    the Mac, for text the tree does not hold (custom-drawn lists, canvases, images of text). It
    takes the screenshot, needing the Screen Recording grant too, and adds `ocr`:
    `[{text, box, target}]` in reading order, rows top to bottom and each row left to right. `box`
-   is in the PNG's pixels, and `target` is a pixel target on its centre (see Targets and
-   staleness). It lists at most 500 entries, and adds `"ocr_truncated": true` when it cut the
+   is in the PNG's pixels, and `target` is the entry's text target, `<snapshot>:t<n>` (see Targets
+   and staleness). It lists at most 500 entries, and adds `"ocr_truncated": true` when it cut the
    list. `--ocr-region <x>,<y>,<w>,<h>`, in points from the window's top-left, reads only that
    part; boxes and targets stay in the whole PNG's pixels. It reads `en-US` alone: other scripts
    come back as confident false Latin text, and a lone digit after a word can read as a letter
-   (`row 0` as `row O`). It gives no confidence: check what matters against the tree or the PNG.
+   (`row 0` as `row O`), and a `C` as the Cyrillic `С`. It gives no confidence: check what
+   matters against the tree or the PNG.
    The first `--ocr` after a goldfinger install, a macOS update or a purge of Vision's cache
    compiles Vision's model, about 35 s alone and minutes behind other compiles, past the verb's
    20 s limit: that call fails `timeout`, the compile runs on, and `--ocr` fails `timeout` at once
    until it ends. Observe with `--ocr` again a minute later. Anything else meanwhile, a plain
    `observe` included, runs as usual. It reads print too small to see in the PNG, secrets
    included, and your host may keep the text in its transcripts: read only windows the task
-   needs. For a picture alone,
+   needs. The daemon keeps it in memory with its snapshot alone, never on disk or in its log.
+   **Read an earlier snapshot again** (from 0.9.0 on): `goldfinger ocr <snapshot>
+   [--region <x>,<y>,<w>,<h>] --json` reads the text of a snapshot `observe` took with
+   `--screenshot` or `--ocr`, from the native-size capture the daemon keeps beside its PNG, and
+   returns `{snapshot, ocr, ocr_truncated?}`, its entries as `--ocr` gives them. The pixels are the
+   snapshot's, whatever the window shows now, moved, changed or closed.
+   - `--region` is `--ocr-region`'s, in points from the window's top-left as it was observed.
+   - The entries stay with the snapshot, numbered on from its last, so each `target` names one
+     entry while the snapshot lives. A region the snapshot has already read (by `--ocr`, `ocr` or
+     `find-text`; the whole window is one region) returns the same entries, numbers and all,
+     without recognizing again.
+   - It needs no grant, sends nothing, is not recorded, and its `timeout` is retryable. A
+     snapshot the daemon no longer holds (8 per window, 64 in all) is `stale_snapshot`; one
+     without a screenshot, `invalid_target`.
+   **Find text** (from 0.9.0 on): `goldfinger find-text <snapshot> [--region <x>,<y>,<w>,<h>]
+   --json [--] <text>` is `ocr`'s read, or the one the snapshot holds, kept to the entries whose
+   text holds `<text>`, both lowercased with each run of whitespace made one space:
+   `{snapshot, matches, ocr_truncated?}`, matches in reading order, `"matches": []` when none.
+   An empty `<text>` is `usage`; the rest, errors included, is `ocr`'s. Act on a match's `target`:
+   `observe <win> --screenshot`, `find-text <snapshot> --json -- Save`, then `click` the match's
+   `target`. A `stale_snapshot` there means the window changed under you: observe again and
+   repeat.
+   For a picture alone,
    `goldfinger screenshot [<window_id>] --json` writes a PNG of the main display, or of that window,
    at its native pixels with no cap, and returns `{"path", "width", "height"}`: a read under the
    Screen Recording grant, whose pixels no target names, in a file that is yours to delete.
@@ -137,9 +160,23 @@ ending all sessions; run it only as the errors say.
 - `k7.12@640,210` is a pixel of that snapshot's PNG, so the observe needed `--screenshot`: a PNG
   pixel, never the screen points of a node's `frame`. It goes stale the moment its window moves
   or resizes. Inside a `batch`, `step0:4` targets an earlier step's observe (see Batch).
-- An `--ocr` entry's `target` is such a pixel target. Nothing checks it against the text: a scroll
-  inside the window leaves it on its old point, over whatever is there now, and it goes stale only
-  when its window moves or resizes. Observe again after anything that may move content.
+- `k7.12:t4` (from 0.9.0 on) is a text target: entry 4 of the text read in that snapshot, the
+  `target` that `observe --ocr`, `ocr` and `find-text` give each entry. It acts as a pixel target
+  at its box's centre, so `click`, `type`, `keys`, `scroll`, `hover`, `drag` and `batch` steps take
+  it, but first goldfinger captures the window and checks that the entry's text still shows at
+  that point, all before anything is sent:
+  - text that moved (a scroll inside the unmoved window) or changed is `stale_snapshot`, as is a
+    window that moved or resized: observe again;
+  - a check that cannot run is `timeout`, retryable on any verb: a recognition still running, the
+    check past its 3 s, or too little of the verb's 20 s left (it keeps the last 2 s). A capture
+    or recognition that fails is `action_failed`;
+  - it needs the Screen Recording grant too, else `permission_missing`;
+  - an entry past the snapshot's text is `invalid_target`, and so is a text target for
+    `set-value` or `reveal`, as a pixel target is.
+  The pixel target of the box's centre, `<snapshot>@<x + ⌊w/2⌋>,<y + ⌊h/2⌋>`, acts unchecked, when
+  you mean whatever is there now. A plain pixel target is never checked: a scroll inside the window
+  leaves it on its old point, over whatever is there now. Observe again after anything that may
+  move content.
 - In Chromium and Electron apps, a pixel click into web content may not land and a scroll may be
   dropped, with no error. Target web content by element, and observe to confirm. Only each
   window's active tab has a web tree: a background tab's page is not in its window's `observe`
@@ -169,7 +206,7 @@ ending all sessions; run it only as the errors say.
   `action_failed`, nothing sent. `goldfinger reveal <target> [--observe] --json` then scrolls that
   element into view, in the background like every action, with the scroll-to-visible action its
   app offers, and returns `{"warnings": [], "frame": {…}}`: reveal it, then act on it.
-  - Element targets only: a pixel target is `invalid_target`.
+  - Element targets only: a pixel or text target is `invalid_target`.
   - Web content offers the action, in Safari (WebKit) and in the Chromium family, though not on
     every web element. A native element offers none, so on one (a Finder row) `reveal` is
     `action_failed`, saying the element offers no scroll-to-visible action, and nothing scrolls:
@@ -409,7 +446,8 @@ A session marks an agent's calls as its own, and its cursor shows the operator w
 - **Recorded:** every action (see The loop) that succeeded in that session, `batch` steps
   included, and `glide`, with whichever it acted on of the app's bundle id, window title and
   element's role, title and tree path (or pixel point); a `hover --click` also keeps the pressed
-  element's. Not reads, `launch`, `quit` or failures. Text and values are written verbatim,
+  element's. A text target is kept as its box centre's point, never its text, and replays there,
+  unchecked. Not reads, `launch`, `quit` or failures. Text and values are written verbatim,
   passwords included, to a file only the user can read.
 - `goldfinger replay <file> [--session <id>] --json` does the steps again, in order, and returns
   `{"step_count": 7, "warnings": []}`, the steps run. Each finds its app by bundle id (launching
@@ -474,17 +512,20 @@ Its tools are named as the socket verbs: `status`, `setup`, `apps`, `windows`, `
 `launch`, `quit`, `click`, `type`, `keys`, `scroll`, `set-value`, `stop`, `window-frame`,
 `clipboard-read`, `clipboard-write`, `menu`, `drag`, `batch`, `session-cursor`, `glide`, `hover`
 and `screenshot`: 23, with no `watch` or `doctor` tool (run those through the CLI). From 0.9.0
-on, `find` is the 24th (`window_id` required; `role` and `text` strings; `limit` an integer), and
-`reveal` the 25th and last (`target` required, a string; `observe` a boolean).
+on, `find` is the 24th (`window_id` required; `role` and `text` strings; `limit` an integer),
+`reveal` the 25th (`target` required, a string; `observe` a boolean), `ocr` the 26th (`snapshot`
+required, a string; `region` an object) and `find-text` the 27th and last (`snapshot` and `text`
+required, strings; `region` an object).
 `screenshot` returns its path and no image: read the file. Parameters are the snake_case socket
 args (`window_id`, `max_nodes`, `new_instance`); `window-frame`'s `frame` is
-`{"x", "y", "width", "height"}`, and so is `observe`'s `ocr_region`, `observe`'s `ocr` a boolean,
+`{"x", "y", "width", "height"}`, and so are `observe`'s `ocr_region` and the `region` of `ocr` and `find-text`, `observe`'s `ocr` a boolean,
 `batch`'s `steps` the array its stdin takes, `menu`'s path is
 `menu_path`, `menu` and `drag` need `foreground: true`, and `session-cursor` takes only `cursor`, a boolean. A result is what
 `goldfinger <verb> … --json` prints for the same call, marked `isError` exactly where the CLI
 exits non-zero: an error, or a `batch` whose last entry failed. Arrays (`apps`, `windows`,
 `batch`) come as text only; `observe` with `screenshot` adds the PNG as an image, and so does
-`observe` with `ocr`, whose entries are in `structuredContent.ocr`. Not every model
+`observe` with `ocr`, whose entries are in `structuredContent.ocr`; `ocr` and `find-text` add
+none. Not every model
 sees that image: Codex 0.160.0 gives a model that calls MCP tools directly (gpt-5.5)
 `structuredContent`, the result's JSON, in place of `content` wherever a result has both (all but
 the arrays), while its code-mode models (gpt-6-astra) get the whole result. Without the image,
@@ -525,14 +566,14 @@ Actions return `"warnings": [...]`, usually empty. With each, the action happene
 
 | Code | Do this |
 |---|---|
-| `permission_missing` | A grant is missing, which the message names: ask the operator to run `goldfinger setup`, and do not retry. |
+| `permission_missing` | A grant is missing, which the message names (an action on a text target needs Screen Recording too; `ocr` and `find-text` need none): ask the operator to run `goldfinger setup`, and do not retry. |
 | `not_found` | The pid, window or bundle id (`launch`) is gone, or the window has no accessibility tree (another desktop; for `window-frame`, no accessibility counterpart) or closed while `window-frame` moved it: list apps or windows again. A message ending `the screen is locked, …` (`observe`, `replay`): the Mac is locked, which only the operator can undo: tell them, and wait for the unlock (see Targets and staleness). A `replay` stopped there had already run its steps before `k`, and running the file again repeats them. `record-stop` on a live session that is not recording. `replay`: a missing file, or a step's app, window or element not found, a replayed `hover`'s pressed element included. `hover --click`: the observe in its hold found no window or tree, and nothing was clicked. `menu`: no menu bar, an item gone while the menus were walked, or a segment matching no item: fix the path from the titles the message lists. `find`: the window holds no web area, as a native one (Finder, a SwiftUI app) does, since AppKit offers no search, or its web engine offers no search: use `observe` (with `--max-nodes`), or act through the app's own UI. |
-| `stale_snapshot` | Observe again, then act on the new snapshot. |
-| `invalid_target` | Fix the target: a malformed id, an index past the snapshot, a pixel target without a screenshot or outside it, a pixel target for `set-value` or `reveal`, a `step<k>:` target outside a `batch`, a `drag` whose `to` is in another window than its `from`, or a `hover --click` index past the observe taken in its hold. |
+| `stale_snapshot` | Observe again, then act on the new snapshot. A text target's text no longer shows at its point (a scroll, or the text changed), and nothing was sent; for `ocr` and `find-text`, the daemon no longer holds the snapshot. |
+| `invalid_target` | Fix the target: a malformed id, an index past the snapshot, a pixel target without a screenshot or outside it, a text target past the snapshot's text, a pixel or text target for `set-value` or `reveal`, an `ocr` or `find-text` of a snapshot with no screenshot, a `step<k>:` target outside a `batch`, a `drag` whose `to` is in another window than its `from`, or a `hover --click` index past the observe taken in its hold. |
 | `background_unavailable` | Nothing was activated or sent. A `cmd` combo (a menu shortcut reaches only the active app): click the control, or press its menu-bar command with `menu … --foreground`. `menu` or `drag` without `--foreground`: add it, which switches the user's front app for the action. A mouse event this platform cannot aim into a background window: use an element target, another route, or ask the user; for a `drag` refused even with `--foreground`, no flag or target lifts it. A single click into background web content outside Chromium, WebKit's or Firefox's (see Targets), a `hover --click` press's mouse fallback included: target an element whose press lands. |
-| `action_failed` | The app rejected the action or value: observe the state before another try. An element that needed mouse events has no visible part in its window (nothing sent): `reveal` it (web content, from 0.9.0 on; see Targets and staleness), then act on it; a native element has no such action, so `scroll` its scroll view, observe again and act on the new snapshot. `reveal`: the element offers no scroll-to-visible action, as no native element does, or the app rejected it; nothing scrolled. `window-frame`: the window is not movable or resizable (nothing written), a write was rejected (part may have landed), or no read-back matched: the platform held its position off the request (a title bar kept below the menu bar), or its frame kept changing, the message naming both frames: run `windows`. `clipboard-read`, `clipboard-write`: clipboard access is denied (nothing written), or the user refused the read at the paste alert: ask the operator to allow the setting the message names. A write refused after the clipboard was cleared left it empty, and says so. `menu`, `drag`: the app did not come frontmost within 1 s (nothing sent; the app before was put back if the focus moved). `menu`: nothing pressed, as the path ends at an item that opens a menu, like a menu bar title (end it at a command inside), or at a disabled one (it needs a state the app is not in, say a selection: observe, change it, press again). `record-start`: the session is already recording (that recording goes on: `record-stop` first), its files or video would not start, or another session's recording has video. `hover`: refused before the pointer moved, as another window, or none, is at the point, the hit test went unanswered, or a button is held; or the platform would not move the pointer, the message saying where it was left (see Hover); or its `--click` press failed as `click`'s does. `glide`: the element has no visible part or position, and the cursor did not move. `observe --ocr`: Vision failed, or a recognition abandoned at its 5 min ceiling still runs, which `goldfinger stop` clears: tell the operator before stopping the daemon every agent shares. |
-| `usage` | Malformed arguments (exit 2): fix the call; `goldfinger --help` lists the verbs. Also a refused `batch` (a step's own bad args fail only that step, after the ones before it ran), a `replay` file that is not a trajectory its version replays (format 1 included: record it again), a command that requires `--session` run without it (see Sessions), `find` with neither `--role` nor `--text` or a `--limit` outside 1–2,000, and, when `goldfinger --version` is below 0.8.0, a call written as this skill writes it: tell the user the task needs goldfinger 0.8.0. |
-| `timeout` | Reads (`status`, `apps`, `windows`, `observe`, `screenshot`, `clipboard-read`, `session-list`), `session-cursor`, `glide` and `reveal` may be retried; `observe --ocr` after a minute when it follows a first use (see The loop), or read a large window in parts with `--ocr-region`. `find` may be retried too: a search past the 20 s limit keeps no snapshot. Anything else may have landed and is not retryable: observe before repeating an action, list apps before a `launch` (it may still open), check a `window-frame` with `windows`, a `clipboard-write` with `clipboard-read` and a `session-start` with `session-list`. A `batch` timeout has no entries: observe before repeating any step. A `menu` timeout says whether it came while the menus were walked (nothing pressed) or at the press; after the press, observe the app's windows first. |
+| `action_failed` | The app rejected the action or value: observe the state before another try. An element that needed mouse events has no visible part in its window (nothing sent): `reveal` it (web content, from 0.9.0 on; see Targets and staleness), then act on it; a native element has no such action, so `scroll` its scroll view, observe again and act on the new snapshot. `reveal`: the element offers no scroll-to-visible action, as no native element does, or the app rejected it; nothing scrolled. `window-frame`: the window is not movable or resizable (nothing written), a write was rejected (part may have landed), or no read-back matched: the platform held its position off the request (a title bar kept below the menu bar), or its frame kept changing, the message naming both frames: run `windows`. `clipboard-read`, `clipboard-write`: clipboard access is denied (nothing written), or the user refused the read at the paste alert: ask the operator to allow the setting the message names. A write refused after the clipboard was cleared left it empty, and says so. `menu`, `drag`: the app did not come frontmost within 1 s (nothing sent; the app before was put back if the focus moved). `menu`: nothing pressed, as the path ends at an item that opens a menu, like a menu bar title (end it at a command inside), or at a disabled one (it needs a state the app is not in, say a selection: observe, change it, press again). `record-start`: the session is already recording (that recording goes on: `record-stop` first), its files or video would not start, or another session's recording has video. `hover`: refused before the pointer moved, as another window, or none, is at the point, the hit test went unanswered, or a button is held; or the platform would not move the pointer, the message saying where it was left (see Hover); or its `--click` press failed as `click`'s does. `glide`: the element has no visible part or position, and the cursor did not move. `observe --ocr`, `ocr`, `find-text` and a text target's check (nothing sent): Vision failed, or a recognition abandoned at its 5 min ceiling still runs, which `goldfinger stop` clears: tell the operator before stopping the daemon every agent shares; for `ocr` and `find-text`, also the snapshot's native capture could not be read. |
+| `usage` | Malformed arguments (exit 2): fix the call; `goldfinger --help` lists the verbs. Also a refused `batch` (a step's own bad args fail only that step, after the ones before it ran), a `replay` file that is not a trajectory its version replays (format 1 included: record it again), a command that requires `--session` run without it (see Sessions), `find` with neither `--role` nor `--text` or a `--limit` outside 1–2,000, an `ocr` or `find-text` with a missing or malformed snapshot id or `--region`, a `find-text` whose text is empty once trimmed, and, when `goldfinger --version` is below 0.8.0, a call written as this skill writes it: tell the user the task needs goldfinger 0.8.0. |
+| `timeout` | Reads (`status`, `apps`, `windows`, `observe`, `screenshot`, `clipboard-read`, `session-list`), `session-cursor`, `glide` and `reveal` may be retried; `observe --ocr` after a minute when it follows a first use (see The loop), or read a large window in parts with `--ocr-region`. `find` may be retried too: a search past the 20 s limit keeps no snapshot. So may `ocr` and `find-text`, and any action whose text target's check timed out, which sent nothing (see Targets and staleness). Anything else may have landed and is not retryable: observe before repeating an action, list apps before a `launch` (it may still open), check a `window-frame` with `windows`, a `clipboard-write` with `clipboard-read` and a `session-start` with `session-list`. A `batch` timeout has no entries: observe before repeating any step. A `menu` timeout says whether it came while the menus were walked (nothing pressed) or at the press; after the press, observe the app's windows first. |
 | `daemon_unavailable` | Retry when `retryable` is true (a `reveal` stays retryable once sent, as repeating it sets the same state). When the message says the action may have landed, check it as for `timeout` first: a `batch` may have run steps, a `record-start` started a recording. When it comes back on retry, run `goldfinger doctor --json` (see Diagnose). |
 | `version_mismatch` | Two goldfinger versions met. Use the newer `goldfinger`. `goldfinger stop` and a retry also clears it, but stops the daemon other agents share. |
 | `session_limit` | All six session colors are held, so `session-start` started nothing. End a session of yours, or wait for one to idle out, then retry. |
