@@ -13,6 +13,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=383 runId=383 sha=173d6e0e -->
+- `/goldfinger` skill now teaches `observe --ocr` and `--ocr-region` (from goldfinger 0.9.0 on), with their MCP arguments and error handling; stark-ops 0.21.19.
 - `/goldfinger` now teaches goldfinger 0.8.0: diagnose with `goldfinger doctor --json` (exit 1 carries a report, not an error object) and leave `--fix`, `setup` and Goldfinger Control's panel to a person, whose Stop, Restart and Force quit end every session; plus `watch`, `screenshot` and MCP's 23 tools (stark-ops 0.21.18).
 <!-- idun:pr-merge pr=381 runId=381 sha=da5bdf64 -->
 - Kevin now idles out after 30 minutes instead of two hours (`kevin.idle_seconds` is 1800 in the default config).
