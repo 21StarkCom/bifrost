@@ -68,6 +68,26 @@ text or value itself, else a usage error, printed as plain text on stderr when i
    neither. A cut tree is not the whole window, so a node missing from it may still be there.
    Nor is every uncut one: the walk takes nothing past level 25 (a group or scroll area counts as
    no level), and that limit never sets `truncated`.
+   When the tree is cut and the element you need is in web content (a browser page, an Electron
+   app, a web view), use `find` instead of observing again: `goldfinger find <window_id>
+   [--role <role>] [--text <text>] [--limit <n>] --json` (from 0.9.0 on) searches the window's
+   web areas with the engine's own search, which reaches elements past observe's 2,000-node limit.
+   It searches web content only: a native window (Finder, a SwiftUI app) holds no web area and is
+   `not_found`, as AppKit offers no search, so there use `observe` with `--max-nodes`, or act
+   through the app's own UI.
+   - It needs `--role`, `--text` or both, else `usage`. A role is matched as `observe` names it
+     (`button`, `link`, `statictext`). The text is matched against the element's own `title` or
+     `value`, ignoring case; give a text that starts with `-` as `--text=-x`.
+   - With `--text`, an element inside another match is left out, so a list item and its own text
+     come back as one match: in Safari the list item (`group = "Item 2500"`), in Chrome Canary
+     the text (`statictext = "Item 2500"`).
+   - It returns `{snapshot, window_id, pid, frame, matches: [{index, role, title?, value?,
+     frame}]}`, matches in page order. That is a new snapshot: every match has an index, whether
+     or not `observe` would give it one, so act on it as `<snapshot>:<index>` (`click k7.13:0`).
+   - `--limit` is 50 by default, from 1 to 2,000. More matches add `"truncated": true` after
+     `matches` and print `find: matches cut at <n>` on stderr.
+   - The snapshot has no screenshot, so it takes no pixel targets, and its matches keep no tree
+     path: a recorded action on a find target writes no line and is `record_failed`.
    `--ocr` (from 0.9.0 on) also reads the window's text from its pixels, with Apple's Vision on
    the Mac, for text the tree does not hold (custom-drawn lists, canvases, images of text). It
    takes the screenshot, needing the Screen Recording grant too, and adds `ocr`:
@@ -438,9 +458,10 @@ tools appear in agent sessions started after that (in one already running, use t
 Its tools are named as the socket verbs: `status`, `setup`, `apps`, `windows`, `observe`,
 `launch`, `quit`, `click`, `type`, `keys`, `scroll`, `set-value`, `stop`, `window-frame`,
 `clipboard-read`, `clipboard-write`, `menu`, `drag`, `batch`, `session-cursor`, `glide`, `hover`
-and `screenshot`: 23, with no `watch` or `doctor` tool (run those through the CLI). `screenshot`
-returns its path and no image: read the file. Parameters are the snake_case socket args
-(`window_id`, `max_nodes`, `new_instance`); `window-frame`'s `frame` is
+and `screenshot`: 23, with no `watch` or `doctor` tool (run those through the CLI). From 0.9.0
+on, `find` is the 24th (`window_id` required; `role` and `text` strings; `limit` an integer).
+`screenshot` returns its path and no image: read the file. Parameters are the snake_case socket
+args (`window_id`, `max_nodes`, `new_instance`); `window-frame`'s `frame` is
 `{"x", "y", "width", "height"}`, and so is `observe`'s `ocr_region`, `observe`'s `ocr` a boolean,
 `batch`'s `steps` the array its stdin takes, `menu`'s path is
 `menu_path`, `menu` and `drag` need `foreground: true`, and `session-cursor` takes only `cursor`, a boolean. A result is what
@@ -456,7 +477,8 @@ its snapshot is kept (see Targets and staleness), as eviction deletes the file. 
 result's size (Claude Code at `MAX_MCP_OUTPUT_TOKENS`, 25,000 by default): pass `max_nodes` on a
 large window. An `observe` the node limit cut adds its `observe: tree cut at <n> nodes` line as a
 second text block, beside the result's `truncated: true`; an action with `observe: true` adds no
-such block, its `observe` holding the key alone. The rest of this skill applies, but not the
+such block, its `observe` holding the key alone. A `find` cut at its limit adds its
+`find: matches cut at <n>` line the same way. The rest of this skill applies, but not the
 CLI's syntax: no `--json`, no `--`, no exit code, and a flag like `--observe` is a boolean
 parameter.
 
@@ -479,7 +501,7 @@ Actions return `"warnings": [...]`, usually empty. With each, the action happene
 | `app_self_activated` | An app activated itself during the action, and the app that was in front was put back. |
 | `observe_failed` | Its `--observe` failed: run `observe` yourself. A later batch step that references it fails `stale_snapshot`. |
 | `restore_failed` | A `--foreground` `menu` or `drag` acted, but the app frontmost before had quit or did not come back to the front within 1 s, so there is no `restored`. The target's app may still be in front and no verb brings the user's app back: tell the user. |
-| `record_failed` | Its line could not be written, so replaying the recording skips that step. |
+| `record_failed` | Its line could not be written, so replaying the recording skips that step. An action on a `find` target always gets it, as its match has no tree path to replay. |
 | `hover_interrupted` | Someone moved the mouse pointer off `hover`'s point during its hold, or held a button at its end, so it was left where it was: what ran inside the hold may have run without the hover, and its `observe` may not show what the hover reveals. Observe before another hover. |
 | `frame_adjusted` | `window-frame` put the window at the position asked for, but its app holds it at another size (its size steps, a minimum or a maximum), so `frame` has that size, not the one asked for: work with the size in `frame`. A replayed `window-frame` adds it to replay's `warnings` the same way. |
 
@@ -488,13 +510,13 @@ Actions return `"warnings": [...]`, usually empty. With each, the action happene
 | Code | Do this |
 |---|---|
 | `permission_missing` | A grant is missing, which the message names: ask the operator to run `goldfinger setup`, and do not retry. |
-| `not_found` | The pid, window or bundle id (`launch`) is gone, or the window has no accessibility tree (another desktop; for `window-frame`, no accessibility counterpart) or closed while `window-frame` moved it: list apps or windows again. A message ending `the screen is locked, …` (`observe`, `replay`): the Mac is locked, which only the operator can undo: tell them, and wait for the unlock (see Targets and staleness). A `replay` stopped there had already run its steps before `k`, and running the file again repeats them. `record-stop` on a live session that is not recording. `replay`: a missing file, or a step's app, window or element not found, a replayed `hover`'s pressed element included. `hover --click`: the observe in its hold found no window or tree, and nothing was clicked. `menu`: no menu bar, an item gone while the menus were walked, or a segment matching no item: fix the path from the titles the message lists. |
+| `not_found` | The pid, window or bundle id (`launch`) is gone, or the window has no accessibility tree (another desktop; for `window-frame`, no accessibility counterpart) or closed while `window-frame` moved it: list apps or windows again. A message ending `the screen is locked, …` (`observe`, `replay`): the Mac is locked, which only the operator can undo: tell them, and wait for the unlock (see Targets and staleness). A `replay` stopped there had already run its steps before `k`, and running the file again repeats them. `record-stop` on a live session that is not recording. `replay`: a missing file, or a step's app, window or element not found, a replayed `hover`'s pressed element included. `hover --click`: the observe in its hold found no window or tree, and nothing was clicked. `menu`: no menu bar, an item gone while the menus were walked, or a segment matching no item: fix the path from the titles the message lists. `find`: the window holds no web area, as a native one (Finder, a SwiftUI app) does, since AppKit offers no search, or its web engine offers no search: use `observe` (with `--max-nodes`), or act through the app's own UI. |
 | `stale_snapshot` | Observe again, then act on the new snapshot. |
 | `invalid_target` | Fix the target: a malformed id, an index past the snapshot, a pixel target without a screenshot or outside it, a pixel target for `set-value`, a `step<k>:` target outside a `batch`, a `drag` whose `to` is in another window than its `from`, or a `hover --click` index past the observe taken in its hold. |
 | `background_unavailable` | Nothing was activated or sent. A `cmd` combo (a menu shortcut reaches only the active app): click the control, or press its menu-bar command with `menu … --foreground`. `menu` or `drag` without `--foreground`: add it, which switches the user's front app for the action. A mouse event this platform cannot aim into a background window: use an element target, another route, or ask the user; for a `drag` refused even with `--foreground`, no flag or target lifts it. A single click into background web content outside Chromium, WebKit's or Firefox's (see Targets), a `hover --click` press's mouse fallback included: target an element whose press lands. |
 | `action_failed` | The app rejected the action or value: observe the state before another try. An element that needed mouse events has no visible part in its window (nothing sent): scroll it into view, observe again, act on the new snapshot. `window-frame`: the window is not movable or resizable (nothing written), a write was rejected (part may have landed), or no read-back matched: the platform held its position off the request (a title bar kept below the menu bar), or its frame kept changing, the message naming both frames: run `windows`. `clipboard-read`, `clipboard-write`: clipboard access is denied (nothing written), or the user refused the read at the paste alert: ask the operator to allow the setting the message names. A write refused after the clipboard was cleared left it empty, and says so. `menu`, `drag`: the app did not come frontmost within 1 s (nothing sent; the app before was put back if the focus moved). `menu`: nothing pressed, as the path ends at an item that opens a menu, like a menu bar title (end it at a command inside), or at a disabled one (it needs a state the app is not in, say a selection: observe, change it, press again). `record-start`: the session is already recording (that recording goes on: `record-stop` first), its files or video would not start, or another session's recording has video. `hover`: refused before the pointer moved, as another window, or none, is at the point, the hit test went unanswered, or a button is held; or the platform would not move the pointer, the message saying where it was left (see Hover); or its `--click` press failed as `click`'s does. `glide`: the element has no visible part or position, and the cursor did not move. `observe --ocr`: Vision failed, or a recognition abandoned at its 5 min ceiling still runs, which `goldfinger stop` clears: tell the operator before stopping the daemon every agent shares. |
-| `usage` | Malformed arguments (exit 2): fix the call; `goldfinger --help` lists the verbs. Also a refused `batch` (a step's own bad args fail only that step, after the ones before it ran), a `replay` file that is not a trajectory its version replays (format 1 included: record it again), a command that requires `--session` run without it (see Sessions), and, when `goldfinger --version` is below 0.8.0, a call written as this skill writes it: tell the user the task needs goldfinger 0.8.0. |
-| `timeout` | Reads (`status`, `apps`, `windows`, `observe`, `screenshot`, `clipboard-read`, `session-list`), `session-cursor` and `glide` may be retried; `observe --ocr` after a minute when it follows a first use (see The loop), or read a large window in parts with `--ocr-region`. Anything else may have landed and is not retryable: observe before repeating an action, list apps before a `launch` (it may still open), check a `window-frame` with `windows`, a `clipboard-write` with `clipboard-read` and a `session-start` with `session-list`. A `batch` timeout has no entries: observe before repeating any step. A `menu` timeout says whether it came while the menus were walked (nothing pressed) or at the press; after the press, observe the app's windows first. |
+| `usage` | Malformed arguments (exit 2): fix the call; `goldfinger --help` lists the verbs. Also a refused `batch` (a step's own bad args fail only that step, after the ones before it ran), a `replay` file that is not a trajectory its version replays (format 1 included: record it again), a command that requires `--session` run without it (see Sessions), `find` with neither `--role` nor `--text` or a `--limit` outside 1–2,000, and, when `goldfinger --version` is below 0.8.0, a call written as this skill writes it: tell the user the task needs goldfinger 0.8.0. |
+| `timeout` | Reads (`status`, `apps`, `windows`, `observe`, `screenshot`, `clipboard-read`, `session-list`), `session-cursor` and `glide` may be retried; `observe --ocr` after a minute when it follows a first use (see The loop), or read a large window in parts with `--ocr-region`. `find` may be retried too: a search past the 20 s limit keeps no snapshot. Anything else may have landed and is not retryable: observe before repeating an action, list apps before a `launch` (it may still open), check a `window-frame` with `windows`, a `clipboard-write` with `clipboard-read` and a `session-start` with `session-list`. A `batch` timeout has no entries: observe before repeating any step. A `menu` timeout says whether it came while the menus were walked (nothing pressed) or at the press; after the press, observe the app's windows first. |
 | `daemon_unavailable` | Retry when `retryable` is true. When the message says the action may have landed, check it as for `timeout` first: a `batch` may have run steps, a `record-start` started a recording. When it comes back on retry, run `goldfinger doctor --json` (see Diagnose). |
 | `version_mismatch` | Two goldfinger versions met. Use the newer `goldfinger`. `goldfinger stop` and a retry also clears it, but stops the daemon other agents share. |
 | `session_limit` | All six session colors are held, so `session-start` started nothing. End a session of yours, or wait for one to idle out, then retry. |
