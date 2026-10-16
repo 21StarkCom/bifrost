@@ -113,11 +113,11 @@ export interface ManagedLink {
  * idavoll repo owns them now — the files, the links to them and the
  * settings that run them. The two hooks are `idavoll hook statusline-prompt`
  * and `statusline-stop` now, and idavoll itself retires their old
- * `~/.claude/statusline-{prompt,stop}-hook.sh` links. None of these paths is
- * in `RETIRED_LINKS` either: on a provisioned machine the rest are correctly
- * installed links into idavoll, and a retired row would make `--check` report
- * each one as a problem. This repo neither creates, repairs, removes nor
- * reports them.
+ * `~/.claude/statusline-{prompt,stop}-hook.sh` links once its settings stop
+ * calling them. None of these paths is in `RETIRED_LINKS` either: on a
+ * provisioned machine each is a link into idavoll until idavoll says otherwise,
+ * and a retired row would make `--check` report it as a problem. This repo
+ * neither creates, repairs, removes nor reports them.
  */
 export const MANAGED_LINKS: readonly ManagedLink[] = [
   {
