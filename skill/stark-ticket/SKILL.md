@@ -22,8 +22,24 @@ follow [standard help](../../standards/help.md), then stop.
 
 # stark-ticket
 
-A ticket is a work order for someone who was not in the room. Keep it under
-300 words; a line or two per heading for a small change.
+A ticket is a work order for someone who was not in the room. Write its prose
+in ASD-STE100 Simplified Technical English, so that each sentence has one
+meaning for the reader, a person or an agent. Write a line or two per heading
+for a small change.
+
+- Write a step (Scope, Acceptance, Verification) in sentences of 20 words or
+  fewer, and a description (Goal) in sentences of 25 words or fewer.
+- Write one instruction in each sentence, in the imperative and the active
+  voice: "Raise the bound", not "The bound should be raised".
+- Use one word for one meaning, and the same word for the same thing each
+  time. Use the simple word: "use", not "utilize".
+- Keep the articles and verbs. Do not remove them to make a sentence shorter.
+- Use no more than three nouns in a row: "the bound on sitemaps", not "the
+  sitemap discovery bound".
+- Use simple tenses. Use an -ing form only in a name.
+- Keep a paragraph to one topic and six sentences or fewer.
+- Paste output, commands, paths, names and error text as they are. These rules
+  apply only to your own prose.
 
 1. **Twin check.** `alfred task find` in the target repo. If a live ticket
    covers it, comment there instead of filing.
