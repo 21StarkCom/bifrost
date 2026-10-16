@@ -501,11 +501,13 @@ test("stateRoot()'s audit/, history/ and locks/ are untouched and the dir is nev
 // Paths another repo owns — left strictly alone
 // ---------------------------------------------------------------------------
 
-// The statusline scripts, their prompt/stop hooks and the Concrete output style
+// The statusline script, its prompt/stop hooks and the Concrete output style
 // used to be rows here. They moved to the idavoll repo, which links them
 // into `~/.claude` itself, so they are neither managed NOR retired: a managed row
 // would repoint a correctly installed link back at this checkout, and a retired
 // one would make `--check` report it as a problem on every provisioned machine.
+// The hooks are `idavoll hook statusline-prompt|statusline-stop` now, and
+// idavoll retires their old links, so those two paths are absent here.
 // Pinned by behaviour rather than by grepping the tables, so it holds whichever
 // table the next edit reaches for.
 test("links another repo owns are neither managed nor retired — check passes and install leaves them alone", () => {
@@ -514,9 +516,11 @@ test("links another repo owns are neither managed nor retired — check passes a
   const otherRepo = tmp("other-repo");
   const foreign = [
     ".claude/statusline-command.sh",
+    ".claude/output-styles/concrete.md",
+  ];
+  const retiredByIdavoll = [
     ".claude/statusline-prompt-hook.sh",
     ".claude/statusline-stop-hook.sh",
-    ".claude/output-styles/concrete.md",
   ];
   for (const rel of foreign) {
     const target = path.join(otherRepo, path.basename(rel));
@@ -536,6 +540,10 @@ test("links another repo owns are neither managed nor retired — check passes a
   assert.deepEqual(snapshot(), before, "install touched a link this repo does not own");
   const check = checkLinks({ home, repoRoot });
   assert.equal(check.ok, true, `a correctly installed foreign link was reported:\n${renderReport(check)}`);
+  for (const rel of retiredByIdavoll) {
+    assert.equal(fs.lstatSync(path.join(home, rel), { throwIfNoEntry: false }), undefined, `install created ${rel}, which idavoll retired`);
+    assert.ok(!renderReport(check).includes(rel), `check reported ${rel}, which idavoll retired`);
+  }
 });
 
 // ---------------------------------------------------------------------------
