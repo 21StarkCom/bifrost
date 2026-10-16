@@ -501,11 +501,16 @@ test("stateRoot()'s audit/, history/ and locks/ are untouched and the dir is nev
 // Paths another repo owns — left strictly alone
 // ---------------------------------------------------------------------------
 
-// The statusline scripts, their prompt/stop hooks and the Concrete output style
+// The statusline script, its prompt/stop hooks and the Concrete output style
 // used to be rows here. They moved to the idavoll repo, which links them
 // into `~/.claude` itself, so they are neither managed NOR retired: a managed row
 // would repoint a correctly installed link back at this checkout, and a retired
 // one would make `--check` report it as a problem on every provisioned machine.
+// The hooks are `idavoll hook statusline-prompt|statusline-stop` now, and
+// idavoll retires their old links, but only once its settings converge stops
+// calling them: until then a machine carries them, pointing at scripts that may
+// be gone. They are fixtures here as such dangling links, so a row for either in
+// either table fails this test (install would repoint it, check would report it).
 // Pinned by behaviour rather than by grepping the tables, so it holds whichever
 // table the next edit reaches for.
 test("links another repo owns are neither managed nor retired — check passes and install leaves them alone", () => {
@@ -514,9 +519,11 @@ test("links another repo owns are neither managed nor retired — check passes a
   const otherRepo = tmp("other-repo");
   const foreign = [
     ".claude/statusline-command.sh",
+    ".claude/output-styles/concrete.md",
+  ];
+  const retiredByIdavoll = [
     ".claude/statusline-prompt-hook.sh",
     ".claude/statusline-stop-hook.sh",
-    ".claude/output-styles/concrete.md",
   ];
   for (const rel of foreign) {
     const target = path.join(otherRepo, path.basename(rel));
@@ -524,8 +531,11 @@ test("links another repo owns are neither managed nor retired — check passes a
     fs.mkdirSync(path.dirname(path.join(home, rel)), { recursive: true });
     fs.symlinkSync(target, path.join(home, rel));
   }
+  for (const rel of retiredByIdavoll) {
+    fs.symlinkSync(path.join(otherRepo, "gone", path.basename(rel)), path.join(home, rel));
+  }
   const snapshot = () =>
-    foreign.map((rel) => {
+    [...foreign, ...retiredByIdavoll].map((rel) => {
       const p = path.join(home, rel);
       return `${rel} ino=${fs.lstatSync(p).ino} -> ${fs.readlinkSync(p)}`;
     });
@@ -536,6 +546,10 @@ test("links another repo owns are neither managed nor retired — check passes a
   assert.deepEqual(snapshot(), before, "install touched a link this repo does not own");
   const check = checkLinks({ home, repoRoot });
   assert.equal(check.ok, true, `a correctly installed foreign link was reported:\n${renderReport(check)}`);
+  const rendered = renderReport(check);
+  for (const rel of retiredByIdavoll) {
+    assert.ok(!rendered.includes(rel), `check reported ${rel}, which idavoll retires`);
+  }
 });
 
 // ---------------------------------------------------------------------------

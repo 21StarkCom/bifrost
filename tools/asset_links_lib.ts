@@ -108,14 +108,16 @@ export interface ManagedLink {
  * them. Order is display order.
  *
  * It is deliberately the `code-review` asset tree and nothing else. The
- * statusline scripts, their `UserPromptSubmit`/`Stop` hooks and the Concrete
+ * statusline script, its `UserPromptSubmit`/`Stop` hooks and the Concrete
  * output style used to be rows here; they are machine configuration, and the
  * idavoll repo owns them now — the files, the links to them and the
- * settings that run them. They are NOT in `RETIRED_LINKS` either, because they
- * are not retired: on a provisioned machine those paths are correctly
- * installed links into idavoll, and a retired row would make `--check`
- * report every one of them as a problem. This repo neither creates, repairs
- * nor reports them.
+ * settings that run them. The two hooks are `idavoll hook statusline-prompt`
+ * and `statusline-stop` now, and idavoll itself retires their old
+ * `~/.claude/statusline-{prompt,stop}-hook.sh` links once its settings stop
+ * calling them. None of these paths is in `RETIRED_LINKS` either: on a
+ * provisioned machine each is a link into idavoll until idavoll says otherwise,
+ * and a retired row would make `--check` report it as a problem. This repo
+ * neither creates, repairs, removes nor reports them.
  */
 export const MANAGED_LINKS: readonly ManagedLink[] = [
   {
