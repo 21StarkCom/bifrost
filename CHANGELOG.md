@@ -138,6 +138,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **`workflow_shape.test.ts` now proves `SCAN_SCOPES` is complete.** That hand-written list claims in its own comment to be *every* top-level dir holding a scannable file, and nothing checked it — so a new top-level directory (or a `gh` call parked in `docs/`) left the `gh api --slurp` gate reporting clean over a file it never opened. A second walk of the whole tree now diffs against the scoped walk and names anything outside it. Mutation-proved: dropping `config` from the list reddens with the eight files it covers.
 
 ### Fixed
+<!-- idun:pr-merge pr=390 runId=390 sha=0b406496 -->
+- Asset links no longer expect idavoll's retired statusline hook links; the foreign-links test pins them as dangling and unmanaged.
 <!-- idun:pr-merge pr=361 runId=361 sha=01780d03 -->
 - gha-cost breakdown now queries one month (`--month`), lists only the org's own repos, and ranks by gross with net and public repos shown apart.
 <!-- idun:pr-merge pr=350 runId=350 sha=8ba4e1dd -->
