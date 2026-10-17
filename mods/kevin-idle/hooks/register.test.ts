@@ -36,6 +36,8 @@ function session(on: On, root: string, config: string | null) {
 
 const start = ($: Engine) => $.session.start({ cwd: '/r', surface: null, isInteractive: true })
 const typed = (text: string) => ({ text, wait: false, origin: { kind: 'composer' } }) as const
+// The kickoff is a slash command, which the engine raises with `command` set.
+const kickoff = { ...typed('/kevin from operator'), command: { name: 'kevin', args: 'from operator' } } as const
 const fromPeer = (text: string) => ({ text, wait: false, origin: { kind: 'peer' } }) as const
 const turn = async ($: Engine, id: string) => {
   await $.turn.start({ text: '', turnId: id })
@@ -53,7 +55,7 @@ test('only a KEVIN-<repo>-<n> worktree is a Kevin', () => {
 test('every prompt a Kevin gets carries the note, his kickoff first', async ($, on) => {
   const { submitted, contexts } = session(on, KEVIN_ROOT, '{"kevin":{"idle_seconds":600}}')
   await start($)
-  await $.prompt.submit(typed('/kevin from operator'))
+  await $.prompt.submit(kickoff)
   await $.prompt.submit(fromPeer('status'))
   expect(submitted).toEqual(['/kevin from operator', 'status'])
   expect(contexts).toEqual([[armed(600)], [armed(600)]])
@@ -71,7 +73,8 @@ test('the config is found where the tools find it, and a bad threshold reads as 
 
 test('a Kevin is woken once at the configured threshold, and a turn restarts the clock', async ($, on) => {
   const clock = mock.clock(on)
-  const { submitted } = session(on, KEVIN_ROOT, '{"kevin":{"idle_seconds":600}}')
+  const { submitted, contexts } = session(on, KEVIN_ROOT, '{"kevin":{"idle_seconds":600}}')
+  const wake = `${WAKE_TEXT}\n\n${armed(600)}`
   await start($)
 
   await clock.advance(9 * MINUTE)
@@ -80,13 +83,16 @@ test('a Kevin is woken once at the configured threshold, and a turn restarts the
   await clock.advance(9 * MINUTE)
   expect(submitted).toEqual([])
   await clock.advance(2 * MINUTE)
-  expect(submitted).toEqual([WAKE_TEXT])
+  expect(submitted).toEqual([wake])
   await clock.advance(8 * MINUTE)
-  expect(submitted).toEqual([WAKE_TEXT])
+  expect(submitted).toEqual([wake])
   // This harness's submit starts no turn, as when another hook refuses the
   // wake: it goes again a whole period later, never sooner.
   await clock.advance(2 * MINUTE)
-  expect(submitted).toEqual([WAKE_TEXT, WAKE_TEXT])
+  expect(submitted).toEqual([wake, wake])
+  // The mod's own wake skips its own prompt.submit hook (as live: "skipped:
+  // re-entry"), so the note is in its text and not in its context.
+  expect(contexts).toEqual([[], []])
 })
 
 test('a turn still running is never idle', async ($, on) => {

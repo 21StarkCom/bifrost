@@ -506,11 +506,11 @@ it. Check after every final report, and whenever anything wakes you.
 Something outside your turns watches the clock for you, armed at launch:
 
 - **The kevin-idle mod**, on Claude where it is installed. Your kickoff and
-  each request then carry its note as context,
-  `kevin-idle: the kevin-idle mod is armed … at kevin.idle_seconds <N>`;
+  each request then carry its note as context, and each of its wakes in its
+  text: `kevin-idle: the kevin-idle mod is armed … at kevin.idle_seconds <N>`;
   take the threshold from it and arm nothing. It sends you
-  `kevin idle check` as a prompt once you have gone that long without a
-  turn.
+  `kevin idle check`, then the note, as a prompt once you have gone that long
+  without a turn.
 - **Otherwise** (on Codex, or on Claude with no such note), start the waker
   once, from your worktree:
 

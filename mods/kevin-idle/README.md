@@ -4,7 +4,8 @@ A Claude Code mod that wakes an idle Kevin (`/kevin`, a repo's request desk)
 so he can idle out without arming a timer of his own. In a session whose
 project root is a `KEVIN-<repo>-<n>` worktree, it notes when each main-loop
 turn starts and ends, and once he has gone `kevin.idle_seconds` without a
-turn it submits one prompt, `kevin idle check`. Kevin runs his own check
+turn it submits one prompt, `kevin idle check` and then its note (below).
+Kevin runs his own check
 (`skill/kevin/SKILL.md`, "Idle out") and decides; the wake's own turn
 restarts the clock, so an idle Kevin is woken once per idle period, never
 more. Every other session is left alone.
@@ -42,10 +43,12 @@ threshold is best set in whole minutes. Other sessions get no band.
 
 ## How Kevin knows it is armed
 
-It attaches one note as context to every prompt that enters a Kevin session
-(his kickoff and each request), in Kevin sessions only. The model reads it
-beside the prompt; the operator never sees it. Its own wake carries no note:
-a mod's own prompt does not pass through its own hook.
+Every prompt that enters a Kevin session carries one note, in Kevin sessions
+only. His kickoff and each request carry it as context, which the model reads
+beside the prompt and the operator never sees. The mod's own wake skips its
+own hook, so the wake carries the note in its text, after `kevin idle check`.
+A compaction can drop the note, and the next prompt, wake or request, brings
+it back.
 
 ```
 kevin-idle: the kevin-idle mod is armed in this session, at kevin.idle_seconds 7200. It sends you `kevin idle check` once you have gone 7200 seconds without a turn, so start no idle waker of your own.
@@ -53,8 +56,9 @@ kevin-idle: the kevin-idle mod is armed in this session, at kevin.idle_seconds 7
 
 The note does not go in the system prompt. Where an organization manages
 Claude Code, the managed settings' plugins pass over an installed plugin's
-`prompt.compose` and `prompt.context` hooks, and `claude plugin validate`
-says so. A `prompt.submit` hook's context reaches the model there.
+`prompt.compose`, `prompt.context` and `session.compact` hooks, and
+`claude plugin validate` says so. A `prompt.submit` hook's context reaches
+the model there.
 
 With no such note (a Codex Kevin, or a Claude without this mod) Kevin starts
 `tools/kevin_idle.ts --detach` at launch instead, which wakes him by hermod at

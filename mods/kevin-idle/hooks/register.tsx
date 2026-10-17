@@ -121,7 +121,8 @@ export const register: Register = on => {
       if (typeof text === 'string') break
     }
     seconds = idleSeconds(text)
-    note = armed(seconds)
+    const armedNote = armed(seconds)
+    note = armedNote
     lastMs = await $.clock.now()
 
     $.clock.every(POLL_MS, async () => {
@@ -132,7 +133,9 @@ export const register: Register = on => {
       // Once per idle period: the wake's own turn restarts the clock.
       wakeMs = now
       await publish($, idleAt(now))
-      await $.prompt.submit({ text: WAKE_TEXT })
+      // The wake skips this module's own prompt.submit hook, so it carries the
+      // note in its text: a wake right after a compaction still names it.
+      await $.prompt.submit({ text: `${WAKE_TEXT}\n\n${armedNote}` })
     })
     await publish($, idleAt(lastMs))
 
@@ -159,9 +162,9 @@ export const register: Register = on => {
   })
 
   // Not the system prompt: where an organization manages Claude Code, an
-  // installed plugin's prompt.compose is passed over, so the note rides every
-  // prompt that enters (his kickoff, each request) as context instead. The
-  // mod's own wake skips its own hook.
+  // installed plugin's prompt.compose (and session.compact) is passed over, so
+  // the note rides every other prompt that enters (his kickoff, each request)
+  // as context instead.
   on('prompt.submit', async ($, e, next) =>
     note === null ? next(e) : next({ ...e, context: [...(e.context ?? []), note] }),
   )
