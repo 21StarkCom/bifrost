@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { PromptComposeSection, Register, StateDollar } from 'claude-code'
+import type { Register, StateDollar } from 'claude-code'
 
 import type { Idle } from '../types'
 
@@ -21,15 +21,12 @@ const EMPTY = '#8a8a8a'
 const idle = atom({ plugin: 'kevin-idle', key: 'idle' } as const, null)
 
 /** What tells Kevin the mod is armed and at what threshold, so he starts no waker of his own. */
-export function armed(idleSeconds: number): PromptComposeSection {
-  return {
-    id: 'kevin-idle:armed',
-    scope: 'session',
-    text:
-      `kevin-idle: the kevin-idle mod is armed in this session, at kevin.idle_seconds ${idleSeconds}. ` +
-      `It sends you \`${WAKE_TEXT}\` once you have gone ${idleSeconds} seconds without a turn, so start no ` +
-      'idle waker of your own.',
-  }
+export function armed(idleSeconds: number): string {
+  return (
+    `kevin-idle: the kevin-idle mod is armed in this session, at kevin.idle_seconds ${idleSeconds}. ` +
+    `It sends you \`${WAKE_TEXT}\` once you have gone ${idleSeconds} seconds without a turn, so start no ` +
+    'idle waker of your own.'
+  )
 }
 
 /** A Claude Kevin stands in a worktree named for his launch id, `KEVIN-<repo>-<n>`. */
@@ -102,7 +99,7 @@ async function publish($: StateDollar, value: () => Idle | null): Promise<void> 
 export const register: Register = on => {
   let isKevin = false
   let seconds = DEFAULT_IDLE_SECONDS
-  let section: PromptComposeSection | null = null
+  let note: string | null = null
   let isBusy = false
   // When the last wake went out: a wake that never became a turn (another hook
   // refused it) goes again a period later, not never.
@@ -124,7 +121,8 @@ export const register: Register = on => {
       if (typeof text === 'string') break
     }
     seconds = idleSeconds(text)
-    section = armed(seconds)
+    const armedNote = armed(seconds)
+    note = armedNote
     lastMs = await $.clock.now()
 
     $.clock.every(POLL_MS, async () => {
@@ -135,7 +133,9 @@ export const register: Register = on => {
       // Once per idle period: the wake's own turn restarts the clock.
       wakeMs = now
       await publish($, idleAt(now))
-      await $.prompt.submit({ text: WAKE_TEXT })
+      // The wake skips this module's own prompt.submit hook, so it carries the
+      // note in its text: a wake right after a compaction still names it.
+      await $.prompt.submit({ text: `${WAKE_TEXT}\n\n${armedNote}` })
     })
     await publish($, idleAt(lastMs))
 
@@ -161,11 +161,13 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('prompt.compose', async ($, e, next) => {
-    const composed = await next(e)
-
-    return section === null ? composed : { sections: [...composed.sections, section] }
-  })
+  // Not the system prompt: where an organization manages Claude Code, an
+  // installed plugin's prompt.compose (and session.compact) is passed over, so
+  // the note rides every other prompt that enters (his kickoff, each request)
+  // as context instead.
+  on('prompt.submit', async ($, e, next) =>
+    note === null ? next(e) : next({ ...e, context: [...(e.context ?? []), note] }),
+  )
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const state = await read($, idle)
