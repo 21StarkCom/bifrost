@@ -1,15 +1,21 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { CELLS, WAKE_TEXT, clockTime, configPaths, duration, filled, idleSeconds, isKevinRoot, shade } from './register'
+import { CELLS, WAKE_TEXT, armed, clockTime, configPaths, duration, filled, idleSeconds, isKevinRoot, shade } from './register'
 
-const KEVIN_ROOT = '/r/.claude/worktrees/KEVIN-bifrost-1'
+// What `$.session.root()` answers at session.start in a Kevin, as measured on
+// Claude Code 2.1.302: `idun kevin` runs `claude --worktree=KEVIN-<repo>-<n>`
+// from the main checkout, and the root is the worktree that flag cuts.
+const KEVIN_ROOT = '/Users/o/Code/bifrost/.claude/worktrees/KEVIN-bifrost-1'
 const MINUTE = 60_000
-const COMPOSE = { model: 'm', promptModel: 'm', surfaces: [], tools: [], outputStyle: null, traits: [] }
 
-/** A session in `root` whose config holds `config`; returns the prompts the mod submitted. */
+/**
+ * A session in `root` whose config holds `config`: `submitted` holds the text
+ * of each prompt that entered, `contexts` the context each one carried.
+ */
 function session(on: On, root: string, config: string | null) {
   const submitted: string[] = []
+  const contexts: (readonly string[])[] = []
   mock.env(on, { HOME: '/h' })
   on('session.root', () => ({ value: root }))
   on('fs.read', ($, e) => {
@@ -19,13 +25,13 @@ function session(on: On, root: string, config: string | null) {
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('turn.start', ($, e) => ({ turnId: e.turnId }))
   on('turn.complete', () => ({ text: '' }))
-  on('prompt.compose', () => ({ sections: [] }))
   on('ui.render', () => ({ type: 'Box', props: {}, children: [] }))
   on('prompt.submit', ($, e) => {
     submitted.push(e.text)
+    contexts.push(e.context ?? [])
     return { text: e.text }
   })
-  return submitted
+  return { submitted, contexts }
 }
 
 const start = ($: Engine) => $.session.start({ cwd: '/r', surface: null, isInteractive: true })
@@ -37,8 +43,19 @@ const turn = async ($: Engine, id: string) => {
 test('only a KEVIN-<repo>-<n> worktree is a Kevin', () => {
   expect(isKevinRoot(KEVIN_ROOT)).toBe(true)
   expect(isKevinRoot(`${KEVIN_ROOT}/`)).toBe(true)
+  expect(isKevinRoot('/Users/o/Code/bifrost')).toBe(false)
   expect(isKevinRoot('/r/.claude/worktrees/STARK-12')).toBe(false)
   expect(isKevinRoot('/r/.claude/worktrees/KEVIN-bifrost')).toBe(false)
+})
+
+test('every prompt a Kevin gets carries the note, his kickoff first', async ($, on) => {
+  const { submitted, contexts } = session(on, KEVIN_ROOT, '{"kevin":{"idle_seconds":600}}')
+  await start($)
+  await $.prompt.submit({ text: '/kevin from operator' })
+  await $.prompt.submit({ text: 'status' })
+  expect(submitted).toEqual(['/kevin from operator', 'status'])
+  expect(contexts).toEqual([[armed(600)], [armed(600)]])
+  expect(armed(600)).toContain('kevin.idle_seconds 600')
 })
 
 test('the config is found where the tools find it, and a bad threshold reads as two hours', () => {
@@ -52,11 +69,8 @@ test('the config is found where the tools find it, and a bad threshold reads as 
 
 test('a Kevin is woken once at the configured threshold, and a turn restarts the clock', async ($, on) => {
   const clock = mock.clock(on)
-  const submitted = session(on, KEVIN_ROOT, '{"kevin":{"idle_seconds":600}}')
+  const { submitted } = session(on, KEVIN_ROOT, '{"kevin":{"idle_seconds":600}}')
   await start($)
-  expect((await $.prompt.compose(COMPOSE)).sections.map(s => s.text)).toEqual([
-    expect.stringContaining('kevin.idle_seconds 600'),
-  ])
 
   await clock.advance(9 * MINUTE)
   expect(submitted).toEqual([])
@@ -75,7 +89,7 @@ test('a Kevin is woken once at the configured threshold, and a turn restarts the
 
 test('a turn still running is never idle', async ($, on) => {
   const clock = mock.clock(on)
-  const submitted = session(on, KEVIN_ROOT, null)
+  const { submitted } = session(on, KEVIN_ROOT, null)
   await start($)
   await $.turn.start({ text: '', turnId: 't1' })
   await clock.advance(3 * 60 * MINUTE)
@@ -84,11 +98,12 @@ test('a turn still running is never idle', async ($, on) => {
 
 test('any other session is left alone', async ($, on) => {
   const clock = mock.clock(on)
-  const submitted = session(on, '/r/.claude/worktrees/STARK-12', null)
+  const { submitted, contexts } = session(on, '/r/.claude/worktrees/STARK-12', null)
   await start($)
   await clock.advance(3 * 60 * MINUTE)
   expect(submitted).toEqual([])
-  expect((await $.prompt.compose(COMPOSE)).sections).toEqual([])
+  await $.prompt.submit({ text: 'hello' })
+  expect(contexts).toEqual([[]])
 })
 
 const BAND = {
