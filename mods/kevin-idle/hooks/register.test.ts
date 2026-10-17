@@ -35,6 +35,8 @@ function session(on: On, root: string, config: string | null) {
 }
 
 const start = ($: Engine) => $.session.start({ cwd: '/r', surface: null, isInteractive: true })
+const typed = (text: string) => ({ text, wait: false, origin: { kind: 'composer' } }) as const
+const fromPeer = (text: string) => ({ text, wait: false, origin: { kind: 'peer' } }) as const
 const turn = async ($: Engine, id: string) => {
   await $.turn.start({ text: '', turnId: id })
   await $.turn.complete({ reason: 'answer', answer: '', durationMs: 0, turnId: id, isAborted: false })
@@ -51,8 +53,8 @@ test('only a KEVIN-<repo>-<n> worktree is a Kevin', () => {
 test('every prompt a Kevin gets carries the note, his kickoff first', async ($, on) => {
   const { submitted, contexts } = session(on, KEVIN_ROOT, '{"kevin":{"idle_seconds":600}}')
   await start($)
-  await $.prompt.submit({ text: '/kevin from operator' })
-  await $.prompt.submit({ text: 'status' })
+  await $.prompt.submit(typed('/kevin from operator'))
+  await $.prompt.submit(fromPeer('status'))
   expect(submitted).toEqual(['/kevin from operator', 'status'])
   expect(contexts).toEqual([[armed(600)], [armed(600)]])
   expect(armed(600)).toContain('kevin.idle_seconds 600')
@@ -102,7 +104,7 @@ test('any other session is left alone', async ($, on) => {
   await start($)
   await clock.advance(3 * 60 * MINUTE)
   expect(submitted).toEqual([])
-  await $.prompt.submit({ text: 'hello' })
+  await $.prompt.submit(typed('hello'))
   expect(contexts).toEqual([[]])
 })
 
