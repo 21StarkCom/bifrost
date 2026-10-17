@@ -5,17 +5,19 @@
  * dir (or, before his first report, the waker's start) and, once that is
  * `kevin.idle_seconds` old (the stark config), sends him `kevin idle check` by
  * hermod while hermod reads him idle; he runs his own check and decides. It
- * wakes him at most once per idle period, and exits once hermod answers with
- * no live row whose `sessionName` or `name` is his name, or with one held by
- * another process than the Kevin it first saw.
+ * wakes him at most once per idle period, and exits once his git dir is gone,
+ * or once hermod answers with no live row whose `sessionName` or `name` is his
+ * name, or with one held by another process than the Kevin it first saw.
  *
  *   node tools/kevin_idle.ts --name KEVIN-<repo>-<n> --git-dir <path> [--detach]
  *
- * `--detach` starts the waker in its own session, prints its pid and returns;
- * a waker already live for that git dir (its `kevin-idle.pid`) is left alone.
+ * `--detach` starts the waker in its own session, from `$HOME`, prints its pid
+ * and returns; a waker already live for that git dir (its `kevin-idle.pid`) is
+ * left alone.
  */
 import { spawn } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnBounded } from "./bounded_spawn_lib.ts";
@@ -32,8 +34,8 @@ const USAGE = `usage: kevin_idle.ts --name KEVIN-<repo>-<n> --git-dir <path> [--
 Wakes an idle Kevin with "${WAKE_TEXT}" by hermod once his worktree's
 kevin-last (or the waker's start) is kevin.idle_seconds old, from the stark
 config (default ${DEFAULT_KEVIN.idle_seconds}), and prints that threshold first.
-Exits once hermod lists no live Kevin of that name. --detach starts it in the
-background and prints its pid.`;
+Exits once the git dir is gone or hermod lists no live Kevin of that name.
+--detach starts it in the background, from $HOME, and prints its pid.`;
 
 export type PeerState = "live" | "gone" | "unknown";
 
@@ -112,16 +114,27 @@ function readText(file: string): string | undefined {
 
 const log = (line: string) => process.stdout.write(`${new Date().toISOString()} kevin_idle: ${line}\n`);
 
+export type HermodResult = { status: number | null; stdout: string; stderr: string; signal?: string | null; error?: Error };
+
 /** One hermod call; a spawn that fails outright (hermod missing, EAGAIN) reads as no answer, never a crash. */
-async function hermod(args: string[]): Promise<{ status: number | null; stdout: string; signal?: string | null; error?: Error }> {
+async function hermod(args: string[]): Promise<HermodResult> {
   try {
     return await spawnBounded("hermod", args, { timeoutMs: HERMOD_TIMEOUT_MS, env: hermodEnv(process.env) });
   } catch (err) {
-    return { status: null, stdout: "", error: err as Error };
+    return { status: null, stdout: "", stderr: "", error: err as Error };
   }
 }
 
-async function run(name: string, gitDir: string, idleMs: number): Promise<void> {
+/** What `run` reaches outside itself, so a test can stand in for hermod and the poll's wait. */
+export interface WakerIo {
+  hermod: (args: string[]) => Promise<HermodResult>;
+  sleep: (ms: number) => Promise<void>;
+  log: (line: string) => void;
+}
+
+const realIo: WakerIo = { hermod, sleep: ms => new Promise<void>(r => setTimeout(r, ms)), log };
+
+export async function run(name: string, gitDir: string, idleMs: number, io: WakerIo = realIo): Promise<void> {
   const pidFile = path.join(gitDir, "kevin-idle.pid");
   fs.writeFileSync(pidFile, `${process.pid}\n`);
   const startedMs = Date.now();
@@ -129,13 +142,25 @@ async function run(name: string, gitDir: string, idleMs: number): Promise<void> 
   // The Kevin this waker serves, by his process: a later Kevin reusing the
   // name after a teardown has his own waker.
   let watchedPid: number | null = null;
-  log(`watching ${name}, idle after ${idleMs / 1000}s`);
+  let hermodFailed = false;
+  io.log(`watching ${name}, idle after ${idleMs / 1000}s`);
   try {
     for (;;) {
-      const peers = await hermod(["msg", "peers", "--all", "--json"]);
+      // Teardown deletes his worktree, git dir included: nothing is left to
+      // watch, whatever hermod answers.
+      if (!fs.existsSync(gitDir)) {
+        io.log(`${gitDir} is gone; exiting`);
+        return;
+      }
+      const peers = await io.hermod(["msg", "peers", "--all", "--json"]);
+      // The first only: a failure that lasts would repeat it every poll.
+      if (peers.status !== 0 && !hermodFailed) {
+        hermodFailed = true;
+        io.log(`first hermod failure, exit ${peers.status ?? peers.signal ?? peers.error?.message}: ${peers.stderr.trim()}`);
+      }
       const peer = peers.status === 0 ? peerState(peers.stdout, name, isRunning) : { state: "unknown" as const };
       if (peer.state === "gone" || (peer.state === "live" && watchedPid !== null && peer.pid !== watchedPid)) {
-        log(`${name} has no live row of pid ${watchedPid ?? "any"}; exiting`);
+        io.log(`${name} has no live row of pid ${watchedPid ?? "any"}; exiting`);
         return;
       }
       if (peer.state === "live") watchedPid ??= peer.pid!;
@@ -146,24 +171,27 @@ async function run(name: string, gitDir: string, idleMs: number): Promise<void> 
         // later is a second turn, and the next period resends anyway.
         lastWakeMs = Date.now();
         // A note, not a request: a request's delivery tells him to reply, and the wake wants none.
-        const sent = await hermod(["msg", "send", "--to", peer.id!, "--kind", "note", "--json", "--", WAKE_TEXT]);
-        log(`woke ${peer.id} (hermod exit ${sent.status ?? sent.signal ?? sent.error?.message})`);
+        const sent = await io.hermod(["msg", "send", "--to", peer.id!, "--kind", "note", "--json", "--", WAKE_TEXT]);
+        io.log(`woke ${peer.id} (hermod exit ${sent.status ?? sent.signal ?? sent.error?.message})`);
       }
-      await new Promise(r => setTimeout(r, pollMs(idleMs)));
+      await io.sleep(pollMs(idleMs));
     }
   } finally {
     if (readText(pidFile)?.trim() === String(process.pid)) fs.rmSync(pidFile, { force: true });
   }
 }
 
-function detach(argv: string[], gitDir: string): void {
+function detach(name: string, gitDir: string): void {
   const held = Number.parseInt(readText(path.join(gitDir, "kevin-idle.pid")) ?? "", 10);
   if (Number.isInteger(held) && held > 0 && isRunning(held)) {
     process.stdout.write(`kevin_idle: already running, pid ${held}\n`);
     return;
   }
   const out = fs.openSync(path.join(gitDir, "kevin-idle.log"), "a");
-  const child = spawn(process.execPath, [...process.execArgv, fileURLToPath(import.meta.url), ...argv.filter(a => a !== "--detach")], {
+  // From $HOME, never the caller's cwd: that is Kevin's worktree, which his
+  // teardown deletes, and hermod refuses every call from a deleted cwd.
+  const child = spawn(process.execPath, [...process.execArgv, fileURLToPath(import.meta.url), "--name", name, "--git-dir", gitDir], {
+    cwd: os.homedir(),
     detached: true,
     stdio: ["ignore", out, out],
   });
@@ -177,18 +205,20 @@ async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const { flags } = precheckCli(argv, { values: ["--name", "--git-dir"], switches: ["--detach"] }, USAGE);
   const name = flags.get("name");
-  const gitDir = flags.get("git-dir");
-  if (typeof name !== "string" || !KEVIN_NAME.test(name) || typeof gitDir !== "string") {
+  const rawGitDir = flags.get("git-dir");
+  if (typeof name !== "string" || !KEVIN_NAME.test(name) || typeof rawGitDir !== "string") {
     process.stderr.write(`--name KEVIN-<repo>-<n> and --git-dir are required\n${USAGE}\n`);
     process.exit(2);
   }
+  // Absolute, so a waker detached into $HOME still finds it.
+  const gitDir = path.resolve(rawGitDir);
   if (!fs.statSync(gitDir, { throwIfNoEntry: false })?.isDirectory()) {
     process.stderr.write(`--git-dir ${gitDir} is not a directory\n`);
     process.exit(2);
   }
   const idle = idleSeconds(getKevinConfig().idle_seconds);
   process.stdout.write(`kevin_idle: idle after ${idle}s (kevin.idle_seconds)\n`);
-  if (flags.has("detach")) return detach(argv, gitDir);
+  if (flags.has("detach")) return detach(name, gitDir);
   await run(name, gitDir, idle * 1000);
 }
 
