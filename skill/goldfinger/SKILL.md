@@ -599,19 +599,26 @@ tools appear in agent sessions started after that (in one already running, use t
 Its tools are named as the socket verbs: `status`, `setup`, `apps`, `windows`, `observe`,
 `launch`, `quit`, `click`, `type`, `keys`, `scroll`, `set-value`, `stop`, `window-frame`,
 `clipboard-read`, `clipboard-write`, `menu`, `drag`, `batch`, `session-cursor`, `glide`, `hover`
-and `screenshot`: 23, with no `watch` or `doctor` tool (run those through the CLI). From 0.9.0
-on, `find` is the 24th (`window_id` required; `role` and `text` strings; `limit` an integer),
-`reveal` the 25th (`target` required, a string; `observe` a boolean), `ocr` the 26th (`snapshot`
-required, a string; `region` an object) and `find-text` the 27th and last (`snapshot` and `text`
-required, strings; `region` an object).
+and `screenshot`: 23. From 0.9.0 on, `find` is the 24th (`window_id` required; `role` and `text`
+strings; `limit` an integer), `reveal` the 25th (`target` required, a string; `observe` a
+boolean), `ocr` the 26th (`snapshot` required, a string; `region` an object) and `find-text` the
+27th (`snapshot` and `text` required, strings; `region` an object). From 0.10.0 on,
+`session-list` is the 28th (no parameters), `record-start` the 29th (`video` a boolean),
+`record-stop` the 30th (no parameters), `replay` the 31st (`file` required, a string: the
+trajectory's path), `doctor` the 32nd (no parameters, and never `--fix`, which stays the CLI's
+and the operator's) and `watch` the 33rd and last (no parameters): 33 in all. MCP's `watch` is one
+reading, the first line `goldfinger watch --json` prints, waited for up to 25 s; it never starts a
+daemon, and fails as the CLI's would before that line (`daemon_unavailable` when none runs).
+Below 0.10.0, run those six through the CLI.
 `screenshot` returns its path and no image: read the file. Parameters are the snake_case socket
 args (`window_id`, `max_nodes`, `new_instance`); `window-frame`'s `frame` is
 `{"x", "y", "width", "height"}`, and so are `observe`'s `ocr_region` and the `region` of `ocr` and `find-text`, `observe`'s `ocr` and `detect` booleans,
 `batch`'s `steps` the array its stdin takes, `menu`'s path is
 `menu_path`, `menu` and `drag` need `foreground: true`, and `session-cursor` takes only `cursor`, a boolean. A result is what
 `goldfinger <verb> … --json` prints for the same call, marked `isError` exactly where the CLI
-exits non-zero: an error, or a `batch` whose last entry failed. Arrays (`apps`, `windows`,
-`batch`) come as text only; `observe` with `screenshot` adds the PNG as an image, and so does
+exits non-zero: an error, a `batch` whose last entry failed, or a `doctor` report with a failed
+check (`fail_count` above 0), whose `checks` you read either way. Arrays (`apps`, `windows`,
+`session-list`, `batch`) come as text only; `observe` with `screenshot` adds the PNG as an image, and so does
 `observe` with `ocr` or `detect`, whose entries are in `structuredContent.ocr` and
 `structuredContent.detections`; `ocr` and `find-text` add
 none. Not every model
@@ -631,9 +638,17 @@ parameter.
 Each connection has its own session, started at the first call that needs one, started again once
 it ends (an idle end, any agent's `stop`), and ended when the connection closes. `session-cursor`
 shows or hides that session's cursor, and `cursor: false` carries into the sessions the
-connection starts later. There are no other session tools, and no record or replay tools: use the
-CLI, acting through it too while recording, as MCP calls stay in the connection's session. A call
-that fails `session_limit` ran nothing: retry later. `setup` is a tool but stays the operator's.
+connection starts later. There are no `session-start` or `session-end` tools: the server owns the
+session. `session-list`, `doctor` and `watch` hold none and leave the connection's as it is, and
+`setup` and `stop` end every session. From 0.10.0 on, `record-start` and `record-stop` record the
+connection's own session, and the recording closes with that session, at the latest when the
+connection closes. `replay` sends its steps in that session, so a recording running there records
+them; a `replay` whose session ended after any of its requests succeeded returns `session_not_live` and is
+not run again, as a second run repeats those steps. A call whose session ended while it recorded
+is not sent again either: its `session_not_live` message says to call `record-start` again, and
+the next call starts a new session that records nothing. Below 0.10.0, record and replay through
+the CLI, acting through it too while recording, as MCP calls stay in the connection's session. A
+call that fails `session_limit` ran nothing: retry later. `setup` is a tool but stays the operator's.
 After a `brew upgrade`, the agent's `goldfinger mcp` is the old client, and the new daemon answers
 it `version_mismatch`: ask the operator to restart the agent. Do not call `stop`, which would cost
 every other agent its daemon and still mismatch.
