@@ -20,7 +20,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnBounded } from "./bounded_spawn_lib.ts";
+import { type BoundedSpawnResult, spawnBounded } from "./bounded_spawn_lib.ts";
 import { precheckCli } from "./cli_args_lib.ts";
 import { isMainModule } from "./main_module_lib.ts";
 import { DEFAULT_KEVIN, getKevinConfig } from "./stark_config_lib.ts";
@@ -114,15 +114,27 @@ function readText(file: string): string | undefined {
 
 const log = (line: string) => process.stdout.write(`${new Date().toISOString()} kevin_idle: ${line}\n`);
 
-export type HermodResult = { status: number | null; stdout: string; stderr: string; signal?: string | null; error?: Error };
+export type HermodResult = BoundedSpawnResult;
 
-/** One hermod call; a spawn that fails outright (hermod missing, EAGAIN) reads as no answer, never a crash. */
+/**
+ * One hermod call, from `$HOME` whatever this process's cwd: a waker run in
+ * the foreground from Kevin's worktree keeps that cwd, which his teardown
+ * deletes, and hermod refuses every call from a deleted cwd. A spawn that
+ * fails outright (hermod missing, EAGAIN) reads as no answer, never a crash.
+ */
 async function hermod(args: string[]): Promise<HermodResult> {
   try {
-    return await spawnBounded("hermod", args, { timeoutMs: HERMOD_TIMEOUT_MS, env: hermodEnv(process.env) });
+    return await spawnBounded("hermod", args, { timeoutMs: HERMOD_TIMEOUT_MS, env: hermodEnv(process.env), cwd: os.homedir() });
   } catch (err) {
-    return { status: null, stdout: "", stderr: "", error: err as Error };
+    return { status: null, stdout: "", stderr: "", signal: null, error: err as Error };
   }
+}
+
+/** A failed hermod call's exit (code, signal or spawn error) and its stderr, for the log. */
+function hermodExit(r: HermodResult): string {
+  const why = `${r.status ?? r.signal ?? r.error?.message}`;
+  const stderr = r.stderr.trim();
+  return stderr ? `${why}: ${stderr}` : why;
 }
 
 /** What `run` reaches outside itself, so a test can stand in for hermod and the poll's wait. */
@@ -137,6 +149,9 @@ const realIo: WakerIo = { hermod, sleep: ms => new Promise<void>(r => setTimeout
 export async function run(name: string, gitDir: string, idleMs: number, io: WakerIo = realIo): Promise<void> {
   const pidFile = path.join(gitDir, "kevin-idle.pid");
   fs.writeFileSync(pidFile, `${process.pid}\n`);
+  // His git dir by identity, not path: a Kevin relaunched under the same name
+  // inside one poll recreates the path, and that dir is the new Kevin's.
+  const gitDirIno = fs.statSync(gitDir).ino;
   const startedMs = Date.now();
   let lastWakeMs: number | null = null;
   // The Kevin this waker serves, by his process: a later Kevin reusing the
@@ -148,16 +163,15 @@ export async function run(name: string, gitDir: string, idleMs: number, io: Wake
     for (;;) {
       // Teardown deletes his worktree, git dir included: nothing is left to
       // watch, whatever hermod answers.
-      if (!fs.existsSync(gitDir)) {
+      if (fs.statSync(gitDir, { throwIfNoEntry: false })?.ino !== gitDirIno) {
         io.log(`${gitDir} is gone; exiting`);
         return;
       }
       const peers = await io.hermod(["msg", "peers", "--all", "--json"]);
-      // The first only: a failure that lasts would repeat it every poll.
-      if (peers.status !== 0 && !hermodFailed) {
-        hermodFailed = true;
-        io.log(`first hermod failure, exit ${peers.status ?? peers.signal ?? peers.error?.message}: ${peers.stderr.trim()}`);
-      }
+      // The first of each run of failures only: a failure that lasts would
+      // repeat it every poll, and one after a recovery is news again.
+      if (peers.status !== 0 && !hermodFailed) io.log(`first hermod failure, exit ${hermodExit(peers)}`);
+      hermodFailed = peers.status !== 0;
       const peer = peers.status === 0 ? peerState(peers.stdout, name, isRunning) : { state: "unknown" as const };
       if (peer.state === "gone" || (peer.state === "live" && watchedPid !== null && peer.pid !== watchedPid)) {
         io.log(`${name} has no live row of pid ${watchedPid ?? "any"}; exiting`);
@@ -172,7 +186,7 @@ export async function run(name: string, gitDir: string, idleMs: number, io: Wake
         lastWakeMs = Date.now();
         // A note, not a request: a request's delivery tells him to reply, and the wake wants none.
         const sent = await io.hermod(["msg", "send", "--to", peer.id!, "--kind", "note", "--json", "--", WAKE_TEXT]);
-        io.log(`woke ${peer.id} (hermod exit ${sent.status ?? sent.signal ?? sent.error?.message})`);
+        io.log(`woke ${peer.id} (hermod exit ${sent.status === 0 ? 0 : hermodExit(sent)})`);
       }
       await io.sleep(pollMs(idleMs));
     }
@@ -195,9 +209,17 @@ function detach(name: string, gitDir: string): void {
     detached: true,
     stdio: ["ignore", out, out],
   });
+  // A spawn that fails (no $HOME, EAGAIN) has no pid and emits `error` later,
+  // which would crash this process after it claimed a start: refuse it here.
+  child.on("error", () => {});
   child.unref();
+  if (child.pid === undefined) {
+    process.stderr.write(`kevin_idle: could not start the waker from ${os.homedir()}\n`);
+    process.exitCode = 1;
+    return;
+  }
   // Claimed here, not only once the child runs, so a second --detach right after finds it.
-  if (child.pid !== undefined) fs.writeFileSync(path.join(gitDir, "kevin-idle.pid"), `${child.pid}\n`);
+  fs.writeFileSync(path.join(gitDir, "kevin-idle.pid"), `${child.pid}\n`);
   process.stdout.write(`kevin_idle: started, pid ${child.pid}\n`);
 }
 
@@ -206,7 +228,9 @@ async function main(): Promise<void> {
   const { flags } = precheckCli(argv, { values: ["--name", "--git-dir"], switches: ["--detach"] }, USAGE);
   const name = flags.get("name");
   const rawGitDir = flags.get("git-dir");
-  if (typeof name !== "string" || !KEVIN_NAME.test(name) || typeof rawGitDir !== "string") {
+  // An empty --git-dir (a failed `$(git rev-parse …)`) is refused, never
+  // resolved: path.resolve("") is the cwd, Kevin's worktree root.
+  if (typeof name !== "string" || !KEVIN_NAME.test(name) || typeof rawGitDir !== "string" || rawGitDir === "") {
     process.stderr.write(`--name KEVIN-<repo>-<n> and --git-dir are required\n${USAGE}\n`);
     process.exit(2);
   }
