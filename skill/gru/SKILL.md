@@ -496,7 +496,9 @@ merge before theirs can go on. You never lead or dismiss a Kevin.
   joins it rather than waiting it out.
 - **You may ask a Kevin too**, by [the Kevin desk](../../standards/kevin-desk.md),
   when the operator hands you work in a repo no ticket covers, and you may
-  launch a bare one through the desk when none is live. Never send one
+  launch a bare one through the desk when none is live. Read his reply by the
+  desk's [step 4](../../standards/kevin-desk.md#4-wait) "under Gru's loop",
+  never by a blocking wait while a Minion of yours is live. Never send one
   `stand down`; never `poison-pill` or `close-session` him. The desk is
   shared, and only the operator, or his own idle-out, dismisses him.
 

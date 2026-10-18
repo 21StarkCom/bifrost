@@ -760,7 +760,7 @@ test("skill smoke: standards — Kevin's place in the shared docs", () => {
   assert.ok(standDown.includes("idle-out"), "stand-down.md lost Kevin's idle-out trigger");
   assert.match(spine, /^## 8\. Releases and other repos$/m, "worker-spine.md lost §8");
   assert.ok(spine.includes("](kevin-desk.md)"), "worker-spine.md §8 no longer links the Kevin desk");
-  for (const marker of ["hermod msg peers --all --json", "hermod msg send --to", "Never send him `stand down`", "## 5. Confirm"]) {
+  for (const marker of ["hermod msg peers --all --json", "hermod msg send --to", "Never send him `stand down`", "## 5. Confirm", "**Under Gru's loop**"]) {
     assert.ok(desk.includes(marker), `kevin-desk.md no longer names ${marker}`);
   }
 });
@@ -875,8 +875,11 @@ test("skill smoke: gru and minion — the Kevin desk, not a hand-off", () => {
 // STARK-12113: cloud dispatch is deprecated (no cloud seats), so Gru works
 // every ticket with a Minion, Kevin has no cloud-ticket merge, and
 // /stark-ticket writes no routing verdict. This is that ticket's acceptance
-// grep, over the same trees, so one file cannot bring the route back alone.
-const CLOUD_ROUTE_RE = /cloud (ticket|pr|session|pass|fallback|route)s?\b|runs_in|## Runs in|idun cc (dispatch|session)/i;
+// grep, over the same trees, plus the markers it misses: Kevin's
+// `merge <PR> for STARK-n` and its verification comment carry no "cloud"
+// word, and "cloud routing" / "cloud-routed" end past `route`. So no one file
+// can bring the route back alone.
+const CLOUD_ROUTE_RE = /cloud (ticket|pr|session|pass|fallback|route)s?\b|runs_in|## Runs in|idun cc (dispatch|session)|cloud[- ]rout|Gru: cloud|Kevin verification|merge <PR( url)?> for STARK/i;
 
 test("skill smoke: skills, standards and agent docs carry no cloud route", () => {
   const files = [
