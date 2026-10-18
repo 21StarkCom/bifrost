@@ -720,12 +720,6 @@ test("skill smoke: skill/kevin — verb set and kickoff markers", () => {
     assert.ok(text.includes(marker), `skill/kevin no longer names ${marker}`);
   }
   assert.ok(!text.includes("CronCreate"), "skill/kevin arms a CronCreate idle check again");
-  // `merge <PR> for STARK-n` (STARK-10532, cloud-local-routing spec KV1-KV2): Gru's
-  // GR10 closes a cloud ticket only on a comment opening the pass marker at a
-  // sha whose tree matches the merge commit's, and never on the FAILED one.
-  for (const marker of ["merge <PR> for STARK-n", "alfred task show STARK-n", "PR title does not name STARK-n", "Kevin verification for STARK-n at <sha>", "Kevin verification FAILED for STARK-n at <sha>", "^{tree}", "verification step <k>", "verification failed after merge"]) {
-    assert.ok(text.includes(marker), `skill/kevin no longer names ${marker}`);
-  }
   // idun before v0.111.0 writes `leader peer`/`leader operator` and `— first instruction:`; the skill reads
   // them as `from` and `— first request:` (rollout order), and names the old marker nowhere else.
   assert.match(text, /`leader\s+peer <PEER>` or `leader\s+operator`[\s\S]{0,120}means the same/, "skill/kevin no longer reads the pre-0.111.0 kickoff");
@@ -766,7 +760,7 @@ test("skill smoke: standards — Kevin's place in the shared docs", () => {
   assert.ok(standDown.includes("idle-out"), "stand-down.md lost Kevin's idle-out trigger");
   assert.match(spine, /^## 8\. Releases and other repos$/m, "worker-spine.md lost §8");
   assert.ok(spine.includes("](kevin-desk.md)"), "worker-spine.md §8 no longer links the Kevin desk");
-  for (const marker of ["hermod msg peers --all --json", "hermod msg send --to", "Never send him `stand down`", "## 5. Confirm", "merge <PR url> for STARK-n", "**Under Gru's loop**"]) {
+  for (const marker of ["hermod msg peers --all --json", "hermod msg send --to", "Never send him `stand down`", "## 5. Confirm"]) {
     assert.ok(desk.includes(marker), `kevin-desk.md no longer names ${marker}`);
   }
 });
@@ -860,11 +854,9 @@ test("skill smoke: standards — the spine titles a cmux tab, else a tmux window
 });
 
 // The desk replaces the leader hand-off (KD15, KD16): Gru never leads or
-// dismisses a Kevin and launches one only through the desk, for a cloud
-// ticket's PR (GR8), and a Minion asks the other repo's Kevin itself instead
-// of reporting `blocked needs … merged` and waiting for `unblocked`. Gru's two
-// cloud comment openers are the state a rerun reads off the board, so a
-// reworded one would strand every ticket an earlier run marked.
+// dismisses a Kevin and launches one only through the desk, for a request of
+// its own, and a Minion asks the other repo's Kevin itself instead of
+// reporting `blocked needs … merged` and waiting for `unblocked`.
 test("skill smoke: gru and minion — the Kevin desk, not a hand-off", () => {
   const gru = fs.readFileSync(path.join(SKILLS_ROOT, "gru", "SKILL.md"), "utf8");
   const minion = fs.readFileSync(path.join(SKILLS_ROOT, "minion", "SKILL.md"), "utf8");
@@ -873,14 +865,37 @@ test("skill smoke: gru and minion — the Kevin desk, not a hand-off", () => {
   assert.ok(kevinSection.includes("You never lead or dismiss a Kevin."), "gru's Kevin section lost its never-lead-or-dismiss rule");
   assert.match(kevinSection, /launch a bare one through the\s+desk/, "gru's Kevin section no longer launches a Kevin through the desk");
   assert.ok(!gru.includes("neither launch, lead nor dismiss"), "gru still says it never launches a Kevin");
-  for (const marker of ["`Gru: cloud fallback", "`Gru: cloud blocked", "merge <PR url> for STARK-n"]) {
-    assert.ok(gru.includes(marker), `gru no longer names ${marker}`);
-  }
   for (const [label, text] of [["gru", gru], ["minion", minion]] as const) {
     assert.ok(!text.includes("blocked needs"), `${label} still names the leader-era \`blocked needs\``);
     assert.ok(!/\bunblocked\b/.test(text), `${label} still names the leader-era \`unblocked\``);
   }
   assert.ok(minion.includes("worker-spine.md#8-releases-and-other-repos"), "minion no longer routes other-repo needs to a Kevin");
+});
+
+// STARK-12113: cloud dispatch is deprecated (no cloud seats), so Gru works
+// every ticket with a Minion, Kevin has no cloud-ticket merge, and
+// /stark-ticket writes no routing verdict. This is that ticket's acceptance
+// grep, over the same trees, so one file cannot bring the route back alone.
+const CLOUD_ROUTE_RE = /cloud (ticket|pr|session|pass|fallback|route)s?\b|runs_in|## Runs in|idun cc (dispatch|session)/i;
+
+test("skill smoke: skills, standards and agent docs carry no cloud route", () => {
+  const files = [
+    ...["skill", "standards"].flatMap((dir) =>
+      fs
+        .readdirSync(path.join(REPO_ROOT, dir), { recursive: true, encoding: "utf8" })
+        .map((rel) => path.join(REPO_ROOT, dir, rel))
+        .filter((file) => fs.statSync(file).isFile()),
+    ),
+    path.join(REPO_ROOT, "CLAUDE.md"),
+    path.join(REPO_ROOT, "AGENTS.md"),
+  ];
+  const hits = files.flatMap((file) =>
+    fs
+      .readFileSync(file, "utf8")
+      .split("\n")
+      .flatMap((line, i) => (CLOUD_ROUTE_RE.test(line) ? [`${path.relative(REPO_ROOT, file)}:${i + 1}`] : [])),
+  );
+  assert.deepEqual(hits, [], "the cloud route is back (STARK-12113 removed it)");
 });
 
 // STARK-10523: a Minion whose brief reads `leader operator` reports in its own

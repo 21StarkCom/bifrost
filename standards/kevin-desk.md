@@ -21,10 +21,6 @@ is `$kevin` on Codex).
   first, a review, a rebase, a failed run, a status. A worktree session's git
   cannot leave its own worktree, and the other repo's rules are its Kevin's
   to apply.
-- **A cloud ticket's PR and its release** (Gru): a cloud session stops at an
-  open PR and merges nothing, so Gru sends that PR to the repo's Kevin as
-  `merge <PR url> for STARK-n`, then the ticket's `release` in a repo whose
-  done is *released*.
 
 Your own repo's PR you still carry through the spine and merge yourself.
 
@@ -35,16 +31,6 @@ Hermod body is a shell argument. Name every PR and run by URL.
 
 - `merge <PR url>`: review it, gate it, merge it, then watch the runs the
   merge started.
-- `merge <PR url> for STARK-n`: `merge`, plus a re-run of the ticket's
-  command Verification steps on the rebased head, after his review's fixes,
-  and again at the merge commit if the merged tree differs from the one
-  verified. He reads the steps off the ticket, skips those that name a
-  required check, runs the rest only when they need nothing beyond `git`,
-  `node` and shell utilities, and posts each run as a
-  `Kevin verification for STARK-n at <sha>` PR comment, or
-  `Kevin verification FAILED …` on a failure: before the merge he then merges
-  nothing; after it the merge stands, and his line is `blocked … verification
-  failed after merge`. The PR's title must contain `(STARK-n)`.
 - `review <PR url>`: the review gate and the repo's gate, without the merge.
 - `rebase <PR url>`: onto its base.
 - `rerun <run url>`: a failed PR check. A base-branch `push` run is the
@@ -118,7 +104,7 @@ request.
 He acks your request when it arrives, and sends a progress line if others are
 ahead of you. He works one request at a time, and a `release` can take an
 hour. Progress lines come as separate messages. His final line is the reply
-to your request, so wait on it (Gru reads it instead, under its loop, below):
+to your request, so wait on it:
 
 ```
 hermod msg wait <request id> --timeout 540 --json
@@ -142,12 +128,6 @@ starts `re <request id>:`: he sends that when a reply can no longer go.
   any wait.
 - **Under a goal** (Agnes): the wait above is your turn's work. Run one
   `hermod msg wait` per turn, not a loop of reads.
-- **Under Gru's loop** (Gru, for a cloud ticket's PR): Gru watches many
-  tickets and cannot block on one, so never `hermod msg wait`. Read each
-  request once per pass instead: `hermod msg status <request id> --json`,
-  then, once its `acknowledgement` is `replied`, his line is
-  `hermod msg status <replyId> --json`'s `body`. The `pid` check before each
-  read and the one resend are as above.
 
 Never send him `stand down`. The desk is shared, and only the operator, or
 his own idle-out, dismisses him.
