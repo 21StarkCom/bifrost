@@ -44,10 +44,9 @@ for a small change.
 1. **Twin check.** `alfred task find` in the target repo. If a live ticket
    covers it, comment there instead of filing.
 2. **Write** it from `alfred task start --template` in a file under
-   `mktemp -d`, never inside a checkout. If the template prints a `Runs in`
-   section, delete it. A bug's Goal names what broke, where, and the error
-   text. Verification is commands and what they should print, or a required
-   check by its name. A live write there names what
+   `mktemp -d`, never inside a checkout. A bug's Goal names what broke,
+   where, and the error text. Verification is commands and what they should
+   print, or a required check by its name. A live write there names what
    it writes and how the run puts it back, or that it cannot. It runs on the
    operator's standing GO, so the step says it needs a GO only where the root
    rules keep the gate: a write the run cannot undo (unless all it leaves
