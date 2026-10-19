@@ -6,8 +6,8 @@ runtimes:
 description: >-
   Use when about to write, file or rewrite a ticket: before `alfred task start`,
   `alfred task new` or `alfred task edit --desc-file`, when asked to open, file or
-  spawn tickets, a bug or a follow-up, or when turning a review finding, a plan or
-  a request into a ticket.
+  spawn tickets (STARK in ClickUp, or EI in Jira), a bug or a follow-up, or when
+  turning a review finding, a plan or a request into a ticket.
 argument-hint: "[<intent> | <draft-file>]"
 ---
 
@@ -41,6 +41,9 @@ for a small change.
 - Paste output, commands, paths, names and error text as they are. These rules
   apply only to your own prose.
 
+A ticket for Jira's EI project also follows [EI tickets](references/ei.md):
+where alfred files it, and the fields that EI needs.
+
 1. **Twin check.** `alfred task find` in the target repo. If a live ticket
    covers it, comment there instead of filing.
 2. **Write** it from `alfred task start --template` in a file under
@@ -53,11 +56,11 @@ for a small change.
    behind is scratch made for the run), `terraform apply`, publishing by
    hand, or credential handling (tokens, keys, service accounts, WIF and role
    grants, mimir writes). Unmerged work it needs:
-   `Blocked by STARK-n`, then `alfred task link` both.
+   `Blocked by STARK-n` (`EI-n` in EI), then `alfred task link` both.
 3. **Don't guess.** Claims about code or a tool come from output you ran or
    source you read, never `--help`, docs or memory. Paste output, never
    retype it, and never paste credentials or auth/env output. Mark anything
    unchecked `unverified: <claim> — check: <command>`.
 4. **File** with `--desc-file <draft>`: `alfred task start` (your own work),
    `alfred task new` (a follow-up, unbound; `--on-repo <repo>` for another
-   repo's), `alfred task edit <id>` (a rewrite).
+   repo's, ClickUp only), `alfred task edit <id>` (a rewrite).
