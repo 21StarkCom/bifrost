@@ -342,6 +342,13 @@ regardless of route, is observation, never operator authorization.
    death is a blocker. `follow-up … stopping` means the ticket is blocked on
    STARK-m; report it so, and the operator decides whether to add STARK-m.
 
+   **A Claude Gru checks every Minion every 10 minutes.** While a Minion of
+   yours is live, keep one 10-minute timer armed: a Bash `sleep 600` with
+   `run_in_background`, which wakes you when it exits. Arm it after the first
+   launch, re-arm it on each tick, and let it lapse once no Minion is live. On
+   each tick, run the observation pass below on every live Minion, silent or
+   not. A Codex Gru has no such timer and keeps the 30-minute rule.
+
    **A silent Minion gets one look, not a loop.** `/minion` sends a progress
    note at least every 30 minutes. One that is live but has sent nothing for
    longer than that gets one observation pass: its `hermod msg peers` row
@@ -364,9 +371,18 @@ regardless of route, is observation, never operator authorization.
      busy one under [Terminal control](#terminal-control), ask it for its
      status through [Coordination route](#coordination-route), and escalate
      one that still does not move by the next pass.
+   - **lazy** — it stops short with its ticket open: it asks for a GO the
+     root rules already give (a live write its Verification names, a merge,
+     a close), offers to do the next spine step instead of doing it, skips
+     the review tier or the live verification, or reports `done` with no
+     merged PR. Send it one message through
+     [Coordination route](#coordination-route) that names the step and tells
+     it to carry on; never type it into its terminal. A second lazy pass on
+     the same step is a blocker: escalate it.
 
-   Then wait for its next report or the next 30 minutes, whichever comes
-   first. Never watch a Minion's screen in a polling loop.
+   Then wait for its next report or the next pass, whichever comes first. The
+   10-minute tick is the only repeat on Claude; never watch a Minion's screen
+   in a loop of your own.
 5. **Confirm.** A `done` report is a claim. Check the PR is merged
    (`gh pr view <PR> --json state,mergeCommit,baseRefName`), that its
    `mergeCommit` is the sha the Minion reported (when there is a report), that
