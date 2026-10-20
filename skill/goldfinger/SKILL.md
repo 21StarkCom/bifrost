@@ -684,9 +684,11 @@ trajectory's path), `doctor` the 32nd (no parameters, and never `--fix`, which s
 and the operator's) and `watch` the 33rd (no parameters): 33 in all. MCP's `watch` is one
 reading, the first line `goldfinger watch --json` prints, waited for up to 25 s; it never starts a
 daemon, and fails as the CLI's would before that line (`daemon_unavailable` when none runs).
-Below 0.10.0, run those six through the CLI. From 0.11.0 on, `capture` is the 34th and last
-(`window_id` required, an integer; `region` an object; `scale` a number), and `drag` takes `via`,
-an array of at least one target, and `observe`: 34 in all.
+Below 0.10.0, run those six through the CLI. From 0.11.0 on, `capture` is the 34th (`window_id`
+required, an integer; `region` an object; `scale` a number), then `hide`, `unhide`, `open`,
+`window-state` and `perform`, which this skill does not teach yet (run them only as
+`goldfinger --help` and goldfinger's `contract/api.md` give them): 39 in all. From 0.11.0 on,
+`drag` takes `via`, an array of at least one target, and `observe`.
 `screenshot` returns its path and no image: read the file. Parameters are the snake_case socket
 args (`window_id`, `max_nodes`, `new_instance`); `window-frame`'s `frame` is
 `{"x", "y", "width", "height"}`, and so are `observe`'s `ocr_region` and the `region` of `ocr` and `find-text`, `observe`'s `ocr` and `detect` booleans,
