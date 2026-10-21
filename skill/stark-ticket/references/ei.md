@@ -43,7 +43,11 @@ that a Prioritizer can move the ticket without questions.
 | Commit to Ready | Owner | `customfield_11156={"accountId":"<id>"}` |
 | Commit to Ready | Parent | `parent={"key":"EI-<n>"}`: the Epic |
 | Start | Assignee | `assignee={"accountId":"<id>"}` |
+| Any | Due date | `duedate=<YYYY-MM-DD>`: the earliest real deadline, from the source of the request. No step refuses without it, so it is the field a draft drops. |
 
+- Assignee and Due date are both on EI's create screen, so set them on the
+  create. Neither Accept nor Commit to Ready refuses without them, and no
+  later step fills them for you.
 - Get the operator's account id with `frigg atlassian test-token`. Agents
   act under that account. Get another person's id with
   `frigg atlassian user by-email <email>`.
@@ -58,3 +62,13 @@ that a Prioritizer can move the ticket without questions.
 - If a field is missing, alfred binds the ticket but does not start it. It
   names the `alfred task move` command to run.
 - `alfred task new` leaves the ticket in Triage for a Prioritizer.
+
+## Read it back
+
+Run `frigg atlassian issue get EI-<n> --json` after the create. A field alfred
+could not set fails quietly: the ticket exists, and the field is `null`. Check
+`status`, `parent`, `assignee`, `duedate`, `priority` and each `customfield_`
+id in the table above. `alfred task edit` writes a custom field in ClickUp
+only, so repair a missing EI field with frigg:
+`frigg atlassian issue update EI-<n> --field '<id>=<json>' --confirm`. Preview
+it first with `--dry-run`. Then read the ticket back again.
