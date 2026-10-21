@@ -88,10 +88,15 @@ below that differs in EI says so.
 
 4. **Carry the dates and the owner.** A ticket that comes from a todo, a
    message or a calendar item keeps that source's deadline. Put the earliest
-   real deadline in the due date field, not only in the Goal prose: `alfred
-   task set-dates --due <when>` in ClickUp, `--field 'duedate=<YYYY-MM-DD>'`
-   in EI. Name one owner, and set that person as the assignee. A body that
-   names an owner and a ticket with an empty assignee do not agree.
+   real deadline in the due date field, not only in the Goal prose. No create
+   verb sets a due date, in either tracker: run `alfred task set-dates --due
+   <when> <id>` after the create (on EI it takes `--due` alone, and
+   `--field duedate=…` refuses, because alfred owns that field). Name one
+   owner, and set that person as the assignee: `--field
+   'assignee={"accountId":"<id>"}'` on an EI create, and `alfred task edit
+   <id> --add-assignee <who>` after a ClickUp create, which has no assignee
+   flag. A body that names an owner and a ticket with an empty assignee do
+   not agree.
 
 5. **Don't guess.** Claims about code or a tool come from output you ran or
    source you read, never `--help`, docs or memory. Paste output, never

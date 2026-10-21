@@ -19,6 +19,10 @@ with the checklist in `SKILL.md` when a ticket goes to EI.
   file a Sub-task or an Objective.
 - Put each Task and Bug under its Epic with `--field 'parent={"key":"EI-<n>"}'`.
   A ticket with no Epic cannot go to Ready.
+- A create that ADOPTS an existing issue by its marker drops the whole
+  `--field` set, and alfred prints a warning line that says so. The adopted
+  ticket keeps its own fields. Read that warning, then set each field the
+  adopted ticket lacks with `frigg atlassian issue update`, below.
 - An Epic also starts in Triage. Its Accept asks for no fields.
 - Name unmerged work that the ticket needs as `Blocked by EI-<n>`.
   `alfred task link` makes a Relates link. alfred has no Blocks link.
@@ -43,11 +47,14 @@ that a Prioritizer can move the ticket without questions.
 | Commit to Ready | Owner | `customfield_11156={"accountId":"<id>"}` |
 | Commit to Ready | Parent | `parent={"key":"EI-<n>"}`: the Epic |
 | Start | Assignee | `assignee={"accountId":"<id>"}` |
-| Any | Due date | `duedate=<YYYY-MM-DD>`: the earliest real deadline, from the source of the request. No step refuses without it, so it is the field a draft drops. |
+| After the create | Due date | not a `--field`: run `alfred task set-dates --due <when> EI-<n>` |
 
-- Assignee and Due date are both on EI's create screen, so set them on the
-  create. Neither Accept nor Commit to Ready refuses without them, and no
-  later step fills them for you.
+- Set the Assignee on the create. No step refuses without it, and no later
+  step fills it for you.
+- Do not pass `--field duedate=…`. alfred owns `duedate` and refuses the
+  clause exit 2 before any call. Set the due date after the create with
+  `alfred task set-dates --due <when> EI-<n>`, which takes `--due` alone on
+  Jira. It is the field a draft drops, because no step refuses without it.
 - Get the operator's account id with `frigg atlassian test-token`. Agents
   act under that account. Get another person's id with
   `frigg atlassian user by-email <email>`.
@@ -58,7 +65,9 @@ that a Prioritizer can move the ticket without questions.
 
 - `alfred task start` files the ticket as the operator, who holds the
   Prioritizer role. Then it moves the ticket through Accept and Commit to
-  Ready to In Progress. Give it each field above, the assignee included.
+  Ready to In Progress. Give it each field above that has a `--field` form,
+  the assignee included. The due date is not one of them: set it after the
+  create.
 - If a field is missing, alfred binds the ticket but does not start it. It
   names the `alfred task move` command to run.
 - `alfred task new` leaves the ticket in Triage for a Prioritizer.
@@ -70,5 +79,7 @@ could not set fails quietly: the ticket exists, and the field is `null`. Check
 `status`, `parent`, `assignee`, `duedate`, `priority` and each `customfield_`
 id in the table above. `alfred task edit` writes a custom field in ClickUp
 only, so repair a missing EI field with frigg:
-`frigg atlassian issue update EI-<n> --field '<id>=<json>' --confirm`. Preview
-it first with `--dry-run`. Then read the ticket back again.
+`frigg atlassian issue update EI-<n> --field '<id>=<json>' --confirm`. frigg
+needs the same gate as alfred, so put `TYR_JIRA_ISSUE_WRITES_ENABLE=1` on that
+command too. Preview it first with `--dry-run`. Then read the ticket back
+again.
