@@ -84,7 +84,8 @@ below that differs in EI says so.
    later step is safe is a precondition, not a sibling. Put it first, and say
    what its answer gates: "List the services that create a third-party client.
    Turn the toggle off only if that list is empty." Read your Scope IN once
-   from the bottom up, and move any item the item above it depends on.
+   from the bottom up. For each item, ask what must be true before it starts,
+   and move that item above it.
 
 4. **Carry the dates and the owner.** A ticket that comes from a todo, a
    message or a calendar item keeps that source's deadline. Put the earliest
@@ -106,8 +107,8 @@ below that differs in EI says so.
 6. **Give each unverified claim a path for a failed check.** The most likely
    way a ticket stalls is a precondition that turns out false. Write the next
    move on one line, next to the mark: who to ask, what to file, or that the
-   work stops. Write `unverified: a credential for the Evinced-dev tenant
-   exists — check: <command>. If none: ask Asaf Shochet for one, and hold the
+   work stops. Write `unverified: a credential for the dev tenant exists —
+   check: <command>. If none: ask the tenant's owner for one, and hold the
    ticket.`, not the mark alone.
 
 7. **Fresh eyes.** The author cannot review the draft: you re-read your intent,
