@@ -224,6 +224,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - Gru leadership transfer can replace operating limits that named the previous leader or held an already-finished phase (`resume --limits-file`), revalidated like `init`. Only an incoming leader may replace them — a sitting leader cannot rewrite the limits binding itself — and the event records both the removed and the installed array. The flag is refused on every other verb rather than ignored.
 
 ### Changed
+<!-- idun:pr-merge pr=402 runId=402 sha=f2483677 -->
+- Skills: new kept gates for GO rules; Gru posts an operator GO as a `GO from the operator for STARK-n:` ticket comment, and workers accept a GO only that way.
 <!-- idun:pr-merge pr=375 runId=375 sha=d35f3879 -->
 - Workers (Gru, Minion, Kevin, Agnes) now title their own tmux window when not in cmux, renaming only a window the worker holds alone.
 <!-- idun:pr-merge pr=325 runId=325 sha=ac62a9bc -->
