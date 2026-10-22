@@ -459,9 +459,15 @@ operator approval. Merging a reviewed PR needs no approval
 does a release its documented chain describes, run by you on a verified
 fleet agent's request: pushing its tag, running its script, approving a bot
 release PR's held runs where the chain does, installing its binary. That is
-the chain, not publishing by hand. These stay the operator's and you never
-take them: an apply or any other live-infrastructure step by hand, handling a
-credential by hand (a chain's own `mimir` read aside), a keychain, Touch ID
+the chain, not publishing by hand. The standing GO also covers a
+`terraform apply` that a merged PR runs (its CI apply), when the PR shows its
+plan. It covers the IAM, WIF, role and service-account changes in that plan.
+These still need a GO: a write you cannot undo (scratch made for the run is
+fine), a `terraform apply` run by hand, publishing by hand, and secret values
+(making, reading out, copying or writing a token or a key: mimir writes,
+Secret Manager versions, a key file). These stay the operator's and you never
+take them: those gates (a chain's own `mimir` read aside), any other
+live-infrastructure step by hand, a keychain, Touch ID
 or `sudo` prompt, an environment approval, rerunning a base-branch or tag
 `push` run, a `major` release, a force push other than `--force-with-lease`
 after a rebase, a push to the base branch, `idun gh pr-merge --force`, an
