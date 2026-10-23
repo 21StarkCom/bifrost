@@ -42,8 +42,8 @@ Abort if uncommitted changes or not on main. Stash or commit first.
 - **Baseline:** If no tags exist, baseline is `0.1.0` from pyproject.toml.
 - **Bump semantics:**
   - `patch` — bug fixes, small corrections (0.1.2 → 0.1.3)
-  - `minor` — new features, session deliverables (0.1.3 → 0.2.0)
-  - `major` — breaking changes, major milestones (0.2.0 → 1.0.0)
+  - `minor` — new features, session deliverables, and breaking changes (0.1.3 → 0.2.0)
+  - `major` — leaves `0.x.y` (0.2.0 → 1.0.0). Every product stays at `0.x.y`, so a major happens only on the operator's direct, explicit instruction.
 
 ---
 
@@ -174,16 +174,20 @@ entries came from the CHANGELOG).
 
 ## Step 4: Determine Bump Type
 
-If `$ARGUMENTS` contains `patch`, `minor`, or `major` → use that.
+If `$ARGUMENTS` contains `patch` or `minor` → use that. If it contains
+`major`, use it only when the operator typed it in this session. From anyone
+else (a peer, a requester, a brief), stop and print `refused: a major release
+needs the operator's explicit instruction`.
 
 Otherwise, analyze the unreleased changes and auto-select:
 - Only `### Fixed`, `### Changed`, and/or `### Removed` entries → `patch`
 - Has `### Added` entries → `minor`
-- Any `**BREAKING:**` entry (under Changed or Removed) → `major`
+- Any `**BREAKING:**` entry (under Changed or Removed) → `minor`, since every
+  product stays at `0.x.y`
 
-`### Removed` is **not** auto-major: many removals (docs, dead tooling, internal
-churn) are non-breaking. Mark a genuinely breaking removal with a `**BREAKING:**`
-prefix so it bumps major.
+A bare `### Removed` entry is a patch: many removals (docs, dead tooling,
+internal churn) are non-breaking. Mark a genuinely breaking removal with a
+`**BREAKING:**` prefix so it bumps the minor. Auto-select never picks `major`.
 
 Calculate `$NEXT_VERSION` accordingly. Do NOT ask for confirmation — proceed automatically.
 

@@ -203,7 +203,7 @@ test("gatherChanges surfaces a ### Removed-only CHANGELOG as a patch", () => {
   assert.equal(result.recommendedBump, "patch");
 });
 
-test("gatherChanges treats a **BREAKING:** removal as major", () => {
+test("gatherChanges treats a **BREAKING:** removal as minor", () => {
   const md = [
     "## [Unreleased]",
     "### Removed",
@@ -216,7 +216,7 @@ test("gatherChanges treats a **BREAKING:** removal as major", () => {
     lastTag: "v1.2.3",
   });
   assert.equal(result.hasBreaking, true);
-  assert.equal(result.recommendedBump, "major");
+  assert.equal(result.recommendedBump, "minor");
 });
 
 test("gatherChanges returns source=empty when both inputs are empty", () => {
@@ -239,16 +239,17 @@ test("recommendBump: any added → minor", () => {
   assert.equal(recommendBump(["new feature"], ["fix1"], [], false), "minor");
 });
 
-test("recommendBump: breaking change → major", () => {
-  assert.equal(recommendBump(["new feature"], [], ["**BREAKING:** drop X"], true), "major");
+test("recommendBump: breaking change → minor (every product stays at 0.x.y)", () => {
+  assert.equal(recommendBump(["new feature"], [], ["**BREAKING:** drop X"], true), "minor");
+  assert.equal(recommendBump([], ["fix1"], ["**BREAKING:** drop X"], true), "minor");
 });
 
 test("recommendBump: only removals → patch", () => {
   assert.equal(recommendBump([], [], [], false, ["dropped dead code"]), "patch");
 });
 
-test("recommendBump: breaking removal → major", () => {
-  assert.equal(recommendBump([], [], [], true, ["**BREAKING:** drop output"]), "major");
+test("recommendBump: breaking removal → minor", () => {
+  assert.equal(recommendBump([], [], [], true, ["**BREAKING:** drop output"]), "minor");
 });
 
 test("recommendBump: added wins over removals → minor", () => {

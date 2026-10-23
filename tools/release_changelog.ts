@@ -45,7 +45,7 @@ export type GatheredChanges = {
   removed: string[];
   hasBreaking: boolean;
   totalEntries: number;
-  recommendedBump: "patch" | "minor" | "major" | null;
+  recommendedBump: "patch" | "minor" | null;
 };
 
 // ── Pure parsers ────────────────────────────────────────────────
@@ -154,13 +154,15 @@ export function recommendBump(
   changed: string[],
   hasBreaking: boolean,
   // Trailing optional so existing 4-arg callers keep working. A bare ### Removed
-  // entry is NOT auto-major: many removals (docs, dead tooling, internal churn)
-  // are non-breaking. Authors mark genuinely breaking removals with a
-  // `**BREAKING:**` prefix, which routes through hasBreaking → major.
+  // entry is a patch: many removals (docs, dead tooling, internal churn) are
+  // non-breaking. Authors mark genuinely breaking removals with a
+  // `**BREAKING:**` prefix, which routes through hasBreaking → minor.
   removed: string[] = [],
-): "patch" | "minor" | "major" | null {
+): "patch" | "minor" | null {
   if (added.length + fixed.length + changed.length + removed.length === 0) return null;
-  if (hasBreaking) return "major";
+  // Every product stays at 0.x.y, so a breaking change bumps the minor. A major
+  // comes only from the operator's explicit instruction, never a recommendation.
+  if (hasBreaking) return "minor";
   if (added.length > 0) return "minor";
   // Only Fixed / Changed / Removed entries → patch (no new feature, no breaking).
   return "patch";

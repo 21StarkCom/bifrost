@@ -35,10 +35,11 @@ Hermod body is a shell argument. Name every PR and run by URL.
 - `rebase <PR url>`: onto its base.
 - `rerun <run url>`: a failed run in his repo, a PR check or a base-branch
   or tag `push` run.
-- `release [patch|minor|major] for STARK-n`: the repo's whole release chain,
+- `release [patch|minor] for STARK-n`: the repo's whole release chain,
   ending with the new version installed and verified on this machine. Name
   the ticket the release finishes; a chain that scopes its PRs or its tap
-  bump to a ticket needs it.
+  bump to a ticket needs it. A `major` is the operator's alone: every
+  product stays at `0.x.y`, and a breaking change bumps the minor.
 - `status`: what he is doing and what is queued.
 
 ## 1. Find him
