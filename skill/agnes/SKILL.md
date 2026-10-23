@@ -154,10 +154,10 @@ close the ticket, re-run the live check after a `--fix` round and post that
 run on the PR, and handle gaps as it says. A goal you were launched with
 stays active until the ticket is done and you have stood down, or you take a
 stopping exit ([When not to stand down](#when-not-to-stand-down)). Decide the points this
-skill already assigns to you without stopping to ask the operator. The
-Verification writes the operator's standing GO covers
-([the spine's §3](../../standards/worker-spine.md#3-verify-live)) are no stop
-either: a missing GO there is never a `blocked`. Your tab
+skill already assigns to you without stopping to ask the operator. Your
+launch is the operator's standing GO for all of your ticket's work
+([the spine's §3](../../standards/worker-spine.md#3-verify-live)), so no
+write it needs is a stop either: a missing GO is never a `blocked`. Your tab
 title, which its step 1 sets, is `AGNES (<n>)`. Three things are yours on top
 of it, and each of them exists because there is no leader:
 
