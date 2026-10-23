@@ -51,6 +51,18 @@ export function isValidSemver(version: string): boolean {
   return SEMVER_RE.test(version);
 }
 
+// Every product stays at 0.x.y: a version whose first number is higher than
+// the one it replaces is a major, which only the operator's explicit
+// instruction allows (`allowMajor`, the CLI's --allow-major).
+export class MajorBumpError extends Error {}
+
+export function isMajorBump(previous: string, next: string): boolean {
+  const first = (v: string) => Number(v.replace(/^v/, "").split(".")[0]);
+  const from = first(previous);
+  const to = first(next);
+  return Number.isFinite(from) && Number.isFinite(to) && to > from;
+}
+
 // ── Pure rewriters (string in, string out) ─────────────────────
 
 export type RewriteOutput = {
@@ -241,15 +253,23 @@ function rewrite(content: string, ecosystem: Ecosystem, newVersion: string): Rew
 export function bumpAll(
   repoRoot: string,
   newVersion: string,
-  opts: { dryRun?: boolean } = {},
+  // `previous` is the version the release starts from (the last tag), which
+  // a repo with no version file has nowhere else; it is checked like a file's.
+  opts: { dryRun?: boolean; allowMajor?: boolean; previous?: string } = {},
 ): BumpResult {
   if (!isValidSemver(newVersion)) {
     throw new Error(`Invalid semver: ${newVersion}`);
+  }
+  if (opts.previous !== undefined && !isValidSemver(opts.previous)) {
+    throw new Error(`Invalid semver: ${opts.previous}`);
   }
   const dryRun = opts.dryRun ?? false;
   const detected = detectVersionFiles(repoRoot);
   const filesUpdated: BumpedFile[] = [];
   const filesSkipped: SkippedFile[] = [];
+  // Every rewrite is planned before any is written, so a refused major
+  // leaves every file as it was.
+  const writes: { absolutePath: string; content: string }[] = [];
 
   for (const file of detected) {
     const original = fs.readFileSync(file.absolutePath, "utf8");
@@ -268,14 +288,31 @@ export function bumpAll(
       filesSkipped.push({ path: relPath, reason: "already at target version" });
       continue;
     }
-    if (!dryRun) {
-      fs.writeFileSync(file.absolutePath, result.content);
-    }
+    writes.push({ absolutePath: file.absolutePath, content: result.content });
     filesUpdated.push({
       path: relPath,
       ecosystem: file.ecosystem,
       previous: result.previous,
     });
+  }
+
+  if (!opts.allowMajor) {
+    const sources = [
+      ...(opts.previous !== undefined ? [{ path: "--previous", previous: opts.previous }] : []),
+      ...filesUpdated,
+    ];
+    const majors = sources.filter((s) => isMajorBump(s.previous, newVersion));
+    if (majors.length > 0) {
+      throw new MajorBumpError(
+        `refused: ${majors.map((m) => `${m.path} ${m.previous}`).join(", ")} → ${newVersion} ` +
+          "is a major. Every product stays at 0.x.y: pass --allow-major only on the " +
+          "operator's explicit instruction.",
+      );
+    }
+  }
+
+  if (!dryRun) {
+    for (const w of writes) fs.writeFileSync(w.absolutePath, w.content);
   }
 
   return {
@@ -289,28 +326,36 @@ export function bumpAll(
 // ── CLI ─────────────────────────────────────────────────────────
 
 const USAGE =
-  "usage: release_version_bump.ts --version X.Y.Z [--repo PATH] [--json] [--dry-run]";
+  "usage: release_version_bump.ts --version X.Y.Z [--previous X.Y.Z] [--allow-major] [--repo PATH] [--json] [--dry-run]\n" +
+  "  Refuses (exit 3, nothing on stdout) a bump of the first number unless --allow-major,\n" +
+  "  which only the operator's explicit instruction allows. --previous is the last tag's version.";
 
 function parseArgs(argv: string[]): {
   version: string | null;
+  previous: string | null;
   repo: string;
   asJson: boolean;
   dryRun: boolean;
+  allowMajor: boolean;
 } {
   let version: string | null = null;
+  let previous: string | null = null;
   let repo = process.cwd();
   let asJson = false;
   let dryRun = false;
+  let allowMajor = false;
   // Help and bad arguments are already handled by `precheckCli` in `main`, so
   // this loop only has to read a validated argv.
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--version") version = argv[++i] ?? null;
+    else if (arg === "--previous") previous = argv[++i] ?? null;
     else if (arg === "--repo") repo = argv[++i] ?? repo;
     else if (arg === "--json") asJson = true;
     else if (arg === "--dry-run") dryRun = true;
+    else if (arg === "--allow-major") allowMajor = true;
   }
-  return { version, repo: path.resolve(repo), asJson, dryRun };
+  return { version, previous, repo: path.resolve(repo), asJson, dryRun, allowMajor };
 }
 
 function formatText(result: BumpResult): string {
@@ -336,19 +381,34 @@ function main(): void {
   // A refusal must not reach stdout: callers run this inside `$(…)` and parse
   // the result as JSON.
   precheckCli(process.argv.slice(2), {
-    values: ["--version", "--repo"],
-    switches: ["--json", "--dry-run"],
+    values: ["--version", "--previous", "--repo"],
+    switches: ["--json", "--dry-run", "--allow-major"],
   }, USAGE);
   const opts = parseArgs(process.argv.slice(2));
   if (!opts.version) {
     console.error("--version is required");
     process.exit(2);
   }
-  if (!isValidSemver(opts.version)) {
-    console.error(`Invalid semver: ${opts.version}`);
-    process.exit(2);
+  for (const v of [opts.version, opts.previous]) {
+    if (v !== null && !isValidSemver(v)) {
+      console.error(`Invalid semver: ${v}`);
+      process.exit(2);
+    }
   }
-  const result = bumpAll(opts.repo, opts.version, { dryRun: opts.dryRun });
+  let result: BumpResult;
+  try {
+    result = bumpAll(opts.repo, opts.version, {
+      dryRun: opts.dryRun,
+      allowMajor: opts.allowMajor,
+      previous: opts.previous ?? undefined,
+    });
+  } catch (err) {
+    if (err instanceof MajorBumpError) {
+      console.error(err.message);
+      process.exit(3);
+    }
+    throw err;
+  }
   if (opts.asJson) {
     console.log(JSON.stringify(result, null, 2));
   } else {

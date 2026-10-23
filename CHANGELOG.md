@@ -13,6 +13,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=404 runId=404 sha=46349abc -->
+- Every product stays at 0.x.y: a breaking change bumps the minor, and a major needs the operator's explicit word; release_version_bump.ts refuses one without --allow-major.
 <!-- idun:pr-merge pr=403 runId=403 sha=8fb2aa65 -->
 - Workers (Gru, Minion, Agnes, Kevin) ask for no GO: the launch is the standing GO. Review, live check and required checks still run. stark-ops 0.27.0, stark-plan 0.13.0.
 <!-- idun:pr-merge pr=400 runId=400 sha=e147f2a2 -->

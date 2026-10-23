@@ -7,6 +7,9 @@ import os from "node:os";
 import path from "node:path";
 import { test, type TestContext } from "node:test";
 
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
 import {
   bumpAll,
   bumpCargoToml,
@@ -14,8 +17,12 @@ import {
   bumpPyproject,
   bumpPythonInit,
   bumpVersionFile,
+  isMajorBump,
   isValidSemver,
+  MajorBumpError,
 } from "./release_version_bump.ts";
+
+const TOOL = fileURLToPath(new URL("./release_version_bump.ts", import.meta.url));
 
 function makeRepo(t: TestContext): string | null {
   try {
@@ -140,8 +147,8 @@ test("bumpAll updates every supported file in a synthetic repo", (t) => {
     );
     fs.writeFileSync(path.join(repo, "VERSION"), "0.0.1\n");
 
-    const result = bumpAll(repo, "1.0.0");
-    assert.equal(result.version, "1.0.0");
+    const result = bumpAll(repo, "0.1.0");
+    assert.equal(result.version, "0.1.0");
     assert.equal(result.dryRun, false);
     const updatedPaths = result.filesUpdated.map((f) => f.path).sort();
     assert.deepEqual(updatedPaths, [
@@ -153,15 +160,15 @@ test("bumpAll updates every supported file in a synthetic repo", (t) => {
     ]);
     assert.equal(
       fs.readFileSync(path.join(repo, "package.json"), "utf8"),
-      '{"version": "1.0.0"}\n',
+      '{"version": "0.1.0"}\n',
     );
     assert.match(
       fs.readFileSync(path.join(repo, "Cargo.toml"), "utf8"),
-      /version = "1\.0\.0"/,
+      /version = "0\.1\.0"/,
     );
     assert.equal(
       fs.readFileSync(path.join(repo, "VERSION"), "utf8"),
-      "1.0.0\n",
+      "0.1.0\n",
     );
   } finally {
     fs.rmSync(repo, { recursive: true, force: true });
@@ -195,7 +202,7 @@ test("bumpAll dry-run reports updates without writing", (t) => {
   if (!repo) return;
   try {
     fs.writeFileSync(path.join(repo, "package.json"), '{"version": "0.0.1"}\n');
-    const result = bumpAll(repo, "1.0.0", { dryRun: true });
+    const result = bumpAll(repo, "0.1.0", { dryRun: true });
     assert.equal(result.dryRun, true);
     assert.equal(result.filesUpdated.length, 1);
     // File on disk untouched.
@@ -227,6 +234,81 @@ test("bumpAll skips a file already at the target version", (t) => {
     assert.equal(result.filesUpdated.length, 0);
     assert.equal(result.filesSkipped.length, 1);
     assert.equal(result.filesSkipped[0].reason, "already at target version");
+  } finally {
+    fs.rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+// ── the major guard ─────────────────────────────────────────────
+// Every product stays at 0.x.y: a bump of the first number needs the
+// operator's explicit instruction, which reaches the tool as allowMajor.
+
+test("isMajorBump is true only when the first number goes up", () => {
+  assert.equal(isMajorBump("0.9.3", "1.0.0"), true);
+  assert.equal(isMajorBump("1.4.0", "2.0.0"), true);
+  assert.equal(isMajorBump("v0.9.3", "1.0.0"), true);
+  assert.equal(isMajorBump("0.9.3", "0.10.0"), false);
+  assert.equal(isMajorBump("1.2.0", "1.3.0"), false);
+  assert.equal(isMajorBump("1.0.0", "1.0.0"), false);
+});
+
+test("bumpAll refuses a major and writes no file", (t) => {
+  const repo = makeRepo(t);
+  if (!repo) return;
+  try {
+    fs.writeFileSync(path.join(repo, "package.json"), '{"version": "0.9.3"}\n');
+    fs.writeFileSync(path.join(repo, "VERSION"), "0.9.3\n");
+    assert.throws(() => bumpAll(repo, "1.0.0"), (err: unknown) =>
+      err instanceof MajorBumpError && /package\.json 0\.9\.3/.test(err.message) &&
+      /--allow-major/.test(err.message));
+    assert.equal(fs.readFileSync(path.join(repo, "package.json"), "utf8"), '{"version": "0.9.3"}\n');
+    assert.equal(fs.readFileSync(path.join(repo, "VERSION"), "utf8"), "0.9.3\n");
+  } finally {
+    fs.rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test("bumpAll refuses a major from previous in a repo with no version file", (t) => {
+  const repo = makeRepo(t);
+  if (!repo) return;
+  try {
+    assert.throws(() => bumpAll(repo, "1.0.0", { previous: "0.9.3" }), MajorBumpError);
+    assert.equal(bumpAll(repo, "0.10.0", { previous: "0.9.3" }).filesUpdated.length, 0);
+    assert.throws(() => bumpAll(repo, "0.10.0", { previous: "v0.9.3" }), /Invalid semver/);
+  } finally {
+    fs.rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test("bumpAll writes a major with allowMajor, and a minor past 1.0 without it", (t) => {
+  const repo = makeRepo(t);
+  if (!repo) return;
+  try {
+    fs.writeFileSync(path.join(repo, "package.json"), '{"version": "0.9.3"}\n');
+    assert.equal(bumpAll(repo, "1.0.0", { allowMajor: true }).filesUpdated.length, 1);
+    assert.equal(fs.readFileSync(path.join(repo, "package.json"), "utf8"), '{"version": "1.0.0"}\n');
+    assert.equal(bumpAll(repo, "1.1.0").filesUpdated.length, 1);
+    assert.equal(fs.readFileSync(path.join(repo, "package.json"), "utf8"), '{"version": "1.1.0"}\n');
+  } finally {
+    fs.rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test("the CLI refuses a major with exit 3 and nothing on stdout", (t) => {
+  const repo = makeRepo(t);
+  if (!repo) return;
+  try {
+    fs.writeFileSync(path.join(repo, "package.json"), '{"version": "0.9.3"}\n');
+    const run = (...extra: string[]) => spawnSync(process.execPath,
+      [TOOL, "--version", "1.0.0", ...extra, "--repo", repo, "--json"], { encoding: "utf8" });
+    const refused = run();
+    assert.equal(refused.status, 3, refused.stderr);
+    assert.equal(refused.stdout, "");
+    assert.match(refused.stderr, /is a major/);
+    assert.equal(fs.readFileSync(path.join(repo, "package.json"), "utf8"), '{"version": "0.9.3"}\n');
+    const allowed = run("--allow-major");
+    assert.equal(allowed.status, 0, allowed.stderr);
+    assert.equal(JSON.parse(allowed.stdout).filesUpdated[0].previous, "0.9.3");
   } finally {
     fs.rmSync(repo, { recursive: true, force: true });
   }
