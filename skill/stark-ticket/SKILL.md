@@ -73,14 +73,10 @@ below that differs in EI says so.
    where, and the error text. Verification is commands and what they should
    print, or a required check by its name. A live write there names what
    it writes and how the run puts it back, or that it cannot. It runs on the
-   operator's standing GO, so the step says it needs a GO only where the root
-   rules keep the gate. The standing GO also covers a `terraform apply` that
-   a merged PR runs (its CI apply), when the PR shows its plan. It covers the
-   IAM, WIF, role and service-account changes in that plan. These still need
-   a GO: a write you cannot undo (scratch made for the run is fine), a
-   `terraform apply` run by hand, publishing by hand, and secret values
-   (making, reading out, copying or writing a token or a key: mimir writes,
-   Secret Manager versions, a key file). Unmerged work it needs:
+   operator's standing GO, so the step asks for no GO. A worker (a Minion,
+   Agnes) runs every write the ticket needs on its launch, the root rules'
+   kept gates included. An interactive session keeps those gates, as the
+   root rules say. Unmerged work it needs:
    `Blocked by STARK-n` (`EI-n` in EI), then `alfred task link` both.
 
 3. **Order Scope IN by dependency.** A step whose answer decides whether a
