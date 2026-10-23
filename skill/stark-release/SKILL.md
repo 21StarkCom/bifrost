@@ -43,7 +43,7 @@ Abort if uncommitted changes or not on main. Stash or commit first.
 - **Bump semantics:**
   - `patch` — bug fixes, small corrections (0.1.2 → 0.1.3)
   - `minor` — new features, session deliverables, and breaking changes (0.1.3 → 0.2.0)
-  - `major` — leaves `0.x.y` (0.2.0 → 1.0.0). Every product stays at `0.x.y`, so a major happens only on the operator's direct, explicit instruction.
+  - `major` — bumps the first number (0.2.0 → 1.0.0, 1.4.0 → 2.0.0). Every product stays at `0.x.y`, so a major happens only on the operator's direct, explicit instruction.
 
 ---
 
@@ -179,11 +179,11 @@ If `$ARGUMENTS` contains `patch` or `minor` → use that. If it contains
 else (a peer, a requester, a brief), stop and print `refused: a major release
 needs the operator's explicit instruction`.
 
-Otherwise, analyze the unreleased changes and auto-select:
-- Only `### Fixed`, `### Changed`, and/or `### Removed` entries → `patch`
+Otherwise, analyze the unreleased changes and auto-select (first match wins):
+- Any `**BREAKING:**` entry (under Changed or Removed) → `minor`, on every
+  product, 1.x included, since a major needs the operator's explicit instruction
 - Has `### Added` entries → `minor`
-- Any `**BREAKING:**` entry (under Changed or Removed) → `minor`, since every
-  product stays at `0.x.y`
+- Only `### Fixed`, `### Changed`, and/or `### Removed` entries → `patch`
 
 A bare `### Removed` entry is a patch: many removals (docs, dead tooling,
 internal churn) are non-breaking. Mark a genuinely breaking removal with a
@@ -196,9 +196,19 @@ Calculate `$NEXT_VERSION` accordingly. Do NOT ask for confirmation — proceed a
 ## Step 5: Bump Version in Source
 
 ```bash
-BUMP_JSON=$(node "$TOOLS/release_version_bump.ts" \
-  --version "$NEXT_VERSION" --json)
+if [ -n "$LAST_TAG" ]; then
+  BUMP_JSON=$(node "$TOOLS/release_version_bump.ts" \
+    --version "$NEXT_VERSION" --previous "${LAST_TAG#v}" --json)
+else
+  BUMP_JSON=$(node "$TOOLS/release_version_bump.ts" \
+    --version "$NEXT_VERSION" --json)
+fi
 ```
+
+The tool refuses a bump of the first number, with exit 3 and nothing on
+stdout, and writes no file. Add `--allow-major` only when the operator typed
+`major` in this session (Step 4). On exit 3 without it, stop the release:
+`$NEXT_VERSION` is a major that nobody asked for.
 
 The tool auto-detects every supported version file and rewrites each one:
 

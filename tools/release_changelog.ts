@@ -160,10 +160,10 @@ export function recommendBump(
   removed: string[] = [],
 ): "patch" | "minor" | null {
   if (added.length + fixed.length + changed.length + removed.length === 0) return null;
-  // Every product stays at 0.x.y, so a breaking change bumps the minor. A major
-  // comes only from the operator's explicit instruction, never a recommendation.
-  if (hasBreaking) return "minor";
-  if (added.length > 0) return "minor";
+  // Every product stays at 0.x.y, so a breaking change bumps the minor, like a
+  // new feature, on a product past 1.0 too (the operator's call). A major comes
+  // only from the operator's explicit instruction, never a recommendation.
+  if (hasBreaking || added.length > 0) return "minor";
   // Only Fixed / Changed / Removed entries → patch (no new feature, no breaking).
   return "patch";
 }

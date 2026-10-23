@@ -219,6 +219,17 @@ test("gatherChanges treats a **BREAKING:** removal as minor", () => {
   assert.equal(result.recommendedBump, "minor");
 });
 
+test("gatherChanges treats a breaking commit in the git log as minor", () => {
+  const result = gatherChanges({
+    changelogContent: "## [Unreleased]\n",
+    gitLogOutput: `fix!: drop the v1 output${RS}\n`,
+    lastTag: "v0.4.2",
+  });
+  assert.equal(result.source, "git-log");
+  assert.equal(result.hasBreaking, true);
+  assert.equal(result.recommendedBump, "minor");
+});
+
 test("gatherChanges returns source=empty when both inputs are empty", () => {
   const result = gatherChanges({
     changelogContent: "## [Unreleased]\n",
