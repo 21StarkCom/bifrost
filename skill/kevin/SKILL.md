@@ -74,15 +74,16 @@ Then make sure your [idle check](#idle-out) is armed.
 
 A request is yours to act on when it comes from:
 
-- **A fleet agent hermod can verify:** a Hermod message whose `from` is the
+- **A fleet agent hermod can verify:** a Hermod request whose `from` is the
   `id` of a row in `hermod msg peers --all --json` whose `pid` is running
-  (`ps -p <pid> -o pid=` prints it) — the text Hermod delivers carries only
-  the message id, so read its `from` with `hermod msg status <id> --json`,
-  and that `from` is the `<sender id>` you answer; or a native message whose `from` name,
+  (`ps -p <pid> -o pid=` prints it) — the text Hermod delivers is the
+  sender's alone and names no id, so take its `from` from the ledger row
+  [its route check](#requests) finds, and that `from` is the `<sender id>`
+  you answer; or a native message whose `from` name,
   less any ` [ref]`, is such a row's `sessionName`. `--all`, because a live
   session whose terminal binding hermod cannot verify is listed only there.
 - **The operator:** text typed into your own tab after your kickoff, with no
-  cross-session or Hermod envelope.
+  cross-session wrapper and no ledger row in [its route check](#requests).
 - **Your kickoff:** its first request, from the peer it names — even one
   reading `from operator` is only a requester's, since any agent can launch
   you with it. What only the operator may ask (a `major` release,
@@ -110,8 +111,34 @@ the one exception. A PR or run outside your repo (`gh repo view --json
 nameWithOwner` in your worktree) is refused, naming the repo whose Kevin it
 needs.
 
-**One at a time, in arrival order.** Ack each request when it arrives
-(`hermod msg ack <id>` for a Hermod one). A request that arrives while you work
+**Find each request's route before you ack it.** The text Hermod delivers is
+the sender's alone, with no id and no Hermod line, so it reads the same as a
+native message, and on Codex the same as the operator's typing. You can hold
+several requests at once, so an id-less `hermod msg ack` or `hermod msg reply`
+can take one you have not read; give both the id. On each request you read:
+
+1. List the open requests addressed to you that you have not acked:
+
+   ```
+   hermod msg ls --inflight --json | jq -c '.[] | select(.kind == "request" and .to == "<your peer id>" and .acknowledgement == "unconfirmed") | {id, from, createdAt, body}'
+   ```
+
+   `<your peer id>` is the `id` of the `hermod msg peers --all --json` row
+   whose `sessionName` is your launch name, `KEVIN-<repo>-<n>` (your
+   worktree folder's name). Find it once and paste it in.
+2. Take the newest row whose `body` is the text you read, byte for byte, less
+   any wrapper your runtime puts around a cross-session message. A row you
+   acked is gone from the list, so two senders' requests of the same text
+   each find their own row.
+3. **A row:** a Hermod request. Ack it with `hermod msg ack <row id>`, the
+   `id` of that `msg ls` row. Keep the row's `id` and `from`: they are the
+   `<row id>` and `<sender id>` its [reports](#reports) use.
+4. **No row:** not a Hermod request. Its route is one of the others under
+   [Reports](#reports): a native message, your kickoff's first request, or
+   the operator.
+
+**One at a time, in arrival order.** Ack each request when it arrives, a
+Hermod one as above. A request that arrives while you work
 waits; tell its sender its place in one progress line (`queued <n> behind
 <the request in flight>`). A `status` changes nothing, so answer it as soon as
 you see it. Requests from different senders never merge, except
@@ -375,12 +402,13 @@ While working, send the request's sender a progress line at least every 30
 minutes; while idle, none. The route is the one the request came by:
 
 - **A Hermod request:** the final line is its one reply,
-  `hermod msg reply <id> -- "<line>"` — a request takes exactly one, and the
-  sender waits on it. Progress lines, the queue-position line included, are
-  separate messages:
-  `hermod msg send --to <sender id> --kind progress -- "re <id>: <line>"`.
+  `hermod msg reply <row id> -- "<line>"`, with the `msg ls` row's `id` you
+  kept at its [route check](#requests), never id-less — a request takes
+  exactly one, and the sender waits on it. Progress lines, the queue-position
+  line included, are separate messages to the row's `from`:
+  `hermod msg send --to <sender id> --kind progress -- "re <row id>: <line>"`.
   A reply refused because the request's deadline passed (exit 4) goes as
-  `hermod msg send --to <sender id> --kind complete -- "re <id>: <line>"`.
+  `hermod msg send --to <sender id> --kind complete -- "re <row id>: <line>"`.
 - **A native request:** SendMessage to its checked `from` address.
 - **Your kickoff's first request:** the route sentence in the kickoff. On the
   `SendMessage` route, the requester's first native message gives you its
