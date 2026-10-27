@@ -42,7 +42,7 @@ leader launched you or a hand did — with no leader peer to report to, your
 report is the one your skill names (a ticket comment, for Agnes; a line in its
 own tab, for a Minion led by the operator) rather than a line to a leader, and
 nothing else changes but the one wait below. What is not negotiable is the scope:
-**only after `idun gh pr-merge` and the ticket close, only your own tab, never
+**only after `njord pr-merge` and the ticket close, only your own tab, never
 on `blocked` or `follow-up … stopping`, and never on any other trigger.** The
 standing permission the command needs is still the operator's, and a refusal
 there is a refusal — see the permissions note below.
@@ -91,7 +91,7 @@ in the foreground, exit 2, which is the report-and-stop in
 - **Report first, then poison-pill**, so your report is a completed act and
   never a race against the reaper's quit, which reaches you moments after the
   arm.
-- **Strictly after `idun gh pr-merge` and the ticket close.** Poison-pill
+- **Strictly after `njord pr-merge` and the ticket close.** Poison-pill
   deliberately skips the dirty/unpushed safety gate — the tab chose to die —
   which is safe only because everything you did is pushed and merged by then. It
   is never a generic "I'm finished" reflex.
@@ -108,7 +108,7 @@ in the foreground, exit 2, which is the report-and-stop in
   *squash*-merges, so your commits are never ancestors of main's squash and
   `origin/main..HEAD` stays non-empty forever after a perfectly good merge —
   a gate that can never go green is a gate that gets ignored. After a real
-  `idun gh pr-merge` both checks are empty, which is why they are cheap, and why
+  `njord pr-merge` both checks are empty, which is why they are cheap, and why
   a non-empty one means something went wrong upstream rather than that the gate
   is noise. Fix that first.
 - **Count what closes with you before you arm**, in the order
@@ -271,7 +271,7 @@ Run it with no behavior-changing flags. `--json` is not one of them — it only
 selects the output shape, and it is the sole way to read `armed:true` (below),
 so it is part of the command, not an embellishment. No `--delete-branch`: the
 branch is merged and harmless, and branches are the operator's to clean with
-`idun gh cleanup`. The worktree is the one thing that is genuinely yours — your
+`njord cleanup`. The worktree is the one thing that is genuinely yours — your
 disk, your session, and you are the one who knows you are finished — so it goes
 with you.
 

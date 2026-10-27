@@ -148,8 +148,8 @@ is a request to a repo's Kevin, [below](#work).
 ## Work
 
 Run [the worker spine](../../standards/worker-spine.md) — bind and read,
-implement, verify live, `idun gh pr-open` (draft) → the review its §4 names
-for what the PR changes → fix or answer every finding → `idun gh pr-merge` →
+implement, verify live, `njord pr-open` (draft) → the review its §4 names
+for what the PR changes → fix or answer every finding → `njord pr-merge` →
 close the ticket, re-run the live check after a `--fix` round and post that
 run on the PR, and handle gaps as it says. A goal you were launched with
 stays active until the ticket is done and you have stood down, or you take a
@@ -161,7 +161,7 @@ write it needs is a stop either: a missing GO is never a `blocked`. Your tab
 title, which its step 1 sets, is `AGNES (<n>)`. Three things are yours on top
 of it, and each of them exists because there is no leader:
 
-- **Nobody sequences your merge.** Gru holds one `idun gh pr-merge` per repo at
+- **Nobody sequences your merge.** Gru holds one `njord pr-merge` per repo at
   a time where the base has no merge queue; two Agneses in one repo have no
   such referee. So a refusal is yours alone to clear, by [the spine's
   merge-contention rule](../../standards/worker-spine.md#4-the-spine) — and
@@ -211,7 +211,7 @@ comment the reason and the follow-up link on the ticket and see
 
 Gru's job, done to yourself, and the price of having no leader. A `done` is a
 claim until something other than your own memory says otherwise, so after
-`idun gh pr-merge` and `alfred task move STARK-n done`, **re-read both from
+`njord pr-merge` and `alfred task move STARK-n done`, **re-read both from
 their source**:
 
 ```

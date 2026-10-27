@@ -156,8 +156,8 @@ and the operator asked for it to run in a tab of its own.
 ## Work
 
 Run [the worker spine](../../standards/worker-spine.md) — bind and read,
-implement, verify live, `idun gh pr-open` (draft) → the review its §4 names
-for what the PR changes → fix or answer every finding → `idun gh pr-merge` →
+implement, verify live, `njord pr-open` (draft) → the review its §4 names
+for what the PR changes → fix or answer every finding → `njord pr-merge` →
 close the ticket, re-run the live check after a `--fix` round and post that
 run on the PR, and handle gaps as it says. Your tab title, which its step 1
 sets, is `MINION (<n>)`. Four things are yours on top of it:
@@ -165,7 +165,7 @@ sets, is `MINION (<n>)`. Four things are yours on top of it:
 - **Your ticket is the one named in your brief**, which also names your
   leader: a peer, or `leader operator`.
 - **If Gru asked you to hold your merge** until another Minion's `done` is
-  confirmed, hold, then rerun `idun gh pr-merge` so the rebase and checks are
+  confirmed, hold, then rerun `njord pr-merge` so the rebase and checks are
   fresh. That is the one place a Minion's merge is sequenced from outside.
 - **The PR comment carrying the re-run live check is not optional here.** Your
   scrollback dies with you at stand down, so that comment is what your leader

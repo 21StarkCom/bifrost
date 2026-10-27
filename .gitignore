@@ -22,7 +22,7 @@ artifacts/
 .stark/
 /config.toml
 
-# ── Local git worktrees (idun gh pr-open does `git add -A`) ───────────
+# ── Local git worktrees (njord pr-open does `git add -A`) ───────────
 /.worktrees/
 
 # ── Local env + noise ─────────────────────────────────────────────────

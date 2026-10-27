@@ -189,7 +189,7 @@ below; where it and this list disagree, it wins.
 5. **Verify live**: re-run `audit --repo <worktree> --json`. Every fixed
    finding must be gone, no new one may appear, and every new glob must show a
    non-zero `matches` on the files it was written for.
-6. **Draft PR** from the worktree with `idun gh pr-open --no-ticket` (a
+6. **Draft PR** from the worktree with `njord pr-open --no-ticket` (a
    draft by default) and a plain title, e.g.
    `docs: scope unscoped agent rules`.
 7. **Review by what the PR changes**, per the root rules' tiers: a PR of
@@ -197,9 +197,9 @@ below; where it and this list disagree, it wins.
    also changes a script, config or code takes that tier (for code,
    `/code-review xhigh --fix <full PR URL>`: the full URL, or it reviews the
    wrong repo's diff), then fix or answer every finding, push with
-   `idun gh pr-open`, and re-run step 5.
+   `njord pr-open`, and re-run step 5.
 8. **Stop at the draft PR.** Print the PR URL and the line the
-   operator runs to finish: `idun gh pr-merge <PR>`. Never merge; never commit
+   operator runs to finish: `njord pr-merge <PR>`. Never merge; never commit
    to `main`.
 
 ## Failure modes

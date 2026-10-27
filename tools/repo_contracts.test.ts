@@ -520,7 +520,7 @@ test(".gitleaks.toml exempts values, never paths", () => {
 // pin bump or a template change — 21stark's apply commits the new bytes straight
 // to `main`. Its own header says "a hand edit is reverted by the next apply",
 // which holds only for a hand `terraform apply`: a hand edit here shows as a
-// pending update on 21stark's plan, and `idun gh repo apply` refuses (57) the
+// pending update on 21stark's plan, and `njord fleet apply` refuses (57) the
 // whole tier's apply, not just that row, until a hand `terraform apply` there
 // reverts it. Change the template in 21stark, never this file.
 //
@@ -540,7 +540,7 @@ function readSecretScanCaller(): string {
   return readRepoFile(
     SECRET_SCAN_REL,
     "21stark's Terraform owns it; deleting it here drops this repo out of the fleet's secret scan and " +
-      "leaves a pending create on 21stark's plan, which `idun gh repo apply` refuses (57) until a hand " +
+      "leaves a pending create on 21stark's plan, which `njord fleet apply` refuses (57) until a hand " +
       "`terraform apply` there writes it back. Restore it from the render, never rewrite it.",
   );
 }

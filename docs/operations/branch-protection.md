@@ -96,7 +96,7 @@ update of that resource is a commit, even with identical bytes: the import's own
 apply left `776a0193` here as an empty commit, and a reworded commit message in
 21stark would leave another. **A hand edit here does not last, and until it is
 reverted it jams 21stark:** it shows as a pending update on 21stark's plan, and
-`idun gh repo apply` refuses (57) the whole tier's apply — every repo's change,
+`njord fleet apply` refuses (57) the whole tier's apply — every repo's change,
 not just this row — until a hand `terraform apply` there reverts it. Change the
 template in 21stark; never edit the body here.
 
@@ -329,7 +329,7 @@ gh api repos/21StarkCom/bifrost/rulesets/23544063 \
 
 - **`strict_required_status_checks_policy: false`** — does not force a PR branch
   to be up to date with `main` before merging. Set it to `true` and every merge
-  to `main` invalidates every other open PR's green run. `idun gh pr-merge`
+  to `main` invalidates every other open PR's green run. `njord pr-merge`
   rebases onto the base before it merges anyway, so `false` costs little.
 - **`bypass_actors` = repository admin (`actor_id: 5`, `bypass_mode: "always"`)**
   — **the operator CAN merge red.** This is a real weakening and it is stated
@@ -342,7 +342,7 @@ gh api repos/21StarkCom/bifrost/rulesets/23544063 \
   `"evaluate"` or `"disabled"` first, with no way back in if that is also what is
   broken. It also stops 21stark's Terraform committing `secret-scan.yml` here
   (§1): bifrost would have to leave that rollout, by the wave-6 note in 21stark's
-  `repos/secret_scan.tf`. Either way `idun gh pr-merge` still refuses a red or
+  `repos/secret_scan.tf`. Either way `njord pr-merge` still refuses a red or
   `skipped` required check on its own, so the practical gate holds one level
   above the ruleset — which is where it actually gets exercised.
 
@@ -357,7 +357,7 @@ against what landed. `21StarkCom/stark-skills#877` merged exactly that way.
 There is no repair once it happens on a given SHA: re-running replays the
 original event payload so it skips again, and a `workflow_dispatch` run **does
 not join the PR's status rollup**. Only a new commit clears it. Of the merge
-paths here, only `idun gh pr-merge` catches it — and only without
+paths here, only `njord pr-merge` catches it — and only without
 `--allow-skipped-checks`, which should never be needed in this repo.
 
 The same reasoning bars a `paths:` filter: a filtered-out workflow never reports
@@ -420,7 +420,7 @@ comm -23 \
       --jq '[.check_runs[].name]|sort|.[]')
 
 # 3. GitHub marks them required ON A PR — the ruleset-aware view, and the same
-#    field `idun gh pr-merge` reads.
+#    field `njord pr-merge` reads.
 gh api graphql -f query='
   query($pr: Int!) {
     repository(owner: "21StarkCom", name: "bifrost") {
@@ -434,7 +434,7 @@ gh api graphql -f query='
     }
   }' -F pr=<PR#>
 
-# 4. `idun gh pr-merge` completes WITHOUT --allow-no-required-checks.
+# 4. `njord pr-merge` completes WITHOUT --allow-no-required-checks.
 ```
 
 **Step 2 is not redundant with step 3, and it is not optional.** An **orphaned
@@ -480,7 +480,7 @@ second approval.
 **What actually holds the high-trust paths is the review tier each PR's diff
 calls for** (the worker spine's §4: `/code-review xhigh --fix` for code, a
 reread of the diff for scripts and config, none for prose), plus
-`idun gh pr-merge`, which refuses a red or `skipped` required check whatever
+`njord pr-merge`, which refuses a red or `skipped` required check whatever
 the ruleset allows. Those are exercised per PR. A PR that changes only
 instruction text (a `SKILL.md`, a standards doc, an agent instructions file)
 takes no review under the root rules, so for that surface CI and the
