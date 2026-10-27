@@ -609,10 +609,8 @@ session's guard refuses a `hermod` line carrying a variable
   - **A queue** (`mergeQueue` non-null): no sequencing. Every Minion runs
     `njord pr-merge` the moment its review gate is green, all at once. The
     queue tests each merge against the base itself, pr-merge never rebases
-    there, and it waits for the PR to be MERGED before it stamps the ticket.
-    That is idun v0.81.0 or later (`idun --version`): an older pr-merge only
-    enqueues and then stamps a merge that has not happened, so an older idun
-    is an escalation before any Minion there merges.
+    there, and it waits for the PR to be MERGED before it stamps the ticket
+    (`njord help pr-merge`, "Merge queue").
     A Minion the queue drops gets exit 38 and clears it by
     [the spine's merge-contention rule](../../standards/worker-spine.md#4-the-spine).
   - **No queue** (`mergeQueue` null), or a read that failed (nonzero exit,
