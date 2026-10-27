@@ -133,7 +133,7 @@ export function checkGithubUser(env: NodeJS.ProcessEnv = process.env): [CheckSta
   if (!ok) return ["fail", `gh: ${out}`];
   const login = out.trim();
   if (login === EXPECTED_GH_LOGIN) return ["pass", `gh authenticated as ${EXPECTED_GH_LOGIN}`];
-  // The human-only `idun user --swap` relief window exports GH_TOKEN; name the way back.
+  // The human-only `njord user --swap` relief window exports GH_TOKEN; name the way back.
   const swap = env.GH_TOKEN || env.GITHUB_TOKEN || env.STARK_GH_USER
     ? " (identity swap active: unset GH_TOKEN GITHUB_TOKEN STARK_GH_USER when the rate-limited command is done)" : "";
   return ["fail", `gh identity is ${login || "unknown"}; expected ${EXPECTED_GH_LOGIN}${swap}`];

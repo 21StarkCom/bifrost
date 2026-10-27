@@ -156,7 +156,7 @@ requests, where `gh` cannot infer it.
    bot's branch: `release-please--branches--…`, `changeset-release/…`) takes
    no push from you, since its branch is the bot's: step 4 reviews it without
    `--fix`, unless it is a release PR that passes step 4's diff check.
-2. **Can you take the branch?** `idun gh pr-merge` checks the PR's branch out
+2. **Can you take the branch?** `njord pr-merge` checks the PR's branch out
    in your worktree, so:
    - another worktree holding `headRefName` (a `branch refs/heads/<head>`
      line under another path in `git worktree list --porcelain`) is
@@ -232,7 +232,7 @@ requests, where `gh` cannot infer it.
    skipped, say so rather than calling it green. Post one PR comment with the
    gate run (command and output, or the check's URL and conclusion) and the
    fixes you pushed.
-7. **`merge` only:** `idun gh pr-merge <n>` on the PR's branch, in your
+7. **`merge` only:** `njord pr-merge <n>` on the PR's branch, in your
    worktree. Clear contention by [the spine's §4 rule](../../standards/worker-spine.md#4-the-spine);
    never `--force`, never past an open finding or a red required check.
    Exit 16 (HEAD_MISMATCH) and exit 20 (the branch could not be checked out)
@@ -328,7 +328,7 @@ operator's alone`.
 5. **The bump**, the one thing you author: exactly the version and changelog
    edits the chain names, nothing else, committed on
    `kevin-release/<launch id>/<tag>` from `origin/<base>` and opened with
-   `idun gh pr-open --draft` — `--no-ticket`, unless the request named
+   `njord pr-open --draft` — `--no-ticket`, unless the request named
    `for STARK-n` or the chain requires a ticket-scoped title (then the
    request's ticket — the earliest one when coalesced requests name several,
    with the others named in the PR body — and with none: `blocked release
@@ -504,12 +504,12 @@ the one release that needs the operator's own word in your tab
 outside the desk, and you never take them, whoever asks: an apply or any
 other live-infrastructure step by hand, a force push other than
 `--force-with-lease` after a rebase, a push to the base branch,
-`idun gh pr-merge --force`, an admin merge, closing a PR, deleting a branch,
+`njord pr-merge --force`, an admin merge, closing a PR, deleting a branch,
 repo settings. A request that needs one is `refused <request> outside the
 desk: <action>`. A keychain, Touch ID or `sudo` prompt only a person can
 answer is `blocked … needs the operator: <what it asked>`. A ticket's live
 Verification writes are that ticket's worker's, not yours.
 
 You bind, move and close no ticket and write no ticket field yourself; the
-stamp `idun gh pr-merge` puts on the PR title's ticket is expected. The
+stamp `njord pr-merge` puts on the PR title's ticket is expected. The
 ticket stays its owner's — your `done` tells its requester, who closes it.

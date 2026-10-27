@@ -212,7 +212,8 @@ Repos can override the enabled agents and nothing else: the walk above lives onl
 - The fleet CLIs, each for the skills that call it:
   - `alfred`: /stark-ticket, /stark-author, /stark-build, /stark-bury, /stark-rules-optimizer, /gru, /minion, /agnes
   - `hermod`: /gru, /minion, /agnes, /kevin, /lucius
-  - `idun` v0.94.0 or later, v0.103.0 for /agnes, and v0.109.0 for /kevin, whose `from` kickoff v0.111.0 writes (`idun gru`, `idun minion`, `idun agnes`, `idun kevin` for the worker launches; `idun gh pr-open`, `pr-merge`): /gru, /minion, /agnes, /kevin, /stark-bury, /stark-rules-optimizer
+  - `idun` v0.94.0 or later, v0.103.0 for /agnes, and v0.109.0 for /kevin, whose `from` kickoff v0.111.0 writes (`idun gru`, `idun minion`, `idun agnes`, `idun kevin` for the worker launches): /gru, /minion, /agnes, /kevin
+  - `njord` (`njord pr-open`, `pr-merge`): /gru, /minion, /agnes, /kevin, /stark-bury, /stark-rules-optimizer
   - `frigg`: /gru, /minion, /agnes, to find a ticket's repo
   - atlas's `brain`: /stark-adr
   - `goldfinger` 0.8.0 or later: /goldfinger (the `21StarkCom/tap/goldfinger` cask, plus one `goldfinger doctor --fix` and `goldfinger setup` by the operator)
@@ -224,7 +225,8 @@ bifrost is the skills layer of the 21StarkCom fleet. The rest of the fleet, by n
 
 - **alfred**: the ticket board every worker binds to.
 - **hermod**: places the agents' tabs, carries their messages and tears them down.
-- **idun**: launches the Gru, Minion and Agnes workers, and `idun gh` opens and merges PRs.
+- **idun**: launches the Gru, Minion and Agnes workers.
+- **njord**: opens and merges PRs.
 - **frigg**: the repo registry.
 - **brain** (in atlas): the second-brain engine /stark-adr writes through.
 - **goldfinger**: the desktop-automation CLI /goldfinger teaches.

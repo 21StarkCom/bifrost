@@ -55,9 +55,9 @@ export interface OpenPr {
 }
 
 /**
- * Does this PR carry the `no-ticket` label? idun's `pr-open --no-ticket` sets
+ * Does this PR carry the `no-ticket` label? njord's `pr-open --no-ticket` sets
  * it on a PR that belongs to no ticket (STARK-9690), and no path stamps ticket
- * fields for such a PR. Matched as idun matches it: the whole name, trimmed and
+ * fields for such a PR. Matched as njord matches it: the whole name, trimmed and
  * case-insensitive, so `No-Ticket` is the label and `no-ticket-yet` is not.
  * Tolerant of malformed entries: a missing `labels` or a nameless label is not
  * the label.

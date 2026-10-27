@@ -1,6 +1,6 @@
 # Skip-draft guard — keep CI off WIP pull requests
 
-**Policy:** PRs open as **drafts** by default (`idun gh pr-open` and the review /
+**Policy:** PRs open as **drafts** by default (`njord pr-open` and the review /
 author / build skills all do this). Work is verified locally while
 the PR is a draft; when it's ready, it's marked ready-for-review — which is the
 moment CI should run. A draft PR should **not** burn CI minutes or trigger any
@@ -55,7 +55,7 @@ runs on the current head. Marking ready is the single CI-triggering moment.
   alone. A workflow that itself *opens* a downstream PR still follows the review
   gate.
   - **Anything that MERGES a PR reads that PR's checks, so the checks it reads
-    must not be draft-guarded.** `idun gh pr-merge` rebases, force-pushes, marks
+    must not be draft-guarded.** `njord pr-merge` rebases, force-pushes, marks
     the draft ready, then waits on the head's checks before it squashes. Guard
     the workflow behind those checks and every one of them reports `skipped` on
     the draft: the watch exits 0 and it merges a suite that never ran. That is
@@ -104,7 +104,7 @@ at all.
 ### Two things that follow from removing the guard
 
 - **Set `cancel-in-progress: false`.** Unguarded jobs take minutes instead of
-  seconds, and `idun gh pr-merge` force-pushes then marks the PR ready moments later —
+  seconds, and `njord pr-merge` force-pushes then marks the PR ready moments later —
   two events for the same commit. Cancelling means the second run kills the
   first and leaves `test: CANCELLED` on the head sha. GitHub counts CANCELLED as
   a *failing* required check, so it can block the merge, and if the replacement

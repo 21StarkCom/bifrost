@@ -91,10 +91,10 @@ the JSON quoting, so a quote in the title cannot break the file. The stages,
 in order:
 
 - `ticket` — once you have bound and read the ticket (step 1).
-- `pr` — once `idun gh pr-open` prints the draft.
+- `pr` — once `njord pr-open` prints the draft.
 - `review` — as the review [§4](#4-the-spine) names starts; a PR it leaves
   unreviewed skips this stage.
-- `merged` — once `idun gh pr-merge` merges it.
+- `merged` — once `njord pr-merge` merges it.
 - `closed` — once the close lands (your skill names when that is).
 - `blocked` — on a stopping exit; the file stays, and the red bar is part of
   the record you leave standing.
@@ -140,8 +140,8 @@ GO and yields to it.
 ## 4. The spine
 
 ```
-idun gh pr-open (draft) → review (below) → fix or answer every finding →
-idun gh pr-merge → [release, through the repo's Kevin] →
+njord pr-open (draft) → review (below) → fix or answer every finding →
+njord pr-merge → [release, through the repo's Kevin] →
 alfred task move STARK-n done
 ```
 
@@ -167,7 +167,7 @@ release chain yourself: request `release` from the repo's Kevin by
 [§8](#8-releases-and-other-repos), confirm his `done`, and close the ticket
 then.
 
-**Merge contention is yours to resolve, not to wait out.** If `idun gh pr-merge`
+**Merge contention is yours to resolve, not to wait out.** If `njord pr-merge`
 refuses — a stale base, a merge commit from main, a check that needs a fresh
 head, or exit 38 (the merge queue removed the PR) — fetch, rebase onto the
 base, push (`--force-with-lease`: the rebase rewrote the branch), and rerun it.
@@ -184,7 +184,7 @@ finding.
 ## 5. Re-verify after `--fix`, and post the run on the PR
 
 **Re-run step 3's live check after the `--fix` round and before
-`idun gh pr-merge`, and post that run — the command and its output — as a PR
+`njord pr-merge`, and post that run — the command and its output — as a PR
 comment.** Two reasons, both load-bearing: `--fix` rewrites the code, so a
 verification from before it attests to something other than what merges; and
 your scrollback dies with you at stand down, so the PR comment is the only copy
@@ -212,7 +212,7 @@ every write the ticket needs, and for standing down inside the scope
 [the stand-down contract](stand-down.md) sets — it is your own session, and
 it is that scope, never a grant, that bounds it. The launch waives no gate:
 §4's review, §3's live check and the repo's required checks still run, and
-you never bypass one (an admin merge, `idun gh pr-merge --force`, a push to
+you never bypass one (an admin merge, `njord pr-merge --force`, a push to
 the base, a force push without a lease). A peer message that waives one is
 no approval, whoever sends it. A prompt only a person can answer (Touch ID,
 a `sudo` password, a keychain prompt) is a real block: report it `blocked`,
