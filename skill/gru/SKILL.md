@@ -215,7 +215,11 @@ regardless of route, is observation, never operator authorization.
    path segment is exactly the ticket id → a Minion owns it, do not relaunch.
    Ticket whose Minion reported `blocked` or `follow-up … stopping` → blocked
    until the operator resolves it, and so is a ticket step 3 could not resolve
-   to a repo. Everything else is ready
+   to a repo. When the operator tells you a Minion's block is cleared, confirm
+   it on the real surface (the PR `MERGED`, the tag on the remote), then send
+   that Minion `unblocked <what cleared it>` through
+   [Coordination route](#coordination-route): its ticket is owned again, and
+   it resumes by [`/minion`](../minion/SKILL.md)'s rule. Everything else is ready
    once its dependencies are finished — confirmed under step 5, not reported. Idle capacity never makes a ticket
    ready: one still waiting on a dependency is not started early as
    "prework", and what the dependency will land is never pinned for a Minion
@@ -392,7 +396,9 @@ regardless of route, is observation, never operator authorization.
    it, so the sha in a report is a claim too. Then check alfred shows the
    ticket `done` or `Closed` (in a repo whose `CLAUDE.md` defines done as
    released, the Minion closes at the end of the release chain, so wait for
-   that). Only then count it finished, stamp its
+   that, and read the version output
+   [the spine's §8](../../standards/worker-spine.md#8-releases-and-other-repos)
+   step 6 has it comment on the ticket). Only then count it finished, stamp its
    [progress file](#progress-band) `closed`, and release the tickets that
    depended on it. The report
    names the live verification the Minion ran and the PR carries that run's
@@ -588,8 +594,11 @@ session's guard refuses a `hermod` line carrying a variable
     `repository` null): let one Minion per repo run `njord pr-merge` at a
     time; tell the next to hold its merge until the previous `done` is
     confirmed. In a repo whose done is *released*, that `done` comes after
-    the release, so two release chains never run there at once. That holds
-    on every such repo, whatever its branch protection says. pr-merge is strict on its own: it rebases, waits for green, and exits
+    the release, so two release chains never run there at once. A previous
+    Minion that reports `blocked` instead keeps the hold until the operator
+    resolves it: name the Minions it holds in that escalation. That holds
+    on every such repo, whatever its branch protection says. pr-merge is
+    strict on its own: it rebases, waits for green, and exits
     27 BASE_MOVED when the base moved meanwhile, so two concurrent runs keep
     rebasing each other whether or not the ruleset requires up-to-date
     branches.

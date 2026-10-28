@@ -295,7 +295,9 @@ happened. Report, then stop and leave everything in place.
 <what cleared it>` for a block you reported, or the operator says so in your
 tab, confirm it on the real surface (the PR `MERGED`, the tag on the remote).
 Then resume the spine where you stopped: fetch, rebase onto the base if it
-moved, and carry on.
+moved while your PR is still open, and carry on. A block after your merge (a
+§8 release step) resumes at that step with no rebase: your branch is
+squash-merged already, so a rebase would replay its commits.
 
 ## Authority
 

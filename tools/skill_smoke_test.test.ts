@@ -781,12 +781,23 @@ test("skill smoke: standards — the spine titles a cmux tab, else a tmux window
   }
 });
 
+/** Every file under the repo-relative `dirs`, walked recursively. */
+function filesUnder(dirs: string[]): string[] {
+  return dirs.flatMap((dir) =>
+    fs
+      .readdirSync(path.join(REPO_ROOT, dir), { recursive: true, encoding: "utf8" })
+      .map((rel) => path.join(REPO_ROOT, dir, rel))
+      .filter((file) => fs.statSync(file).isFile()),
+  );
+}
+
 // STARK-13523 retired Kevin, the request desk for one repo. A worker runs its
 // own repo's release chain by the spine's §8 and reports anything in another
-// repo `blocked`; its leader's `unblocked` resumes it. In a no-queue repo whose
-// done is *released*, Gru's merge hold lasts until the previous `done`, so two
-// release chains never run there at once. No skill or shared doc names the
-// retired desk again.
+// repo `blocked`; Gru relays the operator's fix as `unblocked`, which resumes
+// it. In a no-queue repo whose done is *released*, Gru's merge hold lasts until
+// the previous `done`, so two release chains never run there at once. No
+// skill, shared doc, config or agent doc names the retired desk again: a
+// substring match, as the ticket's acceptance grep is, so `kevin_idle` counts.
 test("skill smoke: §8 — a worker releases its own repo and blocks on another", () => {
   const spine = fs.readFileSync(path.join(REPO_ROOT, "standards", "worker-spine.md"), "utf8");
   const section = /^## 8\. Releases and other repos\n([\s\S]*)/m.exec(spine)?.[1] ?? "";
@@ -797,16 +808,16 @@ test("skill smoke: §8 — a worker releases its own repo and blocks on another"
     gru.includes("hold its merge until the previous `done` is confirmed. In a repo whose done is *released*, that `done` comes after the release"),
     "gru lifts a no-queue repo's merge hold before the previous release ends",
   );
+  assert.ok(gru.includes("send that Minion `unblocked <what cleared it>`"), "gru no longer sends a cleared Minion `unblocked`");
   const minion = fs.readFileSync(path.join(SKILLS_ROOT, "minion", "SKILL.md"), "utf8");
   assert.ok(minion.includes("**`unblocked` resumes you.**"), "minion lost its `unblocked` resume");
-  const hits = ["skill", "standards"].flatMap((dir) =>
-    fs
-      .readdirSync(path.join(REPO_ROOT, dir), { recursive: true, encoding: "utf8" })
-      .map((rel) => path.join(REPO_ROOT, dir, rel))
-      .filter((file) => fs.statSync(file).isFile() && /\bkevin\b/i.test(fs.readFileSync(file, "utf8")))
-      .map((file) => path.relative(REPO_ROOT, file)),
-  );
-  assert.deepEqual(hits, [], "a skill or shared doc names the retired Kevin desk");
+  const hits = [
+    ...filesUnder(["skill", "standards", "global"]),
+    ...["CLAUDE.md", "AGENTS.md", "README.md"].map((name) => path.join(REPO_ROOT, name)),
+  ]
+    .filter((file) => /kevin/i.test(fs.readFileSync(file, "utf8")))
+    .map((file) => path.relative(REPO_ROOT, file));
+  assert.deepEqual(hits, [], "a skill, shared doc, config or agent doc names the retired Kevin desk");
 });
 
 // STARK-12113: cloud dispatch is deprecated (no cloud seats), so Gru works
@@ -819,12 +830,7 @@ const CLOUD_ROUTE_RE = /cloud (ticket|pr|session|pass|fallback|route)s?\b|runs_i
 
 test("skill smoke: skills, standards and agent docs carry no cloud route", () => {
   const files = [
-    ...["skill", "standards"].flatMap((dir) =>
-      fs
-        .readdirSync(path.join(REPO_ROOT, dir), { recursive: true, encoding: "utf8" })
-        .map((rel) => path.join(REPO_ROOT, dir, rel))
-        .filter((file) => fs.statSync(file).isFile()),
-    ),
+    ...filesUnder(["skill", "standards"]),
     path.join(REPO_ROOT, "CLAUDE.md"),
     path.join(REPO_ROOT, "AGENTS.md"),
   ];

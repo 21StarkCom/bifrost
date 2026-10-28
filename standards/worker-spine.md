@@ -211,15 +211,19 @@ naming the prompt.
 ## 8. Releases and other repos
 
 **A release of your own repo is yours.** In a repo whose done is *released*,
-run it in your own session once your PR merges, as the repo's release chain
-writes it:
+or when your ticket asks for a release, run it in your own session once your
+PR merges, as the repo's release chain writes it. Another worker can be
+releasing the same repo at once (a merge-queue repo, two Agneses), so
+steps 2, 4 and 5 each re-read the base and the tags:
 
 1. **The recipe is the repo's.** Read the chain in the repo's agent
    instructions file, its `.claude/rules/*.md` (a rule file loads only for
    the paths it names, so read them all), and any runbook they point to (a
    `RELEASING.md`, a script header). Where the chain and this list differ,
-   the chain wins, except that [§7](#7-authority) binds you either way. A
-   "release" that is an apply or a deploy on merge ran with your merge.
+   the chain wins, except that [§7](#7-authority) binds you either way. No
+   written chain: `blocked`, naming the repo. A "release" that is an apply or
+   a deploy on merge ran with your merge: watch its runs as step 5 says, then
+   close as step 6 does.
 2. **Anything to release?** Fetch the base and the tags. A release tag that
    already holds your merge commit is another worker's release of it, and
    yours too: go to step 6.
@@ -233,25 +237,43 @@ writes it:
 4. **The bump.** One the chain puts in your own PR stays there. Otherwise the
    bump is a PR of its own, only the version and changelog edits the chain
    names, on a branch from `origin/<base>`, carried through §4 and
-   `njord pr-merge` under your ticket. A bot's release PR (release-please,
-   changesets) is the bump: give it §4's diff check, then merge it as the
-   chain says (`gh pr merge <n> --squash --match-head-commit <sha>`, `<sha>`
-   the head you checked; `njord pr-merge` refuses it, exit 37). Never push to
-   the base: a chain step that does becomes this bump PR, and the tag goes on
-   its merge commit.
-5. **Publish** on the merged commit as the chain says: a tag (`git push
-   origin <tag>`, a tag, never a branch), a workflow dispatch, or the repo's
-   release script. Watch every run it starts to `completed`; a failed run is
-   `blocked`, naming its URL. A tag the remote refuses because it exists is
-   another worker's release: go back to step 2. A step that reads a secret
-   through `mimir` runs as the chain writes it, and the value is never
-   printed or stored.
+   `njord pr-merge` under your ticket. Right before that merge, fetch the
+   base: a bump another worker merged meanwhile is the version, so close
+   your bump PR and go back to step 2. A bot's release PR (release-please,
+   changesets) is the bump: give it §4's diff check and the repo's tests (a
+   PR opened on `GITHUB_TOKEN` starts no workflow, so with no CI run on its
+   head, run the repo's test command in your worktree; approve a run held
+   `action_required` only when the chain itself does), then merge it as the
+   chain says, its required checks green (`gh pr merge <n> --squash
+   --match-head-commit <sha>`, `<sha>` the head you checked; `njord pr-merge`
+   refuses it, exit 37). Never push to the base: a chain step that does
+   becomes this bump PR, and the tag goes on its merge commit.
+5. **Publish** on the merged commit as the chain says, never on your own
+   branch, which `njord pr-merge` squashed: `git fetch origin <base> --tags`,
+   then `git switch --detach <merge sha>` (the bump PR's merge commit when
+   step 4 opened one), so a release script builds that commit. Then a tag
+   (`git tag <tag> <merge sha>`, then `git push origin <tag>`, a tag, never a
+   branch), a workflow dispatch, or the repo's release script. Watch every
+   run it starts to `completed`: `gh run list --commit <merge sha> --json
+   databaseId,name,status,conclusion,url`, rechecking for two minutes for runs
+   to appear. A run `waiting` on an environment's approval your launch
+   covers: read `gh api repos/<o>/<r>/actions/runs/<id>/pending_deployments`
+   and approve each environment whose `current_user_can_approve` is `true`
+   (`gh api -X POST repos/<o>/<r>/actions/runs/<id>/pending_deployments -f
+   state=approved -f comment='STARK-n release' -F
+   'environment_ids[]=<environment.id>'`). One you cannot approve, one not
+   `completed` after 60 minutes, and a failed run are `blocked`, naming its
+   URL. A tag the remote refuses because it exists is another worker's
+   release: go back to step 2. A step that reads a secret through `mimir`
+   runs as the chain writes it, and the value is never printed or stored.
 6. **Install and verify** by the chain's install step: for the tap, `brew
    update`, then `brew upgrade 21StarkCom/tap/<formula>` (`--cask` for a
    cask). The binary's own version command must print the new version. A
    repo that installs nothing on this machine (a library tag, a package) ends
    at the published release. Put the version output in a ticket comment, then
-   close the ticket.
+   close the ticket. Before you stand down, `git switch <your branch>`: the
+   stand-down's checks compare HEAD with your branch at origin, and a bump
+   branch or the detached base never matches it.
 
 **Anything in a repo other than your own is not yours.** Your worktree
 session's git cannot leave its worktree, and that repo's merges and releases
