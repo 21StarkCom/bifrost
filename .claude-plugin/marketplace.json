@@ -102,8 +102,8 @@
     {
       "name": "stark-ops",
       "source": "./",
-      "description": "Repository operations beyond the spec-driven pipeline — coordinate Minions with Gru, cut releases, run session start/end, hand off work across sessions, run one ticket solo and unattended with Agnes, run Kevin, a repo's request desk that any agent asks for merges and releases, open a Lucius brainstorm in a tab of its own, and operate desktop apps in the background with goldfinger.",
-      "version": "0.29.1",
+      "description": "Repository operations beyond the spec-driven pipeline — coordinate Minions with Gru, cut releases, run session start/end, hand off work across sessions, run one ticket solo and unattended with Agnes, open a Lucius brainstorm in a tab of its own, and operate desktop apps in the background with goldfinger.",
+      "version": "0.30.0",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -126,7 +126,6 @@
         "./skill/gru",
         "./skill/minion",
         "./skill/agnes",
-        "./skill/kevin",
         "./skill/lucius",
         "./skill/goldfinger"
       ],
@@ -212,22 +211,6 @@
       "tags": [
         "progress",
         "gru",
-        "mod"
-      ]
-    },
-    {
-      "name": "kevin-idle",
-      "source": "./mods/kevin-idle",
-      "description": "Wakes an idle Kevin with `kevin idle check` once he has gone kevin.idle_seconds (the stark config, two hours by default) without a turn, so he arms no idle timer of his own, and draws that idle clock as a band above his prompt.",
-      "version": "0.2.1",
-      "author": {
-        "name": "21 Stark AI",
-        "email": "engineering@21stark.com"
-      },
-      "category": "productivity",
-      "tags": [
-        "kevin",
-        "idle",
         "mod"
       ]
     }

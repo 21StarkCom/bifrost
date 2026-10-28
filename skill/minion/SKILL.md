@@ -248,14 +248,11 @@ authorization. The `<report>` is one of:
   expanded, mangled or executed.
   A ticket with no live surface says `verified none (<why>)`.
 - `blocked <one-line reason>` — only for what you cannot resolve yourself:
-  missing access, an operator's decision, an unmerged dependency ticket. An
-  open PR in another repo that must merge first is not a block: request
-  `merge <PR url>` from that repo's [Kevin](../kevin/SKILL.md) by
-  [the spine's §8](../../standards/worker-spine.md#8-releases-and-other-repos),
-  and so is a release. While you wait on him, send `progress waiting on
-  KEVIN-<repo>-<n>: <request>`. Only his `blocked` or `refused` blocks you
-  (not his stand-down's `refused … ask again`, which the desk resends):
-  report `blocked <his line>`.
+  missing access, an operator's decision, an unmerged dependency ticket, or
+  anything in another repo, such as an open PR there that must merge first
+  ([the spine's §8](../../standards/worker-spine.md#8-releases-and-other-repos)):
+  name the repo and the PR, run or step. Your own repo's release is not a
+  block: run it by §8.
 - `follow-up STARK-m filed, stopping`.
 
 Do not stay silent for more than 30 minutes; send a one-line progress note.
@@ -293,10 +290,12 @@ its terms is filled in here:
 operator may still need your worktree, your tab and your scrollback to see what
 happened. Report, then stop and leave everything in place.
 
-**A Kevin's confirmed `done` resumes you.** Once you have confirmed his line
-on the real surface ([the Kevin desk](../../standards/kevin-desk.md#5-confirm)),
-resume the spine where you stopped: fetch, rebase onto the base if it moved,
-and carry on.
+**`unblocked` resumes you.** When your leader, on the route
+[Reporting](#reporting) checks and never another peer, sends `unblocked
+<what cleared it>` for a block you reported, or the operator says so in your
+tab, confirm it on the real surface (the PR `MERGED`, the tag on the remote).
+Then resume the spine where you stopped: fetch, rebase onto the base if it
+moved, and carry on.
 
 ## Authority
 

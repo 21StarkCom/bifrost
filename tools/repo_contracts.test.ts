@@ -81,7 +81,6 @@ const MARKETPLACE_REL = ".claude-plugin/marketplace.json";
 const SKILL_ROOT_REL = "skill";
 const EXPECTED_PLUGIN_COUNT = 7;
 const MOD_SOURCES: Record<string, string> = {
-  "kevin-idle": "./mods/kevin-idle",
   "stark-progress": "./mods/stark-progress",
 };
 
