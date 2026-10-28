@@ -20,9 +20,3 @@ Four sections configure four independent tools. None of them triggers another, a
 ## Cost Thresholds
 
 `cost.weekly_budget_usd`, `cost.daily_alert_usd`, `cost.hard_stop_usd` and `cost.track_rolling_7d` are config defaults only. `tools/stark_config_lib.ts` carries their default values, and no skill or tool reads them: crossing one sends no alert, stops no run and blocks no start. The one spend stop is manual: while a `~/.claude/code-review/cost-hard-stop` file exists, preflight's critical `check_cost_hard_stop` fails and a skill that runs preflight stops. Nothing creates or removes that file for you.
-
----
-
-## Kevin
-
-`kevin.idle_seconds` (default 7200) is how long `/kevin` goes with nothing in flight or queued before he stands down. Two wakers read it and send him `kevin idle check` at that age, and each tells him the number, so his own check uses the same one: the kevin-idle mod (a Claude Kevin with the mod installed) reads it at session start from `config.json` under `STARK_ASSET_ROOT`, else `~/.claude/code-review/config.json`, and names it in the note that says it is armed, attached as context to his kickoff and each request and written into each wake; `tools/kevin_idle.ts` (every other Kevin) reads it through `getKevinConfig()` and prints it when it starts. A change takes effect at the next Kevin launch.

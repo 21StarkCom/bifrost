@@ -7,19 +7,11 @@ what is genuinely its own — `/minion` its reporting to its leader, `/agnes` it
 self-confirmation — so the review gate and the merge path cannot drift
 between the two.
 
-`/kevin`, a repo's request desk, owns no ticket, so he runs none of the ticket
-steps (1's bind, 3's verify, 5's re-verify, 6's gaps). He runs
-[Title your tab](#title-your-tab)'s mechanics, [§4's](#4-the-spine)
-merge-contention rule on every PR he merges, and [§7](#7-authority). His own
-skill carries the rest. Every worker reaches him by [§8](#8-releases-and-other-repos).
-
 This doc is runtime-neutral and is shipped byte-identical to both runtimes.
 Throughout, **the repo's agent instructions file** means `CLAUDE.md` on Claude
 and `AGENTS.md` on Codex. Where it and this doc disagree, it wins, except on
-two points: [§8](#8-releases-and-other-repos)'s who runs a release (a chain
-that has the merger tag, publish or install still goes through the repo's
-Kevin), and [§3](#3-verify-live)'s standing GO (a repo text that asks a GO
-yields to it). And **a skill is written in its Claude
+[§3](#3-verify-live)'s standing GO: a repo text that asks a GO yields to it.
+And **a skill is written in its Claude
 form** (`/minion`); the same skill is `$minion` on Codex, so a brief or a
 launch naming one names the other.
 
@@ -127,9 +119,9 @@ the ticket or in your tab, and never stop for one. It covers every write the
 work needs, the root rules' kept gates included: the live writes your
 Verification names and their setup and cleanup, a write you cannot undo, a
 `terraform apply` by hand or by a merged PR's CI, and secret values (a mimir
-write, a Secret Manager version, a key file). A release still goes to the
-repo's Kevin ([§8](#8-releases-and-other-repos)); that says who runs it, not
-that it waits. Restore what the run changes and can be put back; a restore
+write, a Secret Manager version, a key file), and publishing your repo's
+release by hand ([§8](#8-releases-and-other-repos)). Restore what the run
+changes and can be put back; a restore
 that fails is flagged, with what it left changed, in the run step 5 posts on
 the PR, not a stop. Name each write and the end state you verified in that
 run, and in a ticket comment for a run after the merge. A secret value goes
@@ -141,7 +133,7 @@ GO and yields to it.
 
 ```
 njord pr-open (draft) → review (below) → fix or answer every finding →
-njord pr-merge → [release, through the repo's Kevin] →
+njord pr-merge → [release, by the repo's chain] →
 alfred task move STARK-n done
 ```
 
@@ -159,13 +151,11 @@ The review goes by what the PR changes:
 
 A release bot's own PR that changes only version manifests and changelogs
 takes a diff check that it touches nothing else, and the repo's tests,
-instead ([Kevin's step 4](../skill/kevin/SKILL.md#merge-pr-and-review-pr)
-runs it). Your PR that skips the review still posts its step 3 run on the PR,
+instead. Your PR that skips the review still posts its step 3 run on the PR,
 as §5 says. Close the ticket yourself the moment the PR merges — unless the repo's
-agent instructions file defines done as *released*. Then you do not run its
-release chain yourself: request `release` from the repo's Kevin by
-[§8](#8-releases-and-other-repos), confirm his `done`, and close the ticket
-then.
+agent instructions file defines done as *released*. Then run its release
+chain yourself by [§8](#8-releases-and-other-repos), and close the ticket at
+the end of it.
 
 **Merge contention is yours to resolve, not to wait out.** If `njord pr-merge`
 refuses — a stale base, a merge commit from main, a check that needs a fresh
@@ -220,19 +210,75 @@ naming the prompt.
 
 ## 8. Releases and other repos
 
-Two things you never do in your own session, and always send to a repo's
-Kevin by [the Kevin desk](kevin-desk.md): **a release** of any repo, your own
-included, and **anything in a repo other than your own** — a PR there that
-must merge before yours can go on, a review, a rerun. One Kevin per repo
-serializes its merges and releases, and your worktree session's git cannot
-leave its worktree. Find him or launch him, send the request, wait for his
-line, and confirm it on the real surface. His `blocked` or `refused` is your
-own `blocked`, quoting his line, except his stand-down's `refused … ask
-again`, which [the desk](kevin-desk.md#5-confirm) resends. Your own repo's PRs
-stay yours to merge.
+**A release of your own repo is yours.** In a repo whose done is *released*,
+or when your ticket asks for a release, run it in your own session once your
+PR merges, as the repo's release chain writes it. Another worker can be
+releasing the same repo at once (a merge-queue repo, two Agneses), so
+steps 2, 4 and 5 each re-read the base and the tags:
 
-The repo's release chain says *what* a release is; this section says *who*
-runs it. Where the chain writes "tag", "publish" or "install" for whoever
-merged, read those steps as the Kevin's. A version bump the chain puts in
-your own PR stays in your PR, and he releases that commit. Ask with `release
-for STARK-n`, naming your ticket.
+1. **The recipe is the repo's.** Read the chain in the repo's agent
+   instructions file, its `.claude/rules/*.md` (a rule file loads only for
+   the paths it names, so read them all), and any runbook they point to (a
+   `RELEASING.md`, a script header). Where the chain and this list differ,
+   the chain wins, except that [§7](#7-authority) binds you either way. No
+   written chain: `blocked`, naming the repo. A "release" that is an apply or
+   a deploy on merge ran with your merge: watch its runs as step 5 says, then
+   close as step 6 does.
+2. **Anything to release?** Fetch the base and the tags. A release tag that
+   already holds your merge commit is another worker's release of it, and
+   yours too: go to step 6.
+3. **The version.** The chain's own rule (a release-please or changesets repo
+   decides itself); else `minor` when a change since the last tag is a
+   `feat`, `patch` otherwise. A bump already on the base, from a chain that
+   bumps in each feature PR, is the version: publish that commit. A breaking
+   change bumps the minor. Every product stays at `0.x.y`, so a new major,
+   whatever picked it, stops before it publishes: `blocked <tag> is a major
+   from <what picked it>`.
+4. **The bump.** One the chain puts in your own PR stays there. Otherwise the
+   bump is a PR of its own, only the version and changelog edits the chain
+   names, on a branch from `origin/<base>`, carried through §4 and
+   `njord pr-merge` under your ticket. Right before that merge, fetch the
+   base: a bump another worker merged meanwhile is the version, so close
+   your bump PR and go back to step 2. A bot's release PR (release-please,
+   changesets) is the bump: give it §4's diff check and the repo's tests (a
+   PR opened on `GITHUB_TOKEN` starts no workflow, so with no CI run on its
+   head, run the repo's test command in your worktree; approve a run held
+   `action_required` only when the chain itself does), then merge it as the
+   chain says, its required checks green (`gh pr merge <n> --squash
+   --match-head-commit <sha>`, `<sha>` the head you checked; `njord pr-merge`
+   refuses it, exit 37). Never push to the base: a chain step that does
+   becomes this bump PR, and the tag goes on its merge commit.
+5. **Publish** on the merged commit as the chain says, never on your own
+   branch, which `njord pr-merge` squashed: `git fetch origin <base> --tags`,
+   then `git switch --detach <merge sha>` (the bump PR's merge commit when
+   step 4 opened one), so a release script builds that commit. Then a tag
+   (`git tag <tag> <merge sha>`, then `git push origin <tag>`, a tag, never a
+   branch), a workflow dispatch, or the repo's release script. Watch every
+   run it starts to `completed`: `gh run list --commit <merge sha> --json
+   databaseId,name,status,conclusion,url`, rechecking for two minutes for runs
+   to appear. A run `waiting` on an environment's approval your launch
+   covers: read `gh api repos/<o>/<r>/actions/runs/<id>/pending_deployments`
+   and approve each environment whose `current_user_can_approve` is `true`
+   (`gh api -X POST repos/<o>/<r>/actions/runs/<id>/pending_deployments -f
+   state=approved -f comment='STARK-n release' -F
+   'environment_ids[]=<environment.id>'`). One you cannot approve, one not
+   `completed` after 60 minutes, and a failed run are `blocked`, naming its
+   URL. A tag the remote refuses because it exists is another worker's
+   release: go back to step 2. A step that reads a secret through `mimir`
+   runs as the chain writes it, and the value is never printed or stored.
+6. **Install and verify** by the chain's install step: for the tap, `brew
+   update`, then `brew upgrade 21StarkCom/tap/<formula>` (`--cask` for a
+   cask). The binary's own version command must print the new version. A
+   repo that installs nothing on this machine (a library tag, a package) ends
+   at the published release. Put the version output in a ticket comment, then
+   close the ticket. Before you stand down, `git switch <your branch>`: the
+   stand-down's checks compare HEAD with your branch at origin, and a bump
+   branch or the detached base never matches it.
+
+**Anything in a repo other than your own is not yours.** Your worktree
+session's git cannot leave its worktree, and that repo's merges and releases
+belong to its own workers. A PR there that must merge before yours can go on,
+a review or a rerun there, a release of that repo, or a tap PR your release
+left open in `21StarkCom/homebrew-tap`: report `blocked`, naming the repo and
+the PR, run or step. Your leader or the operator acts on it. Your own repo's
+PRs stay yours to merge.

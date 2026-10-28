@@ -373,7 +373,6 @@ const WORKER_LAUNCH =
 const MODEL_INVOCABLE_SKILLS: Record<string, string> = {
   agnes: WORKER_LAUNCH,
   gru: WORKER_LAUNCH,
-  kevin: WORKER_LAUNCH,
   minion: WORKER_LAUNCH,
   "stark-ticket": "no agent filing a ticket would ever load it on its own (STARK-9471)",
   goldfinger: "an agent that needs a native app would never find the goldfinger CLI on its own (STARK-9636)",
@@ -503,9 +502,7 @@ function brokenMdLinks(file: string, res: RegExp[]): string[] {
   return broken;
 }
 
-// `kevin-desk.md` (STARK-10506) is the requester side of a Kevin, linked by
-// the spine's §8, the worker skills and Kevin himself.
-const SHARED_WORKER_DOCS = ["kevin-desk.md", "stand-down.md", "worker-spine.md"];
+const SHARED_WORKER_DOCS = ["stand-down.md", "worker-spine.md"];
 // The one directory that ships the shared worker docs. One list, because the
 // link check and the pane-count guards below all walk it — a doc dir added to
 // one and not the other is a copy nothing reads.
@@ -690,80 +687,12 @@ test("skill smoke: skill/gru — Gru is never launched on a ticket it works", ()
 // The worker launchers moved from `hermod ticket` to idun (STARK-10154). A
 // fenced `hermod ticket` line left in any of the worker skills would launch on a
 // hermod path that bypasses idun's managed Codex account and exit-code contract.
-for (const name of ["agnes", "gru", "kevin", "minion"]) {
+for (const name of ["agnes", "gru", "minion"]) {
   test(`skill smoke: skill/${name} — no fenced \`hermod ticket\` launch line`, () => {
     const lines = fencedLaunchLines(path.join(SKILLS_ROOT, name, "SKILL.md"), /^\s*hermod ticket\b/);
     assert.deepEqual(lines, [], `skill/${name} still launches through hermod ticket`);
   });
 }
-
-// Kevin (STARK-10506, docs/specs/2026-10-03-kevin-desk-spec.md): one repo's
-// request desk, taking requests from any fleet agent. The pins below are the
-// strings a later edit can drop without anything else going red: the closed
-// verb set (KD5), the kickoff markers idun writes (idun desk spec D1/D2), the
-// merge-queue read before any push, the kevin-unpushed branch his stand-down
-// check globs, and his idle check (KD8): the kevin-idle mod's note, else the
-// tools/kevin_idle.ts waker, at kevin.idle_seconds, and no CronCreate (STARK-11451).
-const KEVIN_VERBS = ["merge", "review", "rebase", "rerun", "status", "release", "stand down"];
-
-test("skill smoke: skill/kevin — verb set and kickoff markers", () => {
-  const text = fs.readFileSync(path.join(SKILLS_ROOT, "kevin", "SKILL.md"), "utf8");
-  for (const verb of KEVIN_VERBS) {
-    const escaped = verb.replace(/ /g, "\\s+");
-    assert.match(
-      text,
-      new RegExp(`^(?:#{2,4} .*\`${escaped}\\b|.*\\*\\*\`${escaped}\\b)`, "m"),
-      `the request \`${verb}\` is no longer a heading or bold lead`,
-    );
-  }
-  for (const marker of ["from peer", "from operator", "first request:", "isInMergeQueue", "kevin-unpushed/", "kevin idle check", "kevin-idle: the kevin-idle mod is armed", "tools/kevin_idle.ts\" --detach", "kevin.idle_seconds", "kevin-desk.md"]) {
-    assert.ok(text.includes(marker), `skill/kevin no longer names ${marker}`);
-  }
-  assert.ok(!text.includes("CronCreate"), "skill/kevin arms a CronCreate idle check again");
-  // idun before v0.111.0 writes `leader peer`/`leader operator` and `— first instruction:`; the skill reads
-  // them as `from` and `— first request:` (rollout order), and names the old marker nowhere else.
-  assert.match(text, /`leader\s+peer <PEER>` or `leader\s+operator`[\s\S]{0,120}means the same/, "skill/kevin no longer reads the pre-0.111.0 kickoff");
-  assert.match(text, /` — first instruction:` the same as\s+` — first request:`/, "skill/kevin no longer reads the pre-0.111.0 first-instruction marker");
-  assert.equal(text.split("first instruction:").length - 1, 1, "skill/kevin names the leader-era `first instruction:` outside its compatibility line");
-});
-
-// Every fenced `idun kevin` line, in a skill or a shared worker doc, reads its
-// ack (`--json`) and names the repo it launches into, as its first word or by
-// `--repo`/`--cwd`: without one, idun launches into whichever repo the caller
-// stands in. At least one must exist, or the check is vacuous.
-test("skill smoke: fenced idun kevin lines carry --json and a repo", () => {
-  const files = [
-    ...SKILLS.map((name) => path.join(SKILLS_ROOT, name, "SKILL.md")),
-    ...SHARED_WORKER_DOCS.map((name) => path.join(REPO_ROOT, "standards", name)),
-  ];
-  const lines = files.flatMap((file) => fencedLaunchLines(file, /^\s*idun kevin\b/));
-  assert.ok(lines.length > 0, "no fenced `idun kevin` line in any skill or shared doc");
-  for (const line of lines) {
-    assert.match(line, /--json\b/, `no --json: ${line.trim()}`);
-    // The repo word never starts with `-`, or `idun kevin --json` would pass as naming one.
-    assert.match(line, /^\s*idun kevin\s+(?:<repo>|[A-Za-z0-9._][A-Za-z0-9._-]*)(?:\s|$)|--(?:repo|cwd)\b/, `no repo: ${line.trim()}`);
-  }
-});
-
-// Kevin owns no ticket, so the shared contracts name his terms: the
-// stand-down's two triggers and its glob-scoped unpushed check, the spine
-// steps he runs and §8's route to him, and the desk every requester follows.
-// A skill-only copy would drift from the shared doc.
-test("skill smoke: standards — Kevin's place in the shared docs", () => {
-  const standDown = fs.readFileSync(path.join(REPO_ROOT, "standards", "stand-down.md"), "utf8");
-  const spine = fs.readFileSync(path.join(REPO_ROOT, "standards", "worker-spine.md"), "utf8");
-  const desk = fs.readFileSync(path.join(REPO_ROOT, "standards", "kevin-desk.md"), "utf8");
-  assert.ok(standDown.includes("/kevin"), "stand-down.md no longer names /kevin");
-  assert.ok(spine.includes("/kevin"), "worker-spine.md no longer names /kevin");
-  assert.ok(standDown.includes("kevin-unpushed/"), "stand-down.md lost Kevin's kevin-unpushed glob");
-  assert.ok(standDown.includes("--not --remotes"), "stand-down.md lost Kevin's unpushed check");
-  assert.ok(standDown.includes("idle-out"), "stand-down.md lost Kevin's idle-out trigger");
-  assert.match(spine, /^## 8\. Releases and other repos$/m, "worker-spine.md lost §8");
-  assert.ok(spine.includes("](kevin-desk.md)"), "worker-spine.md §8 no longer links the Kevin desk");
-  for (const marker of ["hermod msg peers --all --json", "hermod msg send --to", "Never send him `stand down`", "## 5. Confirm", "**Under Gru's loop**"]) {
-    assert.ok(desk.includes(marker), `kevin-desk.md no longer names ${marker}`);
-  }
-});
 
 // STARK-11402: poison-pill's reaper always runs forced. It sends the quit at
 // once and closes the tab by its --timeout at the latest, whether or not the
@@ -790,7 +719,7 @@ test("skill smoke: standards — the standing GO lives in the spine's §3", () =
   assert.match(spine, /^## 3\. Verify live$/m, "worker-spine.md lost §3's heading, which the worker skills anchor");
   const section = /^## 3\. Verify live\n([\s\S]*?)^## /m.exec(spine)?.[1] ?? "";
   assert.ok(section.includes("standing GO"), "worker-spine.md §3 no longer carries the standing GO");
-  for (const skill of ["agnes", "gru", "kevin", "minion"]) {
+  for (const skill of ["agnes", "gru", "minion"]) {
     const text = fs.readFileSync(path.join(SKILLS_ROOT, skill, "SKILL.md"), "utf8");
     assert.ok(text.includes("worker-spine.md#3-verify-live"), `${skill} no longer points at the spine's §3 for the standing GO`);
   }
@@ -818,14 +747,14 @@ test("skill smoke: standards — the progress-file rule lives in the spine", () 
   }
 });
 
-// All four workers title their own tab by the spine's one step: cmux first,
+// All three workers title their own tab by the spine's one step: cmux first,
 // then tmux (the Linux devbox has no cmux), so neither path can drop out of
 // the step the skills anchor. A tmux window is the worker's own tab only when
 // it holds one pane, so the pane count is read before the rename. Claude's
 // worktree guard refuses a `hermod` or `tmux` line carrying a variable, so no
 // line of the step may hold a `$`. Each skill's `#title-your-tab` link alone proves nothing: every launcher
 // paragraph cites the anchor for the guard measurement, so the step itself is
-// pinned (Gru's and Kevin's own lines; Minion and Agnes run the spine whole).
+// pinned (Gru's own line; Minion and Agnes run the spine whole).
 test("skill smoke: standards — the spine titles a cmux tab, else a tmux window", () => {
   const spine = fs.readFileSync(path.join(REPO_ROOT, "standards", "worker-spine.md"), "utf8");
   assert.match(spine, /^### Title your tab$/m, "worker-spine.md lost its Title your tab heading, which the worker skills anchor");
@@ -844,7 +773,6 @@ test("skill smoke: standards — the spine titles a cmux tab, else a tmux window
   const step: Record<string, string> = {
     agnes: "Run [the worker spine](../../standards/worker-spine.md) — bind and read",
     gru: "**Title your tab**, if you are in cmux or tmux — the mechanics are [the worker spine's](../../standards/worker-spine.md#title-your-tab)",
-    kevin: "Title your tab `KEVIN (<repo>)`, `<repo>` the basename of the main checkout, by [the spine's mechanics](../../standards/worker-spine.md#title-your-tab)",
     minion: "Run [the worker spine](../../standards/worker-spine.md) — bind and read",
   };
   for (const [skill, phrase] of Object.entries(step)) {
@@ -853,42 +781,56 @@ test("skill smoke: standards — the spine titles a cmux tab, else a tmux window
   }
 });
 
-// The desk replaces the leader hand-off (KD15, KD16): Gru never leads or
-// dismisses a Kevin and launches one only through the desk, for a request of
-// its own, and a Minion asks the other repo's Kevin itself instead of
-// reporting `blocked needs … merged` and waiting for `unblocked`.
-test("skill smoke: gru and minion — the Kevin desk, not a hand-off", () => {
-  const gru = fs.readFileSync(path.join(SKILLS_ROOT, "gru", "SKILL.md"), "utf8");
+/** Every file under the repo-relative `dirs`, walked recursively. */
+function filesUnder(dirs: string[]): string[] {
+  return dirs.flatMap((dir) =>
+    fs
+      .readdirSync(path.join(REPO_ROOT, dir), { recursive: true, encoding: "utf8" })
+      .map((rel) => path.join(REPO_ROOT, dir, rel))
+      .filter((file) => fs.statSync(file).isFile()),
+  );
+}
+
+// STARK-13523 retired Kevin, the request desk for one repo. A worker runs its
+// own repo's release chain by the spine's §8 and reports anything in another
+// repo `blocked`; Gru relays the operator's fix as `unblocked`, which resumes
+// it. In a no-queue repo whose done is *released*, Gru's merge hold lasts until
+// the previous `done`, so two release chains never run there at once. No
+// skill, shared doc, config or agent doc names the retired desk again: a
+// substring match, as the ticket's acceptance grep is, so `kevin_idle` counts.
+test("skill smoke: §8 — a worker releases its own repo and blocks on another", () => {
+  const spine = fs.readFileSync(path.join(REPO_ROOT, "standards", "worker-spine.md"), "utf8");
+  const section = /^## 8\. Releases and other repos\n([\s\S]*)/m.exec(spine)?.[1] ?? "";
+  assert.ok(section.includes("**A release of your own repo is yours.**"), "worker-spine.md §8 no longer gives a worker its own release");
+  assert.ok(section.includes("**Anything in a repo other than your own is not yours.**"), "worker-spine.md §8 no longer blocks on another repo");
+  const gru = fs.readFileSync(path.join(SKILLS_ROOT, "gru", "SKILL.md"), "utf8").replace(/\s+/g, " ");
+  assert.ok(
+    gru.includes("hold its merge until the previous `done` is confirmed. In a repo whose done is *released*, that `done` comes after the release"),
+    "gru lifts a no-queue repo's merge hold before the previous release ends",
+  );
+  assert.ok(gru.includes("send that Minion `unblocked <what cleared it>`"), "gru no longer sends a cleared Minion `unblocked`");
   const minion = fs.readFileSync(path.join(SKILLS_ROOT, "minion", "SKILL.md"), "utf8");
-  assert.deepEqual(fencedLaunchLines(path.join(SKILLS_ROOT, "gru", "SKILL.md"), /^\s*idun kevin\b/), [], "gru launches a Kevin outside the desk");
-  const kevinSection = /^## Kevin\n([\s\S]*?)^## /m.exec(gru)?.[1] ?? "";
-  assert.ok(kevinSection.includes("You never lead or dismiss a Kevin."), "gru's Kevin section lost its never-lead-or-dismiss rule");
-  assert.match(kevinSection, /launch a bare one through the\s+desk/, "gru's Kevin section no longer launches a Kevin through the desk");
-  assert.ok(!gru.includes("neither launch, lead nor dismiss"), "gru still says it never launches a Kevin");
-  for (const [label, text] of [["gru", gru], ["minion", minion]] as const) {
-    assert.ok(!text.includes("blocked needs"), `${label} still names the leader-era \`blocked needs\``);
-    assert.ok(!/\bunblocked\b/.test(text), `${label} still names the leader-era \`unblocked\``);
-  }
-  assert.ok(minion.includes("worker-spine.md#8-releases-and-other-repos"), "minion no longer routes other-repo needs to a Kevin");
+  assert.ok(minion.includes("**`unblocked` resumes you.**"), "minion lost its `unblocked` resume");
+  const hits = [
+    ...filesUnder(["skill", "standards", "global"]),
+    ...["CLAUDE.md", "AGENTS.md", "README.md"].map((name) => path.join(REPO_ROOT, name)),
+  ]
+    .filter((file) => /kevin/i.test(fs.readFileSync(file, "utf8")))
+    .map((file) => path.relative(REPO_ROOT, file));
+  assert.deepEqual(hits, [], "a skill, shared doc, config or agent doc names the retired Kevin desk");
 });
 
 // STARK-12113: cloud dispatch is deprecated (no cloud seats), so Gru works
-// every ticket with a Minion, Kevin has no cloud-ticket merge, and
-// /stark-ticket writes no routing verdict. This is that ticket's acceptance
-// grep, over the same trees, plus the markers it misses: Kevin's
-// `merge <PR> for STARK-n` and its verification comment carry no "cloud"
-// word, and "cloud routing" / "cloud-routed" end past `route`. So no one file
-// can bring the route back alone.
-const CLOUD_ROUTE_RE = /cloud (ticket|pr|session|pass|fallback|route)s?\b|runs_in|## Runs in|idun cc (dispatch|session)|cloud[- ]rout|Gru: cloud|Kevin verification|merge <PR( url)?> for STARK/i;
+// every ticket with a Minion, and /stark-ticket writes no routing verdict.
+// This is that ticket's acceptance grep, over the same trees, plus the marker
+// it misses: the old `merge <PR> for STARK-n` request carries no "cloud"
+// word, and "cloud routing" / "cloud-routed" end past `route`. So no one
+// file can bring the route back alone.
+const CLOUD_ROUTE_RE = /cloud (ticket|pr|session|pass|fallback|route)s?\b|runs_in|## Runs in|idun cc (dispatch|session)|cloud[- ]rout|Gru: cloud|merge <PR( url)?> for STARK/i;
 
 test("skill smoke: skills, standards and agent docs carry no cloud route", () => {
   const files = [
-    ...["skill", "standards"].flatMap((dir) =>
-      fs
-        .readdirSync(path.join(REPO_ROOT, dir), { recursive: true, encoding: "utf8" })
-        .map((rel) => path.join(REPO_ROOT, dir, rel))
-        .filter((file) => fs.statSync(file).isFile()),
-    ),
+    ...filesUnder(["skill", "standards"]),
     path.join(REPO_ROOT, "CLAUDE.md"),
     path.join(REPO_ROOT, "AGENTS.md"),
   ];
