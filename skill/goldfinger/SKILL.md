@@ -61,15 +61,16 @@ text or value itself, else a usage error, printed as plain text on stderr when i
    `active`, `hidden`). `goldfinger windows [--pid <pid>] --json` lists windows front to back
    (`window_id`, `pid`, `title`, `frame`, `on_screen`). `goldfinger launch <bundle_id>
    [--new-instance] --json` opens an app without activating it and returns its `pid`.
-   - **Open files in an app** (from 0.11.0 on): `goldfinger open <path|url>... [--app
-     <bundle_id>] [--new-instance] --json` hands files, or URLs whose scheme the app claims, to
-     the `--app` app, else to the files' default app, never activating it, and returns
-     `{pid, bundle_id, name, warnings, windows}`. `windows` holds the ids of the app's windows new
-     since the open, `[]` when the item went into a window it had or its window comes later: poll
-     `windows --pid`. It needs no grant. The client checks each item first and refuses with
-     `usage`, nothing sent: a web or network URL (`http`, `https`, `ssh`, `smb` and the rest: a
-     web page is Huginn's work), a `file` URL (give the path), a URL without `--app`, a path under
-     Desktop, Documents, Downloads, iCloud Drive, cloud storage, `~/Library/Containers`,
+   - **Open files in an app** (from 0.11.0 on): `goldfinger open <path|url>... [--app <bundle_id>]
+     [--new-instance] --json` hands files, or URLs whose scheme the app claims, to the `--app` app,
+     else to the files' default app, never activating it, and returns `{pid, bundle_id, name,
+     warnings, windows}`. `windows` holds the ids of the app's windows new since the open (from
+     0.14.0 on, less the text input window that never shows: untitled, 500 × 500 at the main
+     display's bottom-left corner), `[]` when the item went into a window it had or its window
+     comes later: poll `windows --pid`. It needs no grant. The client checks each item first and
+     refuses with `usage`, nothing sent: a web or network URL (`http`, `https`, `ssh`, `smb` and
+     the rest: a web page is Huginn's work), a `file` URL (give the path), a URL without `--app`, a
+     path under Desktop, Documents, Downloads, iCloud Drive, cloud storage, `~/Library/Containers`,
      `~/Library/Group Containers` or `/Volumes`, a file that runs code or opens a URL (an app, a
      script, a disk image, a `webloc`, an alias), a quarantined file, a file type the `--app` app
      does not open, an app that opens web pages, files whose default apps differ, and an app that
@@ -106,11 +107,12 @@ text or value itself, else a usage error, printed as plain text on stderr when i
      content is missing. Such a walk takes 5 s longer. A second node that gives no answer, or the
      window itself, fails the walk `timeout`.
    - **A suspended web page.** WebKit suspends a web view's page a few seconds after its window
-     shows, if the window is fully covered and no accessibility client has read the page yet.
-     Such a web view is an empty group to `observe`, with no web area, and `find` is `not_found`
-     on its window. goldfinger's reads do not wake the page: its content shows again once the app
-     next runs the page, as when the window comes into view or the app calls into the page. A
-     page read before it was suspended stays readable while covered.
+     shows, if the window is fully covered and no accessibility client has read the page yet. When
+     `observe` or `find` meets such an empty web view, outside the Chromium family, goldfinger
+     moves its window 1 pt and back (from 0.9.1 on), which wakes the page, and waits up to 3 s for
+     it (from 0.14.0 on; 500 ms before), so a page still loading in a window that has just opened
+     shows too. A window whose web view shows no page in that time is not moved again. A page read
+     before it was suspended stays readable while covered.
    When the tree is cut and the element you need is in web content (a browser page, an Electron
    app, a web view), use `find` instead of observing again: `goldfinger find <window_id>
    [--role <role>] [--text <text>] [--limit <n>] --json` (from 0.9.0 on) searches the window's
