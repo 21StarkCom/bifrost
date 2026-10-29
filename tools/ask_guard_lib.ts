@@ -10,10 +10,11 @@
  *     ("I will relaunch EI-2122 once PR #779 is approved.").
  *
  * It is tuned for few false positives. It reads only the last paragraph, drops
- * code, block quotes and quoted questions, skips a question the next sentence
- * answers, and passes a question whose step still needs the operator's GO
- * (a write you cannot undo, a hand-run terraform apply, publishing by hand, a
- * message to a person or channel, secret values, a major release) or whose
+ * code blocks (inline code keeps its words), block quotes and quoted
+ * questions, skips a question the next sentence answers, and passes a
+ * question whose step still needs the operator's GO (a write you cannot undo,
+ * a hand-run terraform apply, publishing by hand, a message to a person or
+ * channel, secret values, a major release) or whose
  * answer is the operator's (scope, taste, money, people). Pure: no I/O.
  */
 import path from "node:path";
@@ -38,7 +39,7 @@ const ASK: RegExp[] = [
   /\b(?:should|shall) i\b.*[?:]\s*$/,
   /\b(?:should|shall) we (?:proceed|continue|go ahead|merge|ship|move on|start|kick off|run|apply|fix|file|release|deploy|push|land|launch|relaunch|retry|rerun|open|close|do (?:it|this|that|the))\b.*\?\s*$/,
   /\b(?:can|may) i (?:go ahead|proceed|continue|start)\b/,
-  /\bwant me to\b/,
+  /\bwant me to\b.*\?\s*$|\bif you(?:'d| would)? want me to\b/,
   /\bwould you like me to\b/,
   /\b(?:would you like|do you want) to (?:proceed|continue|go ahead|move forward)\b/,
   /\bdo you want (?:it|this|that|them|these|those) (?:done|fixed|filed|merged|shipped|applied|changed|created|updated|removed|released|run|launched|opened|closed)\b/,
@@ -46,8 +47,8 @@ const ASK: RegExp[] = [
   /\b(?:let me know|tell me|say) (?:if|whether|when) you(?:'d| would)? (?:want|like) to (?:proceed|continue|go ahead|move forward)\b/,
   /\b(?:let me know|tell me|say) (?:if|whether|when) (?:i should|to (?:proceed|continue|go ahead|start|merge|ship))\b/,
   /\b(?:let me know|tell me) (?:if|whether|when) you want (?:it|this|that|them|these|those) (?:done|fixed|filed|merged|shipped|applied|changed|created|updated|removed|released|run|launched)\b/,
-  /\bsay (?:the word|"?go"?|yes)\b/,
-  /\b(?:give me|i need|waiting (?:for|on)) (?:a|the|your) (?:"?go"?|ok|okay|approval|green light|confirmation|sign-off)\b/,
+  /(?<!\b(?:i|we|they|you)(?:'d| would)? )\bsay (?:the word|"?go"?|yes)\b/,
+  /\b(?:give me|i need|waiting (?:for|on)) (?:(?:a|the|your) (?:ok|okay|approval|green light|go-ahead|confirmation|sign-off)\b|your "?go"?(?![\w-])|(?:a|the) "go")/,
   /\bready (?:to (?:proceed|go|merge|ship|continue|start)\s*\?|for me to\b)/,
   /\b(?:ok|okay|good|fine|alright) (?:to|if i) (?:proceed|continue|go ahead|merge|ship|push|start|apply|run|release)\b.*\?\s*$/,
   /^(?:proceed|go ahead|continue|merge|ship it|go)\s*\?$/,
@@ -57,13 +58,13 @@ const ASK: RegExp[] = [
 
 // A promise of a later step at the end of the turn. "I will X once Y is approved."
 const DEFER: RegExp[] = [
-  /\b(?:i will|i'll|i am going to|i'm going to|i can)\b[^.?!]*\b(?:once|when|after|as soon as)\b[^.?!]*\b(?:approved|merged|green|passes|passed|lands|landed|finishes|finished|completes|completed|reviewed|ready|done|confirm|confirms|approve|approves)\b/,
+  /\b(?:i will|i'll|i am going to|i'm going to|i can(?!'t))\b[^.?!]*\b(?:once|when|after|as soon as)\b[^.?!]*\b(?:approved|merged|green|passes|passed|lands|landed|finishes|finished|completes|completed|reviewed|ready|done|confirm|confirms|approve|approves)\b/,
 ];
 
 // The steps that keep a GO (root rules, "These still need a GO") and the
 // answers that belong to the operator ("Decide what you can decide").
 const EXEMPT: [string, RegExp][] = [
-  ["irreversible", /\b(?:delete|deleting|drop|dropping|destroy|destroying|purge|wipe|erase|truncate|force[- ]?push|irreversibl\w*|permanent(?:ly)?|cannot be undone|can't be undone|can not be undone|overwrite|reset --hard|hard reset)\b|\brm -rf\b/],
+  ["irreversible", /\b(?:delete|deleting|drop|dropping|destroy|destroying|purge|wipe|erase|truncate|force[- ]?push|irreversibl\w*|permanent(?:ly)?|cannot be undone|can't be undone|can not be undone|overwrite|reset --hard|hard reset)\b|\brm -rf\b|\bpush (?:-f|--force)\b/],
   ["terraform apply by hand", /\b(?:terraform|tofu) apply\b|\bapply\w*\b[^.?!]*\b(?:by hand|manually)\b/],
   ["publishing", /\bpublish\w*\b/],
   ["message to a person or channel", /\b(?:slack|e-?mail|dm|direct message|channel|ping|notify|announce\w*|whatsapp|text message)\b|\b(?:send|post|write|draft)\b[^.?!]*\b(?:message|note|reply|announcement)\b|\b(?:reply|respond|write) to\b|\b(?:in your name|on your behalf|from your account)\b|(?:^|\s)#[a-z][\w-]*|(?:^|\s)@[a-z][\w.-]*(?![\w./-])/],
@@ -78,11 +79,13 @@ const EXEMPT: [string, RegExp][] = [
 // rhetorical: "Should I worry? No: it is harmless."
 const ANSWERED = /^(?:yes|no|nope|yep|yeah|not really|short answer)\b/;
 
-/** Lowercase, straight quotes, and code, block quotes and quoted questions gone. */
+/** Lowercase, straight quotes, code blocks, block quotes and quoted questions
+ * gone. Inline code keeps its words, less end punctuation, so a kept-GO command
+ * (`terraform apply`, `npm publish`, `rm -rf`) still meets its exemption. */
 export function normalize(text: string): string {
   return text
     .replace(/```[\s\S]*?(?:```|$)/g, "\n")
-    .replace(/`[^`\n]*`/g, "x")
+    .replace(/`([^`\n]*)`/g, (_, code: string) => code.replace(/[.?!:"]/g, " "))
     .replace(/^[ \t]*>.*$/gm, "")
     .replace(/[‘’]/g, "'")
     .replace(/[“”]/g, '"')
@@ -120,13 +123,17 @@ function clip(s: string): string {
 export function classifyEnding(message: unknown): Verdict {
   if (typeof message !== "string" || !message.trim()) return { block: false };
   const ss = sentences(tail(normalize(message)));
+  // An exempt question does not hide an earlier one the agent can act on.
+  let passed: Verdict | undefined;
   for (let i = ss.length - 1; i >= 0; i--) {
     const s = ss[i];
     if (!ASK.some((re) => re.test(s))) continue;
     if (i + 1 < ss.length && ANSWERED.test(ss[i + 1])) continue;
     const exempt = exemption(s);
-    return exempt ? { block: false, kind: "ask", phrase: clip(s), exempt } : { block: true, kind: "ask", phrase: clip(s) };
+    if (!exempt) return { block: true, kind: "ask", phrase: clip(s) };
+    passed ??= { block: false, kind: "ask", phrase: clip(s), exempt };
   }
+  if (passed) return passed;
   // A deferral counts only at the very end: the last two sentences.
   for (const s of ss.slice(-2).reverse()) {
     if (!DEFER.some((re) => re.test(s))) continue;

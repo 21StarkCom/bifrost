@@ -47,6 +47,13 @@ const PASS: [string, string][] = [
   ["Should I publish the post?", "publishing by hand"],
   ["Should I delete the old bucket? It cannot be undone.", "irreversible"],
   ["Should I force-push over main?", "irreversible"],
+  ["Should I run `git push --force` on main?", "irreversible, in inline code"],
+  ["Should I run `terraform apply` by hand on prod?", "hand-run terraform apply, in inline code"],
+  ["Should I run `npm publish`?", "publishing, in inline code"],
+  ["You said you want me to keep the flag, so I kept it.", "a report, not a question"],
+  ["I'd say yes, the fix is right.", "an opinion, not a GO request"],
+  ["CI is waiting on the go build.", "Go the language, not a GO"],
+  ["I can't reproduce it when the cache is warm and the build is done.", "a negative, not a deferral"],
   ["Should I upgrade to the $200 plan?", "money"],
   ["Want me to buy the extra seats?", "money"],
   ["Should I assign it to Dana?", "people"],
@@ -85,6 +92,12 @@ test("kept-GO steps, operator-owned answers and plain answers pass", () => {
 test("an exempt question reports the group that let it pass", () => {
   assert.equal(classifyEnding("Should I rotate the GitHub token in mimir?").exempt, "secret values");
   assert.equal(classifyEnding("Should I post the summary to #eng-announce?").exempt, "message to a person or channel");
+});
+
+test("an exempt question does not hide an earlier one the agent can act on", () => {
+  const v = classifyEnding("Done.\n\n1. Should I merge PR #3?\n2. Should I post it to #eng?");
+  assert.equal(v.block, true);
+  assert.equal(v.phrase, "should i merge pr #3?");
 });
 
 test("a PR number is not a channel", () => {

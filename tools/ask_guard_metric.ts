@@ -249,6 +249,20 @@ function stableToolPath(): string {
   return fs.existsSync(linked) ? linked : fileURLToPath(import.meta.url);
 }
 
+/** The first `PATH` folder that holds an executable `bin`, as the installer's shell sees it. */
+function binDir(bin: string): string | undefined {
+  for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
+    if (!path.isAbsolute(dir)) continue;
+    try {
+      fs.accessSync(path.join(dir, bin), fs.constants.X_OK);
+      return dir;
+    } catch {
+      /* next */
+    }
+  }
+  return undefined;
+}
+
 function launchctl(args: string[]): { ok: boolean; out: string } {
   const r = spawnSync("launchctl", args, { encoding: "utf8" });
   return { ok: r.status === 0, out: `${r.stdout ?? ""}${r.stderr ?? ""}`.trim() };
@@ -263,7 +277,10 @@ function installSchedule(): number {
   fs.mkdirSync(path.dirname(log), { recursive: true });
   const file = plistPath();
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const envPath = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"].join(":");
+  // launchd starts with a bare PATH: keep the folders that hold this install's
+  // node and heimdall (a version manager's shims, say), then the system ones.
+  const found = ["node", "heimdall"].map((bin) => binDir(bin)).filter((d): d is string => d !== undefined);
+  const envPath = [...new Set([...found, "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"])].join(":");
   fs.writeFileSync(file, plist(stableToolPath(), log, envPath));
   const domain = `gui/${process.getuid?.() ?? os.userInfo().uid}`;
   launchctl(["bootout", `${domain}/${LABEL}`]);
