@@ -173,8 +173,9 @@ of it, and each of them exists because there is no leader:
 
 Your own repo's release is yours to run, by
 [the spine's §8](../../standards/worker-spine.md#8-releases-and-other-repos).
-Anything in a repo other than your own is a stopping exit by the same
-section: `blocked`, naming the repo and the PR, run or step.
+A need in another repo is yours to act on by the same section, since no
+leader acts on it: file a sub-ticket in that repo, launch its Agnes, and wait
+for it by that section's poll, not as a stopping exit.
 
 ## Progress band
 
@@ -289,7 +290,8 @@ Leave the tab and the worktree alive, with a ticket comment saying why, on any
 of these:
 
 - **blocked** — something you cannot resolve yourself: missing access, an
-  operator's decision, an unmerged dependency;
+  operator's decision, an unmerged dependency (a need in another repo is
+  not one: §8 has you wait for it);
 - **a follow-up you cannot work around**, which stopped the ticket;
 - **a self-confirmation that came back wrong** — see above.
 

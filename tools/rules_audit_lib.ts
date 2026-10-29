@@ -15,8 +15,9 @@
  *   - staleness: dead `@imports`, links and repo paths.
  *
  * What needs judgement — identifiers missing from source, a dead path beside a
- * "never", repeated sentences, ticket-history paragraphs — is returned as
- * `candidates[]` for the skill to verify, never as a finding.
+ * "never", repeated sentences, ticket-history paragraphs, gate words that give
+ * a step to the operator — is returned as `candidates[]` for the skill to
+ * verify, never as a finding.
  *
  * Pure: every read goes through the `RepoView` the caller passes.
  */
@@ -44,7 +45,7 @@ export type Severity = "high" | "medium" | "low";
 export type Category = "load-scope" | "size-budget" | "staleness";
 export type ClaudeLoad = "always" | "on-demand" | "never" | "unknown";
 export type FileKind = "rule" | "claude-md" | "agents-md" | "import";
-export type CandidateKind = "identifier" | "path" | "bare-file" | "import" | "frontmatter" | "duplicate" | "narrative";
+export type CandidateKind = "identifier" | "path" | "bare-file" | "import" | "frontmatter" | "duplicate" | "narrative" | "gate";
 
 export interface RulesFinding {
   file: string;
@@ -470,6 +471,77 @@ export function findNarrative(file: string, text: string): Candidate[] {
         kind: "narrative", file, line: block.line, text: clip(block.text, 160),
         detail: `${tickets} ticket id(s), ${dates} date(s), ${history} history word(s) in ${block.text.length} chars`,
       });
+    }
+  }
+  return out;
+}
+
+/** Words that give a step or a choice to the operator: what the root rules
+ *  call a gate. Their list, then the `GO`, `OK` and `to` forms of "the
+ *  operator's", and "go-ahead". Matched without case, across a line break
+ *  and `*`/`_` emphasis; a `GO` written `Go` is the language, not a gate. */
+export const GATE_PHRASES: readonly string[] = [
+  "needs a GO", "with a GO", "the operator's call", "the operator's word",
+  "not yours", "whoever asks", "did not name", "ask each run",
+  "on the operator's GO", "needs the operator's GO", "with the operator's GO",
+  "the operator's OK", "the operator's to", "go-ahead",
+];
+
+const GATE_RE = new RegExp(
+  GATE_PHRASES.map((p) =>
+    `\\b${p.split(" ").map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/'/g, "['’]")).join("[\\s*_]+")}(?![\\w'’-])`,
+  ).join("|"),
+  "gi",
+);
+
+/** Same-length blanks over code spans and double-quoted text, so offsets
+ *  (and `lineAt`) still hold: a phrase there is cited, not stated. A quote
+ *  never spans a sentence end, so a stray `"` cannot blank the prose after it. */
+function blankCited(s: string): string {
+  return s.replace(/(`+)(.+?)\1|"(?:[^".!?]|[.!?](?!\s))*"|“(?:[^”.!?]|[.!?](?!\s))*”/g, (m) => " ".repeat(m.length));
+}
+
+/** The bounds of the sentence of `text` that holds [start, end). */
+function sentenceBounds(text: string, start: number, end: number): { from: number; to: number } {
+  let from = 0;
+  for (const m of text.slice(0, start).matchAll(/[.!?](?=\s)/g)) from = m.index + 1;
+  const stop = /[.!?](?=\s|$)/g;
+  stop.lastIndex = end;
+  return { from, to: (stop.exec(text)?.index ?? text.length - 1) + 1 };
+}
+
+/** Table rows, one block each: `proseBlocks` skips tables, but a gate stated
+ *  in a cell gives the operator the step all the same. */
+function tableRows(raw: string): Block[] {
+  return bodyLines(raw)
+    .filter(({ text, fenced }) => !fenced && text.trim().startsWith("|"))
+    .map(({ n, text }) => ({ line: n, text: text.trim(), starts: [{ offset: 0, line: n }] }));
+}
+
+/** Sentences that state gate words, one candidate per sentence, on the line
+ *  where its first match starts; a phrase may wrap across lines. */
+export function findGates(file: string, text: string): Candidate[] {
+  const out: Candidate[] = [];
+  for (const block of [...proseBlocks(text), ...tableRows(text)]) {
+    let open: { from: number; cand: Candidate; words: string[] } | undefined;
+    // Sentence ends inside a code span or a quote do not split the sentence.
+    const plain = blankCited(block.text);
+    for (const m of plain.matchAll(GATE_RE)) {
+      const words = m[0].replace(/[\s*_]+/g, " ");
+      if (/ Go$/.test(words)) continue;
+      const { from, to } = sentenceBounds(plain, m.index, m.index + m[0].length);
+      if (!open || open.from !== from) {
+        const raw = block.text.slice(from, to);
+        const body = raw.replace(/^\s*(?:(?:[-*+>]|\d+\.)\s+|#+\s+)*/, "");
+        const sentence = body.trimEnd();
+        const hit = m.index - from - (raw.length - body.length);
+        const at = Math.max(Math.min(hit - 60, sentence.length - 159), 0);
+        const shown = sentence.length <= 160 ? sentence : `${at ? "…" : ""}${clip(sentence.slice(at), at ? 159 : 160)}`;
+        open = { from, cand: { kind: "gate", file, line: lineAt(block, m.index), text: shown, detail: "" }, words: [] };
+        out.push(open.cand);
+      }
+      open.words.push(words);
+      open.cand.detail = `gate words ${open.words.map((w) => `"${w}"`).join(", ")}: a step or a choice given to the operator`;
     }
   }
   return out;
@@ -1200,7 +1272,7 @@ export function auditRules(input: AuditInput): AuditReport {
   };
   const docs = inst.map((f) => ({ file: f.path, text: readText(f.path) ?? "" }));
   candidates.push(...findDuplicates(docs, coLoad));
-  for (const d of docs) candidates.push(...findNarrative(d.file, d.text));
+  for (const d of docs) candidates.push(...findNarrative(d.file, d.text), ...findGates(d.file, d.text));
 
   const sev: Record<Severity, number> = { high: 0, medium: 1, low: 2 };
   findings.sort((a, b) =>

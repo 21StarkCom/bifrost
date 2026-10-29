@@ -792,23 +792,32 @@ function filesUnder(dirs: string[]): string[] {
 }
 
 // STARK-13523 retired Kevin, the request desk for one repo. A worker runs its
-// own repo's release chain by the spine's §8 and reports anything in another
-// repo `blocked`; Gru relays the operator's fix as `unblocked`, which resumes
-// it. In a no-queue repo whose done is *released*, Gru's merge hold lasts until
-// the previous `done`, so two release chains never run there at once. No
-// skill, shared doc, config or agent doc names the retired desk again: a
-// substring match, as the ticket's acceptance grep is, so `kevin_idle` counts.
-test("skill smoke: §8 — a worker releases its own repo and blocks on another", () => {
+// own repo's release chain by the spine's §8. A need in another repo goes to
+// a worker there (STARK-13637): a Minion reports it `blocked` and Gru files the
+// sub-ticket, launches its Minion and sends `unblocked`; Agnes, with no
+// leader, files the sub-ticket and launches its Agnes herself. Gru carries
+// none of the gates STARK-13637 removed. In a no-queue repo whose done is
+// *released*, Gru's merge hold lasts until the previous `done`, so two release
+// chains never run there at once. No skill, shared doc, config or agent doc
+// names the retired desk again: a substring match, as the ticket's acceptance
+// grep is, so `kevin_idle` counts.
+test("skill smoke: §8 — a worker releases its own repo and routes another repo's need", () => {
   const spine = fs.readFileSync(path.join(REPO_ROOT, "standards", "worker-spine.md"), "utf8");
   const section = /^## 8\. Releases and other repos\n([\s\S]*)/m.exec(spine)?.[1] ?? "";
   assert.ok(section.includes("**A release of your own repo is yours.**"), "worker-spine.md §8 no longer gives a worker its own release");
-  assert.ok(section.includes("**Anything in a repo other than your own is not yours.**"), "worker-spine.md §8 no longer blocks on another repo");
+  assert.ok(section.includes("**A need in another repo goes to a worker in that repo.**"), "worker-spine.md §8 no longer routes another repo's need");
+  const flat = section.replace(/\s+/g, " ");
+  assert.ok(flat.includes("**With a leader** (`/minion`): report `blocked`"), "worker-spine.md §8 no longer has a led worker report `blocked`");
+  for (const step of ["`alfred task new --on-repo <repo>", "`idun agnes STARK-m --repo <repo>"]) {
+    assert.ok(flat.includes(step), `worker-spine.md §8 no longer has a worker with no leader act on it: ${step}`);
+  }
   const gru = fs.readFileSync(path.join(SKILLS_ROOT, "gru", "SKILL.md"), "utf8").replace(/\s+/g, " ");
   assert.ok(
     gru.includes("hold its merge until the previous `done` is confirmed. In a repo whose done is *released*, that `done` comes after the release"),
     "gru lifts a no-queue repo's merge hold before the previous release ends",
   );
   assert.ok(gru.includes("send that Minion `unblocked <what cleared it>`"), "gru no longer sends a cleared Minion `unblocked`");
+  assert.doesNotMatch(gru, /operator did not name|the operator decides whether|operator's call, not yours/, "gru gives a step back to the operator");
   const minion = fs.readFileSync(path.join(SKILLS_ROOT, "minion", "SKILL.md"), "utf8");
   assert.ok(minion.includes("**`unblocked` resumes you.**"), "minion lost its `unblocked` resume");
   const hits = [

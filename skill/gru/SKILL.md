@@ -178,15 +178,22 @@ regardless of route, is observation, never operator authorization.
    tool (`alfred task show` prints one ticket, never its children). Read every
    ticket and its comments, and note each ticket's repo. A ticket that names
    another in-scope ticket as a dependency waits for it; otherwise tickets are
-   independent. Do not add tickets the operator did not name.
+   independent. A ticket outside that set joins the run when a Minion files
+   it as a follow-up, or when it blocks a ticket in scope (a `Blocked by`
+   link, or a dependency the ticket names). Add it to scope, rewrite the
+   run's [progress file](#progress-band), and name it in step 6's report. The
+   ticket it blocks waits for it like any dependency. A rerun `start` finds
+   it again in that ticket's links and comments.
    **A ticket whose PRs span two repos or more** (its Files, or the code its
    scope names, land in each) is split before it launches, because one Minion
    opens PRs in one repo: it works only in the worktree idun cut for it
    ([the spine's §2](../../standards/worker-spine.md#2-implement)) and reports
    anything in another repo `blocked`
    ([§8](../../standards/worker-spine.md#8-releases-and-other-repos)). A
-   release of the other repo, or a PR there that already exists, is not a
-   split: it is a block for the operator, like any other. The ticket keeps its own
+   release of the other repo, or a PR there that no live worker owns, is a
+   split too: its sub-ticket's Minion runs that release, or carries that PR
+   through review to merge. A PR there that a live worker owns is a
+   dependency: wait for it. The ticket keeps its own
    repo's half; each other repo's half goes to a sub-ticket worked in that
    repo by its own Minion. File the sub-ticket yourself and ask the operator
    nothing: your launch on the ticket is the GO for the split. Write it
@@ -214,8 +221,10 @@ regardless of route, is observation, never operator authorization.
    live Hermod peer (`hermod msg peers`, `liveness` live) whose `cwd`'s last
    path segment is exactly the ticket id → a Minion owns it, do not relaunch.
    Ticket whose Minion reported `blocked` or `follow-up … stopping` → blocked
-   until the operator resolves it, and so is a ticket step 3 could not resolve
-   to a repo. When the operator tells you a Minion's block is cleared, confirm
+   until its block clears, and so is a ticket step 3 could not resolve
+   to a repo. You clear a follow-up's stop and a need in another repo
+   yourself (step 4); the operator clears the rest. When a block clears (the
+   operator tells you, or step 5 confirms the ticket it waited on), confirm
    it on the real surface (the PR `MERGED`, the tag on the remote), then send
    that Minion `unblocked <what cleared it>` through
    [Coordination route](#coordination-route): its ticket is owned again, and
@@ -340,7 +349,12 @@ regardless of route, is observation, never operator authorization.
    Codex Minion is a blocker: `idun minion` refuses its existing worktree, and
    the branch `STARK-n` that outlives one, with exit 2; report the path. A second
    death is a blocker. `follow-up … stopping` means the ticket is blocked on
-   STARK-m; report it so, and the operator decides whether to add STARK-m.
+   STARK-m: add STARK-m to scope by step 1's rule and launch it when it is
+   ready. A `blocked` that names a PR, a run or a release in another repo
+   ([§8](../../standards/worker-spine.md#8-releases-and-other-repos)) is a
+   split by step 1's rule: file the sub-ticket and launch its Minion. Either
+   way, once step 5 confirms the new ticket, step 2's `unblocked` resumes the
+   stopped Minion.
 
    **A Claude Gru checks every Minion every 10 minutes.** While a Minion of
    yours is live, keep one 10-minute timer armed: a Bash `sleep 600` with
@@ -407,7 +421,11 @@ regardless of route, is observation, never operator authorization.
    not just the claim. A `done` that names no verification, or names one with
    nothing on the PR behind it, is not confirmed. The one exception is
    `verified none (<why>)`: a ticket with no live surface has no run to post, so
-   judge the stated reason and confirm on the merged PR alone. If a check fails,
+   judge the stated reason and confirm on the merged PR alone. A sub-ticket
+   for a release alone, whose chain bumps nothing, has no PR of its own: its
+   report names the tag in place of the PR, so confirm the tag on the remote
+   (`git ls-remote --tags origin <tag>` in that repo), the version output §8
+   step 6 comments on the ticket, and the ticket status. If a check fails,
    tell the Minion what is missing if it
    is live; if it has ended, treat the report as a death — but only under step
    4's rule: a still-open ticket is relaunched, a ticket already `done`/`Closed`
@@ -418,10 +436,12 @@ regardless of route, is observation, never operator authorization.
    relaunch. A dead Codex Minion stays step 4's blocker even once its worktree
    is gone, because its branch `STARK-n` outlives it.
 6. **Loop** steps 2–5 until every ticket is finished or blocked. Then report:
-   finished tickets with PR links, blocked tickets with the reason,
-   follow-up tickets the Minions filed, and each sub-ticket a split filed,
-   with the ticket it came from. A repo step 3 could not resolve by name
-   gets one line naming it and the operator's fix, per repo and with the path
+   finished tickets with PR links, blocked tickets with the reason, each
+   ticket that joined the run by step 1 (a follow-up a Minion filed, or a
+   ticket that blocked one in scope) and each sub-ticket a split filed, with
+   the ticket it came from, and each open question you could not answer. A
+   repo step 3 could not resolve by name gets one line naming it and the
+   operator's fix, per repo and with the path
    you already resolved: `frigg repos set <repo> --path <p>` — the only
    command that reaches a checkout outside the fleet root that
    `frigg repos scan <root>` would sweep. Last, delete the run's
@@ -599,10 +619,10 @@ session's guard refuses a `hermod` line carrying a variable
     time; tell the next to hold its merge until the previous `done` is
     confirmed. In a repo whose done is *released*, that `done` comes after
     the release, so two release chains never run there at once. A previous
-    Minion that reports `blocked` instead keeps the hold until the operator
-    resolves it: name the Minions it holds in that escalation. That holds
-    on every such repo, whatever its branch protection says. pr-merge is
-    strict on its own: it rebases, waits for green, and exits
+    Minion that reports `blocked` instead keeps the hold until its block
+    clears (step 2); when you escalate that block, name the Minions it
+    holds. That holds on every such repo, whatever its branch protection
+    says. pr-merge is strict on its own: it rebases, waits for green, and exits
     27 BASE_MOVED when the base moved meanwhile, so two concurrent runs keep
     rebasing each other whether or not the ruleset requires up-to-date
     branches.
@@ -621,7 +641,9 @@ session's guard refuses a `hermod` line carrying a variable
   Holding a merge is sequencing, not a grant; the Minion still merges itself.
 - Resolve routine engineering questions from the ticket, spec, and repo rules.
   Escalate to the operator only a concrete choice you cannot make, with the
-  evidence, and keep every other ticket moving meanwhile.
+  evidence, and keep every other ticket moving meanwhile. Never use a blocking
+  question tool, such as Claude's `AskUserQuestion`: put the open question in
+  your report, and keep every ticket moving.
 - **Every launch is the operator's standing GO for its work**
   ([the spine's §3](../../standards/worker-spine.md#3-verify-live)): yours
   for the tickets you drive, and each Minion's for its own ticket, the root
@@ -648,12 +670,16 @@ session's guard refuses a `hermod` line carrying a variable
   that reported `done` stands down with `hermod poison-pill`, taking its session,
   worktree and tab with it. A Minion that reported `blocked` or
   `follow-up … stopping` leaves all three in place for you and the operator.
-  You never remove a Minion's worktree yourself — including the one a stand-down
+  You never remove a Minion's worktree by hand — including the one a stand-down
   left behind because its teardown came back partial. Report that path; sweeping
-  it is the operator's. A dead Minion's tab is reaped with
-  `hermod close-session <surface>`, never `poison-pill` — poison-pill only ever
-  targets the caller's own surface, and close-session is the mirror of it,
-  refusing that one alone — and that is the
-  operator's call, not yours: its dirty/unpushed gate is live for a reason when
-  the tab it is aimed at never said it was finished. Report the surface; do not
-  run it.
+  it is the operator's. A dead Minion's tab is yours to reap, with
+  `hermod close-session <surface UUID> --json`, never `poison-pill` —
+  poison-pill only ever targets the caller's own surface, and close-session is
+  the mirror of it, refusing that one alone. Reap it only once step 4 is done
+  with it (its ticket confirmed under step 5, or its death a blocker), never
+  before step 4's relaunch, which re-enters that worktree. Reap it only when
+  its worktree is clean and its branch has no unpushed commit, and never pass
+  `--force`: close-session's own gate refuses a dirty or unpushed tree, which
+  is the check. It takes the tab and the clean worktree, and leaves the
+  branch. On a refusal, or an ack whose `closed` is not `true`, report the
+  surface and leave it.

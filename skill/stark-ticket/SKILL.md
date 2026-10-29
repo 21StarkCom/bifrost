@@ -76,7 +76,11 @@ below that differs in EI says so.
    operator's standing GO, so the step asks for no GO. A worker (a Minion,
    Agnes) runs every write the ticket needs on its launch, the root rules'
    kept gates included. An interactive session keeps those gates, as the
-   root rules say. Unmerged work it needs:
+   root rules say. Write no gate anywhere in the body: no text that gives a
+   step or a choice to the operator, in any words ("needs a GO", "with a
+   GO", "the operator's call", "the operator's word", "ask each run"), and
+   no hold or soak step that the request does not name. Write each step as
+   a step; the root rules decide who takes it. Unmerged work it needs:
    `Blocked by STARK-n` (`EI-n` in EI), then `alfred task link` both.
 
 3. **Order Scope IN by dependency.** A step whose answer decides whether a
@@ -124,7 +128,10 @@ below that differs in EI says so.
    > not carry; (c) an `unverified:` mark with no stated move for a failed
    > check; (d) an Acceptance line a reader cannot check; (e) a claim stated
    > as fact that you cannot verify — mark "cannot verify", distinct from
-   > wrong; (f) an instruction that permits two incompatible readings. NOT
+   > wrong; (f) an instruction that permits two incompatible readings; (g) a
+   > gate: text that gives a step or a choice to the operator ("needs a GO",
+   > "the operator's call"), or a hold or soak step the request does not
+   > name. NOT
    > defects: style, scope opinions, "could say more". Severity per finding:
    > **blocker** (the worker produces a wrong result) / **defect** (wrong
    > fact) / **note** (minor ambiguity). Cite the exact line. **Zero findings
