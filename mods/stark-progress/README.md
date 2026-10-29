@@ -62,8 +62,10 @@ legend.
   rows.
 - **Diff size:** `git diff --shortstat` of the worktree against its base, with
   the commits since that base as milestones. The base is `git merge-base HEAD`
-  with the first of `origin/HEAD`, `origin/main` and `main` that works. A row
-  whose worktree git cannot read shows no diff size.
+  with the first of `origin/HEAD`, `origin/main` and `main` that works. It
+  counts tracked files only: a new file counts once it is added. A row whose
+  worktree git cannot read shows no diff size. Git runs in the background, so
+  a slow read never holds the poll.
 
 ## The state contract
 
