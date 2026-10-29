@@ -113,8 +113,9 @@ operator wants, say so and stop.
      `verified: false` and an `error` field. When Hermod could not place the
      tab, or a Codex worktree could not be cut, there is no ack on stdout at
      all.
-   - **2**: refused before anything was created: a bad argument, a repo frigg
-     cannot resolve, a `--cwd` outside any git checkout, both or neither
+   - **2**: refused before anything was created: a bad argument, a repo name
+     that no checkout, or more than one, under valkyrie's `repos.roots`
+     (default `~/Code`) has as its origin, a `--cwd` outside any git checkout, both or neither
      session stamps without `--leader`, an existing worktree for the id or a
      leftover branch `STARK-n` on a Codex launch, or a main checkout Codex
      does not trust (`Codex does not trust <path>…`), which the operator

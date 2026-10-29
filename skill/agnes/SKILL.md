@@ -121,8 +121,9 @@ to work around; report what it printed:
 - **2**: refused before anything was created: a bad argument (among them
   text after `--` with a newline or other control character, text that makes
   the goal longer than 4,000 characters, or a valkyrie flag as a word after
-  `--`), no id and no bound ticket, a repo frigg cannot resolve, a `--cwd`
-  outside any git checkout, an existing worktree for the id or a leftover
+  `--`), no id and no bound ticket, a repo name that no checkout, or more
+  than one, under valkyrie's `repos.roots` (default `~/Code`) has as its
+  origin, a `--cwd` outside any git checkout, an existing worktree for the id or a leftover
   branch `STARK-n` on a Codex launch, or a main checkout Codex does not trust
   (`Codex does not trust <path>…`). Trusting a repo is the operator's to do,
   once; name it and stop.

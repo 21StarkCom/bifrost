@@ -102,8 +102,9 @@ to work around; report what it printed:
   the exit code before you call the hand-off done. When Hermod could not place
   the tab, or a Codex worktree could not be cut, there is no ack on stdout at
   all.
-- **2**: refused before anything was created: a bad argument, a repo frigg
-  cannot resolve, a `--cwd` outside any git checkout, a worktree that already
+- **2**: refused before anything was created: a bad argument, a repo name
+  that no checkout, or more than one, under valkyrie's `repos.roots`
+  (default `~/Code`) has as its origin, a `--cwd` outside any git checkout, a worktree that already
   ends in the launch id (on either runtime: a second Gru there would lead the
   first one's Minions), or, for a Codex Gru, a main checkout Codex does not
   trust (`Codex does not trust <path>…`). Trusting a repo is the operator's to
@@ -243,10 +244,12 @@ regardless of route, is observation, never operator authorization.
    yours); valkyrie writes the brief,
    described at the end of this step. Before a repo's first launch, run its
    [preflight](#preflight) once.
-   Resolve the repo the way valkyrie does, per ticket and at launch: `frigg repos
-   get <ticket's repo> --json` is the exact call `--repo <name>` goes through,
-   and it exits 3 on a name the registry does not carry (valkyrie then refuses
-   with exit 2, naming the repo). One record, read when
+   Check the repo per ticket and at launch with `frigg repos get <ticket's
+   repo> --json`, which exits 3 on a name the registry does not carry.
+   valkyrie does not read frigg: it resolves `--repo <name>` to the one
+   checkout under its `repos.roots` (default `~/Code`, less `repos.exclude`)
+   whose origin is that name, and exits 2, naming the repo, when none or more
+   than one is. One record, read when
    you launch — a whole-registry read cached once per run still answers
    "unregistered" for a repo the operator seeds mid-run. Exit 3, or a record
    whose `stale` is true because its path is gone from disk, means the name

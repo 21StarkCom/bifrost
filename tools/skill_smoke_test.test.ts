@@ -697,21 +697,16 @@ for (const name of ["agnes", "gru", "minion"]) {
 
 // STARK-13714: idun's launch commands are forwards to valkyrie, and phase 5 of
 // idun's launcher-app spec removes them. So no skill, shared doc or agent doc
-// names one: this is that ticket's acceptance grep, over the same files.
-const IDUN_LAUNCH_RE = /\bidun (klod|kodx|bob|agnes|gru|minion|mav|maverick|ice|iceman|_agent)\b/;
+// names one: this is that ticket's acceptance grep, over the same files. `\s+`
+// so a command wrapped across a line break still counts.
+const IDUN_LAUNCH_RE = /\bidun\s+(klod|kodx|bob|agnes|gru|minion|mav|maverick|ice|iceman|_agent)\b/i;
 
 test("skill smoke: skills, standards and agent docs launch through valkyrie", () => {
   const files = [
     ...filesUnder(["skill", "standards"]),
     ...["CLAUDE.md", "AGENTS.md", "README.md"].map((name) => path.join(REPO_ROOT, name)),
   ];
-  const hits = files.flatMap((file) =>
-    fs
-      .readFileSync(file, "utf8")
-      .split("\n")
-      .flatMap((line, i) => (IDUN_LAUNCH_RE.test(line) ? [`${path.relative(REPO_ROOT, file)}:${i + 1}`] : [])),
-  );
-  assert.deepEqual(hits, [], "a skill, shared doc or agent doc names an idun launch command");
+  assert.deepEqual(matchLines(files, IDUN_LAUNCH_RE), [], "a skill, shared doc or agent doc names an idun launch command");
 });
 
 // STARK-11402: poison-pill's reaper always runs forced. It sends the quit at
@@ -801,6 +796,17 @@ test("skill smoke: standards — the spine titles a cmux tab, else a tmux window
   }
 });
 
+/** `<repo-relative file>:<line>` of each match of `re` in `files`; a match may span lines. */
+function matchLines(files: string[], re: RegExp): string[] {
+  const global = new RegExp(re.source, re.flags.includes("g") ? re.flags : `${re.flags}g`);
+  return files.flatMap((file) => {
+    const text = fs.readFileSync(file, "utf8");
+    return [...text.matchAll(global)].map(
+      (m) => `${path.relative(REPO_ROOT, file)}:${text.slice(0, m.index).split("\n").length}`,
+    );
+  });
+}
+
 /** Every file under the repo-relative `dirs`, walked recursively. */
 function filesUnder(dirs: string[]): string[] {
   return dirs.flatMap((dir) =>
@@ -863,13 +869,7 @@ test("skill smoke: skills, standards and agent docs carry no cloud route", () =>
     path.join(REPO_ROOT, "CLAUDE.md"),
     path.join(REPO_ROOT, "AGENTS.md"),
   ];
-  const hits = files.flatMap((file) =>
-    fs
-      .readFileSync(file, "utf8")
-      .split("\n")
-      .flatMap((line, i) => (CLOUD_ROUTE_RE.test(line) ? [`${path.relative(REPO_ROOT, file)}:${i + 1}`] : [])),
-  );
-  assert.deepEqual(hits, [], "the cloud route is back (STARK-12113 removed it)");
+  assert.deepEqual(matchLines(files, CLOUD_ROUTE_RE), [], "the cloud route is back (STARK-12113 removed it)");
 });
 
 // STARK-10523: a Minion whose brief reads `leader operator` reports in its own
