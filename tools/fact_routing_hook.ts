@@ -10,10 +10,11 @@
  * Reads the PostToolUse payload on stdin. When the written file is a
  * `<config dir>/projects/<project>/memory/<name>.md` auto-memory (config dir:
  * $CLAUDE_CONFIG_DIR, else ~/.claude) that smells corpus- or repo-CLAUDE-worthy,
- * it appends a candidate to `<config dir>/.fact-routing-queue.jsonl` and hands
- * the model a one-line advisory as PostToolUse `additionalContext` on stdout;
- * plain stdout or stderr from a PostToolUse hook never reaches the model. It is
- * ADVISORY: it never blocks the tool and always exits 0.
+ * it hands the model a one-line advisory as PostToolUse `additionalContext` on
+ * stdout; plain stdout or stderr from a PostToolUse hook never reaches the model.
+ * The writing session holds the fact's context, so the advisory asks it to route
+ * the fact now or keep it; the hook writes nothing and keeps no record of the
+ * flag. It is ADVISORY: it never blocks the tool and always exits 0.
  *
  * Fleet slugs come from the vault-ecosystem checkout ($ATLAS_ECOSYSTEM_PATH,
  * else ~/Code/Vaults/vault-ecosystem). When that yields none, the hook matches
@@ -23,11 +24,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   classifyMemory,
-  bodyOf,
-  makeEntry,
-  appendToQueue,
   defaultCorpusPath,
-  defaultQueuePath,
   isAutoMemoryPath,
   resolveFleetSlugs,
   FALLBACK_SLUGS,
@@ -72,14 +69,13 @@ function main(): void {
 
   const flag = classifyMemory(content, fp, fellBack ? FALLBACK_SLUGS : corpusSlugs);
   if (flag) {
-    const entry = makeEntry(flag, fp, bodyOf(content), new Date().toISOString());
-    const queue = defaultQueuePath();
-    appendToQueue(entry, queue);
-
-    const target = flag.route === "corpus" ? "the vault-ecosystem corpus" : "the repo's own CLAUDE.md";
+    const [target, when] =
+      flag.route === "corpus"
+        ? ["the vault-ecosystem corpus", "it says how fleet repos relate or when to reach one"]
+        : ["the repo's own CLAUDE.md", "every session in that repo needs it and the code does not show it"];
     advisories.push(
       `↳ fact-routing: ${path.basename(fp)} looks like it belongs in ${target} (${flag.reason}). ` +
-        `Queued in ${queue} — fold it, don't sweep later.`,
+        `Move it there now only if ${when}; else keep it here. Nothing records this flag for later.`,
     );
   }
   // Said on every memory write, flagged or not: a reader that no longer

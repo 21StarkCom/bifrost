@@ -12,7 +12,7 @@ const routes: Record<string, string[]> = {
   alert_delivery: [""], approach_contract: [""], ask_guard_hook: [""], ask_guard_metric: [""],
   asset_links: [""], context_compactor: [""],
   copilot_land: ["", "branch-name", "prepare-branch", "land"],
-  fact_routing_fold: [""], fact_routing_hook: [""], failure_classifier: [""],
+  fact_routing_hook: [""], failure_classifier: [""],
   findings_review_post: [""],
   github_projects: ["", "find-project", "add-issue", "get-field-ids", "get-items", "get-item-fields", "set-field", "set-fields", "find-item", "get-issue-node-id", "transition-status", "is-legal-transition", "check-spec-completeness", "load-config"],
   healer_canary: ["", "--status", "--check", "--promote audit", "--demote audit", "--explain audit", "--close-circuit audit"],

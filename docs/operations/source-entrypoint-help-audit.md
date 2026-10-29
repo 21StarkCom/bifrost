@@ -30,8 +30,8 @@ contents, stdin JSON and child argv are not searched for help words.
 Two defects were present in the source:
 
 - Permissive parsers ignored positionals and unknown options. For example,
-  `context_compactor.ts help` generated a checkpoint, `fact_routing_fold.ts
-  --clear help` could clear the queue, and `stark_persona.ts deactivate help`
+  `context_compactor.ts help` generated a checkpoint, and
+  `stark_persona.ts deactivate help`
   reached the deactivation handler. The release helpers ignored stray tokens;
   the GHA drill treated `help` as a repository and ignored surplus arguments.
 - Value consumers could swallow later flags, including safety flags. For
@@ -88,7 +88,6 @@ argument: …" — wording alone cannot tell a working help from a broken one.
 | `asset_links.ts` | check, install, JSON |
 | `context_compactor.ts` | default, session-id, JSON |
 | `copilot_land.ts` | branch-name, prepare-branch, land |
-| `fact_routing_fold.ts` | default, clear |
 | `fact_routing_hook.ts` | PostToolUse stdin protocol; argv help exits first |
 | `failure_classifier.ts` | stderr-file, JSON |
 | `findings_review_post.ts` | findings-file/stdin, dry-run, generated-path options |
