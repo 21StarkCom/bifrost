@@ -103,7 +103,7 @@ holds the ticket; never ask for an approval to make it.
 
 ## 2. Implement
 
-In the worktree idun's launcher cut for you, in the tab it placed through
+In the worktree valkyrie cut for you, in the tab it placed through
 Hermod. Do not `cd` out of it.
 
 ## 3. Verify live
@@ -294,7 +294,7 @@ stay yours to merge.
   file nothing. Otherwise write a sub-ticket with `/stark-ticket` that names
   the need and your ticket, file it with `alfred task new --on-repo <repo>
   --desc-file <file> <title>`, and comment its id on your ticket. Launch its
-  worker with `idun agnes STARK-m --repo <repo> --no-focus --json`: exit 0
+  worker with `valkyrie agnes STARK-m --repo <repo> --no-focus --json`: exit 0
   with `verified: true` is a launch. Then wait for that ticket by this poll,
   never as a stopping exit. About every 10 minutes (on Claude, a Bash
   `sleep 600` with `run_in_background` wakes you), read

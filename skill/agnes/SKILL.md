@@ -20,12 +20,12 @@ You are a Minion with no Gru. The operator launched one tab on one ticket and
 walked away:
 
 ```
-idun agnes STARK-n --repo <repo> --agent claude|codex
+valkyrie agnes STARK-n --repo <repo> --agent claude|codex
 ```
 
-From idun v0.103.0 the first message is a goal, `/goal /agnes STARK-n [text]`
-(`/goal $agnes STARK-n [text]` on Codex); v0.94.0 to v0.102 send a bare
-`/agnes STARK-n`. idun already created the worktree, had Hermod open the tab
+The first message is a goal, `/goal /agnes STARK-n [text]`
+(`/goal $agnes STARK-n [text]` on Codex), or a bare `/agnes STARK-n` from an
+older launcher. valkyrie already created the worktree, had Hermod open the tab
 and place it in a workspace, and launched you, so none of that is yours. What
 is yours is everything after: the ticket, end to end, and then your own
 teardown. Nobody is watching, nobody sequences you, and nobody checks your
@@ -44,14 +44,14 @@ work but you.
 - `--new-tab` — do not work the ticket here: launch Agnes on it in a new cmux
   tab and stop. See [New tab](#new-tab). Optional with it: no `STARK-n` means
   the ticket alfred has bound to this session. The launcher puts any run text
-  after `--` on the idun command line; use `--` in the skill invocation when
+  after `--` on the valkyrie command line; use `--` in the skill invocation when
   text starts with a flag-shaped word.
 - `--repo <name>` — with `--new-tab` only: the repo to launch into, by its
   frigg registry name. Default: the repo the ticket names, else the repo you
   are standing in.
 - `--agent claude|codex` — with `--new-tab` only: the agent that runs her.
-  Default: idun's configured `agents.launchers.agnes.agent` (built in:
-  claude).
+  Default: `agents.launchers.agnes.agent` in idun's config, which valkyrie
+  reads (built in: claude).
 
 ## New tab
 
@@ -61,13 +61,13 @@ spine, no report, no stand down. Launch her and stop.
 
 1. Name the ticket, then pick the repo. With no `STARK-n`, read the one alfred
    has bound to this session — the `ticket` field of `alfred repo info --json`,
-   the same read `idun agnes` makes when the id is omitted — and stop and ask
+   the same read `valkyrie agnes` makes when the id is omitted — and stop and ask
    when it has none. Pass the id on the launch line either way; you need it
    for the next check. With
    `--repo <name>`, pass it through. Without it, **read the ticket first**
    (`alfred task show STARK-n`): a ticket that belongs to another repo than the
    one you are standing in is launched with `--repo <that repo>`, never into
-   this one — idun would exit 0 and Agnes would work it, unattended, in the
+   this one — valkyrie would exit 0 and Agnes would work it, unattended, in the
    wrong codebase. A ticket that names no repo is this one's, the default the
    Arguments state. Only when the ticket is this repo's, find the **main
    checkout** of the repo you are in — the first `worktree` line of
@@ -85,19 +85,19 @@ spine, no report, no stand down. Launch her and stop.
    does is somebody's already — yours, when this session was itself launched on
    the ticket, which is the likely case if you let the id default to your bound
    ticket. A Claude launch onto it exits 4 while a live session stands in it —
-   this one included, since idun's name check counts the launcher's own
+   this one included, since valkyrie's name check counts the launcher's own
    session — and otherwise re-enters it, saying so only on stderr behind a
    normal-looking ack, so her stand-down would then remove a worktree somebody
    left; a Codex launch is refused. Stop and say so.
-2. Launch, once, with idun v0.103.0 or later (`idun --version`; an older one
-   does not send the goal — stop and say so):
+2. Launch, once, with valkyrie 0.1.1 or later (`valkyrie --version`; with no
+   valkyrie, or an older one, stop and say so):
 
    ```
-   idun agnes STARK-n (--repo <name> | --cwd <main checkout>) [--agent <agent>] --json [-- <text>]
+   valkyrie agnes STARK-n (--repo <name> | --cwd <main checkout>) [--agent <agent>] --json [-- <text>]
    ```
 
    `--repo` and `--cwd` are mutually exclusive. Pass the run text after `--`,
-   with every idun flag before it: only words the operator wrote, never text
+   with every valkyrie flag before it: only words the operator wrote, never text
    of your own, on one line, as one single-quoted word with each `'` inside it
    written `'\''` (`-- 'don'\''t cut a release'`), so the shell runs and
    expands nothing in it. Leave the tab focused; the operator asked to see it.
@@ -109,7 +109,7 @@ Read the exit code before the ack. A nonzero exit is the answer, not something
 to work around; report what it printed:
 
 - **0** with `verified: true`: launched.
-- **1**: something was placed or started and did not come up, and idun's
+- **1**: something was placed or started and did not come up, and valkyrie's
   stderr names what it left standing. When the tab opened but Agnes did not
   come up, that is the tab and the worktree
   (`… left standing: surface:N, worktree <path>`), and under `--json` stdout
@@ -120,13 +120,13 @@ to work around; report what it printed:
   all.
 - **2**: refused before anything was created: a bad argument (among them
   text after `--` with a newline or other control character, text that makes
-  the goal longer than 4,000 characters, or an idun flag as a word after
+  the goal longer than 4,000 characters, or a valkyrie flag as a word after
   `--`), no id and no bound ticket, a repo frigg cannot resolve, a `--cwd`
   outside any git checkout, an existing worktree for the id or a leftover
   branch `STARK-n` on a Codex launch, or a main checkout Codex does not trust
   (`Codex does not trust <path>…`). Trusting a repo is the operator's to do,
   once; name it and stop.
-- **4**: a live agent or tab already holds the id, and idun's stderr lists
+- **4**: a live agent or tab already holds the id, and valkyrie's stderr lists
   each holder — this session counts among them when it stands in the ticket's
   worktree. Do not launch it again.
 - **128+n**: interrupted.
@@ -275,14 +275,14 @@ scope, plus one term of your own:
 
 An unattended worker that fails to stand down leaves a worktree behind, and a
 relaunch on that ticket does **not** start clean — differently, and badly, on
-each runtime. On Codex `idun agnes` refuses outright (`a worktree for STARK-n
+each runtime. On Codex `valkyrie agnes` refuses outright (`a worktree for STARK-n
 already exists …`, exit 2), so the ticket simply cannot be relaunched. On
 Claude — the default agent — it launches `claude --worktree=<ticket>`, which
 **re-enters** an existing worktree of that name rather than minting one, so the
 relaunch drops a second session into your leftovers behind a normal-looking ack,
-with only a line on idun's stderr to say so. Both are reasons to run the
+with only a line on valkyrie's stderr to say so. Both are reasons to run the
 preflight properly, never a reason to reach for `STARK_SKIP_NAME_CHECK=1`, the
-bypass idun's exit-4 message offers.
+bypass valkyrie's exit-4 message offers.
 
 ## When not to stand down
 

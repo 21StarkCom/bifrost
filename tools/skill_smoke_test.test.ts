@@ -338,7 +338,7 @@ for (const name of SKILLS) {
 // change this table first.
 //
 // The worker family (STARK-6471, decided 2026-09-19): `agnes`, `gru` and
-// `minion` are launched unattended. idun hands Gru and a Minion their brief
+// `minion` are launched unattended. valkyrie hands Gru and a Minion their brief
 // (`/gru start …`, `/minion STARK-n …`) as TEXT, and on a marketplace install
 // that resolves through the plugin (STARK-6469 — Claude Code's docs: the bare
 // form invokes the skill unless another command already uses the name; real
@@ -652,15 +652,15 @@ for (const dir of SHARED_DOC_DIRS) {
 // can drop without anything else going red: Gru is never launched on the id of
 // a ticket it will work. The id names Gru's own worktree, and Gru's step 2
 // reads a live peer whose cwd ends in a ticket id as the Minion that owns it —
-// so it would read ITSELF as that ticket's Minion and never launch it. `idun
+// so it would read ITSELF as that ticket's Minion and never launch it. `valkyrie
 // gru` derives the id from its operand: the epic, or GRU-<n> from --tickets.
 const fencedLaunchLines = (file: string, launcher: RegExp): string[] =>
   fencedLines(fs.readFileSync(file, "utf8")).filter((line) => launcher.test(line));
 
-// The operand after `idun gru`: one token, `--tickets <list>`, or a
+// The operand after `valkyrie gru`: one token, `--tickets <list>`, or a
 // `( a | b )` alternation of those.
 function gruLaunchOperands(line: string): string[] {
-  const rest = line.trim().replace(/^idun gru\s+/, "");
+  const rest = line.trim().replace(/^valkyrie gru\s+/, "");
   const group = /^\(([^)]*)\)/.exec(rest);
   if (group) return (group[1] ?? "").split("|").map((alt) => alt.trim());
   return [/^--tickets\s+\S+/.exec(rest)?.[0] ?? rest.split(/\s+/)[0] ?? ""];
@@ -668,8 +668,8 @@ function gruLaunchOperands(line: string): string[] {
 
 test("skill smoke: skill/gru — Gru is never launched on a ticket it works", () => {
   const file = path.join(SKILLS_ROOT, "gru", "SKILL.md");
-  const lines = fencedLaunchLines(file, /^\s*idun gru\b/);
-  assert.equal(lines.length, 1, "expected exactly one fenced `idun gru` launch form");
+  const lines = fencedLaunchLines(file, /^\s*valkyrie gru\b/);
+  assert.equal(lines.length, 1, "expected exactly one fenced `valkyrie gru` launch form");
   for (const line of lines) {
     for (const operand of gruLaunchOperands(line)) {
       assert.match(
@@ -684,15 +684,35 @@ test("skill smoke: skill/gru — Gru is never launched on a ticket it works", ()
   assert.match(fs.readFileSync(file, "utf8"), /Never the id of a ticket Gru will work/);
 });
 
-// The worker launchers moved from `hermod ticket` to idun (STARK-10154). A
-// fenced `hermod ticket` line left in any of the worker skills would launch on a
-// hermod path that bypasses idun's managed Codex account and exit-code contract.
+// The worker launchers moved from `hermod ticket` to idun (STARK-10154), then
+// to valkyrie (STARK-13714). A fenced `hermod ticket` line left in any of the
+// worker skills would launch on a hermod path that bypasses valkyrie's
+// exit-code contract and idun's managed Codex account.
 for (const name of ["agnes", "gru", "minion"]) {
   test(`skill smoke: skill/${name} — no fenced \`hermod ticket\` launch line`, () => {
     const lines = fencedLaunchLines(path.join(SKILLS_ROOT, name, "SKILL.md"), /^\s*hermod ticket\b/);
     assert.deepEqual(lines, [], `skill/${name} still launches through hermod ticket`);
   });
 }
+
+// STARK-13714: idun's launch commands are forwards to valkyrie, and phase 5 of
+// idun's launcher-app spec removes them. So no skill, shared doc or agent doc
+// names one: this is that ticket's acceptance grep, over the same files.
+const IDUN_LAUNCH_RE = /\bidun (klod|kodx|bob|agnes|gru|minion|mav|maverick|ice|iceman|_agent)\b/;
+
+test("skill smoke: skills, standards and agent docs launch through valkyrie", () => {
+  const files = [
+    ...filesUnder(["skill", "standards"]),
+    ...["CLAUDE.md", "AGENTS.md", "README.md"].map((name) => path.join(REPO_ROOT, name)),
+  ];
+  const hits = files.flatMap((file) =>
+    fs
+      .readFileSync(file, "utf8")
+      .split("\n")
+      .flatMap((line, i) => (IDUN_LAUNCH_RE.test(line) ? [`${path.relative(REPO_ROOT, file)}:${i + 1}`] : [])),
+  );
+  assert.deepEqual(hits, [], "a skill, shared doc or agent doc names an idun launch command");
+});
 
 // STARK-11402: poison-pill's reaper always runs forced. It sends the quit at
 // once and closes the tab by its --timeout at the latest, whether or not the
@@ -808,7 +828,7 @@ test("skill smoke: §8 — a worker releases its own repo and routes another rep
   assert.ok(section.includes("**A need in another repo goes to a worker in that repo.**"), "worker-spine.md §8 no longer routes another repo's need");
   const flat = section.replace(/\s+/g, " ");
   assert.ok(flat.includes("**With a leader** (`/minion`): report `blocked`"), "worker-spine.md §8 no longer has a led worker report `blocked`");
-  for (const step of ["`alfred task new --on-repo <repo>", "`idun agnes STARK-m --repo <repo>"]) {
+  for (const step of ["`alfred task new --on-repo <repo>", "`valkyrie agnes STARK-m --repo <repo>"]) {
     assert.ok(flat.includes(step), `worker-spine.md §8 no longer has a worker with no leader act on it: ${step}`);
   }
   const gru = fs.readFileSync(path.join(SKILLS_ROOT, "gru", "SKILL.md"), "utf8").replace(/\s+/g, " ");
@@ -860,8 +880,8 @@ test("skill smoke: skills, standards and agent docs carry no cloud route", () =>
 test("skill smoke: minion — the operator-leader shape", () => {
   const minion = fs.readFileSync(path.join(SKILLS_ROOT, "minion", "SKILL.md"), "utf8");
   const standDown = fs.readFileSync(path.join(REPO_ROOT, "standards", "stand-down.md"), "utf8");
-  const fence = fencedLaunchLines(path.join(SKILLS_ROOT, "minion", "SKILL.md"), /^\s*idun minion\b/);
-  assert.ok(fence.some((line) => /--leader <peer>\|operator\b/.test(line)), "the idun minion line no longer passes --leader operator through");
+  const fence = fencedLaunchLines(path.join(SKILLS_ROOT, "minion", "SKILL.md"), /^\s*valkyrie minion\b/);
+  assert.ok(fence.some((line) => /--leader <peer>\|operator\b/.test(line)), "the valkyrie minion line no longer passes --leader operator through");
   assert.ok(minion.includes("**`leader operator`:**"), "minion's Reporting lost the operator route");
   assert.ok(minion.includes("**`--leader operator`**"), "minion's New tab lost the operator-leader shape");
   assert.ok(!minion.includes("no third shape"), "minion still counts two launch shapes");

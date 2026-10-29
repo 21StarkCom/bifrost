@@ -14,7 +14,7 @@ follow [standard help](../../standards/help.md), then stop.
 
 # Minion
 
-You own one ticket, named in your brief, in the worktree `idun minion` cut for
+You own one ticket, named in your brief, in the worktree `valkyrie minion` cut for
 you, in a tab it placed through Hermod. Your leader is a peer — Gru, who
 coordinates the other tickets, or the session that launched you — or, when the
 brief reads `leader operator`, the operator, who reads your reports in your own
@@ -35,8 +35,8 @@ tab. You never wait on your leader for anything.
   registry name. Default: the repo the ticket names, else the repo you are
   standing in.
 - `--agent claude|codex` — with `--new-tab` only: the agent that runs the
-  Minion. Default: idun's configured `agents.launchers.minion.agent` (built
-  in: claude).
+  Minion. Default: `agents.launchers.minion.agent` in idun's config, which
+  valkyrie reads (built in: claude).
 
 ## New tab
 
@@ -53,13 +53,13 @@ operator wants, say so and stop.
 
 1. Name the ticket, then pick the repo. With no `STARK-n`, read the one alfred
    has bound to this session — the `ticket` field of `alfred repo info --json`
-   — and stop and ask when it has none. `idun minion` does not read it for
+   — and stop and ask when it has none. `valkyrie minion` does not read it for
    you: it takes the id as its first word, and any other first word starts a
    persona dev worker, not a ticket Minion. With
    `--repo <name>`, pass it through. Without it, **read the ticket first**
    (`alfred task show STARK-n`): a ticket that belongs to another repo than the
    one you are standing in is launched with `--repo <that repo>`, never into
-   this one — idun would exit 0 and the Minion would work it in the wrong
+   this one — valkyrie would exit 0 and the Minion would work it in the wrong
    codebase. A ticket that names no repo is this one's, the default the
    Arguments state. Only when the ticket is this repo's, find the **main
    checkout** of the repo you are in — the first `worktree` line of
@@ -77,25 +77,25 @@ operator wants, say so and stop.
    does is somebody's already — yours, when this session was itself launched on
    the ticket, which is the likely case if you let the id default to your bound
    ticket. A Claude launch onto it exits 4 while a live session stands in it —
-   this one included, since idun's name check counts the launcher's own
+   this one included, since valkyrie's name check counts the launcher's own
    session — and otherwise re-enters it, saying so only on stderr behind a
    normal-looking ack, so the Minion's stand-down would then aim at a worktree
    somebody left; a Codex launch is refused. Stop and say so.
-2. Launch, once, with idun v0.94.0 or later (`idun --version`; an older one has
-   no ticket-mode `minion` — stop and say so):
+2. Launch, once, with valkyrie 0.1.1 or later (`valkyrie --version`; with no
+   valkyrie, or an older one, stop and say so):
 
    ```
-   idun minion STARK-n [--leader <peer>|operator] (--repo <name> | --cwd <main checkout>) [--agent <agent>] --json
+   valkyrie minion STARK-n [--leader <peer>|operator] (--repo <name> | --cwd <main checkout>) [--agent <agent>] --json
    ```
 
    `STARK-n` stays the first word. `--repo` and `--cwd` are mutually
-   exclusive. `--leader operator` passes through as written and needs idun
-   v0.114.0 or later; an older one refuses it with exit 2 — say so and stop,
-   never relaunch with yourself as the leader instead. Without `--leader`,
-   idun names **you** as the leader, from your own session stamp
+   exclusive. `--leader operator` passes through as written; when it is
+   refused, say so and stop, never relaunch with yourself as the leader
+   instead. Without `--leader`,
+   valkyrie names **you** as the leader, from your own session stamp
    (`claude:$CLAUDE_CODE_SESSION_ID`, or `codex:$CODEX_THREAD_ID`), and refuses
    with exit 2 when it finds neither stamp or both. That refusal is fixed by
-   naming yourself to idun: find the `hermod msg peers` row whose `sessionId`
+   naming yourself to valkyrie: find the `hermod msg peers` row whose `sessionId`
    is yours and pass its `id` as `--leader` — you are then still the leader, and step 4
    still applies.
 3. Read the exit code, then the ack, before you call it launched. A nonzero
@@ -106,7 +106,7 @@ operator wants, say so and stop.
      `coordination` names the route the prompt describes for the provider
      pair (`SendMessage` or `hermod-msg`). An operator leader's ack carries
      `leader: "operator"` and no `coordination`.
-   - **1**: something was placed or started and did not come up, and idun's
+   - **1**: something was placed or started and did not come up, and valkyrie's
      stderr names what it left standing. When the tab opened, that is the tab
      and the worktree, and under `--json` stdout still carries a complete,
      normal-looking ack on either runtime, whose only tells are
@@ -119,7 +119,7 @@ operator wants, say so and stop.
      leftover branch `STARK-n` on a Codex launch, or a main checkout Codex
      does not trust (`Codex does not trust <path>…`), which the operator
      trusts once — name it and stop.
-   - **4**: a live agent or tab already holds the id, and idun's stderr lists
+   - **4**: a live agent or tab already holds the id, and valkyrie's stderr lists
      each holder — this session counts among them when it stands in the
      ticket's worktree. Do not launch it again.
    - **128+n**: interrupted.
