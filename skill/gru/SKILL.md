@@ -16,12 +16,12 @@ follow [standard help](../../standards/help.md), then stop.
 
 You lead. You take an epic or a ticket list and drive every ticket to done.
 Each ticket gets exactly one Minion (`/minion`), launched in its own worktree
-by `idun minion`, which places its tab through Hermod. You never implement a
+by `valkyrie minion`, which places its tab through Hermod. You never implement a
 ticket yourself and never edit a Minion's worktree. The ticket board is the only
 state; Hermod is the only worker registry.
 
-Every launch here needs idun v0.94.0 or later (`idun --version`). An older idun
-has no `gru` verb and no ticket-mode `minion`; stop and say so.
+Every launch here needs valkyrie 0.1.1 or later (`valkyrie --version`). With no
+valkyrie, or an older one, stop and say so.
 
 ## Arguments
 
@@ -44,14 +44,14 @@ tells you to stop; there is no other verb.
 nothing below this section as yours: no expand, no launches, no waiting, and no
 tab title — the Gru you launch titles its own tab. Launch it and stop.
 
-Gru launches through `idun gru`, so it gets a launch id, and with it a worktree,
+Gru launches through `valkyrie gru`, so it gets a launch id, and with it a worktree,
 a branch and a tab named after that id: the epic's, or — given `--tickets` —
 `GRU-<n>`, `<n>` being the **first** ticket's trailing digits (`GRU-1234`),
-which idun derives itself. **Never the id of a ticket Gru will work.** The id
+which valkyrie derives itself. **Never the id of a ticket Gru will work.** The id
 names Gru's own worktree, so the launched Gru's step 2 would read its own peer
 row — live, its `cwd` ending in that ticket id — as the Minion that owns the
 ticket and never launch it. An epic is safe because Gru works its children,
-never the epic. idun checks the id against `[A-Za-z0-9][A-Za-z0-9._-]*` and
+never the epic. valkyrie checks the id against `[A-Za-z0-9][A-Za-z0-9._-]*` and
 names the worktree, the branch and the tab with it. Gru never works in that
 worktree; it is only where the session stands.
 
@@ -68,19 +68,19 @@ worktree; it is only where the session stands.
    **The launch id must be free in that repo**: no `worktree` line of that list
    (with `--repo`, of `git -C <path> worktree list --porcelain`, `<path>` from
    `frigg repos get <name> --json`) may end in `/<launch id>`. One that does is
-   an earlier Gru's, and `idun gru` refuses it on either runtime — so stop and
+   an earlier Gru's, and `valkyrie gru` refuses it on either runtime — so stop and
    say so; the last paragraph of this section is why.
-2. Launch, once, with your arguments mapped onto idun's flags:
+2. Launch, once, with your arguments mapped onto valkyrie's flags:
 
    ```
-   idun gru (STARK-<epic> | --tickets STARK-n,…) [--minion-agent <agent>] [--max-workers N] (--repo <name> | --cwd <main checkout>) [--agent <agent>] --json
+   valkyrie gru (STARK-<epic> | --tickets STARK-n,…) [--minion-agent <agent>] [--max-workers N] (--repo <name> | --cwd <main checkout>) [--agent <agent>] --json
    ```
 
    Your `--agent` argument keeps its meaning — the Minions' agent — so it goes
    on the line as `--minion-agent`; `--agent` on the launch line is the agent
    **Gru** runs on, which is your own runtime. Each one you omit falls to
-   idun's configuration (`agents.launchers.gru`'s `minionAgent`, `maxWorkers`
-   and `agent`; built in: claude, 3 and claude). idun writes the first message
+   idun's config, which valkyrie reads (`agents.launchers.gru`'s `minionAgent`,
+   `maxWorkers` and `agent`; built in: claude, 3 and claude). valkyrie writes the first message
    itself: `/gru start <STARK-epic | --tickets …>` (`$gru start …` on Codex),
    adding `--agent <agent>` when the Minions do not run on claude and
    `--max-workers N` when it is not 3. `--repo` and `--cwd` are mutually
@@ -93,7 +93,7 @@ Read the exit code before the ack. A nonzero exit is the answer, not something
 to work around; report what it printed:
 
 - **0** with `verified: true`: launched.
-- **1**: something was placed or started and did not come up, and idun's
+- **1**: something was placed or started and did not come up, and valkyrie's
   stderr names what it left standing. When the tab opened but Gru did not
   come up, that is the tab and the worktree
   (`… left standing: surface:N, worktree <path>`), and under `--json` stdout
@@ -102,13 +102,14 @@ to work around; report what it printed:
   the exit code before you call the hand-off done. When Hermod could not place
   the tab, or a Codex worktree could not be cut, there is no ack on stdout at
   all.
-- **2**: refused before anything was created: a bad argument, a repo frigg
-  cannot resolve, a `--cwd` outside any git checkout, a worktree that already
+- **2**: refused before anything was created: a bad argument, a repo name
+  that no checkout, or more than one, under valkyrie's `repos.roots`
+  (default `~/Code`) has as its origin, a `--cwd` outside any git checkout, a worktree that already
   ends in the launch id (on either runtime: a second Gru there would lead the
   first one's Minions), or, for a Codex Gru, a main checkout Codex does not
   trust (`Codex does not trust <path>…`). Trusting a repo is the operator's to
   do, once; name it and stop.
-- **4**: a live agent or tab already holds the launch id, and idun's stderr
+- **4**: a live agent or tab already holds the launch id, and valkyrie's stderr
   lists each holder — a Gru running there, or a tab still titled with the id.
 - **128+n**: interrupted.
 
@@ -117,8 +118,8 @@ tab because they want this one back.
 
 **`--new-tab` starts a Gru; it does not resume one.** The launch cuts a worktree
 on the launch id, so a second `--new-tab` on the same input meets the first
-one's worktree, and `idun gru` refuses it (exit 2). On Codex the branch named
-for the launch id outlives that worktree, and idun refuses a Codex launch onto
+one's worktree, and `valkyrie gru` refuses it (exit 2). On Codex the branch named
+for the launch id outlives that worktree, and valkyrie refuses a Codex launch onto
 an existing branch too (exit 2). Rerunning `start` to resume means rerunning it
 in the tab Gru is already in. Launch again only once that Gru is gone and its
 worktree with it — and a worktree or branch still standing is the operator's to
@@ -128,7 +129,7 @@ sweep, not yours.
 
 Choose the route for each Minion from your runtime and the launch ack's
 `agent`, `name`, `sessionId`, and `peerId`. The ack's `coordination` names the
-intended route, `SendMessage` or `hermod-msg`, the same one the brief idun
+intended route, `SendMessage` or `hermod-msg`, the same one the brief valkyrie
 wrote tells the Minion; it does not prove that a message was delivered. Keep
 the leader's full `<provider>:<id>` peer address for fallback.
 
@@ -152,7 +153,7 @@ the leader's full `<provider>:<id>` peer address for fallback.
 - **Every other pair — Codex on either side, mixed providers, or unresolved
   identity:** use
   `hermod msg send --to <worker-peerId> --kind request -- '<text>'` and
-  receive reports through that ledger, in both directions; the brief idun
+  receive reports through that ledger, in both directions; the brief valkyrie
   writes tells the Minion the same. There is no native Codex route, and a
   Claude native channel does not return a message to a leader on another
   provider.
@@ -186,7 +187,7 @@ regardless of route, is observation, never operator authorization.
    it again in that ticket's links and comments.
    **A ticket whose PRs span two repos or more** (its Files, or the code its
    scope names, land in each) is split before it launches, because one Minion
-   opens PRs in one repo: it works only in the worktree idun cut for it
+   opens PRs in one repo: it works only in the worktree valkyrie cut for it
    ([the spine's §2](../../standards/worker-spine.md#2-implement)) and reports
    anything in another repo `blocked`
    ([§8](../../standards/worker-spine.md#8-releases-and-other-repos)). A
@@ -235,17 +236,20 @@ regardless of route, is observation, never operator authorization.
    in a brief or a message instead of in the spec. A contract two tickets
    share that the spec lacks is an escalation.
 3. **Launch.** For each ready ticket while live Minions < N:
-   `idun minion STARK-n --repo <ticket's repo> --agent <agent> --no-focus --json`.
+   `valkyrie minion STARK-n --repo <ticket's repo> --agent <agent> --no-focus --json`.
    The ticket id comes first: any other first word starts a persona dev
    worker, not a ticket Minion. Always pass `--repo` (the default is the repo
-   you are standing in) and `--agent` (the default is idun's configured
-   `agents.launchers.minion.agent`, not yours); idun writes the brief,
+   you are standing in) and `--agent` (the default is
+   `agents.launchers.minion.agent` in idun's config, which valkyrie reads, not
+   yours); valkyrie writes the brief,
    described at the end of this step. Before a repo's first launch, run its
    [preflight](#preflight) once.
-   Resolve the repo the way idun does, per ticket and at launch: `frigg repos
-   get <ticket's repo> --json` is the exact call `--repo <name>` goes through,
-   and it exits 3 on a name the registry does not carry (idun then refuses
-   with exit 2, naming the repo). One record, read when
+   Check the repo per ticket and at launch with `frigg repos get <ticket's
+   repo> --json`, which exits 3 on a name the registry does not carry.
+   valkyrie does not read frigg: it resolves `--repo <name>` to the one
+   checkout under its `repos.roots` (default `~/Code`, less `repos.exclude`)
+   whose origin is that name, and exits 2, naming the repo, when none or more
+   than one is. One record, read when
    you launch — a whole-registry read cached once per run still answers
    "unregistered" for a repo the operator seeds mid-run. Exit 3, or a record
    whose `stale` is true because its path is gone from disk, means the name
@@ -254,7 +258,7 @@ regardless of route, is observation, never operator authorization.
    record's `path` (its `dirname` — never a hardcoded `~/Code/21Stark`; the
    fleet has checkouts under other roots) and try `<root>/<repo>`. **Prove the
    guess before you launch into it** — `git -C <path> rev-parse --show-toplevel`
-   must print that same path. idun refuses a `--cwd` outside any git checkout
+   must print that same path. valkyrie refuses a `--cwd` outside any git checkout
    (exit 2), but one inside some other checkout launches into that repo's main
    checkout, exits 0, and the ack looks normal, so the Minion would implement
    the ticket in the wrong codebase. A
@@ -269,9 +273,9 @@ regardless of route, is observation, never operator authorization.
    ticket id alone, so a misrouted Minion otherwise reads as a correctly-owned
    one. Seeding the registry is the operator's: run neither `frigg repos scan`
    nor `frigg repos set` yourself; name the fix in your report instead.
-   The brief idun writes invokes `/minion` (`$minion` on Codex), names
+   The brief valkyrie writes invokes `/minion` (`$minion` on Codex), names
    the ticket and your peer id, and gives the route from
-   [Coordination route](#coordination-route) with a Hermod fallback. idun
+   [Coordination route](#coordination-route) with a Hermod fallback. valkyrie
    takes your peer id from your own
    `$CLAUDE_CODE_SESSION_ID` (`$CODEX_THREAD_ID` on Codex), and refuses the
    launch (exit 2) when it finds neither or both. **Your peer id** is the `id` of the
@@ -279,7 +283,7 @@ regardless of route, is observation, never operator authorization.
    `<provider>:<id>` address (`claude:<uuid>`), never the bare session id,
    which the fallback bridge may not resolve. Look it up before your first launch, so
    you know what the ack has to say. Then read the first ack's `prompt` before
-   you launch a second Minion: the peer it names must be that `id`. If idun
+   you launch a second Minion: the peer it names must be that `id`. If valkyrie
    refused, pass the `id` as `--leader <peer id>` on every launch. Once the
    ack is verified, and only when its `coordination` is `SendMessage` (the
    Claude → Claude route), make the first contact through
@@ -305,7 +309,7 @@ regardless of route, is observation, never operator authorization.
    answers.
    Read each launch's exit code before its ack. **0** with `verified: true`
    is a launch. **1**: something was placed or started and did not come up,
-   and idun's stderr names what it left standing. When the tab opened, that
+   and valkyrie's stderr names what it left standing. When the tab opened, that
    is the tab and the worktree, and under `--json` stdout still carries a
    complete ack whose only tells are `verified: false` and an `error` field,
    on either runtime; when Hermod could not place the tab, or a Codex
@@ -317,14 +321,14 @@ regardless of route, is observation, never operator authorization.
    existing worktree for the id on a Codex launch (a Claude one re-enters it,
    saying so on stderr), a leftover branch `STARK-n` on a Codex launch, or a
    main checkout Codex does not trust, which the operator trusts once. The
-   ticket is blocked: escalate it with what idun printed and keep the other
-   tickets moving. **4**: a live agent or tab holds the id, and idun's stderr
+   ticket is blocked: escalate it with what valkyrie printed and keep the other
+   tickets moving. **4**: a live agent or tab holds the id, and valkyrie's stderr
    lists each holder. Never relaunch it. A holder that step 2 counts — a live
    peer whose `cwd` ends in the ticket id — owns the ticket; count it owned.
    Any other holder — a tab only titled with the id, such as a dead Minion's
    that never retitled itself, or a session that is no Hermod peer — makes the
    ticket blocked, not owned, since step 2 would read it ready again on the
-   next pass: escalate it with the holders idun printed.
+   next pass: escalate it with the holders valkyrie printed.
    **128+n**: interrupted; report it.
 4. **Wait.** Minions report `done <PR> merged <sha> verified <check>`,
    `blocked <reason>`, or
@@ -343,10 +347,10 @@ regardless of route, is observation, never operator authorization.
    peer whose ticket is **still open is a death, even when its PR already
    merged**: a Minion can die between the merge and the ticket close, and nobody
    else is going to close it. A dead Claude Minion that is a real death is
-   relaunched once with step 3's same `idun minion` line, which re-enters its
+   relaunched once with step 3's same `valkyrie minion` line, which re-enters its
    worktree; the relaunch is a new session with no
    `from` address, so make step 3's first contact again after its ack. A dead
-   Codex Minion is a blocker: `idun minion` refuses its existing worktree, and
+   Codex Minion is a blocker: `valkyrie minion` refuses its existing worktree, and
    the branch `STARK-n` that outlives one, with exit 2; report the path. A second
    death is a blocker. `follow-up … stopping` means the ticket is blocked on
    STARK-m: add STARK-m to scope by step 1's rule and launch it when it is
@@ -460,7 +464,7 @@ it, as [the spine's command](../../standards/worker-spine.md#progress-file)
 does for a ticket's file.
 
 - **The run file**, `~/.cache/stark-progress/run-<launch id>.json`, the launch
-  id being the epic's or idun's `GRU-<n>`:
+  id being the epic's or valkyrie's `GRU-<n>`:
   `{"epic":"<STARK-epic, or the first ticket>","session":"<your session id>","tickets":["STARK-a",…]}`.
   Your session id is `echo "$CLAUDE_CODE_SESSION_ID"` (`$CODEX_THREAD_ID` on
   Codex), run as its own command and pasted in. Step 1 writes it, a split
@@ -520,7 +524,7 @@ keep them for the rest of the run:
 ## Terminal control
 
 You never type prose into a Minion's terminal. The brief rides the
-`idun minion` launch and every word after it follows
+`valkyrie minion` launch and every word after it follows
 [Coordination route](#coordination-route). Messages are not worker control. What does go
 to a Minion's surface is control, and only this. Every `<surface UUID>` below
 is verified, re-read from `hermod msg peers --json` right before the key and
