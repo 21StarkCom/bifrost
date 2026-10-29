@@ -347,7 +347,7 @@ test("plugin hooks are declared inline on stark-ops alone and run tools from thi
   assert.deepEqual(
     withHooks.map((p) => p.name),
     ["stark-ops"],
-    `${MARKETPLACE_REL}: only stark-ops ships hooks (the fact-routing hook, next to /stark-memory).`,
+    `${MARKETPLACE_REL}: only stark-ops ships hooks (the fact-routing hook, next to /stark-memory, and the ask-guard Stop hook).`,
   );
   const hooks = withHooks[0].hooks;
   assert.ok(
@@ -373,6 +373,19 @@ test("plugin hooks are declared inline on stark-ops alone and run tools from thi
     ],
     `${MARKETPLACE_REL}: stark-ops must wire tools/fact_routing_hook.ts on PostToolUse as two command hooks, ` +
       `gated to auto-memory files by \`if\`, one for Write and one for Edit.`,
+  );
+  // Stop has no matcher: one ungated handler, with a short timeout so a hung
+  // node never holds a turn's end.
+  type StopHook = { type?: unknown; if?: unknown; command?: unknown; timeout?: unknown };
+  assert.deepEqual(
+    groups.Stop?.map((g) => [g.matcher, (g.hooks as StopHook[] | undefined)?.map((h) => [h.type, h.if, h.command, h.timeout])]),
+    [[undefined, [["command", undefined, 'node "${CLAUDE_PLUGIN_ROOT}/tools/ask_guard_hook.ts"', 10]]]],
+    `${MARKETPLACE_REL}: stark-ops must wire tools/ask_guard_hook.ts on Stop as one command hook with a 10 s timeout.`,
+  );
+  assert.deepEqual(
+    Object.keys(groups).sort(),
+    ["PostToolUse", "Stop"],
+    `${MARKETPLACE_REL}: stark-ops ships hooks on PostToolUse and Stop only.`,
   );
   for (const [event, list] of Object.entries(groups)) {
     assert.ok(Array.isArray(list), `${MARKETPLACE_REL}: stark-ops \`hooks.${event}\` must be an array of matcher groups.`);
