@@ -1,6 +1,6 @@
 // fact_routing_hook CLI end to end: a PostToolUse payload on stdin, a throwaway
-// HOME, and the two things Claude Code consumes — the queue line and the stdout
-// JSON whose `additionalContext` is the only PostToolUse output the model sees.
+// HOME, and what Claude Code consumes: the stdout JSON whose `additionalContext`
+// is the only PostToolUse output the model sees. The hook writes no file.
 import { strict as assert } from "node:assert";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -44,12 +44,17 @@ function advisoryOf(stdout: string): string {
   return JSON.parse(stdout).hookSpecificOutput.additionalContext;
 }
 
-function queueLines(cfg: string): string[] {
-  const q = path.join(cfg, ".fact-routing-queue.jsonl");
-  return fs.existsSync(q) ? fs.readFileSync(q, "utf8").split("\n").filter(Boolean) : [];
+// Every file under a dir, relative and sorted: the hook adds none to the config dir.
+function filesUnder(dir: string): string[] {
+  if (!fs.existsSync(dir)) return [];
+  return (fs.readdirSync(dir, { recursive: true }) as string[])
+    .filter((rel) => fs.statSync(path.join(dir, rel)).isFile())
+    .map((rel) => rel.split(path.sep).join("/"))
+    .sort();
 }
+const ONLY_THE_MEMORY = ["projects/p/memory/probe.md"];
 
-test("a flagged memory is queued and its advisory reaches the model as additionalContext", () => {
+test("a flagged memory's advisory reaches the model as additionalContext, and the hook writes no file", () => {
   withMemory(".claude", (home, cfg, memory) => {
     const r = run(home, memory);
     assert.equal(r.status, 0, r.stderr);
@@ -57,9 +62,11 @@ test("a flagged memory is queued and its advisory reaches the model as additiona
     const out = JSON.parse(r.stdout);
     assert.equal(out.hookSpecificOutput.hookEventName, "PostToolUse");
     assert.match(out.hookSpecificOutput.additionalContext, /^↳ fact-routing: probe\.md looks like it belongs in the vault-ecosystem corpus/);
-    assert.ok(out.hookSpecificOutput.additionalContext.includes(path.join(cfg, ".fact-routing-queue.jsonl")));
-    assert.equal(queueLines(cfg).length, 1);
-    assert.equal(JSON.parse(queueLines(cfg)[0]).file, memory);
+    assert.match(
+      out.hookSpecificOutput.additionalContext,
+      /Move it there now only if it says how fleet repos relate or when to reach one; else keep it here\. Nothing records this flag for later\.$/,
+    );
+    assert.deepEqual(filesUnder(cfg), ONLY_THE_MEMORY);
     assert.doesNotMatch(out.hookSpecificOutput.additionalContext, FALLBACK_NOTE);
   });
 });
@@ -70,7 +77,7 @@ test("slugs come from the corpus checkout's entity folders, not the built-in lis
     assert.equal(r.status, 0, r.stderr);
     assert.match(advisoryOf(r.stdout), /mentions zz-fixture-repo /);
     assert.doesNotMatch(advisoryOf(r.stdout), FALLBACK_NOTE);
-    assert.equal(queueLines(cfg).length, 1);
+    assert.deepEqual(filesUnder(cfg), ONLY_THE_MEMORY);
   }, FIXTURE_ONLY);
 });
 
@@ -83,16 +90,16 @@ test("with no corpus the hook falls back to the built-in list and says so, flag 
     assert.match(note, FALLBACK_NOTE);
     assert.ok(note.includes(path.join(home, "no-corpus")));
     assert.deepEqual(rest, []);
-    assert.equal(queueLines(cfg).length, 1);
+    assert.deepEqual(filesUnder(cfg), ONLY_THE_MEMORY);
   });
-  // The fixture-only slug is in no built-in list, so nothing is flagged or
-  // queued — and the fallback is still announced.
+  // The fixture-only slug is in no built-in list, so nothing is flagged, and
+  // the fallback is still announced.
   withMemory(".claude", (home, cfg, memory) => {
     const quiet = run(home, memory, { ATLAS_ECOSYSTEM_PATH: path.join(home, "no-corpus") });
     assert.equal(quiet.status, 0, quiet.stderr);
     assert.match(advisoryOf(quiet.stdout), FALLBACK_NOTE);
     assert.doesNotMatch(advisoryOf(quiet.stdout), /looks like it belongs/);
-    assert.deepEqual(queueLines(cfg), []);
+    assert.deepEqual(filesUnder(cfg), ONLY_THE_MEMORY);
   }, FIXTURE_ONLY);
 });
 
@@ -101,32 +108,26 @@ test("an unflagged memory under a readable corpus prints nothing", () => {
     const r = run(home, memory);
     assert.equal(r.status, 0, r.stderr);
     assert.equal(r.stdout, "");
-    assert.deepEqual(queueLines(cfg), []);
+    assert.deepEqual(filesUnder(cfg), ONLY_THE_MEMORY);
   }, "---\nname: probe\ntype: project\n---\nRemember to buy milk.\n");
 });
 
-test("CLAUDE_CONFIG_DIR moves the memory root and the queue, and the fold reads that queue", () => {
+test("CLAUDE_CONFIG_DIR moves the memory root", () => {
   withMemory(".claude-work", (home, cfg, memory) => {
     const r = run(home, memory, { CLAUDE_CONFIG_DIR: cfg });
     assert.equal(r.status, 0, r.stderr);
-    assert.equal(queueLines(cfg).length, 1);
+    assert.match(advisoryOf(r.stdout), /^↳ fact-routing: probe\.md looks like it belongs in the vault-ecosystem corpus/);
+    assert.deepEqual(filesUnder(cfg), ONLY_THE_MEMORY);
     assert.equal(fs.existsSync(path.join(home, ".claude")), false);
-
-    const fold = spawnSync(process.execPath, ["--no-warnings", path.join(import.meta.dirname, "fact_routing_fold.ts")], {
-      env: { ...process.env, HOME: home, CLAUDE_CONFIG_DIR: cfg },
-      encoding: "utf8",
-    });
-    assert.equal(fold.status, 0, fold.stderr);
-    assert.match(fold.stdout, /→ vault-ecosystem corpus {2}\(1\)/);
   });
 });
 
-test("a repo's own .claude/projects/*/memory file is not auto-memory: no output, no queue", () => {
+test("a repo's own .claude/projects/*/memory file is not auto-memory: no output, no file", () => {
   withMemory(path.join("Code", "r", ".claude"), (home, cfg, memory) => {
     const r = run(home, memory); // the profile is ~/.claude, not the repo's .claude
     assert.equal(r.status, 0, r.stderr);
     assert.equal(r.stdout, "");
-    assert.deepEqual(queueLines(cfg), []);
-    assert.deepEqual(queueLines(path.join(home, ".claude")), []);
+    assert.deepEqual(filesUnder(cfg), ONLY_THE_MEMORY);
+    assert.equal(fs.existsSync(path.join(home, ".claude")), false);
   });
 });

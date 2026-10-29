@@ -1,7 +1,7 @@
 // Tests for `tools/fact_routing_hook_lib.ts` (STARK-1785). Covers the classifier
 // (the four routing classes + the null cases), the frontmatter/body parsers, the
 // whole-word slug matcher (hyphenated slugs, no substring false-hits), the
-// queue roundtrip, and the corpus slug reader. Every fixture is synthetic: real
+// config-dir and auto-memory path rules, and the corpus slug reader. Every fixture is synthetic: real
 // memory files are never copied in.
 import { strict as assert } from "node:assert";
 import fs from "node:fs";
@@ -14,10 +14,7 @@ import {
   bodyOf,
   descriptionOf,
   fleetSlugsMentioned,
-  makeEntry,
-  appendToQueue,
   claudeConfigDir,
-  defaultQueuePath,
   isAutoMemoryPath,
   resolveFleetSlugs,
   defaultCorpusPath,
@@ -134,28 +131,9 @@ test("null — MEMORY.md index and no-signal facts are not flagged", () => {
   assert.equal(classifyMemory(note("project", "Remember to buy milk on the way home."), "/x/projects/p/memory/f.md", SLUGS), null);
 });
 
-test("queue roundtrip — makeEntry extracts the project, appendToQueue writes JSONL", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fact-route-"));
-  try {
-    const q = path.join(dir, "q.jsonl");
-    const fp = "/Users/x/.claude/projects/-Users-x-Code-21Stark-plume/memory/foo.md";
-    const entry = makeEntry({ route: "corpus", reason: "r" }, fp, "  a   b  ", "2026-08-29T00:00:00Z");
-    assert.equal(entry.project, "-Users-x-Code-21Stark-plume");
-    assert.equal(entry.snippet, "a b");
-    appendToQueue(entry, q);
-    appendToQueue(entry, q);
-    const lines = fs.readFileSync(q, "utf8").split("\n").filter(Boolean);
-    assert.equal(lines.length, 2);
-    assert.equal(JSON.parse(lines[0]).route, "corpus");
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test("claudeConfigDir honors CLAUDE_CONFIG_DIR, else ~/.claude; the queue lives under it", () => {
+test("claudeConfigDir honors CLAUDE_CONFIG_DIR, else ~/.claude", () => {
   assert.equal(claudeConfigDir({}, "/home/x"), "/home/x/.claude");
   assert.equal(claudeConfigDir({ CLAUDE_CONFIG_DIR: "/home/x/.claude-work" }, "/home/x"), "/home/x/.claude-work");
-  assert.equal(defaultQueuePath("/home/x/.claude"), "/home/x/.claude/.fact-routing-queue.jsonl");
 });
 
 test("isAutoMemoryPath matches <configDir>/projects/<p>/memory/<n>.md only", () => {

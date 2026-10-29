@@ -1,14 +1,13 @@
 /**
- * fact-routing hook — classifier + queue.
+ * fact-routing hook — classifier.
  *
  * A `PostToolUse` hook fires when Claude writes a `<project>/memory/<name>.md` auto-memory
  * file. This lib decides whether that fact was mis-stored: a **product-level
  * fleet fact** belongs in the vault-ecosystem corpus, a **repo
  * implementation/invariant** belongs in that repo's own `CLAUDE.md` — either way
  * it is stranded in per-project private memory. When a memory smells class-1
- * (corpus) or class-2 (repo-CLAUDE) the hook appends it to a routing queue for a
- * cheap incremental fold, instead of leaving it to be recovered by an expensive
- * sweep.
+ * (corpus) or class-2 (repo-CLAUDE) the hook tells the writing session, which
+ * holds the context to route it at once. No queue keeps the flag for later.
  *
  * Full rule: vault-ecosystem/docs/specs/2026-08-29-fact-routing-and-corpus-intake-spec.md
  * (STARK-1781). This is the STARK-1785 safety net.
@@ -26,21 +25,9 @@ export interface RoutingFlag {
   reason: string;
 }
 
-export interface QueueEntry extends RoutingFlag {
-  ts: string;
-  project: string;
-  file: string;
-  snippet: string;
-}
-
 /** Claude Code's config dir: `$CLAUDE_CONFIG_DIR`, else `~/.claude`. */
 export function claudeConfigDir(env: NodeJS.ProcessEnv = process.env, home: string = os.homedir()): string {
   return env.CLAUDE_CONFIG_DIR ? path.resolve(env.CLAUDE_CONFIG_DIR) : path.join(home, ".claude");
-}
-
-/** The routing queue: append-only JSONL under the Claude config dir. */
-export function defaultQueuePath(configDir: string = claudeConfigDir()): string {
-  return path.join(configDir, ".fact-routing-queue.jsonl");
 }
 
 /** True for a Claude auto-memory file, `<configDir>/projects/<project>/memory/<name>.md`,
@@ -169,19 +156,6 @@ export function classifyMemory(
     return { route: "corpus", reason: `cross-repo relationship: ${slugs.slice(0, 4).join("/")}` };
   }
   return null;
-}
-
-export function makeEntry(flag: RoutingFlag, filePath: string, body: string, now: string): QueueEntry {
-  const m = filePath.match(/\/projects\/([^/]+)\/memory\//);
-  const project = m ? m[1] : "unknown";
-  const snippet = body.replace(/\s+/g, " ").trim().slice(0, 200);
-  return { ...flag, ts: now, project, file: filePath, snippet };
-}
-
-/** Append one JSONL line. Never throws on a normal FS; caller still guards. */
-export function appendToQueue(entry: QueueEntry, queuePath: string): void {
-  fs.mkdirSync(path.dirname(queuePath), { recursive: true });
-  fs.appendFileSync(queuePath, JSON.stringify(entry) + "\n", "utf8");
 }
 
 /** Folder names under `repos/` or `systems/` that are scaffolding, never an
