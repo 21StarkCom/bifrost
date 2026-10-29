@@ -2,7 +2,7 @@
 name: stark-fresh-eyes
 description: >-
   One-shot zero-context review of a prompt, research brief, spec, or doc before it ships: a single read-only subagent re-verifies every checkable claim by a DIFFERENT method and reports defects only. Findings return to the author once — no second round, no loops. Use for fresh eyes, review prompt, check brief.
-argument-hint: '<doc-path> [--focus "aspect"] [--model opus|fable]'
+argument-hint: '<doc-path> [--focus "aspect"] [--model <name>]'
 disable-model-invocation: true
 ---
 
@@ -53,8 +53,10 @@ then returns defects to you exactly once.
 
 ## Phase 2 — Dispatch (one subagent)
 
-Model: `fable` by default (judgment task); `--model opus` for mechanical-heavy
-docs. Dispatch a read-only subagent whose prompt is: the doc path, the claim
+Model: `opus` by default. Do not pass `--model fable`: fable refuses this
+contract (`[reasoning_extraction]`, on its "show your measurement" wording), and
+a refused or failed dispatch is not a pass with zero defects, so dispatch again
+with `opus`. Dispatch a read-only subagent whose prompt is: the doc path, the claim
 classes from Phase 1 with the concrete different-method instruction per class,
 and this contract **verbatim**:
 
