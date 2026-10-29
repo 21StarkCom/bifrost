@@ -72,14 +72,16 @@ file and renames it over the old one, so the mod never reads a half-written
 file:
 
 ```
-mkdir -p ~/.cache/stark-progress && jq -n --arg title '<ticket title>' --arg stage '<stage>' --arg pr '<PR url, or empty>' '{id: "STARK-n", title: $title, stage: $stage, pr: ($pr | select(. != "") // null), updated: (now | todate)}' > ~/.cache/stark-progress/STARK-n.json.tmp && mv ~/.cache/stark-progress/STARK-n.json.tmp ~/.cache/stark-progress/STARK-n.json
+mkdir -p ~/.cache/stark-progress && jq -n --arg title '<ticket title>' --arg stage '<stage>' --arg pr '<PR url, or empty>' '{id: "STARK-n", title: $title, stage: $stage, pr: ($pr | select(. != "") // null), updated: (now | todate), worktree: $ENV.PWD}' > ~/.cache/stark-progress/STARK-n.json.tmp && mv ~/.cache/stark-progress/STARK-n.json.tmp ~/.cache/stark-progress/STARK-n.json
 ```
 
 Single-quote each value, with every `'` inside it written `'"'"'` and any
 backslash dropped: on Claude a worktree session's guard refuses a command
 carrying a backslash, so the backslash-escaped form of a quote never runs
 there. Leave `pr` empty until you have one (it writes `"pr":null`); `jq` does
-the JSON quoting, so a quote in the title cannot break the file. The stages,
+the JSON quoting, so a quote in the title cannot break the file. `worktree`
+is the folder the command runs in (`$ENV.PWD`, which needs no quoting), so run
+it from your worktree: the mod reads your commits and diff size there. The stages,
 in order:
 
 - `ticket` — once you have bound and read the ticket (step 1).
