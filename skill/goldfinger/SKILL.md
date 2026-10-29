@@ -105,7 +105,9 @@ text or value itself, else a usage error, printed as plain text on stderr when i
      JavaScript `alert`, `confirm` or `prompt` answers nothing until the dialog closes, while the
      window and the dialog's sheet do: the sheet's buttons and field are indexed and the page's
      content is missing. Such a walk takes 5 s longer. A second node that gives no answer, or the
-     window itself, fails the walk `timeout`.
+     window itself, fails the walk `timeout`. A Firefox window that shows a dialog over its page,
+     such as a new profile's Terms of Use dialog, has only that dialog in its tree: answer the
+     dialog first.
    - **A suspended web page.** WebKit suspends a web view's page a few seconds after its window
      shows, if the window is fully covered and no accessibility client has read the page yet. When
      `observe` or `find` meets such an empty web view, outside the Chromium family, goldfinger
@@ -242,7 +244,9 @@ text or value itself, else a usage error, printed as plain text on stderr when i
        open menu can take the key window. Nothing is activated. That is the background
        guarantee's exemption for the menu `--right` shows (the Gauntlet spec's Operator approval
        ruling 8). A `click` or `keys` that fires an item, or `keys <target> escape`, closes the
-       menu, and a pixel target inside the open menu goes to the menu's window.
+       menu, and a pixel target inside the open menu goes to the menu's window; on macOS 26, from
+       0.14.0 on, a single left click there presses the item at the point instead, and is
+       `background_unavailable` on no item or a disabled one.
    - `goldfinger type <target> <text> --json`: the text arrives exactly once
      - **WebKit fields** (an element in a `webarea` of an app outside the Chromium family) take
        the text over accessibility, as VoiceOver inserts it, never as keys: key events reach no
@@ -557,7 +561,10 @@ background verb reaches. `menu` and `window-state` take no `--observe`, and `dra
   mouse pointer stays where it is. `from` and `to` are targets in one window, aimed as `click`
   aims: an element at its visible centre, a pixel at its point. A control that tracks a press in
   its own loop may ignore the drags while the verb succeeds: check with `observe`, and set a
-  slider with `set-value`.
+  slider with `set-value`. On macOS 26, AppKit's drag and drop drops nothing: a view's drag
+  source, a table's row reorder and a web page's HTML5 drag and drop in WebKit end where they
+  started while the verb succeeds, since the drag session there follows only the mouse pointer;
+  SwiftUI's drags still drop. Check the drop with `--observe`.
 - `goldfinger drag <from> <to> [--via <target>]... [--observe] --foreground --json` (from 0.11.0
   on) drags along a path: one `--via` per point it passes through, in order, 1 to 64, each a
   target in `from`'s window, resolved and aimed as `to` is before anything is activated. Each
