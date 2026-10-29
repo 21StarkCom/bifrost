@@ -7,6 +7,8 @@ export type TicketFile = {
   stage: Stage
   pr: string | null
   updated: string
+  /** The worker's worktree, from the spine's command; absent in a v1 file. */
+  worktree?: string | null
 }
 
 /** `~/.cache/stark-progress/run-<id>.json`, one per Gru run. */
@@ -16,13 +18,63 @@ export type RunFile = {
   tickets: string[]
 }
 
-export type Row = { id: string; title: string; stage: Stage }
+/** One minute of a heartbeat: `at` is the minute since the epoch. */
+export type BeatMinute = { at: number; calls: number; fails: number }
 
-/** What the band draws: a Gru run's rows, or a worker's one row. */
-export type View = { heading: string | null; rows: Row[] }
+/**
+ * `~/.cache/stark-progress/<STARK-n>.beat.json`, the activity of a worker's own
+ * Claude session. The mod writes it, in that session alone.
+ */
+export type BeatFile = {
+  id: string
+  session: string
+  updated: string
+  /** The last time a tool call started or ended. */
+  lastActivity: string | null
+  /** The oldest tool call still running. */
+  running: { tool: string; since: string } | null
+  /** Calls and failures per minute, for the last 60 minutes. */
+  minutes: BeatMinute[]
+  /** The outcomes of the last 10 calls that ended, oldest first: `true` failed. */
+  recent: boolean[]
+}
+
+/** What git says of a worktree: commit times since its base (ms), and the diff size against it. */
+export type GitSignal = { commits: number[]; added: number; removed: number }
+
+export type Tone = 'good' | 'warn' | 'bad' | 'dim'
+
+export type Verdict = {
+  word: 'done' | 'blocked' | 'idle' | 'moving' | 'slow' | 'stalled' | 'waiting'
+  text: string
+  tone: Tone
+}
+
+/** One piece of the stage track: done stages, the stages to come, or the current stage in its verdict's tone. */
+export type Seg = { ch: string; tone: 'done' | 'todo' | Tone }
+
+/** One 5-minute cell of a row's timeline. */
+export type Cell = { ch: string; kind: 'none' | 'quiet' | 'busy' | 'fail' | 'milestone' | 'running' }
+
+export type Row = {
+  id: string
+  title: string
+  stage: Stage
+  inStage: string
+  track: Seg[]
+  cells: Cell[]
+  verdict: Verdict
+  failed: string | null
+  diff: string | null
+}
+
+export type Count = { label: string; tone: Tone }
+
+/** What the band draws: a Gru run's rows with a header and a legend, or a worker's one row. */
+export type View = { heading: string | null; counts: Count[]; hasLegend: boolean; rows: Row[] }
 
 declare module 'claude-code' {
   interface PluginState {
-    'stark-progress': { view: View | null }
+    'stark-progress': { view: Shaped<View | null> }
   }
 }

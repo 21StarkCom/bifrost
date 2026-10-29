@@ -430,8 +430,10 @@ regardless of route, is observation, never operator authorization.
 ## Progress band
 
 The `stark-progress` mod (`mods/stark-progress/`, its own install) draws a
-bar per ticket above your prompt from files under `~/.cache/stark-progress/`;
-its README is the contract. The files are yours to write whether or not the
+row per ticket above your prompt from files under `~/.cache/stark-progress/`:
+its stage, a one-hour timeline of tool calls and milestones, and a verdict
+(`moving`, `slow`, `stalled`, `idle`, `blocked`, `done`). Its README is the
+contract. The files are yours to write whether or not the
 mod is installed, on either runtime; a write that fails costs one line and
 never holds the run. Write each file whole, to a `.tmp` beside it renamed over
 it, as [the spine's command](../../standards/worker-spine.md#progress-file)
@@ -452,7 +454,9 @@ does for a ticket's file.
   the closed count. The stamps: `blocked` on a `blocked` or
   `follow-up … stopping` report (step 4), and `closed` once you confirm the
   ticket finished (step 5). The `closed` stamp is what counts a ticket no
-  worker writes for: a ticket step 2 finds closed already has none.
+  worker writes for: a ticket step 2 finds closed already has none. A stamp
+  writes your own folder as `worktree`; the mod reads git only in a folder
+  named for the ticket, so it skips yours.
 
 ## Preflight
 
