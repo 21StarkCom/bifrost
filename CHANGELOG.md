@@ -13,6 +13,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=412 runId=412 sha=79e1f3e3 -->
+- `/stark-fresh-eyes` now defaults to opus, since fable refuses its contract; a failed dispatch no longer counts as zero defects. Docs state bifrost and idun share no code.
 <!-- idun:pr-merge pr=410 runId=410 sha=b4f9db98 -->
 - Worker gates removed: Gru, Minion and Agnes act on their launch as the GO; `rules_audit` now flags gate phrases as `gate` candidates.
 <!-- idun:pr-merge pr=409 runId=409 sha=50ba4771 -->
