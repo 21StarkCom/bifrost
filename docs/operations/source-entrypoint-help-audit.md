@@ -83,6 +83,8 @@ argument: …" — wording alone cannot tell a working help from a broken one.
 | --- | --- |
 | `alert_delivery.ts` | default/check, JSON |
 | `approach_contract.ts` | plan-file, force-confirm, JSON |
+| `ask_guard_hook.ts` | Stop stdin protocol; argv help exits first |
+| `ask_guard_metric.ts` | default (one week), week, JSON, notify, install-schedule, uninstall-schedule |
 | `asset_links.ts` | check, install, JSON |
 | `context_compactor.ts` | default, session-id, JSON |
 | `copilot_land.ts` | branch-name, prepare-branch, land |
