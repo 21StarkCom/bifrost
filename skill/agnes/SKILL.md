@@ -173,8 +173,9 @@ of it, and each of them exists because there is no leader:
 
 Your own repo's release is yours to run, by
 [the spine's §8](../../standards/worker-spine.md#8-releases-and-other-repos).
-Anything in a repo other than your own is a stopping exit by the same
-section: `blocked`, naming the repo and the PR, run or step.
+A need in another repo is yours to act on by the same section, since no
+leader acts on it: file a sub-ticket in that repo, launch its Agnes, and wait
+for it like a dependency.
 
 ## Progress band
 

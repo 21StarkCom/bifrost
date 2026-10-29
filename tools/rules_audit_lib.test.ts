@@ -298,6 +298,70 @@ test("narrative: ticket history is a candidate; ids inside code spans do not cou
   assert.deepEqual(r.candidates.filter((c) => c.kind === "narrative").map((c) => c.line), [1, 2]);
 });
 
+test("gate: every gate phrase is a candidate, without case, on the line where it starts", () => {
+  const r = audit({
+    "CLAUDE.md": [
+      "- A tag needs a GO first.",
+      "- Publish only with a GO from the operator.",
+      "- A new commit is The Operator's call.",
+      "- Re-run only on the operator’s word.",
+      "- That repo is not yours.",
+      "- Never, whoever asks.",
+      "- Do not add tickets the operator did not name.",
+      "- Ask each run before moving it.",
+      "- A push runs only on the operator's GO.",
+      "- Every destructive step needs the operator's go.",
+      "- Copyleft code needs the operator's OK.",
+      "- A locked screen is the operator's to unlock.",
+    ].join("\n"),
+  });
+  const gates = r.candidates.filter((c) => c.kind === "gate");
+  assert.deepEqual(gates.map((c) => c.line), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  assert.match(gates[3].detail, /"the operator’s word"/);
+  assert.equal(gates[0].file, "CLAUDE.md");
+});
+
+test("gate: a phrase wrapped across lines or emphasis matches; one candidate per sentence", () => {
+  const r = audit({
+    "AGENTS.md": [
+      "Intro line.",
+      "",
+      "A window there is the operator's: ask",
+      "each run before moving it. The tab is reaped, and that is the **operator's call**,",
+      "not yours. Then report it.",
+    ].join("\n"),
+  });
+  const gates = r.candidates.filter((c) => c.kind === "gate");
+  assert.equal(gates.length, 2, JSON.stringify(gates));
+  assert.equal(gates[0].line, 3);
+  assert.equal(gates[0].text, "A window there is the operator's: ask each run before moving it.");
+  assert.equal(gates[1].line, 4);
+  assert.match(gates[1].detail, /"the operator's call", "not yours"/);
+});
+
+test("gate: code spans, quotes, the Go language and longer words do not count", () => {
+  const r = audit({
+    "CLAUDE.md": [
+      "- The check flags `needs a GO` and `the operator's call`.",
+      "- A gate reads \"ask each run\" or “not yours”.",
+      "- Build it with a Go toolchain; the repo needs a Go module.",
+      "- Do it yourself; the work is not yourself to hand off, and a go-to tool helps.",
+      "- Start with a go-to recipe.",
+      "- A launch is the operator's GO for all of its work.",
+    ].join("\n"),
+  });
+  assert.deepEqual(r.candidates.filter((c) => c.kind === "gate"), []);
+});
+
+test("gate: a long sentence is clipped near its match", () => {
+  const long = `${"word ".repeat(60)}then waits for the operator's word: Other sessions.`;
+  const r = audit({ "CLAUDE.md": `${long}\n` });
+  const [gate] = r.candidates.filter((c) => c.kind === "gate");
+  assert.ok(gate.text.length <= 160, gate.text);
+  assert.match(gate.text, /^…/);
+  assert.match(gate.text, /the operator's word/);
+});
+
 test("formatText renders the load summary, findings and candidates", () => {
   const out = formatText(audit({ ".claude/rules/a.md": "x\n" }));
   assert.match(out, /Always loaded at Claude Code session start/);

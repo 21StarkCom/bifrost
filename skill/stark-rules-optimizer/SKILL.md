@@ -24,8 +24,8 @@ evidence and a proposed fix.
 
 The deterministic half is `tools/rules_audit.ts` (load scope, globs, sizes,
 dead links, imports and paths). The judgement half — identifiers, commands and
-flags, duplication, contradictions, the repo's own policies, narrative bloat —
-is yours, in Phase 2, and it starts from the tool's `candidates[]`.
+flags, duplication, contradictions, the repo's own policies, narrative bloat,
+gates — is yours, in Phase 2, and it starts from the tool's `candidates[]`.
 
 ## Arguments
 
@@ -124,10 +124,17 @@ the summary — never promoted on suspicion.
    ids, dates and live-verify words. Promote one when the repo bans such
    content or the file loads every session; the fix condenses it to the rule
    that remains true today and leaves the history to the ticket or PR.
+5. **Gates.** `gate` candidates are sentences whose words give a step or a
+   choice to the operator ("needs a GO", "the operator's call", "ask each
+   run"; the tool's `GATE_PHRASES`). The root rules make the request the GO,
+   so the agent takes such a step unless it is on their "These still need a
+   GO" list. Promote a candidate that gives the operator any other step; the
+   fix rewrites it so the agent takes the step. Drop one that only names the
+   words, records history, or keeps a step on that list.
 
 Promoted findings use `category` `staleness`, `duplication`, `contradiction`,
-`policy` or `narrative-bloat`; `verdict` `CONFIRMED` when a command or a
-quoted line proves it, `PLAUSIBLE` when it is judgement; `severity` `high` for
+`policy`, `narrative-bloat` or `gate`; `verdict` `CONFIRMED` when a command or
+a quoted line proves it, `PLAUSIBLE` when it is judgement; `severity` `high` for
 a contradiction or anything in an always-loaded file that misleads, `medium`
 otherwise, `low` for cosmetic.
 
