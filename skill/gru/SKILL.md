@@ -421,7 +421,11 @@ regardless of route, is observation, never operator authorization.
    not just the claim. A `done` that names no verification, or names one with
    nothing on the PR behind it, is not confirmed. The one exception is
    `verified none (<why>)`: a ticket with no live surface has no run to post, so
-   judge the stated reason and confirm on the merged PR alone. If a check fails,
+   judge the stated reason and confirm on the merged PR alone. A sub-ticket
+   for a release alone, whose chain bumps nothing, has no PR of its own: its
+   report names the tag in place of the PR, so confirm the tag on the remote
+   (`git ls-remote --tags origin <tag>` in that repo), the version output §8
+   step 6 comments on the ticket, and the ticket status. If a check fails,
    tell the Minion what is missing if it
    is live; if it has ended, treat the report as a death — but only under step
    4's rule: a still-open ticket is relaunched, a ticket already `done`/`Closed`
@@ -616,10 +620,9 @@ session's guard refuses a `hermod` line carrying a variable
     confirmed. In a repo whose done is *released*, that `done` comes after
     the release, so two release chains never run there at once. A previous
     Minion that reports `blocked` instead keeps the hold until its block
-    clears (step 2); when the operator clears it, name the Minions it holds
-    in that escalation. That holds on every such repo, whatever its branch
-    protection says. pr-merge is
-    strict on its own: it rebases, waits for green, and exits
+    clears (step 2); when you escalate that block, name the Minions it
+    holds. That holds on every such repo, whatever its branch protection
+    says. pr-merge is strict on its own: it rebases, waits for green, and exits
     27 BASE_MOVED when the base moved meanwhile, so two concurrent runs keep
     rebasing each other whether or not the ruleset requires up-to-date
     branches.
@@ -672,9 +675,11 @@ session's guard refuses a `hermod` line carrying a variable
   it is the operator's. A dead Minion's tab is yours to reap, with
   `hermod close-session <surface UUID> --json`, never `poison-pill` —
   poison-pill only ever targets the caller's own surface, and close-session is
-  the mirror of it, refusing that one alone. Reap it only when its worktree is
-  clean and its branch has no unpushed commit, and never pass `--force`:
-  close-session's own gate refuses a dirty or unpushed tree, which is the
-  check. It takes the tab and the clean worktree, and leaves the branch. On a
-  refusal, or an ack whose `closed` is not `true`, report the surface and
-  leave it.
+  the mirror of it, refusing that one alone. Reap it only once step 4 is done
+  with it (its ticket confirmed under step 5, or its death a blocker), never
+  before step 4's relaunch, which re-enters that worktree. Reap it only when
+  its worktree is clean and its branch has no unpushed commit, and never pass
+  `--force`: close-session's own gate refuses a dirty or unpushed tree, which
+  is the check. It takes the tab and the clean worktree, and leaves the
+  branch. On a refusal, or an ack whose `closed` is not `true`, report the
+  surface and leave it.

@@ -285,20 +285,24 @@ PR your release left open in `21StarkCom/homebrew-tap`. Your own repo's PRs
 stay yours to merge.
 
 - **With a leader** (`/minion`): report `blocked`, naming the repo and the
-  PR, run or step. Your leader acts on it. Gru files a sub-ticket in that
-  repo, launches its Minion, and sends you `unblocked` once that ticket is
-  done.
+  PR, run or step. Your leader acts on it. A Gru leader files a sub-ticket
+  in that repo, launches its Minion, and sends you `unblocked` once that
+  ticket is done.
 - **With no leader** (`/agnes`): act on it yourself. A PR there that a live
   worker owns (a live `hermod msg peers` row whose `cwd` ends in that PR's
-  ticket id) is a dependency: wait for it, and file nothing. Otherwise write
-  a sub-ticket with `/stark-ticket` that names the need and your ticket,
-  file it with `alfred task new --on-repo <repo> --desc-file <file>
-  <title>`, and comment its id on your ticket. Launch its worker with
-  `idun agnes STARK-m --repo <repo> --no-focus --json`: exit 0 with
-  `verified: true` is a launch. Then wait for that ticket like a
-  dependency. About every 10 minutes (on Claude, a Bash `sleep 600` with
-  `run_in_background` wakes you), read `alfred task show STARK-m`, its PR,
-  and its worker's row in `hermod msg peers`. Go on where you stopped once
-  the ticket is closed and its PR is `MERGED`, or its tag is on the remote.
-  Any other launch exit, a worker that dies with its ticket open, or a stop
-  comment on that ticket is your `blocked` too, naming STARK-m.
+  ticket id) is a dependency: wait for that ticket by the poll below, and
+  file nothing. Otherwise write a sub-ticket with `/stark-ticket` that names
+  the need and your ticket, file it with `alfred task new --on-repo <repo>
+  --desc-file <file> <title>`, and comment its id on your ticket. Launch its
+  worker with `idun agnes STARK-m --repo <repo> --no-focus --json`: exit 0
+  with `verified: true` is a launch. Then wait for that ticket by this poll,
+  never as a stopping exit. About every 10 minutes (on Claude, a Bash
+  `sleep 600` with `run_in_background` wakes you), read
+  `alfred task show STARK-m`, its PR, and its worker's row in
+  `hermod msg peers`. Go on where you stopped once the ticket is closed and
+  its PR is `MERGED`, or its tag is on the remote. Any other launch exit, a
+  worker that dies with its ticket open, a stop comment on that ticket, or a
+  ticket still open after 4 hours is your `blocked` too, naming STARK-m. A
+  need whose ticket is the one that filed yours, or waits on yours, is a
+  cycle: no poll ends it, so it is your `blocked` at once, naming both
+  tickets.

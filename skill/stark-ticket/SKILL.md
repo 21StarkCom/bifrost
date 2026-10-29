@@ -130,7 +130,8 @@ below that differs in EI says so.
    > as fact that you cannot verify — mark "cannot verify", distinct from
    > wrong; (f) an instruction that permits two incompatible readings; (g) a
    > gate: text that gives a step or a choice to the operator ("needs a GO",
-   > "the operator's call"), or a hold or soak step. NOT
+   > "the operator's call"), or a hold or soak step the request does not
+   > name. NOT
    > defects: style, scope opinions, "could say more". Severity per finding:
    > **blocker** (the worker produces a wrong result) / **defect** (wrong
    > fact) / **note** (minor ambiguity). Cite the exact line. **Zero findings

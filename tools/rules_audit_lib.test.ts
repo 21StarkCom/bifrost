@@ -313,12 +313,35 @@ test("gate: every gate phrase is a candidate, without case, on the line where it
       "- Every destructive step needs the operator's go.",
       "- Copyleft code needs the operator's OK.",
       "- A locked screen is the operator's to unlock.",
+      "- Publish only with the operator's GO.",
+      "- A rerun waits for the go-ahead.",
     ].join("\n"),
   });
   const gates = r.candidates.filter((c) => c.kind === "gate");
-  assert.deepEqual(gates.map((c) => c.line), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  assert.deepEqual(gates.map((c) => c.line), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
   assert.match(gates[3].detail, /"the operator’s word"/);
   assert.equal(gates[0].file, "CLAUDE.md");
+  assert.equal(gates[0].text, "A tag needs a GO first.");
+});
+
+test("gate: a stray quote, a period in code and a table row do not hide or split a gate", () => {
+  const r = audit({
+    "CLAUDE.md": [
+      "Use a 12\" screen. A tag needs a GO first. Then say \"done\".",
+      "",
+      "Run `git log. x` and the push needs a GO, which is the operator's call.",
+      "",
+      "| Step | Who |",
+      "|------|-----|",
+      "| Publish | needs a GO |",
+    ].join("\n"),
+  });
+  const gates = r.candidates.filter((c) => c.kind === "gate");
+  assert.deepEqual(gates.map((c) => [c.line, c.text]), [
+    [1, "A tag needs a GO first."],
+    [3, "Run `git log. x` and the push needs a GO, which is the operator's call."],
+    [7, "| Publish | needs a GO |"],
+  ]);
 });
 
 test("gate: a phrase wrapped across lines or emphasis matches; one candidate per sentence", () => {
@@ -357,9 +380,9 @@ test("gate: a long sentence is clipped near its match", () => {
   const long = `${"word ".repeat(60)}then waits for the operator's word: Other sessions.`;
   const r = audit({ "CLAUDE.md": `${long}\n` });
   const [gate] = r.candidates.filter((c) => c.kind === "gate");
-  assert.ok(gate.text.length <= 160, gate.text);
+  assert.equal(gate.text.length, 160, gate.text);
   assert.match(gate.text, /^…/);
-  assert.match(gate.text, /the operator's word/);
+  assert.match(gate.text, /the operator's word: Other sessions\.$/);
 });
 
 test("formatText renders the load summary, findings and candidates", () => {
