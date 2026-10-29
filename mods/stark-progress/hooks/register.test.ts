@@ -119,3 +119,86 @@ test("a worker's tab writes its heartbeat, reads git, draws its row, and drops t
   expect(runs).toContainEqual(['rm', '-f', `${DIR}/STARK-1.beat.json`])
   expect(disk['STARK-1.beat.json']).toBe(undefined)
 })
+
+test('a call that ends after a flush is flushed again, and a deny counts as a failure', async ($, on) => {
+  const worktree = '/r/.claude/worktrees/STARK-1'
+  const disk: Record<string, string> = { 'STARK-1.json': ticket('STARK-1', 'pr') }
+  const writes: Record<string, string> = {}
+  mock.env(on, { HOME: '/h' })
+  const clock = mock.clock(on, { now: T0 })
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('session.root', () => ({ value: worktree }))
+  on('session.id', () => ({ value: 's1' }))
+  on('fs.list', () => ({
+    value: Object.keys(disk).map(name => ({ name, kind: 'file' as const, size: 1, mtimeMs: 0, isLink: false })),
+  }))
+  on('fs.read', (_$, e) => {
+    const text = disk[nameOf(e.path)]
+    if (text === undefined) throw new Error(`ENOENT ${e.path}`)
+    return { value: text }
+  })
+  on('fs.write', (_$, e) => {
+    writes[e.path] = e.text
+    return { value: undefined }
+  })
+  on('process.run', (_$, e) => {
+    const argv = [...e.argv]
+    if (argv[0] === 'mv') disk[nameOf(argv[3] ?? '')] = writes[argv[2] ?? ''] ?? ''
+    return { value: { exitCode: argv[0] === 'mv' ? 0 : 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  let release = () => {}
+  on('tool.call', async (_$, e) => {
+    const command = e.tool === 'Bash' ? e.command : ''
+    if (command === 'sleep') await new Promise<void>(resolve => (release = resolve))
+    return command === 'denied' ? { deny: 'no' } : { result: {} }
+  })
+
+  await $.session.start({ cwd: worktree, surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  const pending = $.tool.call({ tool: 'Bash', command: 'sleep' })
+  await clock.advance(1000)
+  expect(JSON.parse(disk['STARK-1.beat.json'] ?? '{}').running?.tool).toBe('Bash')
+
+  // No later call starts: the end alone must reach the file.
+  release()
+  await pending
+  await clock.advance(5000)
+  expect(JSON.parse(disk['STARK-1.beat.json'] ?? '{}').running).toBe(null)
+
+  await $.tool.call({ tool: 'Bash', command: 'denied' }).catch(() => undefined)
+  await clock.advance(5000)
+  expect(JSON.parse(disk['STARK-1.beat.json'] ?? '{}').recent).toEqual([false, true])
+})
+
+test('a git read that hangs never holds the poll: the row draws without a diff size', async ($, on) => {
+  const worktree = '/r/.claude/worktrees/STARK-1'
+  const disk: Record<string, string> = { 'STARK-1.json': ticket('STARK-1', 'pr', { worktree }) }
+  let gitReads = 0
+  mock.env(on, { HOME: '/h' })
+  const clock = mock.clock(on, { now: T0 })
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('session.root', () => ({ value: worktree }))
+  on('session.id', () => ({ value: 's1' }))
+  on('fs.list', () => ({
+    value: Object.keys(disk).map(name => ({ name, kind: 'file' as const, size: 1, mtimeMs: 0, isLink: false })),
+  }))
+  on('fs.read', (_$, e) => {
+    const text = disk[nameOf(e.path)]
+    if (text === undefined) throw new Error(`ENOENT ${e.path}`)
+    return { value: text }
+  })
+  on('process.run', () => {
+    gitReads += 1
+    return new Promise<never>(() => undefined)
+  })
+
+  await $.session.start({ cwd: worktree, surface: 'terminal', isInteractive: true })
+  await clock.advance(3000)
+
+  const band = await $.ui.mount(BAND)
+  const row = await band.find({ type: 'Text', text: /^STARK-1 ●━◉┄○┄○┄○ pr +10m/ })
+  expect(row).toBeDefined()
+  expect(row?.text).not.toMatch(/\+\d+ −\d+/)
+  // One read runs; no poll starts another while it hangs.
+  expect(gitReads).toBe(1)
+})

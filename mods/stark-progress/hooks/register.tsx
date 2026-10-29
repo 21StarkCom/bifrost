@@ -21,16 +21,27 @@ let isSeeded = false
 let isDirty = false
 let lastFlush = 0
 let calls = 0
-const gitCache = new Map<string, { at: number; signal: GitSignal | null }>()
+const gitCache = new Map<string, { at: number; signal: GitSignal | null; isReading: boolean }>()
 
-/** Git's signal for a worktree, read at most once per GIT_MS. */
-async function gitFor($: EngineInterface, dir: string, now: number): Promise<GitSignal | null> {
+/**
+ * Git's last signal for a worktree. One older than GIT_MS starts a new read in
+ * the background, so a slow or hung git never holds the poll: a later poll
+ * draws what the read found.
+ */
+function gitFor($: EngineInterface, dir: string, now: number): GitSignal | null {
   const hit = gitCache.get(dir)
-  if (hit !== undefined && now - hit.at < GIT_MS) return hit.signal
-  const signal = await readGit($, dir)
-  gitCache.set(dir, { at: now, signal })
+  if (hit === undefined || (!hit.isReading && now - hit.at >= GIT_MS)) {
+    gitCache.set(dir, { at: now, signal: hit?.signal ?? null, isReading: true })
+    void readGit($, dir)
+      .catch(() => null)
+      .then(signal => gitCache.set(dir, { at: now, signal, isReading: false }))
+  }
+  // Drop the worktrees no row has asked for in a while (a finished run's).
+  for (const [key, entry] of gitCache) {
+    if (!entry.isReading && now - entry.at >= 10 * GIT_MS) gitCache.delete(key)
+  }
 
-  return signal
+  return gitCache.get(dir)?.signal ?? null
 }
 
 /** Whole JSON, written to a `.tmp` beside it and renamed over it, as the contract asks. */
@@ -108,12 +119,10 @@ export const register: Register = on => {
         }
 
         const git: Record<string, GitSignal | null> = {}
-        await Promise.all(
-          wanted.map(async id => {
-            const worktree = worktreeOf(id, files[`${id}.json`], root)
-            git[id] = worktree === null ? null : await gitFor($, worktree, now)
-          }),
-        )
+        for (const id of wanted) {
+          const worktree = worktreeOf(id, files[`${id}.json`], root)
+          git[id] = worktree === null ? null : gitFor($, worktree, now)
+        }
 
         const fresh = buildView(root, session, now, files, git)
         const key = JSON.stringify(fresh)
@@ -138,12 +147,17 @@ export const register: Register = on => {
     isDirty = true
     try {
       const result = await next(e)
-      callEnded(beat, key, result.isError === true, await $.clock.now())
+      // A deny (a guard or a refused permission) is a failed call too.
+      callEnded(beat, key, result.isError === true || result.deny !== undefined, await $.clock.now())
 
       return result
     } catch (err) {
       callEnded(beat, key, true, await $.clock.now())
       throw err
+    } finally {
+      // The end changes the file too (`running`, the counts): a flush that
+      // ran while the call ran must not be the last one.
+      isDirty = true
     }
   })
 
@@ -156,6 +170,7 @@ export const register: Register = on => {
     const { Box, Text } = $.ui.resolve(e)
     const width = Math.max(...current.rows.map(tailWidth)) + 2
     const idWidth = Math.max(...current.rows.map(r => r.id.length)) + 1
+    const inStageWidth = Math.max(6, ...current.rows.map(r => r.inStage.length))
 
     return (
       <Box flexDirection="column">
@@ -185,7 +200,7 @@ export const register: Register = on => {
             ))}
             {' '}
             {r.stage.padEnd(7)}
-            {r.inStage.padStart(6)}
+            {r.inStage.padStart(inStageWidth)}
             {'  '}
             {r.cells.map((c, i) => (
               <Text key={`c${i}`} color={cellColor(c)}>

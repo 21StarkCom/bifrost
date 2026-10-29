@@ -93,6 +93,9 @@ test('a worktree counts only when its folder is named for the ticket', () => {
   expect(worktreeOf('STARK-1', gru, '/r/.claude/worktrees/STARK-10')).toBe(null)
   expect(worktreeOf('STARK-1', gru, '/c/.worktrees/STARK-1')).toBe('/c/.worktrees/STARK-1')
   expect(worktreeOf('STARK-1', undefined, '/r')).toBe(null)
+  // The spine's command run from a subfolder of the worktree still counts.
+  const sub = ticket('STARK-1', 'pr', 1, { worktree: '/r/.claude/worktrees/STARK-1/mods/x' })
+  expect(worktreeOf('STARK-1', sub, '/r')).toBe('/r/.claude/worktrees/STARK-1')
 })
 
 test("a worker's worktree shows its own row, once its file exists", () => {

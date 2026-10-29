@@ -1,4 +1,5 @@
 import type { BeatMinute, Cell, Count, GitSignal, Row, RunFile, Seg, Stage, Tone, Verdict, View } from '../types'
+import { beatFields, RECENT } from './beat'
 
 // What a tab draws, from the contract's files (../README.md), git's signal for
 // each ticket and the time. Pure: the poller in register.tsx reads the disk.
@@ -13,7 +14,6 @@ const CELLS = 12
 const CELL_MIN = 5
 const BARS = '▁▂▃▄▅▆'
 const CALLS_A_STEP = 6
-const RECENT = 10
 const FAILED_OF_RECENT = 5
 
 function parse<T>(text: string | undefined): Partial<T> | null {
@@ -63,14 +63,24 @@ export function ticketOf(path: string): string | null {
   return TICKET_ID.test(base) ? base : null
 }
 
+/** The folder named `id` that `path` is or is inside, or null. */
+function folderOf(id: string, path: string): string | null {
+  const parts = path.replace(/[\\/]+$/, '').split(/[\\/]/)
+  const at = parts.lastIndexOf(id)
+
+  return TICKET_ID.test(id) && at > 0 ? parts.slice(0, at + 1).join('/') : null
+}
+
 /**
- * The worktree git reads for a ticket: its file's `worktree` when that folder
- * is named for the ticket (Gru's stamps write Gru's own folder there, which is
- * not), else the session's root when this is the worker's own tab.
+ * The worktree git reads for a ticket: the folder named for the ticket that
+ * its file's `worktree` is or is inside (the spine's command may run in a
+ * subfolder; Gru's stamps write Gru's own folder there, which is not), else
+ * the session's root when this is the worker's own tab.
  */
 export function worktreeOf(id: string, text: string | undefined, root: string): string | null {
   const own = str(parse<{ worktree: string }>(text)?.worktree)
-  if (own !== null && ticketOf(own) === id) return own
+  const found = own === null ? null : folderOf(id, own)
+  if (found !== null) return found
 
   return ticketOf(root) === id ? root : null
 }
@@ -99,23 +109,11 @@ function ticket(text: string): Ticket {
 function beat(text: string | undefined): Beat | null {
   const b = parse<Record<string, unknown>>(text)
   if (b === null) return null
-  const minutes = new Map<number, BeatMinute>()
-  for (const m of Array.isArray(b.minutes) ? b.minutes : []) {
-    const { at, calls, fails } = (m ?? {}) as Record<string, unknown>
-    if (typeof at === 'number' && typeof calls === 'number') {
-      minutes.set(at, { at, calls, fails: typeof fails === 'number' ? fails : 0 })
-    }
-  }
   const run = (b.running ?? null) as Record<string, unknown> | null
   const since = time(run?.since)
   const tool = str(run?.tool)
 
-  return {
-    lastActivity: time(b.lastActivity),
-    running: since !== null && tool !== null ? { tool, since } : null,
-    minutes,
-    recent: Array.isArray(b.recent) ? b.recent.filter((x): x is boolean => typeof x === 'boolean') : [],
-  }
+  return { ...beatFields(b), running: since !== null && tool !== null ? { tool, since } : null }
 }
 
 export function verdict(t: Ticket | null, b: Beat | null, milestones: number[], now: number): Verdict {

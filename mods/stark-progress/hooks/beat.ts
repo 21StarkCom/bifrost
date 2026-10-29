@@ -3,7 +3,7 @@ import type { BeatFile, BeatMinute } from '../types'
 // A worker's heartbeat, kept in memory from its tool calls and written as the
 // contract's `<STARK-n>.beat.json` (../README.md).
 const WINDOW_MIN = 60
-const RECENT = 10
+export const RECENT = 10
 
 export type Beat = {
   minutes: Map<number, BeatMinute>
@@ -29,14 +29,28 @@ export function seedBeat(beat: Beat, text: string | undefined, session: string):
     return
   }
   if (file?.session !== session || beat.lastActivity !== null || beat.minutes.size > 0) return
+  const { minutes, recent, lastActivity } = beatFields(file as Record<string, unknown>)
+  beat.minutes = minutes
+  beat.recent = recent.slice(-RECENT)
+  beat.lastActivity = lastActivity
+}
+
+/**
+ * The minutes, outcomes and last activity of a parsed heartbeat file; a field
+ * of the wrong type reads as absent. The reload's seed and the view share it.
+ */
+export function beatFields(file: Record<string, unknown>): Pick<Beat, 'minutes' | 'recent' | 'lastActivity'> {
+  const minutes = new Map<number, BeatMinute>()
   for (const m of Array.isArray(file.minutes) ? file.minutes : []) {
-    if (typeof m?.at === 'number' && typeof m.calls === 'number') {
-      beat.minutes.set(m.at, { at: m.at, calls: m.calls, fails: typeof m.fails === 'number' ? m.fails : 0 })
+    const { at, calls, fails } = (m ?? {}) as Record<string, unknown>
+    if (typeof at === 'number' && typeof calls === 'number') {
+      minutes.set(at, { at, calls, fails: typeof fails === 'number' ? fails : 0 })
     }
   }
-  if (Array.isArray(file.recent)) beat.recent = file.recent.filter((x): x is boolean => typeof x === 'boolean').slice(-RECENT)
+  const recent = Array.isArray(file.recent) ? file.recent.filter((x): x is boolean => typeof x === 'boolean') : []
   const last = typeof file.lastActivity === 'string' ? Date.parse(file.lastActivity) : Number.NaN
-  if (Number.isFinite(last)) beat.lastActivity = last
+
+  return { minutes, recent, lastActivity: Number.isFinite(last) ? last : null }
 }
 
 /** A tool call started: it is running, and it is activity. */
@@ -62,19 +76,15 @@ export function callEnded(beat: Beat, key: string, isFailed: boolean, now: numbe
 export function beatFile(beat: Beat, id: string, session: string, now: number): BeatFile {
   const oldest = Math.floor(now / 60_000) - WINDOW_MIN + 1
   for (const at of beat.minutes.keys()) if (at < oldest) beat.minutes.delete(at)
-  let running: BeatFile['running'] = null
-  for (const call of beat.running.values()) {
-    if (running === null || call.since < Date.parse(running.since)) {
-      running = { tool: call.tool, since: new Date(call.since).toISOString() }
-    }
-  }
+  let first: { tool: string; since: number } | null = null
+  for (const call of beat.running.values()) if (first === null || call.since < first.since) first = call
 
   return {
     id,
     session,
     updated: new Date(now).toISOString(),
     lastActivity: beat.lastActivity === null ? null : new Date(beat.lastActivity).toISOString(),
-    running,
+    running: first === null ? null : { tool: first.tool, since: new Date(first.since).toISOString() },
     minutes: [...beat.minutes.values()].sort((a, b) => a.at - b.at),
     recent: [...beat.recent],
   }

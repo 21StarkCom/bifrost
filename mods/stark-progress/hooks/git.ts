@@ -3,7 +3,8 @@ import type { EngineInterface } from 'claude-code'
 import type { GitSignal } from '../types'
 
 // What git says of a worker's worktree: its commits since the branch base and
-// its diff size against that base, committed and not.
+// its diff size against that base, committed and not (tracked files only: a
+// new file counts once it is added).
 const BASES = ['origin/HEAD', 'origin/main', 'main']
 const TIMEOUT_MS = 5000
 

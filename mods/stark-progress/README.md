@@ -85,8 +85,9 @@ does this for a ticket's file). A field of the wrong type reads as absent: a
 `stage` is one of `ticket`, `pr`, `review`, `merged`, `closed` (the track
 fills in that order) or `blocked`. `updated` is when the stage was written, so
 it is the stage's milestone and the start of its time. `worktree` is the folder
-the spine's command ran in; git reads it only when its folder name is the
-ticket id, so a stamp Gru writes from its own worktree adds no git signal. A
+the spine's command ran in; git reads the folder named for the ticket that it
+is or is inside, and nothing when there is none, so a stamp Gru writes from its
+own worktree adds no git signal. A
 file with no `worktree` (contract v1) reads git in a worker's own tab from its
 project root, and nowhere else.
 
