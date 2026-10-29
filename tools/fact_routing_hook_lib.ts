@@ -9,8 +9,8 @@
  * (corpus) or class-2 (repo-CLAUDE) the hook tells the writing session, which
  * holds the context to route it at once. No queue keeps the flag for later.
  *
- * Full rule: vault-ecosystem/docs/specs/2026-08-29-fact-routing-and-corpus-intake-spec.md
- * (STARK-1781). This is the STARK-1785 safety net.
+ * Classifier rule: vault-ecosystem/docs/specs/2026-08-29-fact-routing-and-corpus-intake-spec.md
+ * (STARK-1781). That spec's queue and fold are retired; only its classes hold.
  *
  * Pure + injectable so the classifier is unit-tested without a real memory tree.
  */
@@ -116,7 +116,7 @@ export function fleetSlugsMentioned(text: string, fleetSlugs: readonly string[])
 /**
  * Classify a just-written memory file. Returns the flag, or null when the fact
  * legitimately belongs in Claude memory (class 3 process/feedback) or carries no
- * routable signal. Errs toward flagging — the fold curates; a missed fact is the
+ * routable signal. Errs toward flagging — the writing session decides; a missed fact is the
  * failure mode this exists to prevent.
  */
 export function classifyMemory(

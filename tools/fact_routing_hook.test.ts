@@ -44,15 +44,13 @@ function advisoryOf(stdout: string): string {
   return JSON.parse(stdout).hookSpecificOutput.additionalContext;
 }
 
-// Every file under a dir, relative and sorted: the hook adds none to the config dir.
+// Every entry under a dir (files, dirs and links), relative and sorted: the hook
+// adds none, so a dir or a dangling link it made shows here too.
 function filesUnder(dir: string): string[] {
   if (!fs.existsSync(dir)) return [];
-  return (fs.readdirSync(dir, { recursive: true }) as string[])
-    .filter((rel) => fs.statSync(path.join(dir, rel)).isFile())
-    .map((rel) => rel.split(path.sep).join("/"))
-    .sort();
+  return (fs.readdirSync(dir, { recursive: true }) as string[]).map((rel) => rel.split(path.sep).join("/")).sort();
 }
-const ONLY_THE_MEMORY = ["projects/p/memory/probe.md"];
+const ONLY_THE_MEMORY = ["projects", "projects/p", "projects/p/memory", "projects/p/memory/probe.md"];
 
 test("a flagged memory's advisory reaches the model as additionalContext, and the hook writes no file", () => {
   withMemory(".claude", (home, cfg, memory) => {
@@ -120,6 +118,18 @@ test("CLAUDE_CONFIG_DIR moves the memory root", () => {
     assert.deepEqual(filesUnder(cfg), ONLY_THE_MEMORY);
     assert.equal(fs.existsSync(path.join(home, ".claude")), false);
   });
+});
+
+test("an implementation fact gets the repo-CLAUDE.md advisory and its own condition", () => {
+  withMemory(".claude", (home, cfg, memory) => {
+    const r = run(home, memory);
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(
+      advisoryOf(r.stdout),
+      /^↳ fact-routing: probe\.md looks like it belongs in the repo's own CLAUDE\.md \(implementation detail about alfred .*\)\. Move it there now only if every session in that repo needs it and the code does not show it; else keep it here\. Nothing records this flag for later\.$/,
+    );
+    assert.deepEqual(filesUnder(cfg), ONLY_THE_MEMORY);
+  }, "---\nname: probe\ndescription: alfred's CI gate runs the race tests\ntype: project\n---\nRun the gate before a merge.\n");
 });
 
 test("a repo's own .claude/projects/*/memory file is not auto-memory: no output, no file", () => {
