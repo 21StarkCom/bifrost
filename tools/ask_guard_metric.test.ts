@@ -123,8 +123,19 @@ test("a turn end's last non-empty line is tagged by kind, an untagged question, 
     ["Done. Nothing is pending.", "none"],
     ["Is it right?\nDone. Nothing is pending.", "none"],
     ["", "none"],
+    ["The PR is https://github.com/o/r/pull/1?w=1", "none"],
+    ["Run `ls -d ?*` to list them.", "none"],
+    ["Should I run `ls`?", "untagged"],
+    ["Did you see https://github.com/o/r/pull/1?", "untagged"],
+    ["**Should I merge it?**", "untagged"],
+    ["Is it A?B", "none"],
   ];
   for (const [t, kind] of cases) assert.equal(classifyEnding(t).kind, kind, t);
+  // One tagged line per open question: each line of the closing run counts.
+  const two = classifyEnding("Done.\nNeeds you (GO: apply): Apply it?\nNeeds you (Yours: name): Which name?");
+  assert.equal(two.kind, "Yours");
+  assert.deepEqual(two.kinds, ["GO", "Yours"]);
+  assert.deepEqual(classifyEnding("Needs you (GO: a): A?\nShould I B?").kinds, []);
   assert.equal(classifyEnding("Done.\n  Should I ship it?  \n").line, "Should I ship it?");
 });
 
@@ -133,6 +144,7 @@ test("a prompt is a typed user line, never a tool result, meta, summary or <tag>
   assert.equal(isPrompt(row("fix the config")), true);
   assert.equal(isPrompt(row([image, text("what is wrong here?")])), true);
   assert.equal(isPrompt(row([text("[Huginn tab 1 · page]\n\nexplain")])), true);
+  assert.equal(isPrompt(row('<pasted_content id="0198">\nodinctl failed\n</pasted_content>\nwhy?')), true);
   assert.equal(isPrompt(row(toolResult)), false);
   assert.equal(isPrompt(row([...toolResult, text("[Request interrupted by user for tool use]")])), false);
   assert.equal(isPrompt(row([text("Base directory for this skill: /x")], { isMeta: true })), false);
@@ -190,13 +202,14 @@ test("countQuestions counts the week only, each uuid once, and keeps the oldest 
     user("p6", "f"), asst("t-done", "m6", text("Done. Nothing is pending.")),
     user("p7", "g"), asst("t-old", "m7", text("Old question?"), iso(2026, 10, 20)),
     user("p8", "h"), asst("t-late", "m8", text("Late question?"), iso(2026, 10, 29, 0)),
-    user("p9", "i"),
+    user("p9", "i"), asst("t-two", "m9", text("Needs you (GO: merge): Merge?\nNeeds you (Yours: name): Name?")),
+    user("p10", "j"),
   ];
   // A resumed session's file repeats an earlier uuid: it counts once.
   const fileB = [user("q1", "x"), asst("t-q1", "m5", text("Want me to fix the README too?"), iso(2026, 10, 25))];
   const c = countQuestions([fileA, fileB], w);
-  assert.equal(c.turnEnds, 6);
-  assert.deepEqual(c.tagged, { GO: 1, Yours: 1, "Your hands": 1, "Design approval": 1 });
+  assert.equal(c.turnEnds, 7);
+  assert.deepEqual(c.tagged, { GO: 2, Yours: 2, "Your hands": 1, "Design approval": 1 });
   assert.deepEqual(c.untagged, [{ ts: at(2026, 10, 25), cwd: "/Users/x/Code/21Stark/bifrost", sessionId: "s1", line: "Want me to fix the README too?" }]);
   assert.equal(c.oldest, at(2026, 10, 20));
 });
@@ -249,6 +262,11 @@ test("the coverage names the days counted when the transcripts start after the w
   assert.match(render(r), /coverage\s+oldest turn end read 2026-10-27\n {2}only 2026-10-27 to 2026-10-28 counted: the transcripts start after the week's first day/);
   assert.match(notifyBody(r), /Note: only 2026-10-27 to 2026-10-28 counted/);
   assert.doesNotMatch(render(r), /untagged questions, newest first/);
+  // A transcript older than the week's start is on disk: the first days were quiet, not cleaned up.
+  q.reachesBack = true;
+  assert.deepEqual(result(w, p, p, q).questions.coverage, { oldest: "2026-10-27", whole_week: true, days: { from: "2026-10-22", last: "2026-10-28" } });
+  assert.doesNotMatch(render(result(w, p, p, q)), /counted:/);
+  q.reachesBack = undefined;
 
   q.oldest = at(2026, 10, 29, 1);
   assert.deepEqual(result(w, p, p, q).questions.coverage, { oldest: "2026-10-29", whole_week: false, days: null });
@@ -280,7 +298,7 @@ test("fileLines splits on newlines across 1 MiB chunks and keeps multibyte text 
 test("transcriptFiles takes top-level .jsonl files changed since the week's start, never subagent folders", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ask-files-"));
   try {
-    assert.deepEqual(transcriptFiles(dir, new Date(0)), []);
+    assert.deepEqual(transcriptFiles(dir, new Date(0)), { files: [], reachesBack: false });
     const proj = path.join(dir, "projects", "-Users-x-Code-repo");
     fs.mkdirSync(path.join(proj, "s1", "subagents"), { recursive: true });
     const write = (p: string, mtime: Date) => {
@@ -293,7 +311,8 @@ test("transcriptFiles takes top-level .jsonl files changed since the week's star
     write(path.join(proj, "s1", "subagents", "agent-a.jsonl"), new Date(2026, 9, 25));
     write(path.join(dir, "projects", "stray.jsonl"), new Date(2026, 9, 25));
     fs.mkdirSync(path.join(proj, "folder.jsonl"));
-    assert.deepEqual(transcriptFiles(dir, new Date(2026, 9, 22)), [path.join(proj, "s1.jsonl")]);
+    assert.deepEqual(transcriptFiles(dir, new Date(2026, 9, 22)), { files: [path.join(proj, "s1.jsonl")], reachesBack: true });
+    assert.deepEqual(transcriptFiles(dir, new Date(2026, 9, 19)).reachesBack, false);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -320,10 +339,17 @@ test("the CLI reads history from a throwaway home", () => {
     const env = { ...process.env, HOME: home, CLAUDE_CONFIG_DIR: cfg, STARK_STATE_ROOT: path.join(home, "state") };
     const empty = spawnSync(process.execPath, ["--no-warnings", CLI, "--week", "2026-10-22"], { env, encoding: "utf8" });
     assert.equal(empty.status, 0, empty.stderr);
-    assert.match(empty.stdout, /coverage\s+no turn end read/);
+    assert.match(empty.stdout, /coverage\s+no turn end read\n {2}no day of the week counted/);
 
     const proj = path.join(cfg, "projects", "-Users-x-Code-21Stark-bifrost");
     fs.mkdirSync(path.join(proj, "s1", "subagents"), { recursive: true });
+    // A transcript last changed before the week: the transcripts reach its first day.
+    const old = path.join(proj, "old.jsonl");
+    fs.writeFileSync(old, "");
+    fs.utimesSync(old, new Date(2026, 9, 1), new Date(2026, 9, 1));
+    const quiet = spawnSync(process.execPath, ["--no-warnings", CLI, "--week", "2026-10-22", "--json"], { env, encoding: "utf8" });
+    assert.equal(quiet.status, 0, quiet.stderr);
+    assert.deepEqual(JSON.parse(quiet.stdout).questions.coverage, { oldest: null, whole_week: true, days: { from: "2026-10-22", last: "2026-10-28" } });
     fs.writeFileSync(
       path.join(proj, "s1.jsonl"),
       [
