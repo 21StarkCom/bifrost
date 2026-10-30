@@ -1,5 +1,5 @@
-// ask_guard_metric: the week window, the one-word-reply rule, the block count,
-// the launchd plist, and the CLI end to end over a throwaway history and log.
+// ask_guard_metric: the week window, the one-word-reply rule, the launchd
+// plist, and the CLI end to end over a throwaway history.
 import { strict as assert } from "node:assert";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -9,7 +9,6 @@ import { test } from "node:test";
 import {
   BASELINE,
   LABEL,
-  countBlocks,
   countPrompts,
   isOneWordReply,
   normalizeReply,
@@ -71,30 +70,17 @@ test("countPrompts counts the week only, and skips bad lines", () => {
   assert.deepEqual(c.words, { go: 2, "1": 1 });
 });
 
-test("countBlocks splits ask and defer inside the week", () => {
-  const w = weekWindow("2026-10-22");
-  const iso = (ms: number) => new Date(ms).toISOString();
-  const lines = [
-    JSON.stringify({ time: iso(at(2026, 10, 23)), kind: "ask" }),
-    JSON.stringify({ time: iso(at(2026, 10, 24)), kind: "defer" }),
-    JSON.stringify({ time: iso(at(2026, 10, 30)), kind: "ask" }),
-    JSON.stringify({ time: "garbage", kind: "ask" }),
-    "{",
-  ];
-  assert.deepEqual(countBlocks(lines, w), { blocks: 2, ask: 1, defer: 1 });
-});
-
 test("the report names the week, the counts and the baseline", () => {
   const w = weekWindow("2026-10-22");
   const p = { prompts: 2353, replies: 84, go: 39, words: { go: 39, "1": 6 } };
-  const r = result(w, p, { blocks: 3, ask: 2, defer: 1 }, p);
+  const r = result(w, p, p);
   assert.deepEqual(r.week, { start: "2026-10-22", last: "2026-10-28" });
   assert.deepEqual(r.words, [["go", 39], ["1", 6]]);
   const text = render(r);
   assert.match(text, /week 2026-10-22 to 2026-10-28/);
   assert.match(text, /prompts\s+2,353/);
   assert.match(text, /one-word replies\s+84 \(go 39, 1 6\)/);
-  assert.match(text, /hook blocks\s+3 \(ask 2, defer 1\)/);
+  assert.doesNotMatch(text, /hook blocks/);
   assert.match(text, /baseline, week of 2026-10-22: 81 one-word replies, 39 go, 2,375 prompts \(this rule counts 84, 39, 2,353\)/);
   assert.deepEqual({ ...BASELINE }, { week: "2026-10-22", replies: 81, go: 39, prompts: 2375 });
 });
@@ -108,19 +94,14 @@ test("the plist runs --notify on Thursdays at 09:00 through env node", () => {
   assert.match(plist("/a&b", "/l", "/p"), /\/a&amp;b/);
 });
 
-test("the CLI reads history and the block log from a throwaway home", () => {
+test("the CLI reads history from a throwaway home", () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "ask-metric-"));
   try {
     const cfg = path.join(home, ".claude");
-    fs.mkdirSync(path.join(home, "state", "ask-guard"), { recursive: true });
     fs.mkdirSync(cfg, { recursive: true });
     fs.writeFileSync(
       path.join(cfg, "history.jsonl"),
       [hist("go", at(2026, 10, 23)), hist("yes", at(2026, 10, 23)), hist("explain this", at(2026, 10, 24))].join("\n") + "\n",
-    );
-    fs.writeFileSync(
-      path.join(home, "state", "ask-guard", "blocks.jsonl"),
-      JSON.stringify({ time: new Date(at(2026, 10, 23)).toISOString(), session_id: "s", cwd: "/", kind: "ask", phrase: "x" }) + "\n",
     );
     const env = { ...process.env, HOME: home, CLAUDE_CONFIG_DIR: cfg, STARK_STATE_ROOT: path.join(home, "state") };
     const r = spawnSync(process.execPath, ["--no-warnings", CLI, "--week", "2026-10-22", "--json"], { env, encoding: "utf8" });
@@ -129,7 +110,7 @@ test("the CLI reads history and the block log from a throwaway home", () => {
     assert.equal(out.prompts, 3);
     assert.equal(out.one_word_replies, 2);
     assert.equal(out.go, 1);
-    assert.equal(out.blocks, 1);
+    assert.equal("blocks" in out, false);
     assert.equal(out.baseline.replies, 81);
     assert.deepEqual(out.baseline.recount, { replies: 2, go: 1, prompts: 3 });
 
