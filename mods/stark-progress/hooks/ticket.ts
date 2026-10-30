@@ -52,8 +52,10 @@ export function buildTicket(
   // The verdict reads a hold only while the ticket is neither closed nor blocked.
   const hold = r.verdict.word === 'held' ? holdOf(t?.hold) : null
   const words = nameOf(typeof t?.title === 'string' && t.title !== '' ? t.title : id)
-  // A `--tickets` run's epic is its first ticket: no ticket is part of itself.
-  const run = runsOf(files, mtimes).find(run => run.tickets.includes(id) && run.epic !== id)
+  // Only an epic's run (launched under the epic's own id) names a parent. A
+  // `--tickets` run (launched as `GRU-n`) writes its first ticket as `epic`,
+  // which is no parent of the others; and no ticket is part of itself.
+  const run = runsOf(files, mtimes).find(run => run.tickets.includes(id) && run.epic === run.launchId && run.epic !== id)
   // A heartbeat with no call yet (a worker tab's own, before its first call) says so.
   const activity = beat === null || lastActivity === null ? ['No tool call yet.'] : callsOf(beat, now)
   if (git !== null && r.diff !== null) {

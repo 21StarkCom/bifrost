@@ -83,6 +83,15 @@ test('the next step follows the stage, and a hold waits for your OK', () => {
     null,
   )
   expect(own).toMatchObject({ epic: null, activity: ['No tool call yet.'] })
+  // A `--tickets` run, launched as `GRU-n`, names no epic for its other tickets either.
+  const listed = buildTicket(
+    'STARK-1',
+    T0,
+    { 'STARK-1.json': ticket('ticket'), 'run-GRU-3.json': JSON.stringify({ epic: 'STARK-7', session: 'g', tickets: ['STARK-7', 'STARK-1'] }) },
+    new Map(),
+    null,
+  )
+  expect(listed?.epic).toBe(null)
   // A worker tab's own heartbeat before its first call says the same.
   const quiet = JSON.stringify({ lastActivity: null, running: null, minutes: [], recent: [] })
   const fresh = buildTicket('STARK-1', T0, { 'STARK-1.json': ticket('ticket'), 'STARK-1.beat.json': quiet }, new Map(), null)

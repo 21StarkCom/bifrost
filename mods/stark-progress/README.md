@@ -160,7 +160,8 @@ header and per status, and none in Settings.
 
 - The name (the title without its `[tag]`, `<repo>: ` lead and
   `(slice n of m)` tail), then the id, the repo and the slice, and
-  `Part of <epic>` when a run file lists the ticket.
+  `Part of <epic>` when an epic's run file lists the ticket (a `--tickets`
+  run, launched as `GRU-n`, has no epic to name).
 - `🚇 Where it is`: the five stations, one emoji and the status, as the Gru
   pane reads them. A held ticket reads `✋ held · <merge or release> · <time>`.
 - A box when the ticket is worth a look: the band calls it `blocked`, `idle`
@@ -345,6 +346,9 @@ nothing more.
 - A merge hold, a review depth or a release stop for a whole Gru run: each
   ticket has its own, in its worker's ticket pane.
 - Activity for a Codex worker in its ticket pane (it writes no heartbeat).
+- A held worker whose session died reads `held` on the Gru pane, with its
+  time held, since no file says whether a worker lives; Gru's observation
+  pass reads that from Hermod. The ticket pane dies with its tab.
 - A light-theme palette for the Gru pane and the ticket pane.
 
 ## Develop

@@ -175,7 +175,7 @@ sets, is `MINION (<n>)`. Four things are yours on top of it:
   `closed` once `alfred task move STARK-n done` lands, `blocked` when you stop
   on a `blocked` or `follow-up … stopping` report. Once the close lands, also
   delete your ticket's settings file:
-  `rm -f ~/.cache/stark-progress/STARK-n.settings.json`.
+  `rm -f ~/.cache/stark-progress/STARK-n.settings.json ~/.cache/stark-progress/STARK-n.settings.json.tmp`.
 
 Then report to your leader and stand down — both below.
 

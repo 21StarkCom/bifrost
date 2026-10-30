@@ -113,7 +113,8 @@ export const register: Register = on => {
 
     const poll = async () => {
       // A slow tick must not overlap the next one and write an older view last.
-      if (isPolling) return
+      // A caller that finds one reading waits for it, so `pollNow` never returns early.
+      if (isPolling) return polling
       isPolling = true
       polling = tick().finally(() => {
         isPolling = false

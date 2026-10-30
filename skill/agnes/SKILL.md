@@ -198,7 +198,7 @@ the spine's background command, and go on when it clears. Send no
 
 Delete the progress file and the settings file, with any `.tmp` a failed
 write left beside them
-(`rm -f ~/.cache/stark-progress/STARK-n.json ~/.cache/stark-progress/STARK-n.json.tmp ~/.cache/stark-progress/STARK-n.settings.json`), at the
+(`rm -f ~/.cache/stark-progress/STARK-n.json ~/.cache/stark-progress/STARK-n.json.tmp ~/.cache/stark-progress/STARK-n.settings.json ~/.cache/stark-progress/STARK-n.settings.json.tmp`), at the
 [stand-down](#stand-down), once the contract's checks pass and right before
 `hermod poison-pill --json`, which takes your session with it. A check that
 stops you there leaves the files, and the tab, standing.

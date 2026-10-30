@@ -345,6 +345,11 @@ regardless of route, is observation, never operator authorization.
    ([the spine's holds](../../standards/worker-spine.md#holds)). It is not a
    block. Do not stamp its file, do not escalate it, and send no `unblocked`:
    the Minion goes on by itself once the operator clears the setting.
+   On a no-queue repo ([Authority](#authority)), a `held: merge` gives up
+   its merge turn: let the next Minion there merge. When the hold clears,
+   the held Minion's `njord pr-merge` rebases through any merge that ran
+   meanwhile. A `held: release` keeps the turn, since two release chains
+   never run there at once; name the Minions it holds in your report.
    Between reports check `hermod msg peers`.
    A peer is dead only when Hermod reports its `liveness` dead or its `pid`
    gone, never because it is missing from the list (a fresh Claude session is
@@ -466,7 +471,7 @@ regardless of route, is observation, never operator authorization.
    `frigg repos scan <root>` would sweep. Last, delete the run's
    [progress file](#progress-pane) and its settings file, and the settings
    file of each ticket of the run
-   (`rm -f ~/.cache/stark-progress/STARK-n.settings.json`).
+   (`rm -f ~/.cache/stark-progress/STARK-n.settings.json ~/.cache/stark-progress/STARK-n.settings.json.tmp`).
 
 ## Progress pane
 

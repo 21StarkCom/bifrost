@@ -207,9 +207,11 @@ goal, and do not stand down.
    it has and `hold` set to `merge` or `release`.
 2. Report `held: <merge or release> by the ticket's settings`. A Minion sends
    it to its leader. Agnes comments it on her ticket.
-3. Wait in one background command until the setting clears (on Claude, a Bash
-   call with `run_in_background`, which wakes you when it exits). A missing,
-   empty or unparsable file clears the hold.
+3. Wait in one background command until the setting clears. On Claude, run it
+   as a Bash call with `run_in_background`, which wakes you when it exits. On
+   Codex, `exec_command` returns a `session_id` while it still runs; poll that
+   session with an empty `write_stdin` until it exits. A missing, empty or
+   unparsable file clears the hold.
 
    ```
    until ! jq -e '.mergeOnGreen == false' ~/.cache/stark-progress/STARK-n.settings.json >/dev/null 2>&1; do sleep 30; done
