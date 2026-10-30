@@ -10,16 +10,27 @@ const TITLE = 'Decisions'
 // earlier version stored, which outlives a reload.
 const deckAtom = atom({ plugin: 'decision-deck', key: 'deck' } as const, null, { shape: 'deck-1' })
 const cursorAtom = atom({ plugin: 'decision-deck', key: 'cursor' } as const, 0)
-const answersAtom = atom({ plugin: 'decision-deck', key: 'answers' } as const, {}, { shape: 'answers-1' })
+const answersAtom = atom({ plugin: 'decision-deck', key: 'answers' } as const, {}, { shape: 'answers-2' })
 const sentAtom = atom({ plugin: 'decision-deck', key: 'sent' } as const, {}, { shape: 'sent-1' })
 
 const EMPTY: Answer = { picks: [], note: '' }
 
-const keyOf = (deck: Deck, item: DeckItem) => `${deck.id}-${item.id}`
-const isAnswered = (a: Answer | undefined) =>
-  a !== undefined && (a.picks.length > 0 || a.note.trim() !== '')
+// The pair as JSON, so no two (deck id, item id) pairs share a key.
+const keyOf = (deck: Deck, item: DeckItem) => JSON.stringify([deck.id, item.id])
+// Only the picks that name an option the item still has: a deck presented
+// again under its id keeps its answers, but may have dropped an option.
+const pickedOptions = (item: DeckItem, a: Answer | undefined) =>
+  (a?.picks ?? []).flatMap(id => item.options.filter(o => o.id === id))
+// The person's words on one line, so they cannot break the list Send writes.
+const noteText = (a: Answer | undefined) => (a?.note ?? '').replace(/\s+/g, ' ').trim()
+const isAnswered = (item: DeckItem, a: Answer | undefined) =>
+  pickedOptions(item, a).length > 0 || noteText(a) !== ''
+const answeredCount = (deck: Deck, answers: Record<string, Answer>) =>
+  deck.items.filter(i => isAnswered(i, answers[keyOf(deck, i)])).length
 const without = (all: Record<string, string>, key: string) =>
   Object.fromEntries(Object.entries(all).filter(([k]) => k !== key))
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v)
 
 // null until Claude presents a deck with the present tool.
 async function currentDeck($: EngineInterface): Promise<Deck | null> {
@@ -27,16 +38,15 @@ async function currentDeck($: EngineInterface): Promise<Deck | null> {
 }
 
 function answerText(item: DeckItem, a: Answer | undefined): string {
-  const picks = (a?.picks ?? []).flatMap(id => item.options.filter(o => o.id === id).map(o => o.label))
-  const note = a?.note.trim() ?? ''
+  const picks = pickedOptions(item, a).map(o => o.label)
+  const note = noteText(a)
   if (picks.length === 0 && note === '') return 'no answer'
   return [picks.join(' + '), note === '' ? '' : `my words: "${note}"`].filter(Boolean).join('; ')
 }
 
 function messageFor(deck: Deck, answers: Record<string, Answer>): string {
-  const done = deck.items.filter(i => isAnswered(answers[keyOf(deck, i)])).length
   const lines = [
-    `My answers to "${deck.title}" (${done} of ${deck.items.length} answered):`,
+    `My answers to "${deck.title}" (${answeredCount(deck, answers)} of ${deck.items.length} answered):`,
     '',
     ...deck.items.map(i => `- ${i.id} ${i.title}: ${answerText(i, answers[keyOf(deck, i)])}.`),
   ]
@@ -48,7 +58,7 @@ async function send($: EngineInterface): Promise<void> {
   const deck = await currentDeck($)
   if (deck === null) return
   const answers = await read($, answersAtom)
-  const done = deck.items.filter(i => isAnswered(answers[keyOf(deck, i)])).length
+  const done = answeredCount(deck, answers)
   if (done === 0) {
     $.ui.toast('Pick an option or write your words first.')
     return
@@ -56,13 +66,21 @@ async function send($: EngineInterface): Promise<void> {
   const at = new Date(await $.clock.now()).toISOString().slice(11, 16) + ' UTC'
   await update($, sentAtom, all => ({ ...all, [deck.id]: at }))
   // The submit resolves only when its turn starts, which waits while Claude
-  // is busy: awaiting it here would run the press past its time budget.
-  void $.prompt.submit({ text: messageFor(deck, answers), asUser: true }).then(async submitted => {
-    if (submitted.drop === undefined) return
-    await update($, sentAtom, all => without(all, deck.id))
-    $.ui.toast(`Not sent: ${submitted.drop}`)
-  })
-  $.ui.toast(`Sent ${done} answers. Claude reads them when its current turn ends.`)
+  // is busy: awaiting it here would run the press past its time budget. A
+  // drop and a rejection both mean nothing was sent: take the mark back.
+  void $.prompt
+    .submit({ text: messageFor(deck, answers), asUser: true })
+    .then(
+      submitted => submitted.drop,
+      (error: unknown) => (error instanceof Error ? error.message : String(error)),
+    )
+    .then(async dropped => {
+      if (dropped === undefined) return
+      await update($, sentAtom, all => without(all, deck.id))
+      $.ui.toast(`Not sent: ${dropped}`)
+    })
+    .catch(() => undefined)
+  $.ui.toast(`Sent ${done} ${done === 1 ? 'answer' : 'answers'}. Claude reads them when its current turn ends.`)
 }
 
 // The tool's input as the model sends it, checked by hand: the engine passes
@@ -74,17 +92,21 @@ function parseDeck(input: Record<string, unknown>): Deck | string {
     return 'items must hold 1 to 40 decisions'
   }
   const items: DeckItem[] = []
-  for (const raw of input.items as Record<string, unknown>[]) {
+  for (const raw of input.items) {
+    if (!isRecord(raw)) return 'each item must be an object'
     if (!text(raw.id) || !text(raw.title) || !text(raw.explain)) return 'each item needs id, title and explain'
     if (items.some(i => i.id === raw.id)) return `item id ${raw.id} appears twice`
     if (!Array.isArray(raw.options) || raw.options.length === 0 || raw.options.length > 9) {
       return `item ${raw.id} needs 1 to 9 options`
     }
     const options: DeckOption[] = []
-    for (const o of raw.options as Record<string, unknown>[]) {
-      if (!text(o.id) || !text(o.label)) return `each option of ${raw.id} needs id and label`
+    for (const o of raw.options) {
+      if (!isRecord(o) || !text(o.id) || !text(o.label)) return `each option of ${raw.id} needs id and label`
       if (options.some(p => p.id === o.id)) return `option id ${o.id} appears twice in ${raw.id}`
       options.push({ id: o.id, label: o.label, ...(text(o.detail) ? { detail: o.detail } : {}) })
+    }
+    if (text(raw.recommended) && !options.some(o => o.id === raw.recommended)) {
+      return `recommended ${raw.recommended} is not an option id of ${raw.id}`
     }
     const facts = Array.isArray(raw.facts) ? raw.facts.filter(text) : []
     items.push({
@@ -134,7 +156,10 @@ const DECK_SCHEMA = {
           explain: { type: 'string', description: 'Markdown: what it is, why it matters, the catch. Keep it short.' },
           facts: { type: 'array', items: { type: 'string' }, description: 'Short facts drawn dim under the text.' },
           options: { type: 'array', minItems: 1, maxItems: 9, items: OPTION_SCHEMA },
-          recommended: { type: 'string', description: 'The option id you recommend, marked "my pick".' },
+          recommended: {
+            type: 'string',
+            description: 'The option id you recommend, marked "my pick"; one of this item\'s option ids.',
+          },
         },
         required: ['id', 'title', 'explain', 'options'],
       },
@@ -152,14 +177,18 @@ const TOOL_DESCRIPTION =
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    await $.command.register({
-      name: 'decide',
-      description: 'Open the decision deck: go through the decisions Claude prepared, one at a time',
-    })
-    await $.tool.register({ name: 'present', description: TOOL_DESCRIPTION, inputSchema: DECK_SCHEMA })
+    await Promise.all([
+      $.command.register({
+        name: 'decide',
+        description: 'Open the decision deck: go through the decisions Claude prepared, one at a time',
+      }),
+      $.tool.register({ name: 'present', description: TOOL_DESCRIPTION, inputSchema: DECK_SCHEMA }),
+    ])
     const deck = await currentDeck($)
     if (deck !== null && (await read($, sentAtom))[deck.id] === undefined) {
-      void $.ui.open({ id: PANE, title: TITLE })
+      // Each open sets closeOnEscape anew: left out, a reload would stop Esc
+      // closing a pane that present opened.
+      void $.ui.open({ id: PANE, title: TITLE, closeOnEscape: true })
     }
 
     return next(e)
@@ -174,9 +203,11 @@ export const register: Register = on => {
   on('tool.call', { tool: 'mcp__decision-deck__present' }, async ($, e) => {
     const deck = parseDeck(e as unknown as Record<string, unknown>)
     if (typeof deck === 'string') return { deny: `The deck was not loaded: ${deck}.` }
-    await update($, deckAtom, () => deck)
-    await update($, cursorAtom, () => 0)
-    await update($, sentAtom, all => without(all, deck.id))
+    await Promise.all([
+      update($, deckAtom, () => deck),
+      update($, cursorAtom, () => 0),
+      update($, sentAtom, all => without(all, deck.id)),
+    ])
     const opened = await $.ui.open({ id: PANE, title: TITLE, focus: true, closeOnEscape: true })
 
     return {
@@ -186,7 +217,9 @@ export const register: Register = on => {
         : `The deck "${deck.title}" is loaded, but the pane waits (${opened.reason}). ` +
           'Tell the person to type /decide.',
     }
-  }).catch(() => ({ deny: 'decision-deck: the deck could not be loaded.' }))
+  }).catch(($, e, next) => ({
+    deny: `decision-deck: the deck could not be loaded (${next.error.message ?? next.error.kind}).`,
+  }))
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Button, Markdown, Text } = $.ui.resolve(e)
@@ -199,11 +232,15 @@ export const register: Register = on => {
         </Box>
       )
     }
-    const answers = await read($, answersAtom)
-    const sentAt = (await read($, sentAtom))[deck.id]
+    const [answers, sent, cursor] = await Promise.all([
+      read($, answersAtom),
+      read($, sentAtom),
+      read($, cursorAtom),
+    ])
+    const sentAt = sent[deck.id]
     const count = deck.items.length
-    const at = Math.min(Math.max(await read($, cursorAtom), 0), count)
-    const done = deck.items.filter(i => isAnswered(answers[keyOf(deck, i)])).length
+    const at = Math.min(Math.max(cursor, 0), count)
+    const done = answeredCount(deck, answers)
     const go = (to: number) => update($, cursorAtom, () => to)
     const step = (by: number) => update($, cursorAtom, c => Math.min(Math.max(c + by, 0), count))
     const item = deck.items[at]
@@ -215,7 +252,7 @@ export const register: Register = on => {
         <Text bold>{deck.title}</Text>
         <Box flexWrap="wrap" columnGap={1}>
           {deck.items.map((one, i) => {
-            const isDone = isAnswered(answers[keyOf(deck, one)])
+            const isDone = isAnswered(one, answers[keyOf(deck, one)])
 
             return (
               <Button key={`jump-${i}`} plain onPress={() => go(i)}>
@@ -245,7 +282,7 @@ export const register: Register = on => {
             </Text>
             {deck.items.map((one, i) => {
               const answer = answers[keyOf(deck, one)]
-              const isDone = isAnswered(answer)
+              const isDone = isAnswered(one, answer)
 
               return (
                 <Button key={`row-${one.id}`} plain dimColor={!isDone} onPress={() => go(i)}>
@@ -284,16 +321,16 @@ export const register: Register = on => {
       )
     }
 
-    const answer = answers[keyOf(deck, item)] ?? EMPTY
+    const key = keyOf(deck, item)
+    const answer = answers[key] ?? EMPTY
     const toggle = (id: string) =>
       update($, answersAtom, all => {
-        const now = all[keyOf(deck, item)] ?? EMPTY
+        const now = all[key] ?? EMPTY
         const picks = now.picks.includes(id) ? now.picks.filter(p => p !== id) : [...now.picks, id]
 
-        return { ...all, [keyOf(deck, item)]: { ...now, picks } }
+        return { ...all, [key]: { ...now, picks } }
       })
-    const setNote = (note: string) =>
-      update($, answersAtom, all => ({ ...all, [keyOf(deck, item)]: { ...(all[keyOf(deck, item)] ?? EMPTY), note } }))
+    const setNote = (note: string) => update($, answersAtom, all => ({ ...all, [key]: { ...(all[key] ?? EMPTY), note } }))
     const hint = e.props.isFocused
       ? `1-${item.options.length} pick · Tab: your words · n next · b back · l all answers · Esc closes`
       : keysHint
@@ -303,7 +340,7 @@ export const register: Register = on => {
       const { Input } = $.ui.resolve(e)
       field = (
         <Input
-          key={`note-${keyOf(deck, item)}`}
+          key={`note-${deck.id}-${item.id}`}
           label="Your words"
           placeholder="optional: a condition, a change, or your own answer"
           value={answer.note}

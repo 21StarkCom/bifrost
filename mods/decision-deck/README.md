@@ -36,7 +36,7 @@ Each decision in `items`:
 | `explain` | string | yes | Markdown: what it is, why it matters, the catch. |
 | `facts` | array of strings | no | Short facts, drawn dim under the text. |
 | `options` | array of 1 to 9 options | yes | Each option has `id` and `label`, and an optional one-line `detail`. Option ids are unique in the decision. |
-| `recommended` | string | no | The option id Claude recommends, marked `★ my pick`. |
+| `recommended` | string | no | The option id Claude recommends, marked `★ my pick`. It must be one of the decision's option ids. |
 
 The mod checks the input itself. A deck that breaks a rule is refused with
 `The deck was not loaded: <reason>.`, and the pane keeps the deck it had.
@@ -44,7 +44,8 @@ The mod checks the input itself. A deck that breaks a rule is refused with
 A good deck replaces the deck in the pane, puts the pane at the first
 decision, clears the sent mark of that deck id, and opens the pane with the
 focus. A deck presented again under the same id keeps the answers it already
-has. When the pane cannot open, the tool tells Claude to ask the operator to
+has; a pick of an option that the new deck dropped no longer counts as an
+answer. When the pane cannot open, the tool tells Claude to ask the operator to
 type `/decide`.
 
 ## The `/decide` command
@@ -87,8 +88,9 @@ My answers to "<title>" (<answered> of <count> answered):
 <outro>
 ```
 
-The pane then shows `✓ Sent to Claude at <HH:MM> UTC`. When Claude Code drops
-the message, the mod clears that mark and shows `Not sent: <reason>`.
+The operator's words are put on one line in the message. The pane then shows
+`✓ Sent to Claude at <HH:MM> UTC`. When Claude Code drops the message, or the
+submit fails, the mod clears that mark and shows `Not sent: <reason>`.
 
 ## The state the pane keeps
 
@@ -99,10 +101,10 @@ code, and the mod writes nothing to disk.
 |---|---|
 | `deck` | The deck on screen, or `null` until Claude presents one. |
 | `cursor` | The index of the decision on screen, or the count of decisions for the page of all answers. |
-| `answers` | `{ picks, note }` per decision, keyed `<deck id>-<item id>`: the picked option ids and the operator's words. |
+| `answers` | `{ picks, note }` per decision, keyed by the JSON array `[<deck id>, <item id>]`: the picked option ids and the operator's words. |
 | `sent` | Deck id to the time its answers were sent. |
 
-`deck`, `answers` and `sent` carry a shape tag (`deck-1`, `answers-1`,
+`deck`, `answers` and `sent` carry a shape tag (`deck-1`, `answers-2`,
 `sent-1`). Change a tag when the shape of its value changes: the new code then
 reads the old value as absent, not as a value of the wrong shape.
 

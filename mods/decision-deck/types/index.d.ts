@@ -36,7 +36,7 @@ declare module 'claude-code' {
       deck: Shaped<Deck | null>
       // An item's index, or the item count for the page of all answers.
       cursor: number
-      // Keyed `<deck id>-<item id>`.
+      // Keyed by the JSON array `[<deck id>, <item id>]`.
       answers: Shaped<Record<string, Answer>>
       // Deck id to the time its answers were sent.
       sent: Shaped<Record<string, string>>
