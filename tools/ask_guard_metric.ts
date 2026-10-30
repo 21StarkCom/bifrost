@@ -5,9 +5,8 @@
  * For one week of 7 local days it counts, in `~/.claude/history.jsonl`
  * (`$CLAUDE_CONFIG_DIR/history.jsonl` when set), every prompt and every
  * one-word reply: a prompt that is only a nudge (`go`, `continue`, `yes`,
- * `merge`, `ship it`, …) or an option pick (`1`, `a`). It counts the Stop hook's
- * blocks in `<stateRoot>/ask-guard/blocks.jsonl`, and prints the operator's
- * baseline beside them.
+ * `merge`, `ship it`, …) or an option pick (`1`, `a`), and prints the
+ * operator's baseline beside them.
  *
  *   ask_guard_metric.ts [--week YYYY-MM-DD] [--json] [--notify]
  *   ask_guard_metric.ts --install-schedule | --uninstall-schedule
@@ -26,13 +25,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { precheckCli } from "./cli_args_lib.ts";
 import { isMainModule } from "./main_module_lib.ts";
-import { blockLogPath } from "./ask_guard_lib.ts";
+import { stateRoot } from "./asset_root_lib.ts";
 
 export const USAGE = `usage: ask_guard_metric.ts [--week YYYY-MM-DD] [--json] [--notify]
        ask_guard_metric.ts --install-schedule | --uninstall-schedule
 
 Counts one week (7 local days) of prompts and one-word replies in
-~/.claude/history.jsonl, and the ask-guard Stop hook's blocks, beside the baseline.
+~/.claude/history.jsonl, beside the baseline.
 
   --week YYYY-MM-DD     first day of the week (default: the 7 days before today)
   --json                print the result as JSON
@@ -42,7 +41,7 @@ Counts one week (7 local days) of prompts and one-word replies in
   --uninstall-schedule  unload and remove that job
 `;
 
-/** The operator's own count, from before the hook. */
+/** The operator's own count, the week this metric measures against. */
 export const BASELINE = { week: "2026-10-22", replies: 81, go: 39, prompts: 2375 } as const;
 
 export const LABEL = "com.21stark.ask-guard-metric";
@@ -114,34 +113,6 @@ export function countPrompts(lines: Iterable<string>, week: Week): PromptCounts 
   return out;
 }
 
-export interface BlockCounts {
-  blocks: number;
-  ask: number;
-  defer: number;
-}
-
-/** Count the hook's block lines (`time` as ISO) inside the week. */
-export function countBlocks(lines: Iterable<string>, week: Week): BlockCounts {
-  const out: BlockCounts = { blocks: 0, ask: 0, defer: 0 };
-  const from = week.start.getTime();
-  const to = week.end.getTime();
-  for (const line of lines) {
-    if (!line.trim()) continue;
-    let row: any;
-    try {
-      row = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    const t = typeof row?.time === "string" ? Date.parse(row.time) : NaN;
-    if (Number.isNaN(t) || t < from || t >= to) continue;
-    out.blocks++;
-    if (row.kind === "defer") out.defer++;
-    else out.ask++;
-  }
-  return out;
-}
-
 function day(d: Date): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
@@ -156,14 +127,11 @@ export interface Result {
   go: number;
   /** Each reply word and its count, most first. */
   words: [string, number][];
-  blocks: number;
-  blocks_ask: number;
-  blocks_defer: number;
   /** The operator's count, and this rule's count of the same week from today's history. */
   baseline: typeof BASELINE & { recount: { replies: number; go: number; prompts: number } };
 }
 
-export function result(week: Week, p: PromptCounts, b: BlockCounts, base: PromptCounts): Result {
+export function result(week: Week, p: PromptCounts, base: PromptCounts): Result {
   const last = new Date(week.end.getFullYear(), week.end.getMonth(), week.end.getDate() - 1);
   return {
     week: { start: day(week.start), last: day(last) },
@@ -171,15 +139,12 @@ export function result(week: Week, p: PromptCounts, b: BlockCounts, base: Prompt
     one_word_replies: p.replies,
     go: p.go,
     words: Object.entries(p.words).sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0])),
-    blocks: b.blocks,
-    blocks_ask: b.ask,
-    blocks_defer: b.defer,
     baseline: { ...BASELINE, recount: { replies: base.replies, go: base.go, prompts: base.prompts } },
   };
 }
 
 export function title(r: Result): string {
-  return `Act, don't ask: ${r.one_word_replies} one-word replies (baseline ${BASELINE.replies}), ${r.blocks} hook blocks`;
+  return `Act, don't ask: ${r.one_word_replies} one-word replies (baseline ${BASELINE.replies})`;
 }
 
 export function render(r: Result): string {
@@ -190,7 +155,6 @@ export function render(r: Result): string {
     `  prompts           ${n(r.prompts)}`,
     `  one-word replies  ${n(r.one_word_replies)} (${words})`,
     `  go                ${n(r.go)}`,
-    `  hook blocks       ${n(r.blocks)} (ask ${r.blocks_ask}, defer ${r.blocks_defer})`,
     `  baseline, week of ${BASELINE.week}: ${BASELINE.replies} one-word replies, ${BASELINE.go} go, ${n(BASELINE.prompts)} prompts` +
       ` (this rule counts ${re.replies}, ${re.go}, ${n(re.prompts)})`,
   ].join("\n");
@@ -273,7 +237,7 @@ function installSchedule(): number {
     process.stderr.write("--install-schedule needs macOS launchd\n");
     return 1;
   }
-  const log = path.join(path.dirname(blockLogPath()), "weekly.log");
+  const log = path.join(stateRoot(), "ask-guard", "weekly.log");
   fs.mkdirSync(path.dirname(log), { recursive: true });
   const file = plistPath();
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -303,8 +267,7 @@ function uninstallSchedule(): number {
 
 function notify(r: Result): number {
   const body =
-    `Week ${r.week.start} to ${r.week.last}: ${n(r.prompts)} prompts, ${r.go} go, ` +
-    `blocks ask ${r.blocks_ask} / defer ${r.blocks_defer}. ` +
+    `Week ${r.week.start} to ${r.week.last}: ${n(r.prompts)} prompts, ${r.go} go. ` +
     `Baseline ${BASELINE.week}: ${BASELINE.replies} replies, ${BASELINE.go} go, ${n(BASELINE.prompts)} prompts.`;
   const s = spawnSync("heimdall", ["send", "--body", body, "--", title(r)], { encoding: "utf8" });
   if (s.status !== 0) {
@@ -340,7 +303,6 @@ function main(argv: string[]): number {
   const r = result(
     week,
     countPrompts(history, week),
-    countBlocks(readLines(blockLogPath()), week),
     countPrompts(history, weekWindow(BASELINE.week)),
   );
   process.stdout.write(flags.has("json") ? JSON.stringify(r, null, 2) + "\n" : render(r) + "\n");

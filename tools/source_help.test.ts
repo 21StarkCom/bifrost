@@ -9,7 +9,7 @@ import { parseCli, hasCliHelp } from "./cli_args_lib.ts";
 const root = path.resolve(import.meta.dirname, "..");
 // One row per executable; every dispatched route is exercised independently.
 const routes: Record<string, string[]> = {
-  alert_delivery: [""], approach_contract: [""], ask_guard_hook: [""], ask_guard_metric: [""],
+  alert_delivery: [""], approach_contract: [""], ask_guard_metric: [""],
   asset_links: [""], context_compactor: [""],
   copilot_land: ["", "branch-name", "prepare-branch", "land"],
   fact_routing_hook: [""], failure_classifier: [""],
