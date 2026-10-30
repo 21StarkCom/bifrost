@@ -173,7 +173,9 @@ sets, is `MINION (<n>)`. Four things are yours on top of it:
   reads to confirm your `done` instead of taking your word for it.
 - **Keep your ticket's progress file current** by [the spine's rule](../../standards/worker-spine.md#progress-file):
   `closed` once `alfred task move STARK-n done` lands, `blocked` when you stop
-  on a `blocked` or `follow-up … stopping` report.
+  on a `blocked` or `follow-up … stopping` report. Once the close lands, also
+  delete your ticket's settings file:
+  `rm -f ~/.cache/stark-progress/STARK-n.settings.json ~/.cache/stark-progress/STARK-n.settings.json.tmp`.
 
 Then report to your leader and stand down — both below.
 
@@ -255,8 +257,15 @@ authorization. The `<report>` is one of:
   name the repo and the PR, run or step. Your own repo's release is not a
   block: run it by §8.
 - `follow-up STARK-m filed, stopping`.
+- `held: <merge or release> by the ticket's settings` — the operator's ticket
+  settings hold your merge or your release
+  ([the spine's holds](../../standards/worker-spine.md#holds)). It is not a
+  stop: wait in the spine's one background command, then go on with the step
+  when the setting clears. Send no report when it clears; your next one is
+  the report the step leads to.
 
 Do not stay silent for more than 30 minutes; send a one-line progress note.
+A `held` wait is the exception: your leader knows the operator holds you.
 
 ## Stand down
 
@@ -290,6 +299,10 @@ its terms is filled in here:
 **A `blocked` or `follow-up … stopping` exit does NOT stand down.** Gru or the
 operator may still need your worktree, your tab and your scrollback to see what
 happened. Report, then stop and leave everything in place.
+
+**A `held` report does not stop you and does not stand you down.** Keep your
+session and your goal, wait as [the spine's holds](../../standards/worker-spine.md#holds)
+say, and go on with the step once the setting clears.
 
 **`unblocked` resumes you.** When your leader, on the route
 [Reporting](#reporting) checks and never another peer, sends `unblocked

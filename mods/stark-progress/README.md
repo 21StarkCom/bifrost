@@ -3,7 +3,10 @@
 A Claude Code mod that shows a live view of each Gru, Minion and Agnes run.
 Gru's tab gets the Gru pane beside the chat: a calm board of the run, and the
 run's settings, which Gru reads before each launch. A Minion's or Agnes's tab
-gets one progress row above the prompt for its ticket. Both say where a ticket
+gets the ticket pane beside the chat: its one ticket, and the ticket's
+settings, which the worker reads before its review, its merge and its
+release; one progress row above the prompt stands in while that pane is not
+placed. Each says where a ticket
 is, whether its worker is doing anything, and whether that work gets anywhere:
 a worker that is busy for hours with no commit and no stage change reads
 `stalled`, not "20% done". Neither ever forecasts the time left. The mod polls
@@ -53,7 +56,40 @@ Then close STARK-1200 once all 4 tickets close.
 Read from ~/.cache/stark-progress at 12:53.
 ```
 
-A Minion's or Agnes's tab, above the prompt:
+A Minion's or Agnes's tab, the ticket pane's Overview, with its merge held:
+
+```
+Overview   Settings
+
+Document the export flags
+STARK-1202 · bragi
+Part of STARK-1200
+
+🚇 Where it is
+  ticket PR     review merge  done
+  ●━━━━━━●━━━━━━◉┄┄┄┄┄┄○┄┄┄┄┄┄○  ✋ held · merge · 12m
+
+╭──────────────────────────────────────────────────╮
+│ 🙋 Worth a look                                   │
+│ Held by your settings: merge                     │
+│ Set Merge when checks pass to On in Settings,    │
+│ and the worker merges.                           │
+╰──────────────────────────────────────────────────╯
+
+🔧 Activity
+Last tool call 12m ago.
+0 tool calls in the last 15 minutes.
+1 of the last 10 calls failed.
++234 −20 in its worktree.
+3 commits since its base.
+
+👉 Up next
+Wait for your merge OK.
+
+Read from ~/.cache/stark-progress at 12:53.
+```
+
+The same tab, above the prompt, while the ticket pane is not placed:
 
 ```
 STARK-1202 ●━●━◉┄○┄○ review    36m  ▃▃◆▄◆▁─▂◆▃▃▄  moving · +234 −20  Document the export flags
@@ -110,6 +146,49 @@ each scope change ([the Gru skill](../../skill/gru/SKILL.md#progress-pane)):
 (secondary text 8.1:1); the track's lines and rings, which carry no words,
 are 3.5:1. They suit a dark theme.
 
+## The ticket pane
+
+The pane opens by itself in a Minion's or Agnes's own tab, once, when the
+poll first finds the tab's ticket file, and from 144 columns (110 once you
+opened it). `/ticket-board` opens it in that tab at any width; in any other
+tab it says the tab has no ticket. While the pane is not placed, the tab keeps
+its one band row above the prompt. It draws with the Gru pane's parts, palette
+and rules: counts and elapsed times only, one emoji at most per section
+header and per status, and none in Settings.
+
+**Overview.** All of it at once, since the pane holds one ticket:
+
+- The name (the title without its `[tag]`, `<repo>: ` lead and
+  `(slice n of m)` tail), then the id, the repo and the slice, and
+  `Part of <epic>` when an epic's run file lists the ticket (a `--tickets`
+  run, launched as `GRU-n`, has no epic to name).
+- `🚇 Where it is`: the five stations, one emoji and the status, as the Gru
+  pane reads them. A held ticket reads `✋ held · <merge or release> · <time>`.
+- A box when the ticket is worth a look: the band calls it `blocked`, `idle`
+  or `stalled`, 5 of its last 10 calls failed, or a setting holds it
+  (`Held by your settings: <merge or release>`, and the setting that clears
+  it). Else `🌿 Nothing needs you right now.`
+- `🔧 Activity`: the running or last tool call, the calls in the last 15
+  minutes, the failures among the last 10, the diff size, and the commits.
+- `👉 Up next`: the next spine step. With a hold, `Wait for your merge OK.` or
+  `Wait for your release OK.` Else by stage: `ticket` opens the PR, `pr`
+  reviews it, `review` merges it, `merged` releases or closes, and `blocked`
+  waits for the block to clear. A closed ticket has none.
+
+**Settings.** Three rows, each a value you select to change. A press writes
+all three to the ticket's settings file at once, one press at a time, each
+over the one before it. The worker reads the file at three points of
+[the worker spine](../../standards/worker-spine.md#ticket-settings):
+
+| Row | Field | What the worker does |
+|---|---|---|
+| Merge when checks pass | `mergeOnGreen` | On: merges once the review and the checks pass. Off: holds the merge until you set it On. |
+| Review depth | `reviewDepth` | `by what the PR changes`: the spine's tier. `deep`: a code PR gets `/code-review xhigh`, even after a live run. |
+| Release | `release` | `run the chain`: runs the repo's release chain after the merge. `stop before publish`: holds the release until you set it back. |
+
+A hold is no stop: the worker writes `hold` into its ticket file, reports
+`held`, and waits in one background command until you clear the setting.
+
 ## How a row reads
 
 A worker's band row:
@@ -135,6 +214,7 @@ A worker's band row:
   | `no file yet` | Gru's run names the ticket, and it has no file | dim |
   | `done` | the stage is `closed` | green |
   | `blocked <time>` | the stage is `blocked` | red |
+  | `held · <merge or release>` | the file's `hold` is set | yellow |
   | `idle <time>` | the heartbeat shows no call that started or ended for 15 min (`· in <tool>` when one still runs) | yellow |
   | `moving` | the last milestone is under 45 min old | green |
   | `slow <time>` | the last milestone is 45–90 min old | yellow |
@@ -152,7 +232,7 @@ A worker's band row:
 ## The state contract
 
 The skills write the ticket and run files; the mod writes the heartbeat and
-the settings file. The ticket, run and settings files are runtime-neutral: a
+the settings files. The ticket, run and settings files are runtime-neutral: a
 Codex Gru or worker writes and reads them too, and only a Claude Code session
 draws them. Every file is whole JSON, written atomically: a writer writes
 `<name>.json.tmp` beside it and renames it over `<name>.json`, so a poll never
@@ -164,11 +244,14 @@ does this for a ticket's file). A field of the wrong type reads as absent: a
 `~/.cache/stark-progress/<STARK-n>.json`, one per ticket:
 
 ```json
-{ "id": "STARK-n", "title": "<ticket title>", "stage": "pr", "pr": "<PR url or null>", "updated": "<ISO 8601>", "worktree": "<absolute path or null>" }
+{ "id": "STARK-n", "title": "<ticket title>", "stage": "pr", "pr": "<PR url or null>", "hold": null, "updated": "<ISO 8601>", "worktree": "<absolute path or null>" }
 ```
 
 `stage` is one of `ticket`, `pr`, `review`, `merged`, `closed` (the track
-fills in that order) or `blocked`. `updated` is when the stage was written, so
+fills in that order) or `blocked`. `hold` is `"merge"` or `"release"` while
+the ticket's settings hold that step, else absent or `null`; the stage does
+not change during a hold, and a closed or blocked ticket reads no hold.
+`updated` is when the stage was written, so
 it is the stage's milestone and the start of its time. `worktree` is the folder
 the spine's command ran in; git reads the folder named for the ticket that it
 is or is inside, and nothing when there is none, so a stamp Gru writes from its
@@ -201,6 +284,21 @@ the default: `decideForMe` `true`, `maxWorkers` 3, `followUps` `true`,
 run file it is the launch's `--max-workers`, with no cap. A `*.settings.json` file is
 never a run file. Gru deletes it with the run file when the run ends.
 
+`~/.cache/stark-progress/<STARK-n>.settings.json`, the ticket's settings,
+which the ticket pane writes and the worker reads at three points of the
+spine:
+
+```json
+{ "mergeOnGreen": true, "reviewDepth": "by-change", "release": "run" }
+```
+
+`mergeOnGreen` is a bool (default `true`), `reviewDepth` is `by-change` or
+`deep` (default `by-change`), and `release` is `run` or `stop` (default
+`run`). A field that is absent or of the wrong type takes its default. The mod
+never reads this file as a ticket file. The worker deletes it when it closes
+the ticket (Agnes at her stand-down), and Gru deletes each of its run's at
+the run's end.
+
 `~/.cache/stark-progress/<STARK-n>.beat.json`, the heartbeat, one per ticket
 whose worker is a Claude session with the mod installed:
 
@@ -227,8 +325,9 @@ outcomes and last activity of a heartbeat its own session wrote.
   or `GRU-n`): it shows that run in the Gru pane.
 - Any other session whose project root (where it started, or the worktree it
   moved to; a shell `cd` does not move it) is a folder named `STARK-n`, a
-  worker's worktree, shows that ticket's band row once its file exists, and
-  writes its heartbeat.
+  worker's worktree, shows that ticket in the ticket pane once its file
+  exists, its band row while the pane is not placed, and writes its
+  heartbeat. `/ticket-board` opens the pane there, and only there.
 - Any session shows the Gru pane after `/gru-board`.
 - Nothing matching draws nothing.
 
@@ -243,9 +342,14 @@ nothing more.
 - A toast or a sound when a row becomes `stalled`.
 - A stage history that stays when the mod reloads.
 - Settings Gru cannot honor yet: workers on devbox (valkyrie cannot launch
-  there), a minimum worker count (Gru already fills to the maximum), and a
-  merge hold, a review depth or a release stop (the Minion protocol).
-- A light-theme palette for the Gru pane.
+  there), and a minimum worker count (Gru already fills to the maximum).
+- A merge hold, a review depth or a release stop for a whole Gru run: each
+  ticket has its own, in its worker's ticket pane.
+- Activity for a Codex worker in its ticket pane (it writes no heartbeat).
+- A held worker whose session died reads `held` on the Gru pane, with its
+  time held, since no file says whether a worker lives; Gru's observation
+  pass reads that from Hermod. The ticket pane dies with its tab.
+- A light-theme palette for the Gru pane and the ticket pane.
 
 ## Develop
 

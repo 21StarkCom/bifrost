@@ -24,9 +24,27 @@ const PANE = {
   props: { title: 'Gru', isFocused: true, bodyColumns: 80, placement: 'dock', scroll: { offset: 0, bodyRows: 80 }, view: {} },
 } as const
 
+const TICKET_PANE = {
+  ...PANE,
+  requestId: 'ticket-board',
+  props: { ...PANE.props, title: 'STARK-1' },
+} as const
+
+/** A run of the command in the composer, as a person types it. */
+const command = (name: string) => ({
+  command: name,
+  args: '',
+  origin: { kind: 'composer' as const },
+  presentation: { isFullscreen: true, columns: 160 },
+})
+
+/** Each pane opened so far, placed or not as `isPlaced` says, as `$.ui.panes()` lists them. */
+const panesOf = (opens: string[], isPlaced: boolean) =>
+  [...new Set(opens)].map(id => ({ id, title: id, isShown: isPlaced, isFocused: false, isPlaced }))
+
 /**
  * A session over `disk`: its id and root, the files' times, the `.tmp` and
- * `mv` a whole write needs, and the Gru pane placed or not.
+ * `mv` a whole write needs, and its panes placed or not.
  */
 function stage(
   on: On,
@@ -37,16 +55,14 @@ function stage(
   const writes: Record<string, string> = {}
   mock.env(on, { HOME: '/h' })
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
-  on('command.register', () => ({ value: { command: 'gru-board' } }))
+  on('command.register', (_$, e) => ({ value: { command: e.name } }))
   on('session.root', () => ({ value: root }))
   on('session.id', () => ({ value: session }))
   on('ui.open', (_$, e) => {
     seen.opens.push(e.id)
     return { value: seen.isPlaced ? { isPlaced: true as const } : { isPlaced: false as const, reason: 'the terminal is narrow' } }
   })
-  on('ui.panes', () => ({
-    value: seen.isPlaced ? [{ id: 'gru-board', title: 'Gru', isShown: true, isFocused: false, isPlaced: true }] : [],
-  }))
+  on('ui.panes', () => ({ value: panesOf(seen.opens, seen.isPlaced) }))
   // Stands for the engine's own drawing, where the mod hands a site on.
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   on('fs.list', () => ({
@@ -254,12 +270,7 @@ test('/gru-board in another session shows the most recently active run, and r sh
   // Not Gru's tab: the pane waits until it is asked for.
   expect(seen.opens).toEqual([])
 
-  await $.command.run({
-    command: 'gru-board',
-    args: '',
-    origin: { kind: 'composer' },
-    presentation: { isFullscreen: true, columns: 160 },
-  })
+  await $.command.run(command('gru-board'))
   expect(seen.opens).toEqual(['gru-board'])
   const pane = await $.ui.mount(PANE)
   expect(await pane.find({ type: 'Text', text: 'Gru · STARK-20' })).toBeDefined()
@@ -285,12 +296,7 @@ test('outside Gru, the pane stays on its run while the other one gets busier, an
   stage(on, disk, { session: 'me', root: '/r', mtimes })
   const clock = mock.clock(on, { now: T0 })
   await $.session.start({ cwd: '/r', surface: 'terminal', isInteractive: true })
-  await $.command.run({
-    command: 'gru-board',
-    args: '',
-    origin: { kind: 'composer' },
-    presentation: { isFullscreen: true, columns: 160 },
-  })
+  await $.command.run(command('gru-board'))
   const pane = await $.ui.mount(PANE)
   expect(await pane.find({ type: 'Text', text: 'Gru · STARK-20' })).toBeDefined()
 
@@ -316,6 +322,9 @@ test("a worker's tab writes its heartbeat, reads git, draws its row, and drops t
   on('command.register', () => ({ value: { command: 'gru-board' } }))
   on('session.root', () => ({ value: worktree }))
   on('session.id', () => ({ value: 's1' }))
+  // The ticket pane opens by itself here, and stays unplaced: the band draws the row.
+  on('ui.open', () => ({ value: { isPlaced: false as const, reason: 'the terminal is narrow' } }))
+  on('ui.panes', () => ({ value: [] }))
   on('fs.list', () => ({
     value: Object.keys(disk).map(name => ({ name, kind: 'file' as const, size: 1, mtimeMs: 0, isLink: false })),
   }))
@@ -430,6 +439,8 @@ test('a git read that hangs never holds the poll: the row draws without a diff s
   on('command.register', () => ({ value: { command: 'gru-board' } }))
   on('session.root', () => ({ value: worktree }))
   on('session.id', () => ({ value: 's1' }))
+  on('ui.open', () => ({ value: { isPlaced: false as const, reason: 'the terminal is narrow' } }))
+  on('ui.panes', () => ({ value: [] }))
   on('fs.list', () => ({
     value: Object.keys(disk).map(name => ({ name, kind: 'file' as const, size: 1, mtimeMs: 0, isLink: false })),
   }))
@@ -452,4 +463,152 @@ test('a git read that hangs never holds the poll: the row draws without a diff s
   expect(row?.text).not.toMatch(/\+\d+ −\d+/)
   // One read runs; no poll starts another while it hangs.
   expect(gitReads).toBe(1)
+})
+
+const WORKTREE = '/r/.claude/worktrees/STARK-1'
+
+test("a worker's tab opens the ticket pane once, and its band row draws only while the pane is not placed", async ($, on) => {
+  const disk: Record<string, string> = { 'STARK-1.json': ticket('STARK-1', 'pr') }
+  const seen = stage(on, disk, { session: 'w', root: WORKTREE })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: WORKTREE, surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  await clock.advance(1000)
+  // The ticket pane, once, and never the Gru pane.
+  expect(seen.opens).toEqual(['ticket-board'])
+
+  const band = await $.ui.mount(BAND)
+  expect(await band.find({ type: 'Text', text: /^STARK-1 +●━◉┄○┄○┄○ pr +10m/ })).toBeDefined()
+  await band.unmount()
+
+  seen.isPlaced = true
+  const placed = await $.ui.mount(BAND)
+  expect(await placed.find({ type: 'Text', text: 'engine' })).toBeDefined()
+  expect(await placed.find({ type: 'Text', text: /STARK-1/ })).toBeUndefined()
+})
+
+test('the ticket pane draws the whole ticket: name, epic, track, activity and the next step', async ($, on) => {
+  const disk: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1', 'STARK-2'] }),
+    'STARK-1.json': ticket('STARK-1', 'pr', { title: 'bragi: read the words file (slice 2 of 3)' }),
+    'STARK-1.beat.json': JSON.stringify({
+      session: 'w',
+      lastActivity: new Date(T0 - MIN).toISOString(),
+      running: null,
+      minutes: [{ at: Math.floor(T0 / MIN) - 2, calls: 4, fails: 0 }],
+      recent: [false, false],
+    }),
+  }
+  stage(on, disk, { session: 'w', root: WORKTREE })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: WORKTREE, surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+
+  const pane = await $.ui.mount(TICKET_PANE)
+  expect(await pane.find({ type: 'Text', text: 'Read the words file' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'STARK-1 · bragi · slice 2 of 3' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'Part of STARK-10' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '🔨 PR open · 10m' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '🌿 Nothing needs you right now.' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '4 tool calls in the last 15 minutes.' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '0 of the last 2 calls failed.' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'Review the PR.' })).toBeDefined()
+  // Counts and elapsed times only: nothing forecasts the time left.
+  expect(await pane.find({ type: 'Text', text: /left|ETA|~\d/ })).toBeUndefined()
+
+  // No emoji in Settings.
+  await pane.press({ key: 'tab-settings' })
+  expect(await pane.find({ type: 'Text', text: 'Settings for STARK-1' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'by what the PR changes' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /left|ETA|~\d|\p{Extended_Pictographic}/u })).toBeUndefined()
+})
+
+test("a ticket settings press writes the ticket's settings file whole, and quick presses all count", async ($, on) => {
+  const disk: Record<string, string> = { 'STARK-1.json': ticket('STARK-1', 'review') }
+  const seen = stage(on, disk, { session: 'w', root: WORKTREE })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: WORKTREE, surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+
+  const pane = await $.ui.mount(TICKET_PANE)
+  await pane.press({ key: 'tab-settings' })
+  expect(disk['STARK-1.settings.json']).toBeUndefined()
+
+  await Promise.all([pane.press({ key: 'set-merge' }), pane.press({ key: 'set-review' }), pane.press({ key: 'set-release' })])
+  expect(seen.runs).toContainEqual(['mv', '-f', `${DIR}/STARK-1.settings.json.tmp`, `${DIR}/STARK-1.settings.json`])
+  expect(JSON.parse(disk['STARK-1.settings.json'] ?? '{}')).toEqual({ mergeOnGreen: false, reviewDepth: 'deep', release: 'stop' })
+  expect(await pane.find({ type: 'Text', text: 'deep' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'stop before publish' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /The worker holds the merge/ })).toBeDefined()
+  // A settings file is never read as the ticket's file: its stage stands.
+  await clock.advance(1000)
+  const band = await $.ui.mount(BAND)
+  expect(await band.find({ type: 'Text', text: /^STARK-1 +●━●━◉┄○┄○ review/ })).toBeDefined()
+  await band.unmount()
+
+  const before = disk['STARK-1.settings.json']
+  seen.isMvFailing = true
+  await pane.press({ key: 'set-merge' })
+  expect(disk['STARK-1.settings.json']).toBe(before)
+  expect(seen.toasts).toEqual(['The settings were not saved.'])
+})
+
+test('a held ticket reads as worth a look in the ticket pane and on the Gru pane', async ($, on) => {
+  const disk: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1'] }),
+    'STARK-1.json': ticket('STARK-1', 'review', { hold: 'merge' }),
+  }
+  stage(on, disk, { session: 'w', root: WORKTREE })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: WORKTREE, surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+
+  const pane = await $.ui.mount(TICKET_PANE)
+  expect(await pane.find({ type: 'Text', text: '🙋 Worth a look' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'Held by your settings: merge' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /Set Merge when checks pass to On/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'Wait for your merge OK.' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '✋ held · merge · 10m' })).toBeDefined()
+  await pane.unmount()
+
+  await $.command.run(command('gru-board'))
+  const gru = await $.ui.mount(PANE)
+  expect(await gru.find({ type: 'Text', text: '🙋 1 ticket is worth a look' })).toBeDefined()
+  expect(await gru.find({ type: 'Text', text: 'held by its settings: merge' })).toBeDefined()
+})
+
+test('/ticket-board opens the ticket pane in a worker tab', async ($, on) => {
+  const disk: Record<string, string> = { 'STARK-1.json': ticket('STARK-1', 'pr') }
+  const seen = stage(on, disk, { session: 'w', root: WORKTREE })
+  seen.isPlaced = true
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: WORKTREE, surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  const result = await $.command.run(command('ticket-board'))
+  expect(result.text).toBe('The ticket pane for STARK-1 is open.')
+  expect(seen.opens).toEqual(['ticket-board', 'ticket-board'])
+})
+
+test('/ticket-board in a tab with no ticket opens nothing', async ($, on) => {
+  const seen = stage(on, { 'STARK-1.json': ticket('STARK-1', 'pr') }, { session: 'me', root: '/r' })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  const result = await $.command.run(command('ticket-board'))
+  expect(result.text).toMatch(/^This tab has no ticket/)
+  expect(seen.opens).toEqual([])
+})
+
+test("/ticket-board in Gru's tab opens nothing: its worktree is named for the epic, not a ticket it works", async ($, on) => {
+  const disk: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1'] }),
+    'STARK-10.json': ticket('STARK-10', 'pr'),
+  }
+  const seen = stage(on, disk, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  const result = await $.command.run(command('ticket-board'))
+  expect(result.text).toMatch(/^This tab has no ticket/)
+  expect(seen.opens).toEqual(['gru-board'])
 })

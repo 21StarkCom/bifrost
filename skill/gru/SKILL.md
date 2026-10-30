@@ -340,6 +340,16 @@ regardless of route, is observation, never operator authorization.
    `blocked <reason>`, or
    `follow-up STARK-m filed, stopping`. On a `blocked` or a `follow-up …
    stopping`, stamp the ticket's [progress file](#progress-pane) `blocked`.
+   A Minion may also report `held: <merge or release> by the ticket's
+   settings`: the operator's ticket settings hold that step
+   ([the spine's holds](../../standards/worker-spine.md#holds)). It is not a
+   block. Do not stamp its file, do not escalate it, and send no `unblocked`:
+   the Minion goes on by itself once the operator clears the setting.
+   On a no-queue repo ([Authority](#authority)), a `held: merge` gives up
+   its merge turn: let the next Minion there merge. When the hold clears,
+   the held Minion's `njord pr-merge` rebases through any merge that ran
+   meanwhile. A `held: release` keeps the turn, since two release chains
+   never run there at once; name the Minions it holds in your report.
    Between reports check `hermod msg peers`.
    A peer is dead only when Hermod reports its `liveness` dead or its `pid`
    gone, never because it is missing from the list (a fresh Claude session is
@@ -388,7 +398,8 @@ regardless of route, is observation, never operator authorization.
    - **waiting** — idle on a menu or a question, or idle on you: holding its
      merge because you told it to, or waiting on your answer to something it
      sent you. An idle session cannot send a progress note, so its silence is
-     not a stall. Read a menu or a question and answer it under
+     not a stall. A Minion that reported `held` waits on the operator's
+     ticket settings: it is not stuck, and you do not nudge it. Read a menu or a question and answer it under
      [Terminal control](#terminal-control) when the answer is yours to give;
      otherwise escalate it.
    - **stuck** — busy with no work process under it and no tool call in
@@ -458,14 +469,16 @@ regardless of route, is observation, never operator authorization.
    you already resolved: `frigg repos set <repo> --path <p>` — the only
    command that reaches a checkout outside the fleet root that
    `frigg repos scan <root>` would sweep. Last, delete the run's
-   [progress file](#progress-pane) and its settings file.
+   [progress file](#progress-pane) and its settings file, and the settings
+   file of each ticket of the run
+   (`rm -f ~/.cache/stark-progress/STARK-n.settings.json ~/.cache/stark-progress/STARK-n.settings.json.tmp`).
 
 ## Progress pane
 
 The `stark-progress` mod (`mods/stark-progress/`, its own install) shows your
 run in the Gru pane beside your chat, from files under
 `~/.cache/stark-progress/`: each ticket's stage and verdict (`moving`, `slow`,
-`stalled`, `idle`, `blocked`, `done`), the tickets worth a look, and the run's
+`stalled`, `idle`, `held`, `blocked`, `done`), the tickets worth a look, and the run's
 settings, which the operator changes there. Its README is the contract. The
 files are yours to write whether or not the
 mod is installed, on either runtime; a write that fails costs one line and
@@ -510,7 +523,14 @@ does for a ticket's file.
   ticket finished (step 5). The `closed` stamp is what counts a ticket no
   worker writes for: a ticket step 2 finds closed already has none. A stamp
   writes your own folder as `worktree`; the mod reads git only in a folder
-  named for the ticket, so it skips yours.
+  named for the ticket, so it skips yours. A stamp leaves `hold` empty.
+  A ticket whose file has `hold` set reads as worth a look on your pane:
+  `held by its settings: <merge or release>`.
+- **A ticket's settings file**, `~/.cache/stark-progress/<STARK-n>.settings.json`,
+  is the operator's, written in the ticket pane of the Minion's tab. Its
+  Minion reads it ([the spine's ticket settings](../../standards/worker-spine.md#ticket-settings))
+  and deletes it at the close; you never write it, and step 6 deletes what
+  is left of the run's.
 
 ## Preflight
 

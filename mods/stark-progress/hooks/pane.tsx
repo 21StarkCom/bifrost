@@ -5,12 +5,13 @@ import { clockOf, MAX_WORKERS } from './board'
 import { STAGES } from './view'
 
 // The Gru pane: a calm board of one run (Overview) and the run's settings
-// that Gru reads before each launch (Settings). The model is board.ts's.
-type UI = Elements['terminal']
+// that Gru reads before each launch (Settings). The model is board.ts's. The
+// ticket pane (ticket-pane.tsx) draws with the parts this file exports.
+export type UI = Elements['terminal']
 
 // Contrast on the pane's #262626 (WCAG): text 8.1:1, gray 6.8:1, hint 5.9:1;
 // track 3.5:1 for lines and rings alone, which carry no words.
-const P = {
+export const P = {
   text: '#b8bdd0',
   hint: '#9ba1b8',
   track: '#727894',
@@ -39,10 +40,13 @@ export type PaneView = {
   set: (change: (s: GruSettings) => Partial<GruSettings>) => unknown
 }
 
-const cut = (words: string, room: number) => (words.length > room ? `${words.slice(0, Math.max(room - 1, 1))}…` : words)
+export const cut = (words: string, room: number) => (words.length > room ? `${words.slice(0, Math.max(room - 1, 1))}…` : words)
+
+/** The length of one track segment at a width, leaving room for a status after the track. */
+export const segFor = (w: number) => Math.max(2, Math.min(6, Math.floor((w - 2 - 5 - 2 - 24) / 4)))
 
 /** The words over the stations, each cut to fit before the next. */
-function stationHeader(seg: number): string {
+export function stationHeader(seg: number): string {
   const labels = ['ticket', 'PR', 'review', 'merge', 'done']
   const cells: string[] = Array.from({ length: STAGES.length * (seg + 1) }, () => ' ')
   labels.forEach((label, i) => [...label.slice(0, seg)].forEach((ch, k) => (cells[i * (seg + 1) + k] = ch)))
@@ -51,7 +55,7 @@ function stationHeader(seg: number): string {
 }
 
 /** A ticket's line: ● stations passed, ◉ the one it is at, ○ the ones to come. */
-function line(ui: UI, r: BoardRow, seg: number) {
+export function line(ui: UI, r: Pick<BoardRow, 'at' | 'tone'>, seg: number) {
   const { Text } = ui
   const color = TONE[r.tone]
 
@@ -72,7 +76,7 @@ function overview(ui: UI, w: number, board: Board, view: PaneView) {
   const { Box, Button, Text } = ui
   const rows = board.rows
   const looks = rows.filter(r => r.attention !== null)
-  const seg = Math.max(2, Math.min(6, Math.floor((w - 2 - 5 - 2 - 24) / 4)))
+  const seg = segFor(w)
   const segment = Math.max(Math.floor((w - (rows.length - 1)) / Math.max(rows.length, 1)), 1)
   // `r` steps through the other runs by launch id, so with three or more each one is reached.
   const others = [...board.others].sort((a, b) => a.launchId.localeCompare(b.launchId))
@@ -182,21 +186,33 @@ function overview(ui: UI, w: number, board: Board, view: PaneView) {
   )
 }
 
-function settings(ui: UI, w: number, board: Board, view: PaneView) {
-  const { Box, Button, Text } = ui
-  const s = board.settings
+/** A setting's on and off value, which a press flips. */
+export const toggle = (ui: UI, key: string, on: boolean, onPress: () => unknown) => {
+  const { Button, Text } = ui
 
-  const toggle = (key: string, on: boolean, onPress: () => unknown) => (
+  return (
     <Button key={`set-${key}`} plain onPress={onPress}>
       {on ? <Text color={P.green}>● On</Text> : <Text color={P.gray}>○ Off</Text>}
     </Button>
   )
-  const step = (key: string, sign: string, onPress: () => unknown) => (
+}
+
+/** A setting's value as words, which a press changes. */
+export const choice = (ui: UI, key: string, words: string, onPress: () => unknown) => {
+  const { Button, Text } = ui
+
+  return (
     <Button key={`set-${key}`} plain onPress={onPress}>
-      <Text color={P.blue}>{sign}</Text>
+      <Text color={P.blue}>{words}</Text>
     </Button>
   )
-  const row = (label: string, control: ReturnType<typeof toggle>, about: string) => (
+}
+
+/** One setting: its label and control on a line, and what it does below. */
+export const settingRow = (ui: UI, w: number, label: string, control: ReturnType<typeof toggle>, about: string) => {
+  const { Box, Text } = ui
+
+  return (
     <Box flexDirection="column">
       <Box justifyContent="space-between" width={w} columnGap={1}>
         <Text>{label}</Text>
@@ -208,6 +224,38 @@ function settings(ui: UI, w: number, board: Board, view: PaneView) {
       </Box>
     </Box>
   )
+}
+
+/** The pane's two tabs, each with its hotkey. */
+export function tabBar(ui: UI, tab: PaneTab, setTab: (tab: PaneTab) => unknown) {
+  const { Box, Button, Text } = ui
+  const tabs = [
+    ['overview', 'o', 'Overview'],
+    ['settings', 's', 'Settings'],
+  ] as const
+
+  return (
+    <Box columnGap={3}>
+      {tabs.map(([id, hotkey, label]) => (
+        <Button key={`tab-${id}`} plain hotkey={hotkey} onPress={() => setTab(id)}>
+          {tab === id ? (
+            <Text bold underline>
+              {label}
+            </Text>
+          ) : (
+            <Text color={P.text}>{label}</Text>
+          )}
+        </Button>
+      ))}
+    </Box>
+  )
+}
+
+function settings(ui: UI, w: number, board: Board, view: PaneView) {
+  const { Box, Text } = ui
+  const s = board.settings
+  const step = (key: string, sign: string, onPress: () => unknown) => choice(ui, key, sign, onPress)
+  const row = (label: string, control: ReturnType<typeof toggle>, about: string) => settingRow(ui, w, label, control, about)
 
   return (
     <Box flexDirection="column" gap={1}>
@@ -217,7 +265,7 @@ function settings(ui: UI, w: number, board: Board, view: PaneView) {
       </Box>
       {row(
         'Decide for me',
-        toggle('decide', s.decideForMe, () => view.set(now => ({ decideForMe: !now.decideForMe }))),
+        toggle(ui, 'decide', s.decideForMe, () => view.set(now => ({ decideForMe: !now.decideForMe }))),
         s.decideForMe
           ? 'Gru splits a ticket across repos and adds a blocking ticket on its own.'
           : 'Gru holds a split or a blocking ticket, and asks you in its report.',
@@ -236,14 +284,12 @@ function settings(ui: UI, w: number, board: Board, view: PaneView) {
       )}
       {row(
         'Pick up follow-ups',
-        toggle('follow-ups', s.followUps, () => view.set(now => ({ followUps: !now.followUps }))),
+        toggle(ui, 'follow-ups', s.followUps, () => view.set(now => ({ followUps: !now.followUps }))),
         s.followUps ? 'A follow-up a Minion files joins this run.' : 'A follow-up waits on the board, named in the report.',
       )}
       {row(
         'Worker type',
-        <Button key="set-agent" plain onPress={() => view.set(now => ({ minionAgent: now.minionAgent === 'claude' ? 'codex' : 'claude' }))}>
-          <Text color={P.blue}>{s.minionAgent}</Text>
-        </Button>,
+        choice(ui, 'agent', s.minionAgent, () => view.set(now => ({ minionAgent: now.minionAgent === 'claude' ? 'codex' : 'claude' }))),
         `Each new Minion runs on ${s.minionAgent}.`,
       )}
     </Box>
@@ -251,7 +297,7 @@ function settings(ui: UI, w: number, board: Board, view: PaneView) {
 }
 
 export function drawPane(ui: UI, w: number, view: PaneView) {
-  const { Box, Button, Text } = ui
+  const { Box, Text } = ui
   const board = view.board
   if (board === null) {
     return (
@@ -261,26 +307,10 @@ export function drawPane(ui: UI, w: number, view: PaneView) {
       </Box>
     )
   }
-  const tabs = [
-    ['overview', 'o', 'Overview'],
-    ['settings', 's', 'Settings'],
-  ] as const
 
   return (
     <Box flexDirection="column" gap={1}>
-      <Box columnGap={3}>
-        {tabs.map(([id, hotkey, label]) => (
-          <Button key={`tab-${id}`} plain hotkey={hotkey} onPress={() => view.setTab(id)}>
-            {view.tab === id ? (
-              <Text bold underline>
-                {label}
-              </Text>
-            ) : (
-              <Text color={P.text}>{label}</Text>
-            )}
-          </Button>
-        ))}
-      </Box>
+      {tabBar(ui, view.tab, view.setTab)}
       {view.tab === 'settings' ? settings(ui, w, board, view) : overview(ui, w, board, view)}
     </Box>
   )

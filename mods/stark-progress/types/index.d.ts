@@ -1,5 +1,8 @@
 export type Stage = 'ticket' | 'pr' | 'review' | 'merged' | 'closed' | 'blocked'
 
+/** The spine step a ticket's settings hold, while they hold one. */
+export type Hold = 'merge' | 'release'
+
 /** `~/.cache/stark-progress/<STARK-n>.json`, one per ticket. */
 export type TicketFile = {
   id: string
@@ -9,6 +12,20 @@ export type TicketFile = {
   updated: string
   /** The worker's worktree, from the spine's command; absent in a v1 file. */
   worktree?: string | null
+  /** The step its settings hold; absent or null when none does. */
+  hold?: Hold | null
+}
+
+/**
+ * `~/.cache/stark-progress/<STARK-n>.settings.json`, the ticket's settings:
+ * the ticket pane writes it, and the worker reads it before its review, its
+ * merge and its release. A field that is absent or of the wrong type takes
+ * its default.
+ */
+export type TicketSettings = {
+  mergeOnGreen: boolean
+  reviewDepth: 'by-change' | 'deep'
+  release: 'run' | 'stop'
 }
 
 /** `~/.cache/stark-progress/run-<id>.json`, one per Gru run. */
@@ -60,7 +77,7 @@ export type GitSignal = { commits: number[]; added: number; removed: number }
 export type Tone = 'good' | 'warn' | 'bad' | 'dim'
 
 export type Verdict = {
-  word: 'done' | 'blocked' | 'idle' | 'moving' | 'slow' | 'stalled' | 'waiting'
+  word: 'done' | 'blocked' | 'held' | 'idle' | 'moving' | 'slow' | 'stalled' | 'waiting'
   text: string
   tone: Tone
 }
@@ -129,6 +146,31 @@ export type Board = {
   readAt: number
 }
 
+/** What the ticket pane draws: a worker's own ticket, read as the Gru pane reads it, and its settings. */
+export type TicketBoard = {
+  id: string
+  /** The title without its `[tag]`, `repo: ` lead and `(slice n of m)` tail. */
+  name: string
+  repo: string | null
+  slice: string | null
+  /** The epic of a Gru run that lists the ticket, or null. */
+  epic: string | null
+  /** The station it is at: 5 past the last. */
+  at: number
+  tone: BoardTone
+  emoji: string
+  status: string
+  hold: Hold | null
+  /** Why it is worth a look, or null. */
+  attention: string | null
+  /** The tool calls, failures, diff size and commits, one line each. */
+  activity: string[]
+  /** The next spine step, or null once the ticket is closed. */
+  next: string | null
+  settings: TicketSettings
+  readAt: number
+}
+
 export type PaneTab = 'overview' | 'settings'
 
 declare module 'claude-code' {
@@ -141,6 +183,9 @@ declare module 'claude-code' {
       focus: string
       /** The launch id the pane shows, or '' for this tab's own or the most active run. */
       pick: string
+      /** The ticket pane's model, in a worker's own tab. */
+      ticket: Shaped<TicketBoard | null>
+      ticketTab: PaneTab
     }
   }
 }

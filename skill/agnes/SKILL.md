@@ -178,18 +178,30 @@ A need in another repo is yours to act on by the same section, since no
 leader acts on it: file a sub-ticket in that repo, launch its Agnes, and wait
 for it by that section's poll, not as a stopping exit.
 
-## Progress band
+## Progress pane
 
 Keep your ticket's progress file by [the spine's rule](../../standards/worker-spine.md#progress-file),
-for the `stark-progress` mod to draw. Your `closed` is once
+for the `stark-progress` mod to draw: in your tab, the ticket pane beside the
+chat (`/ticket-board` opens it), or one band row above the prompt while the
+pane is not placed. Your `closed` is once
 [self-confirmation](#self-confirmation) passes; one that stays wrong after its
 fix is a stopping exit, so `blocked`.
 
-Delete it, with any `.tmp` a failed write left beside it
-(`rm -f ~/.cache/stark-progress/STARK-n.json ~/.cache/stark-progress/STARK-n.json.tmp`), at the
+The pane's Settings tab is the operator's: it writes your ticket's settings
+file, which you read at the spine's
+[three points](../../standards/worker-spine.md#ticket-settings). A setting
+that holds your merge or your release is a
+[hold](../../standards/worker-spine.md#holds), not a stopping exit: comment
+`held: <merge or release> by the ticket's settings` on your ticket, wait in
+the spine's background command, and go on when it clears. Send no
+`hermod notify`: the operator set it.
+
+Delete the progress file and the settings file, with any `.tmp` a failed
+write left beside them
+(`rm -f ~/.cache/stark-progress/STARK-n.json ~/.cache/stark-progress/STARK-n.json.tmp ~/.cache/stark-progress/STARK-n.settings.json ~/.cache/stark-progress/STARK-n.settings.json.tmp`), at the
 [stand-down](#stand-down), once the contract's checks pass and right before
 `hermod poison-pill --json`, which takes your session with it. A check that
-stops you there leaves the file, and the tab, standing.
+stops you there leaves the files, and the tab, standing.
 
 ## Gaps
 
@@ -252,7 +264,7 @@ strictly after the merge and the close; a clean tree and no unpushed commits
 against **your own branch**; the count of what closes with you),
 `hermod poison-pill --json`, `armed:true` as the only proof it took, and the
 `partial` outcomes.
-Delete your [progress file](#progress-band) once those checks pass, right
+Delete your [progress and settings files](#progress-pane) once those checks pass, right
 before the poison-pill.
 Once it reads `armed:true`, say so and end the turn; if a goal sends you back,
 say again that the stand-down is armed and end the turn, never firing it twice.
@@ -295,6 +307,11 @@ of these:
   not one: §8 has you wait for it);
 - **a follow-up you cannot work around**, which stopped the ticket;
 - **a self-confirmation that came back wrong** — see above.
+
+A **`held`** ticket is none of these: it waits on the operator's setting, not
+on a stop. Comment `held: <merge or release> by the ticket's settings`, wait
+in the [spine's background command](../../standards/worker-spine.md#holds),
+and go on with the step when the setting clears ([Progress pane](#progress-pane)).
 
 There is no leader to inspect what happened, so the session itself is the
 record. The operator's sweep is cheap; a destroyed worktree that held the only

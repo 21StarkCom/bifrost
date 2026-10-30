@@ -72,13 +72,15 @@ file and renames it over the old one, so the mod never reads a half-written
 file:
 
 ```
-mkdir -p ~/.cache/stark-progress && jq -n --arg title '<ticket title>' --arg stage '<stage>' --arg pr '<PR url, or empty>' '{id: "STARK-n", title: $title, stage: $stage, pr: ($pr | select(. != "") // null), updated: (now | todate), worktree: $ENV.PWD}' > ~/.cache/stark-progress/STARK-n.json.tmp && mv ~/.cache/stark-progress/STARK-n.json.tmp ~/.cache/stark-progress/STARK-n.json
+mkdir -p ~/.cache/stark-progress && jq -n --arg title '<ticket title>' --arg stage '<stage>' --arg pr '<PR url, or empty>' --arg hold '<merge or release, or empty>' '{id: "STARK-n", title: $title, stage: $stage, pr: ($pr | select(. != "") // null), hold: ($hold | select(. != "") // null), updated: (now | todate), worktree: $ENV.PWD}' > ~/.cache/stark-progress/STARK-n.json.tmp && mv ~/.cache/stark-progress/STARK-n.json.tmp ~/.cache/stark-progress/STARK-n.json
 ```
 
 Single-quote each value, with every `'` inside it written `'"'"'` and any
 backslash dropped: on Claude a worktree session's guard refuses a command
 carrying a backslash, so the backslash-escaped form of a quote never runs
-there. Leave `pr` empty until you have one (it writes `"pr":null`); `jq` does
+there. Leave `pr` empty until you have one (it writes `"pr":null`). Leave
+`hold` empty except during a [hold](#holds), when it is the step held (it
+writes `"hold":null`); `jq` does
 the JSON quoting, so a quote in the title cannot break the file. `worktree`
 is the folder the command runs in (`$ENV.PWD`, which needs no quoting), so run
 it from your worktree: the mod reads your commits and diff size there. The stages,
@@ -93,8 +95,14 @@ in order:
 - `blocked` — on a stopping exit; the file stays, and the red bar is part of
   the record you leave standing.
 
-A relaunch that finds its PR open already, or a resume after a `blocked`
-stop, writes the stage it picks up at, never `ticket` or a stale `blocked`.
+A [hold](#holds) keeps the stage and sets `hold`. A relaunch that finds its PR
+open already, or a resume after a `blocked` stop, writes the stage it picks up
+at, never `ticket` or a stale `blocked`.
+
+Beside it, `~/.cache/stark-progress/<STARK-n>.settings.json` is the
+operator's: the ticket pane's Settings tab writes it, and you never do.
+[§4](#ticket-settings) names the three points that read it. Your skill
+deletes it when you close the ticket.
 The file is outside your worktree: the write runs unprompted on Claude in a
 bypass-mode session or under an allowlist entry for it, and on Codex only
 under a sandbox that can write `~/.cache` (`workspace-write` cannot). The file
@@ -149,7 +157,8 @@ The review goes by what the PR changes:
   Claude, `/code-review xhigh --fix`; on Codex,
   `codex review --base <base>`, never a Claude spun up to review. When your
   step 3 run exercised the behavior the PR changed, drop to `high`
-  (`-c model_reasoning_effort=high` on Codex).
+  (`-c model_reasoning_effort=high` on Codex), unless your
+  [settings](#ticket-settings) set `reviewDepth` to `deep`.
 
 A release bot's own PR that changes only version manifests and changelogs
 takes a diff check that it touches nothing else, and the repo's tests,
@@ -172,6 +181,48 @@ merge-queue base (a root `CHANGELOG.md` would conflict every queued pair) is
 not contention, and no rebase clears it: report it blocked and stop. Never
 `git push --force`, never pass pr-merge `--force`, and never merge past an open
 finding.
+
+### Ticket settings
+
+The operator can change three steps of your work in the ticket pane, which
+writes `~/.cache/stark-progress/STARK-n.settings.json`. Read the file at each
+of these three points with the `jq -e` test named there. Exit 0 means the
+setting applies. Any other exit means the default: a missing or unparsable
+file, and a field that is absent or of the wrong type.
+
+| Field (default) | Read | Test | When it applies |
+|---|---|---|---|
+| `reviewDepth` (`by-change`) | before the review | `'.reviewDepth == "deep"'` | A code PR keeps `/code-review xhigh --fix` (on Codex, `codex review` with no `high` effort), even when step 3 ran the changed behavior. A prose-only or scripts-only PR keeps its tier. |
+| `mergeOnGreen` (`true`) | before each `njord pr-merge` | `'.mergeOnGreen == false'` | [Hold](#holds) the merge. |
+| `release` (`run`) | before the release publishes ([§8](#8-releases-and-other-repos) step 5) | `'.release == "stop"'` | [Hold](#holds) the release. |
+
+The command is `jq -e '<test>' ~/.cache/stark-progress/STARK-n.settings.json >/dev/null 2>&1`.
+
+### Holds
+
+A hold is not a `blocked` exit. Keep your session, your worktree and your
+goal, and do not stand down.
+
+1. Write your ticket file by [the §1 command](#progress-file), with the stage
+   it has and `hold` set to `merge` or `release`.
+2. Report `held: <merge or release> by the ticket's settings`. A Minion sends
+   it to its leader. Agnes comments it on her ticket.
+3. Wait in one background command until the setting clears. On Claude, run it
+   as a Bash call with `run_in_background`, which wakes you when it exits. On
+   Codex, `exec_command` returns a `session_id` while it still runs; poll that
+   session with an empty `write_stdin` until it exits. A missing, empty or
+   unparsable file clears the hold.
+
+   ```
+   until ! jq -e '.mergeOnGreen == false' ~/.cache/stark-progress/STARK-n.settings.json >/dev/null 2>&1; do sleep 30; done
+   ```
+
+   For the release, the test is `'.release == "stop"'`. With a goal active,
+   end each turn on one line that says the hold waits on the operator's
+   setting.
+4. When it exits, write your ticket file with `hold` empty, and go on with the
+   step: `njord pr-merge`, which rebases and reruns the checks, or the
+   publish.
 
 ## 5. Re-verify after `--fix`, and post the run on the PR
 
@@ -251,7 +302,9 @@ steps 2, 4 and 5 each re-read the base and the tags:
    refuses it, exit 37). Never push to the base: a chain step that does
    becomes this bump PR, and the tag goes on its merge commit.
 5. **Publish** on the merged commit as the chain says, never on your own
-   branch, which `njord pr-merge` squashed: `git fetch origin <base> --tags`,
+   branch, which `njord pr-merge` squashed. First read your
+   [settings](#ticket-settings): `release: stop` [holds](#holds) the release
+   here. Then `git fetch origin <base> --tags`,
    then `git switch --detach <merge sha>` (the bump PR's merge commit when
    step 4 opened one), so a release script builds that commit. Then a tag
    (`git tag <tag> <merge sha>`, then `git push origin <tag>`, a tag, never a
