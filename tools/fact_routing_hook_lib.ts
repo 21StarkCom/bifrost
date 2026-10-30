@@ -163,11 +163,12 @@ export function classifyMemory(
 export const SCAFFOLD_NAMES: ReadonlySet<string> = new Set(["contributing", "index", "readme", "template"]);
 
 /** The fleet slugs to match when no corpus checkout answers (CI, a fresh
- *  machine): the vault-ecosystem entity folders as of 2026-10-02. */
+ *  machine): the vault-ecosystem entity folders as of 2026-10-02, plus
+ *  `folkvang`, added by hand because the corpus has no folder for it yet. */
 export const FALLBACK_SLUGS: readonly string[] = [
   "21stark", "alfred", "apple-developer", "atlas", "bifrost", "draupnir",
-  "ev-infra-group", "frigg", "heimdall", "hermod", "homebrew-tap", "idun",
-  "infra-ai-platform", "infra-sentinel", "kotodama", "lumiere", "meridian",
+  "ev-infra-group", "folkvang", "frigg", "heimdall", "hermod", "homebrew-tap",
+  "idun", "infra-ai-platform", "infra-sentinel", "kotodama", "lumiere", "meridian",
   "mimir", "mimir-automations", "nastrond", "plume", "sleipnir", "stark-clickup",
   "stark-engineering-labs", "stark-invoices-collector", "stark-personal",
   "stark-showcase", "stark-skills", "stark-slack-indexer", "stark-stream-deck-sdk",
