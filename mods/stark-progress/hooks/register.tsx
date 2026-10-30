@@ -121,9 +121,15 @@ export const register: Register = on => {
         const own = run === null ? ticketOf(root) : null
         isWorker = own !== null
         // The pane's run, when this tab shows the pane: its tickets and its settings file.
-        const pick = await read($, pickAtom)
+        let pick = await read($, pickAtom)
         const runs = run !== null || isBoardWanted ? runsOf(files, mtimes) : []
         const shown = pickRun(runs, session, pick)
+        // Outside Gru's own run, the pane stays on the run it chose until `r` or
+        // that run's end: which run is most active changes as other runs' files do.
+        if (shown !== undefined && shown.session !== session && shown.launchId !== pick) {
+          pick = shown.launchId
+          await update($, pickAtom, () => shown.launchId)
+        }
         const wanted = [
           ...new Set([...(run !== null ? run.tickets : own === null ? [] : [own]), ...(shown?.tickets ?? [])]),
         ]
@@ -218,11 +224,17 @@ export const register: Register = on => {
         await pollNow()
       },
       // The whole settings, written as one file, as the contract asks; Gru reads it before each launch.
-      // Each press reads the board as it is now, not as this render saw it, so quick presses all count.
+      // Each press reads the board as it is now, not as this render saw it, so quick presses all count,
+      // and writes only to the run the operator saw.
       set: (change: (s: GruSettings) => Partial<GruSettings>) => {
+        const seen = shown?.launchId
         settingsWrites = settingsWrites.catch(() => undefined).then(async () => {
           const current = await read($, board)
           if (current === null || stateDir === '') return
+          if (current.launchId !== seen) {
+            await $.ui.toast('The board moved to another run. Press again.')
+            return
+          }
           const settings: GruSettings = { ...current.settings, ...change(current.settings) }
           try {
             await writeWhole($, `${stateDir}/${settingsName(current.launchId)}`, `${JSON.stringify(settings, null, 2)}\n`)

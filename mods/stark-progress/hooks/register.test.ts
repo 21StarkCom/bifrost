@@ -269,6 +269,42 @@ test('/gru-board in another session shows the most recently active run, and r sh
   expect(await pane.find({ type: 'Text', text: 'Also running: STARK-20.' })).toBeDefined()
 })
 
+test('outside Gru, the pane stays on its run while the other one gets busier, and a press writes to it', async ($, on) => {
+  const disk: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru-a', tickets: ['STARK-11'] }),
+    'run-STARK-20.json': JSON.stringify({ epic: 'STARK-20', session: 'gru-b', tickets: ['STARK-21'] }),
+    'STARK-11.json': ticket('STARK-11', 'pr'),
+    'STARK-21.json': ticket('STARK-21', 'review'),
+  }
+  const mtimes: Record<string, number> = {
+    'run-STARK-10.json': T0 - 86_400_000,
+    'run-STARK-20.json': T0 - 86_400_000,
+    'STARK-11.json': T0 - 10 * MIN,
+    'STARK-21.json': T0,
+  }
+  stage(on, disk, { session: 'me', root: '/r', mtimes })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r', surface: 'terminal', isInteractive: true })
+  await $.command.run({
+    command: 'gru-board',
+    args: '',
+    origin: { kind: 'composer' },
+    presentation: { isFullscreen: true, columns: 160 },
+  })
+  const pane = await $.ui.mount(PANE)
+  expect(await pane.find({ type: 'Text', text: 'Gru · STARK-20' })).toBeDefined()
+
+  // STARK-10's worker writes its heartbeat: that run is now the most active one.
+  mtimes['STARK-11.json'] = T0 + 2000
+  await clock.advance(3000)
+  expect(await pane.find({ type: 'Text', text: 'Gru · STARK-20' })).toBeDefined()
+
+  await pane.press({ key: 'tab-settings' })
+  await pane.press({ key: 'set-follow-ups' })
+  expect(JSON.parse(disk['run-STARK-20.settings.json'] ?? '{}').followUps).toBe(false)
+  expect(disk['run-STARK-10.settings.json']).toBeUndefined()
+})
+
 test("a worker's tab writes its heartbeat, reads git, draws its row, and drops the heartbeat with its ticket file", async ($, on) => {
   const worktree = '/r/.claude/worktrees/STARK-1'
   const disk: Record<string, string> = { 'STARK-1.json': ticket('STARK-1', 'ticket', { worktree }) }

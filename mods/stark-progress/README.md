@@ -69,10 +69,13 @@ board`. Gru's tab draws no band rows.
 
 **Which run.** Gru's tab shows its own run. Another session shows the run
 whose run file, ticket files or heartbeats changed last; a run file changes
-only at launch, so its own time says little. A run is active when one of its
-files changed in the last hour. The pane names the other active runs, and `r`
-shows the next one by launch id, in Gru's tab too, so each run is reached. When
-no run file is left, the pane says `No Gru run yet`.
+only at launch, so its own time says little. It then stays on that run until
+you press `r` or the run ends, even when another run gets busier, so a Settings
+press always writes to the run on screen (a press that finds the board moved
+writes nothing and says so). A run is active when one of its files changed in
+the last hour. The pane names the other active runs, and `r` shows the next one
+by launch id, in Gru's tab too, so each run is reached. When no run file is
+left, the pane says `No Gru run yet`.
 
 **Overview.** From the top:
 
