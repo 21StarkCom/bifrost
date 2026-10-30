@@ -34,7 +34,9 @@ const time = (v: unknown): number | null => {
   return Number.isFinite(ms) ? ms : null
 }
 
-export const isRunName = (name: string) => name.startsWith('run-') && name.endsWith('.json')
+/** A run file's name; a run's settings file (`run-<id>.settings.json`) is not one. */
+export const isRunName = (name: string) =>
+  name.startsWith('run-') && name.endsWith('.json') && !name.endsWith('.settings.json')
 
 /** `7m`, `2h05m`. */
 export function dur(ms: number): string {

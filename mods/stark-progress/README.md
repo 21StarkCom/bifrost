@@ -1,11 +1,13 @@
 # stark-progress
 
-A Claude Code mod that draws a live progress row above the prompt for each
-ticket of a Gru, Minion or Agnes run. A row says where the ticket is, whether
-its worker is doing anything, and whether that work gets anywhere: a worker
-that is busy for hours with no commit and no stage change reads `stalled`, not
-"20% done". Gru's tab also shows an `n/m closed` total. The mod polls the state
-files below once a second, and git once every 30 seconds.
+A Claude Code mod that shows a live view of each Gru, Minion and Agnes run.
+Gru's tab gets the Gru pane beside the chat: a calm board of the run, and the
+run's settings, which Gru reads before each launch. A Minion's or Agnes's tab
+gets one progress row above the prompt for its ticket. Both say where a ticket
+is, whether its worker is doing anything, and whether that work gets anywhere:
+a worker that is busy for hours with no commit and no stage change reads
+`stalled`, not "20% done". Neither ever forecasts the time left. The mod polls
+the state files below once a second, and git once every 30 seconds.
 
 Install it on its own; the seven skill plugins do not need it:
 
@@ -15,21 +17,102 @@ Install it on its own; the seven skill plugins do not need it:
 
 ## What it looks like
 
-Gru's tab, above the prompt:
+Gru's tab, the Gru pane's Overview:
 
 ```
-Gru · STARK-1200 · 1/4 closed · 1 stalled · 1 idle
-◆ milestone   ▃ tool calls per 5 min   ▃ most calls failed   ─ one long call   · no calls
-STARK-1201 ●━●━●━●━● closed         ◆◆▅◆◆◆▅◆◆◆··  done                                    Add the export command
-STARK-1202 ●━●━◉┄○┄○ review    36m  ▃▃◆▄◆▁─▂◆▃▃▄  moving · +234 −20                       Document the export flags
-STARK-1203 ◉┄○┄○┄○┄○ ticket  1h50m  ▆▆▆▆▆▆▆▆▆▆▆▆  stalled 1h38m · 7/10 failed · +320 −22  Cache the export index
-STARK-1204 ●━◉┄○┄○┄○ pr      1h17m  ────────────  idle 1h12m · in Bash · +92 −6           Sign the export bundle
+Overview   Settings
+
+Gru · STARK-1200                                       ● this run
+bragi · 4 tickets
+━━━━━━━━━━━━ ━━━━━━━━━━━━ ━━━━━━━━━━━━ ━━━━━━━━━━━━
+1 of 4 done · 2 in progress · 1 not started
+
+╭──────────────────────────────────────────────────╮
+│ 🙋 1 ticket is worth a look                       │
+│                                                  │
+│ Cache the export index                           │
+│ no stage change or commit for 1h38m              │
+╰──────────────────────────────────────────────────╯
+
+🚇 Where each ticket is
+  ticket PR     review merge  done
+Add the export command
+  ●━━━━━━●━━━━━━●━━━━━━●━━━━━━●  ✅ done
+Document the export flags
+  ●━━━━━━●━━━━━━◉┄┄┄┄┄┄○┄┄┄┄┄┄○  👀 in review · 36m
+Cache the export index
+  ●━━━━━━◉┄┄┄┄┄┄○┄┄┄┄┄┄○┄┄┄┄┄┄○  🧱 PR open · 1h50m
+Sign the export bundle
+  ○┄┄┄┄┄┄○┄┄┄┄┄┄○┄┄┄┄┄┄○┄┄┄┄┄┄○  💤 not started
+Select a name to see more.
+
+👉 Up next
+Start STARK-1204
+Then close STARK-1200 once all 4 tickets close.
+
+Read from ~/.cache/stark-progress at 12:53.
 ```
 
-A Minion's or Agnes's tab shows its own ticket's row, with no header and no
-legend.
+A Minion's or Agnes's tab, above the prompt:
+
+```
+STARK-1202 ●━●━◉┄○┄○ review    36m  ▃▃◆▄◆▁─▂◆▃▃▄  moving · +234 −20  Document the export flags
+```
+
+## The Gru pane
+
+The pane opens by itself in Gru's tab, once, when the poll first finds Gru's
+run, and from 144 columns (110 once you opened it). `/gru-board` opens it in
+any session, at any width. While the pane is not placed, Gru's tab keeps one
+line above the prompt: `Gru · <epic> · <n> of <m> done · /gru-board opens the
+board`. Gru's tab draws no band rows.
+
+**Which run.** Gru's tab shows its own run. Another session shows the run
+whose run file, ticket files or heartbeats changed last; a run file changes
+only at launch, so its own time says little. It then stays on that run until
+you press `r` or the run ends, even when another run gets busier, so a Settings
+press always writes to the run on screen (a press that finds the board moved
+writes nothing and says so). A run is active when one of its files changed in
+the last hour. The pane names the other active runs, and `r` shows the next one
+by launch id, in Gru's tab too, so each run is reached. When no run file is
+left, the pane says `No Gru run yet`.
+
+**Overview.** From the top:
+
+- The epic, the repos (each from a title's `<repo>: ` lead) and the ticket count.
+- One bar segment per ticket, in its color, and the counts
+  `<n> of <m> done · <k> in progress · <j> not started`. Done means closed, as
+  the band counts it.
+- A box of the tickets worth a look, with the reason: the band calls it
+  `blocked`, `idle` or `stalled`, or 5 of its last 10 calls failed. With none,
+  `🌿 Nothing needs you right now.`
+- `🚇 Where each ticket is`: a name (the title without its `<repo>: ` lead and
+  `(slice n of m)` tail), then the track and one emoji and status: `✅ done`,
+  `👀 in review · <time in stage>`, `🔨 PR open · <time>`, `🧱` for `stalled`,
+  `⏳` for `blocked` or idle (`quiet <time>`), `💤 not started`. Select a name
+  to open its detail: the whole title, the slice, the PR, when the step began,
+  the diff size, the running or last tool call, the calls in the last 15
+  minutes, and the failures among the last 10.
+- `👉 Up next`: the tickets with no file yet, in run order.
+
+**Settings.** Four rows, each a value you select to change. A press writes all
+four to the run's settings file at once; Gru reads it before each launch and
+each scope change ([the Gru skill](../../skill/gru/SKILL.md#progress-pane)):
+
+| Row | Field | What Gru does |
+|---|---|---|
+| Decide for me | `decideForMe` | On: splits a ticket across repos, and adds a blocking ticket, by itself. Off: holds the ticket `blocked` and asks in its report. |
+| Workers at once | `maxWorkers` | Keeps up to this many Minions alive, 1 to 8. A launch above 8 shows its own value; `−` steps it down to 8, and `+` does not change it. |
+| Pick up follow-ups | `followUps` | On: a ticket a Minion files joins the run. Off: it waits on the board, named in the report. |
+| Worker type | `minionAgent` | The runtime of each new Minion, `claude` or `codex`. A relaunch keeps its runtime. |
+
+**Colors.** Every text color is 4.5:1 or more on the pane's `#262626`
+(secondary text 8.1:1); the track's lines and rings, which carry no words,
+are 3.5:1. They suit a dark theme.
 
 ## How a row reads
+
+A worker's band row:
 
 `<id> <track> <stage> <time in stage>  <timeline>  <verdict> · <n>/10 failed · +<added> −<removed>  <title>`
 
@@ -45,7 +128,7 @@ legend.
   commit) and takes the cell. `─` is a cell with no calls while one call runs,
   `·` a cell with no calls, and a blank cell a row with no heartbeat (a Codex
   worker, or a Claude worker without the mod).
-- **Verdict**, the first rule that holds:
+- **Verdict**, the first rule that holds; the Gru pane reads the same verdicts:
 
   | Verdict | When | Colour |
   |---|---|---|
@@ -58,8 +141,7 @@ legend.
   | `stalled <time>` | the last milestone is 90 min old or more | red |
 
   `<n>/10 failed`, in red, follows a live verdict when 5 or more of the last 10
-  calls failed. Gru's header counts the `stalled`, `slow`, `idle` and `blocked`
-  rows.
+  calls failed.
 - **Diff size:** `git diff --shortstat` of the worktree against its base, with
   the commits since that base as milestones. The base is `git merge-base HEAD`
   with the first of `origin/HEAD`, `origin/main` and `main` that works. It
@@ -69,11 +151,12 @@ legend.
 
 ## The state contract
 
-The skills write the ticket and run files; the mod writes only the heartbeat.
-The ticket and run files are runtime-neutral: a Codex worker writes them too,
-and only a Claude Code session draws them. Every file is whole JSON, written
-atomically: a writer writes `<name>.json.tmp` beside it and renames it over
-`<name>.json`, so a poll never reads a half-written file
+The skills write the ticket and run files; the mod writes the heartbeat and
+the settings file. The ticket, run and settings files are runtime-neutral: a
+Codex Gru or worker writes and reads them too, and only a Claude Code session
+draws them. Every file is whole JSON, written atomically: a writer writes
+`<name>.json.tmp` beside it and renames it over `<name>.json`, so a poll never
+reads a half-written file
 ([the worker spine's command](../../standards/worker-spine.md#progress-file)
 does this for a ticket's file). A field of the wrong type reads as absent: a
 `stage` that is not one of the six draws as `ticket`.
@@ -97,11 +180,26 @@ project root, and nowhere else.
 launch id (the epic's, or `GRU-n`):
 
 ```json
-{ "epic": "STARK-n", "session": "<Gru's session id>", "tickets": ["STARK-a", "STARK-b"] }
+{ "epic": "STARK-n", "session": "<Gru's session id>", "tickets": ["STARK-a", "STARK-b"], "maxWorkers": 3, "minionAgent": "claude" }
 ```
 
 `session` is Gru's own session id (`$CLAUDE_CODE_SESSION_ID`, or
-`$CODEX_THREAD_ID` on Codex). A ticket with no file yet draws as `no file yet`.
+`$CODEX_THREAD_ID` on Codex). `maxWorkers` and `minionAgent` are the launch's
+`--max-workers` and Minion runtime; a v1 file has neither. A ticket with no
+file yet draws as `no file yet`.
+
+`~/.cache/stark-progress/run-<id>.settings.json`, the run's settings, which
+the Gru pane writes and Gru reads before each launch and each scope change:
+
+```json
+{ "decideForMe": true, "maxWorkers": 3, "followUps": true, "minionAgent": "claude" }
+```
+
+A field that is absent or of the wrong type takes the run file's value, else
+the default: `decideForMe` `true`, `maxWorkers` 3, `followUps` `true`,
+`minionAgent` `claude`. `maxWorkers` is 1 to 8 in the settings file; in the
+run file it is the launch's `--max-workers`, with no cap. A `*.settings.json` file is
+never a run file. Gru deletes it with the run file when the run ends.
 
 `~/.cache/stark-progress/<STARK-n>.beat.json`, the heartbeat, one per ticket
 whose worker is a Claude session with the mod installed:
@@ -124,18 +222,19 @@ outcomes and last activity of a heartbeat its own session wrote.
 
 ## Which tab shows what
 
-- A session that a run file names as its `session` shows that run: Gru's tab,
-  even though it stands in a worktree named for its launch id (the epic's own
-  `STARK-n`, or `GRU-n`).
+- A session that a run file names as its `session` is Gru's tab, even though
+  it stands in a worktree named for its launch id (the epic's own `STARK-n`,
+  or `GRU-n`): it shows that run in the Gru pane.
 - Any other session whose project root (where it started, or the worktree it
   moved to; a shell `cd` does not move it) is a folder named `STARK-n`, a
-  worker's worktree, shows that ticket's row once its file exists, and writes
-  its heartbeat.
+  worker's worktree, shows that ticket's band row once its file exists, and
+  writes its heartbeat.
+- Any session shows the Gru pane after `/gru-board`.
 - Nothing matching draws nothing.
 
-Each poll lists the directory and reads the run files, then only the ticket
-and heartbeat files the tab draws, so old files cost a listing and nothing
-more.
+Each poll lists the directory and reads the run files, then only the ticket,
+heartbeat and settings files the tab draws, so old files cost a listing and
+nothing more.
 
 ## Not built (add when it hurts)
 
@@ -143,6 +242,10 @@ more.
 - Activity for Codex workers, from their session files.
 - A toast or a sound when a row becomes `stalled`.
 - A stage history that stays when the mod reloads.
+- Settings Gru cannot honor yet: workers on devbox (valkyrie cannot launch
+  there), a minimum worker count (Gru already fills to the maximum), and a
+  merge hold, a review depth or a release stop (the Minion protocol).
+- A light-theme palette for the Gru pane.
 
 ## Develop
 
