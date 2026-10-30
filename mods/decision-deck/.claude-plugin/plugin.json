@@ -1,0 +1,10 @@
+{
+  "name": "decision-deck",
+  "version": "0.1.0",
+  "description": "A pane that walks you through a deck of decisions: Claude explains each one, you pick one or more options or write your own words, then send your answers back to Claude.",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "21 Stark AI",
+    "email": "engineering@21stark.com"
+  }
+}
