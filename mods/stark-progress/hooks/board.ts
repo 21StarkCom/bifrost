@@ -12,7 +12,6 @@ const DEFAULT_WORKERS = 3
 
 export const MAX_WORKERS = 8
 
-export const isSettingsName = (name: string) => name.startsWith('run-') && name.endsWith('.settings.json')
 export const launchIdOf = (runName: string) => runName.slice('run-'.length, -'.json'.length)
 export const settingsName = (launchId: string) => `run-${launchId}.settings.json`
 
@@ -30,6 +29,8 @@ function parse(text: string | undefined): Record<string, unknown> | null {
 const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null)
 const workers = (v: unknown): number | null =>
   typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= MAX_WORKERS ? v : null
+// The launch's `--max-workers` has no cap: a run launched above the pane's range keeps its N.
+const launched = (v: unknown): number | null => (typeof v === 'number' && Number.isInteger(v) && v >= 1 ? v : null)
 const agent = (v: unknown): 'claude' | 'codex' | null => (v === 'claude' || v === 'codex' ? v : null)
 const flag = (v: unknown): boolean | null => (typeof v === 'boolean' ? v : null)
 
@@ -66,13 +67,18 @@ export function runsOf(files: Record<string, string>, mtimes: ReadonlyMap<string
       epic: str(run.epic) ?? launchIdOf(name),
       session: str(run.session) ?? '',
       tickets,
-      maxWorkers: workers(run.maxWorkers),
+      maxWorkers: launched(run.maxWorkers),
       minionAgent: agent(run.minionAgent),
       active,
     })
   }
 
   return runs.sort((a, b) => b.active - a.active)
+}
+
+/** The run a tab shows: the one `pick` names, else this session's own (Gru's tab), else the most recently active. */
+export function pickRun(runs: RunEntry[], session: string, pick: string): RunEntry | undefined {
+  return runs.find(r => r.launchId === pick) ?? runs.find(r => r.session === session) ?? runs[0]
 }
 
 /**
@@ -202,8 +208,7 @@ export function buildBoard(
   git: Record<string, GitSignal | null>,
 ): Board | null {
   const runs = runsOf(files, mtimes)
-  const own = runs.find(r => r.session === session) ?? null
-  const chosen = runs.find(r => r.launchId === pick) ?? own ?? runs[0]
+  const chosen = pickRun(runs, session, pick)
   if (chosen === undefined) return null
   const rows: BoardRow[] = chosen.tickets.map(id => {
     const text = files[`${id}.json`]
@@ -229,7 +234,7 @@ export function buildBoard(
   return {
     launchId: chosen.launchId,
     epic: chosen.epic,
-    isOwn: chosen === own,
+    isOwn: chosen.session === session,
     repos: [...new Set(rows.flatMap(r => (r.repo === null ? [] : [r.repo])))],
     rows,
     done,

@@ -71,7 +71,8 @@ board`. Gru's tab draws no band rows.
 whose run file, ticket files or heartbeats changed last; a run file changes
 only at launch, so its own time says little. A run is active when one of its
 files changed in the last hour. The pane names the other active runs, and `r`
-shows the next one, in Gru's tab too.
+shows the next one by launch id, in Gru's tab too, so each run is reached. When
+no run file is left, the pane says `No Gru run yet`.
 
 **Overview.** From the top:
 
@@ -98,7 +99,7 @@ each scope change ([the Gru skill](../../skill/gru/SKILL.md#progress-pane)):
 | Row | Field | What Gru does |
 |---|---|---|
 | Decide for me | `decideForMe` | On: splits a ticket across repos, and adds a blocking ticket, by itself. Off: holds the ticket `blocked` and asks in its report. |
-| Workers at once | `maxWorkers` | Keeps up to this many Minions alive, 1 to 8. |
+| Workers at once | `maxWorkers` | Keeps up to this many Minions alive, 1 to 8. A launch above 8 shows its own value; `−` steps it down to 8, and `+` does not change it. |
 | Pick up follow-ups | `followUps` | On: a ticket a Minion files joins the run. Off: it waits on the board, named in the report. |
 | Worker type | `minionAgent` | The runtime of each new Minion, `claude` or `codex`. A relaunch keeps its runtime. |
 
@@ -193,7 +194,8 @@ the Gru pane writes and Gru reads before each launch and each scope change:
 
 A field that is absent or of the wrong type takes the run file's value, else
 the default: `decideForMe` `true`, `maxWorkers` 3, `followUps` `true`,
-`minionAgent` `claude`. `maxWorkers` is 1 to 8. A `*.settings.json` file is
+`minionAgent` `claude`. `maxWorkers` is 1 to 8 in the settings file; in the
+run file it is the launch's `--max-workers`, with no cap. A `*.settings.json` file is
 never a run file. Gru deletes it with the run file when the run ends.
 
 `~/.cache/stark-progress/<STARK-n>.beat.json`, the heartbeat, one per ticket

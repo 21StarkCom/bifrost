@@ -52,6 +52,10 @@ test("settings take the file's value, else the launch's, else the default; a wro
   })
   // Out of range reads as absent too.
   expect(settingsOf(run, JSON.stringify({ maxWorkers: 9 })).maxWorkers).toBe(5)
+  // A launch above the pane's range keeps its N; it is not read as the default.
+  const [wide] = runsOf({ 'run-W.json': JSON.stringify({ epic: 'W', session: 's', tickets: [], maxWorkers: 10 }) }, new Map())
+  if (wide === undefined) throw new Error('no run')
+  expect(settingsOf(wide, undefined).maxWorkers).toBe(10)
   const [v1] = runsOf({ 'run-Y.json': JSON.stringify({ epic: 'Y', session: 's', tickets: [] }) }, new Map())
   if (v1 === undefined) throw new Error('no run')
   expect(settingsOf(v1, undefined)).toEqual({ decideForMe: true, maxWorkers: 3, followUps: true, minionAgent: 'claude' })

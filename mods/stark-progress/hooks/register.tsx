@@ -3,7 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Cell, GitSignal, GruSettings, PaneTab, Row, Seg, Tone } from '../types'
 import { beatFile, callEnded, callStarted, newBeat, seedBeat } from './beat'
-import { buildBoard, runsOf, settingsName } from './board'
+import { buildBoard, pickRun, runsOf, settingsName } from './board'
 import { readGit } from './git'
 import { drawPane } from './pane'
 import { buildView, isRunName, ownRun, ticketOf, worktreeOf } from './view'
@@ -62,7 +62,9 @@ function gitFor($: EngineInterface, dir: string, now: number): GitSignal | null 
 /** Whole JSON, written to a `.tmp` beside it and renamed over it, as the contract asks. */
 async function writeWhole($: EngineInterface, path: string, text: string): Promise<void> {
   await $.fs.write(`${path}.tmp`, text)
-  await $.process.run(['mv', '-f', `${path}.tmp`, path])
+  // `run` resolves on any exit code: a rename that failed left the old file in place.
+  const moved = await $.process.run(['mv', '-f', `${path}.tmp`, path])
+  if (moved.exitCode !== 0) throw new Error(`mv exited ${moved.exitCode}: ${moved.stderr.trim()}`)
 }
 
 const paint = (tone: Tone) =>
@@ -79,7 +81,9 @@ const tailWidth = (r: Row) =>
 
 export const register: Register = on => {
   let last = ''
-  let lastBoard = ''
+  let lastBoard = 'null'
+  // Settings presses apply one at a time, each over the one before it.
+  let settingsWrites: Promise<void> = Promise.resolve()
   let isPolling = false
 
   on('session.start', async ($, e, next) => {
@@ -119,7 +123,7 @@ export const register: Register = on => {
         // The pane's run, when this tab shows the pane: its tickets and its settings file.
         const pick = await read($, pickAtom)
         const runs = run !== null || isBoardWanted ? runsOf(files, mtimes) : []
-        const shown = runs.find(r => r.launchId === pick) ?? runs.find(r => r.session === session) ?? runs[0]
+        const shown = pickRun(runs, session, pick)
         const wanted = [
           ...new Set([...(run !== null ? run.tickets : own === null ? [] : [own]), ...(shown?.tickets ?? [])]),
         ]
@@ -161,14 +165,15 @@ export const register: Register = on => {
           isPaneOpened = true
           void $.ui.open({ id: PANE, title: PANE_TITLE }).catch(() => undefined)
         }
-        if (shown !== undefined) {
-          const fresh = buildBoard(session, pick, now, files, mtimes, git)
-          // Draw again when a file changed, or once a minute for the times.
-          const key = JSON.stringify([fresh === null ? null : { ...fresh, readAt: 0 }, Math.floor(now / 60_000)])
-          if (key !== lastBoard) {
-            lastBoard = key
-            await update($, board, () => fresh)
-          }
+        // No run to show (Gru deleted its run file at the end) clears the
+        // pane, so it never keeps drawing a finished run as live.
+        const shownBoard = shown === undefined ? null : buildBoard(session, pick, now, files, mtimes, git)
+        // Draw again when a file changed, or once a minute for the times.
+        const boardKey =
+          shownBoard === null ? 'null' : JSON.stringify([{ ...shownBoard, readAt: 0 }, Math.floor(now / 60_000)])
+        if (boardKey !== lastBoard) {
+          lastBoard = boardKey
+          await update($, board, () => shownBoard)
         }
 
         const fresh = buildView(root, session, now, files, git)
@@ -213,12 +218,23 @@ export const register: Register = on => {
         await pollNow()
       },
       // The whole settings, written as one file, as the contract asks; Gru reads it before each launch.
-      set: async (change: Partial<GruSettings>) => {
-        if (shown === null || stateDir === '') return
-        const settings: GruSettings = { ...shown.settings, ...change }
-        await writeWhole($, `${stateDir}/${settingsName(shown.launchId)}`, `${JSON.stringify(settings, null, 2)}\n`)
-          .then(() => pollNow())
-          .catch(() => $.ui.toast('The settings were not saved.'))
+      // Each press reads the board as it is now, not as this render saw it, so quick presses all count.
+      set: (change: (s: GruSettings) => Partial<GruSettings>) => {
+        settingsWrites = settingsWrites.catch(() => undefined).then(async () => {
+          const current = await read($, board)
+          if (current === null || stateDir === '') return
+          const settings: GruSettings = { ...current.settings, ...change(current.settings) }
+          try {
+            await writeWhole($, `${stateDir}/${settingsName(current.launchId)}`, `${JSON.stringify(settings, null, 2)}\n`)
+          } catch {
+            await $.ui.toast('The settings were not saved.')
+            return
+          }
+          await update($, board, b => (b !== null && b.launchId === current.launchId ? { ...b, settings } : b))
+          await pollNow()
+        })
+
+        return settingsWrites
       },
     })
   })
@@ -258,9 +274,10 @@ export const register: Register = on => {
     if (current.heading !== null) {
       const isPlaced = (await $.ui.panes()).some(p => p.id === PANE && p.isPlaced)
       if (isPlaced) return next(e)
-      const own = await read($, board)
+      // The pane may show another run (`r`); this line is always this tab's own.
+      const shown = await read($, board)
       const closed = current.rows.filter(r => r.stage === 'closed').length
-      const epic = own?.epic ?? current.heading.split(' · ')[1] ?? ''
+      const epic = shown?.isOwn === true ? shown.epic : (current.heading.split(' · ')[1] ?? '')
 
       return (
         <Text wrap="truncate-end">
@@ -273,24 +290,9 @@ export const register: Register = on => {
     const idWidth = Math.max(...current.rows.map(r => r.id.length)) + 1
     const inStageWidth = Math.max(6, ...current.rows.map(r => r.inStage.length))
 
+    // A worker's tab: its one row, with no heading and no legend.
     return (
       <Box flexDirection="column">
-        {current.heading === null ? null : (
-          <Text wrap="truncate-end">
-            <Text bold>{current.heading}</Text>
-            {current.counts.map(c => (
-              <Text key={c.label} color={paint(c.tone)}>{` · ${c.label}`}</Text>
-            ))}
-          </Text>
-        )}
-        {current.hasLegend ? (
-          <Text dimColor wrap="truncate-end">
-            <Text color="success">◆</Text>
-            {' milestone   ▃ tool calls per 5 min   '}
-            <Text color="error">▃</Text>
-            {' most calls failed   ─ one long call   · no calls'}
-          </Text>
-        ) : null}
         {current.rows.map(r => (
           <Text key={r.id} wrap="truncate-end">
             {r.id.padEnd(idWidth)}

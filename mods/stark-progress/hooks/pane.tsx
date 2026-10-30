@@ -35,7 +35,8 @@ export type PaneView = {
   setTab: (tab: PaneTab) => unknown
   setFocus: (id: string) => unknown
   pick: (launchId: string) => unknown
-  set: (change: Partial<GruSettings>) => unknown
+  /** A change made from the settings as they are when it is written, so two quick presses both count. */
+  set: (change: (s: GruSettings) => Partial<GruSettings>) => unknown
 }
 
 const cut = (words: string, room: number) => (words.length > room ? `${words.slice(0, Math.max(room - 1, 1))}…` : words)
@@ -73,6 +74,9 @@ function overview(ui: UI, w: number, board: Board, view: PaneView) {
   const looks = rows.filter(r => r.attention !== null)
   const seg = Math.max(2, Math.min(6, Math.floor((w - 2 - 5 - 2 - 24) / 4)))
   const segment = Math.max(Math.floor((w - (rows.length - 1)) / Math.max(rows.length, 1)), 1)
+  // `r` steps through the other runs by launch id, so with three or more each one is reached.
+  const others = [...board.others].sort((a, b) => a.launchId.localeCompare(b.launchId))
+  const next = others.find(o => o.launchId.localeCompare(board.launchId) > 0) ?? others[0]
 
   return (
     <Box flexDirection="column" gap={1}>
@@ -158,15 +162,18 @@ function overview(ui: UI, w: number, board: Board, view: PaneView) {
           {board.next.map(id => (
             <Text key={`n${id}`}>{`Start ${id}`}</Text>
           ))}
-          <Text color={P.text}>{`Then close ${board.epic} once all ${rows.length} tickets close.`}</Text>
+          {/* A `--tickets` run's epic is its first ticket, which no one closes as an epic. */}
+          {!rows.some(r => r.id === board.epic) && (
+            <Text color={P.text}>{`Then close ${board.epic} once all ${rows.length} tickets close.`}</Text>
+          )}
         </Box>
       )}
 
-      {board.others.length > 0 && (
+      {next !== undefined && (
         <Box columnGap={1}>
           <Text color={P.hint}>{`Also running: ${board.others.map(o => o.epic).join(', ')}.`}</Text>
-          <Button key="switch" plain hotkey="r" onPress={() => view.pick(board.others[0]?.launchId ?? '')}>
-            <Text color={P.text}>{`show ${board.others[0]?.epic ?? ''}`}</Text>
+          <Button key="switch" plain hotkey="r" onPress={() => view.pick(next.launchId)}>
+            <Text color={P.text}>{`show ${next.epic}`}</Text>
           </Button>
         </Box>
       )}
@@ -210,7 +217,7 @@ function settings(ui: UI, w: number, board: Board, view: PaneView) {
       </Box>
       {row(
         'Decide for me',
-        toggle('decide', s.decideForMe, () => view.set({ decideForMe: !s.decideForMe })),
+        toggle('decide', s.decideForMe, () => view.set(now => ({ decideForMe: !now.decideForMe }))),
         s.decideForMe
           ? 'Gru splits a ticket across repos and adds a blocking ticket on its own.'
           : 'Gru holds a split or a blocking ticket, and asks you in its report.',
@@ -218,20 +225,23 @@ function settings(ui: UI, w: number, board: Board, view: PaneView) {
       {row(
         'Workers at once',
         <Box columnGap={1}>
-          {step('fewer', '−', () => view.set({ maxWorkers: Math.max(1, s.maxWorkers - 1) }))}
+          {/* A launch above MAX_WORKERS steps down into range, and + never lowers it. */}
+          {step('fewer', '−', () => view.set(now => ({ maxWorkers: Math.max(1, Math.min(MAX_WORKERS, now.maxWorkers - 1)) })))}
           <Text>{String(s.maxWorkers)}</Text>
-          {step('more', '+', () => view.set({ maxWorkers: Math.min(MAX_WORKERS, s.maxWorkers + 1) }))}
+          {step('more', '+', () =>
+            view.set(now => ({ maxWorkers: Math.max(now.maxWorkers, Math.min(MAX_WORKERS, now.maxWorkers + 1)) })),
+          )}
         </Box>,
         `Gru keeps up to ${s.maxWorkers} Minions alive at once.`,
       )}
       {row(
         'Pick up follow-ups',
-        toggle('follow-ups', s.followUps, () => view.set({ followUps: !s.followUps })),
+        toggle('follow-ups', s.followUps, () => view.set(now => ({ followUps: !now.followUps }))),
         s.followUps ? 'A follow-up a Minion files joins this run.' : 'A follow-up waits on the board, named in the report.',
       )}
       {row(
         'Worker type',
-        <Button key="set-agent" plain onPress={() => view.set({ minionAgent: s.minionAgent === 'claude' ? 'codex' : 'claude' })}>
+        <Button key="set-agent" plain onPress={() => view.set(now => ({ minionAgent: now.minionAgent === 'claude' ? 'codex' : 'claude' }))}>
           <Text color={P.blue}>{s.minionAgent}</Text>
         </Button>,
         `Each new Minion runs on ${s.minionAgent}.`,

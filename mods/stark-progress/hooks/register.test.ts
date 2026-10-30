@@ -33,7 +33,7 @@ function stage(
   disk: Record<string, string>,
   { session, root, mtimes = {} }: { session: string; root: string; mtimes?: Record<string, number> },
 ) {
-  const seen = { reads: [] as string[], runs: [] as string[][], opens: [] as string[], isPlaced: false }
+  const seen = { reads: [] as string[], runs: [] as string[][], opens: [] as string[], toasts: [] as string[], isPlaced: false, isMvFailing: false }
   const writes: Record<string, string> = {}
   mock.env(on, { HOME: '/h' })
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
@@ -65,8 +65,13 @@ function stage(
   on('process.run', (_$, e) => {
     const argv = [...e.argv]
     seen.runs.push(argv)
-    if (argv[0] === 'mv') disk[nameOf(argv[3] ?? '')] = writes[argv[2] ?? ''] ?? ''
-    return { value: { exitCode: argv[0] === 'mv' ? 0 : 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    const isMoved = argv[0] === 'mv' && !seen.isMvFailing
+    if (isMoved) disk[nameOf(argv[3] ?? '')] = writes[argv[2] ?? ''] ?? ''
+    return { value: { exitCode: isMoved ? 0 : 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  on('ui.toast', (_$, e) => {
+    seen.toasts.push(e.text)
+    return { value: undefined }
   })
 
   return seen
@@ -173,6 +178,57 @@ test('a settings press writes the run settings file whole, and the pane reads it
   expect(await pane.find({ type: 'Text', text: /Gru holds a split or a blocking ticket/ })).toBeDefined()
   // A run file is never read as a settings file, nor the other way round.
   expect(await pane.find({ type: 'Text', text: 'Settings for STARK-10' })).toBeDefined()
+})
+
+test('two quick settings presses both count, and a failed rename says the settings were not saved', async ($, on) => {
+  const disk: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1'], maxWorkers: 3 }),
+    'STARK-1.json': ticket('STARK-1', 'pr'),
+  }
+  const seen = stage(on, disk, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+
+  const pane = await $.ui.mount(PANE)
+  await pane.press({ key: 'tab-settings' })
+  await Promise.all([pane.press({ key: 'set-more' }), pane.press({ key: 'set-more' })])
+  expect(JSON.parse(disk['run-STARK-10.settings.json'] ?? '{}').maxWorkers).toBe(5)
+
+  const before = disk['run-STARK-10.settings.json']
+  seen.isMvFailing = true
+  await pane.press({ key: 'set-decide' })
+  expect(disk['run-STARK-10.settings.json']).toBe(before)
+  expect(seen.toasts).toEqual(['The settings were not saved.'])
+})
+
+test("the pane clears once Gru's run file is gone, and the band names this tab's own run", async ($, on) => {
+  const disk: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1'] }),
+    'run-STARK-20.json': JSON.stringify({ epic: 'STARK-20', session: 'other', tickets: ['STARK-21'] }),
+    'STARK-1.json': ticket('STARK-1', 'pr'),
+    'STARK-21.json': ticket('STARK-21', 'pr'),
+  }
+  stage(on, disk, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+
+  // The pane shows the other run; the band's line still names this tab's own.
+  const pane = await $.ui.mount(PANE)
+  await pane.press({ key: 'switch' })
+  expect(await pane.find({ type: 'Text', text: 'Gru · STARK-20' })).toBeDefined()
+  const band = await $.ui.mount(BAND)
+  expect(await band.find({ type: 'Text', text: /^Gru · STARK-10 · / })).toBeDefined()
+  await band.unmount()
+  await pane.unmount()
+
+  // Step 6 deletes the run files: the pane no longer draws a finished run as live.
+  delete disk['run-STARK-10.json']
+  delete disk['run-STARK-20.json']
+  await clock.advance(1000)
+  const after = await $.ui.mount(PANE)
+  expect(await after.find({ type: 'Text', text: 'No Gru run yet' })).toBeDefined()
 })
 
 test('/gru-board in another session shows the most recently active run, and r shows the next', async ($, on) => {
