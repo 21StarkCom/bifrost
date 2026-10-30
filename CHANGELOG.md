@@ -13,6 +13,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=421 runId=421 sha=b84ce76a -->
+- Goldfinger skill teaches every goldfinger 0.12.0 and 0.13.0 change: click --right menus, hidden windows, text and safari-tabs, --ocr-language, 41 MCP tools (stark-ops 0.35.3).
 <!-- idun:pr-merge pr=420 runId=420 sha=262f7698 -->
 - Goldfinger skill teaches every goldfinger 0.14.0 change: walk time limit, windows over a window, window-alone captures, retryable capture timeout (stark-ops 0.35.2).
 <!-- idun:pr-merge pr=418 runId=418 sha=b8a56c30 -->
