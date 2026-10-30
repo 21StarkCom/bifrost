@@ -125,7 +125,7 @@ The pipeline has two stages: you gate the spec at `/stark-author`, and checks ga
 
 stark-ops also ships one hook, a PostToolUse `tools/fact_routing_hook.ts` that runs when a Write or Edit touches an auto-memory file and advises the model where the fact belongs. It takes the fleet's repo names from the vault-ecosystem checkout, and says so when it finds none and falls back to its built-in list. It is the safety net behind `/stark-memory`, declared on the stark-ops entry of the manifest, and it installs and updates with that plugin.
 
-`tools/ask_guard_metric.ts` measures the root rules' "Act, don't ask": each week it counts the operator's one-word replies (`go`, `yes`, `ship it`) beside a baseline week (`--install-schedule` sets up the Thursday heimdall push).
+`tools/ask_guard_metric.ts` measures the root rules' "Act, don't ask": each week it counts the operator's one-word replies (`go`, `yes`, `ship it`) beside a baseline week, and, from the Claude Code transcripts, the turns that end on a question, tagged (`Needs you (<tag>): …`) or untagged, with the newest untagged ones listed, since each points to a rule to fix (`--install-schedule` sets up the Thursday heimdall push).
 
 ### stark-constitution: docs, decisions and rules
 
