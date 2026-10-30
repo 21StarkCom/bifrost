@@ -13,6 +13,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=425 runId=425 sha=63d1e082 -->
+- goldfinger skill teaches 0.15.0: action `--max-nodes` and cut lines, LibreOffice routes, `set-value` re-read, real pids for self-re-executing apps; stark-ops 0.35.6.
 <!-- idun:pr-merge pr=424 runId=424 sha=94e51699 -->
 - Ship the `decision-deck` mod from `mods/decision-deck` with its own marketplace entry, README, and `/decide` pane for walking through decisions.
 <!-- idun:pr-merge pr=423 runId=423 sha=a7cb64cd -->
