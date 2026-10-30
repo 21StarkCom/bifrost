@@ -1,11 +1,13 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Cell, GitSignal, GruSettings, PaneTab, Row, Seg, Tone } from '../types'
+import type { Cell, GitSignal, GruSettings, PaneTab, Row, Seg, TicketSettings, Tone } from '../types'
 import { beatFile, callEnded, callStarted, newBeat, seedBeat } from './beat'
 import { buildBoard, pickRun, runsOf, settingsName } from './board'
 import { readGit } from './git'
 import { drawPane } from './pane'
+import { buildTicket, ticketSettingsName, ticketSettingsOf } from './ticket'
+import { drawTicketPane } from './ticket-pane'
 import { buildView, isRunName, ownRun, ticketOf, worktreeOf } from './view'
 
 // The state contract is in ../README.md.
@@ -14,17 +16,23 @@ const GIT_MS = 30_000
 const BEAT_MS = 5000
 const PANE = 'gru-board'
 const PANE_TITLE = 'Gru'
+const TICKET_PANE = 'ticket-board'
 
 const view = atom({ plugin: 'stark-progress', key: 'view' } as const, null, { shape: 'view-2' })
 const board = atom({ plugin: 'stark-progress', key: 'board' } as const, null, { shape: 'board-1' })
 const tabAtom = atom({ plugin: 'stark-progress', key: 'tab' } as const, 'overview' as PaneTab)
 const focusAtom = atom({ plugin: 'stark-progress', key: 'focus' } as const, '')
 const pickAtom = atom({ plugin: 'stark-progress', key: 'pick' } as const, '')
+const ticketAtom = atom({ plugin: 'stark-progress', key: 'ticket' } as const, null, { shape: 'ticket-1' })
+const ticketTabAtom = atom({ plugin: 'stark-progress', key: 'ticketTab' } as const, 'overview' as PaneTab)
 
 // The pane's run: Gru's tab shows its own; a session that asked for the pane
 // with /gru-board shows the most recently active run, or the one `r` picked.
 let isBoardWanted = false
 let isPaneOpened = false
+// A worker's own tab: its ticket, and whether the ticket pane opened by itself yet.
+let ownTicket: string | null = null
+let isTicketPaneOpened = false
 let stateDir = ''
 let pollNow: () => Promise<void> = async () => {}
 
@@ -82,14 +90,21 @@ const tailWidth = (r: Row) =>
 export const register: Register = on => {
   let last = ''
   let lastBoard = 'null'
+  let lastTicket = 'null'
   // Settings presses apply one at a time, each over the one before it.
   let settingsWrites: Promise<void> = Promise.resolve()
+  let ticketWrites: Promise<void> = Promise.resolve()
   let isPolling = false
+  let polling: Promise<void> = Promise.resolve()
 
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'gru-board',
       description: "Open the Gru board: a calm view of a Gru run's tickets, and the settings Gru reads",
+    })
+    await $.command.register({
+      name: 'ticket-board',
+      description: "Open the ticket pane in a Minion's or Agnes's tab: its ticket, and the settings its worker reads",
     })
     const home = await $.env.get('HOME')
     if (!home) return next(e)
@@ -100,98 +115,121 @@ export const register: Register = on => {
       // A slow tick must not overlap the next one and write an older view last.
       if (isPolling) return
       isPolling = true
-      try {
-        const now = await $.clock.now()
-        const listed = await $.fs.list(dir).catch(() => [])
-        const jsons = listed.filter(f => f.kind === 'file' && f.name.endsWith('.json'))
-        const names = new Set(jsons.map(f => f.name))
-        const mtimes = new Map(jsons.map(f => [f.name, f.mtimeMs]))
-        const files: Record<string, string> = {}
-        const load = async (name: string) => {
-          if (!names.has(name)) return
-          const text = await $.fs.read(`${dir}/${name}`).catch(() => undefined)
-          if (typeof text === 'string') files[name] = text
-        }
-
-        // The run files first; then only the files this tab draws, so a
-        // directory of old tickets costs a listing, not a read of each.
-        const [root, session] = await Promise.all([$.session.root(), $.session.id()])
-        await Promise.all([...names].filter(isRunName).map(load))
-        const run = ownRun(session, files)
-        const own = run === null ? ticketOf(root) : null
-        isWorker = own !== null
-        // The pane's run, when this tab shows the pane: its tickets and its settings file.
-        let pick = await read($, pickAtom)
-        const runs = run !== null || isBoardWanted ? runsOf(files, mtimes) : []
-        const shown = pickRun(runs, session, pick)
-        // Outside Gru's own run, the pane stays on the run it chose until `r` or
-        // that run's end: which run is most active changes as other runs' files do.
-        if (shown !== undefined && shown.session !== session && shown.launchId !== pick) {
-          pick = shown.launchId
-          await update($, pickAtom, () => shown.launchId)
-        }
-        const wanted = [
-          ...new Set([...(run !== null ? run.tickets : own === null ? [] : [own]), ...(shown?.tickets ?? [])]),
-        ]
-        await Promise.all([
-          ...wanted.flatMap(id => [load(`${id}.json`), load(`${id}.beat.json`)]),
-          ...(shown === undefined ? [] : [load(settingsName(shown.launchId))]),
-        ])
-
-        // A worker's own tab writes its heartbeat while its ticket's file
-        // exists, draws its own row from memory, and removes the heartbeat
-        // once the file is gone (Agnes deletes it at stand-down).
-        if (own !== null) {
-          const name = `${own}.beat.json`
-          if (!isSeeded) {
-            isSeeded = true
-            seedBeat(beat, files[name], session)
-          }
-          if (files[`${own}.json`] !== undefined) {
-            const text = JSON.stringify(beatFile(beat, own, session, now))
-            files[name] = text
-            if (isDirty && now - lastFlush >= BEAT_MS) {
-              isDirty = false
-              lastFlush = now
-              await writeWhole($, `${dir}/${name}`, text).catch(() => undefined)
-            }
-          } else if (names.has(name)) {
-            await $.process.run(['rm', '-f', `${dir}/${name}`]).catch(() => undefined)
-          }
-        }
-
-        const git: Record<string, GitSignal | null> = {}
-        for (const id of wanted) {
-          const worktree = worktreeOf(id, files[`${id}.json`], root)
-          git[id] = worktree === null ? null : gitFor($, worktree, now)
-        }
-
-        // Gru's tab opens the pane once, the first time its run is found.
-        if (run !== null && !isPaneOpened) {
-          isPaneOpened = true
-          void $.ui.open({ id: PANE, title: PANE_TITLE }).catch(() => undefined)
-        }
-        // No run to show (Gru deleted its run file at the end) clears the
-        // pane, so it never keeps drawing a finished run as live.
-        const shownBoard = shown === undefined ? null : buildBoard(session, pick, now, files, mtimes, git)
-        // Draw again when a file changed, or once a minute for the times.
-        const boardKey =
-          shownBoard === null ? 'null' : JSON.stringify([{ ...shownBoard, readAt: 0 }, Math.floor(now / 60_000)])
-        if (boardKey !== lastBoard) {
-          lastBoard = boardKey
-          await update($, board, () => shownBoard)
-        }
-
-        const fresh = buildView(root, session, now, files, git)
-        const key = JSON.stringify(fresh)
-        if (key === last) return
-        last = key
-        await update($, view, () => fresh)
-      } finally {
+      polling = tick().finally(() => {
         isPolling = false
-      }
+      })
+
+      return polling
     }
-    pollNow = poll
+    const tick = async () => {
+      const now = await $.clock.now()
+      const listed = await $.fs.list(dir).catch(() => [])
+      const jsons = listed.filter(f => f.kind === 'file' && f.name.endsWith('.json'))
+      const names = new Set(jsons.map(f => f.name))
+      const mtimes = new Map(jsons.map(f => [f.name, f.mtimeMs]))
+      const files: Record<string, string> = {}
+      const load = async (name: string) => {
+        if (!names.has(name)) return
+        const text = await $.fs.read(`${dir}/${name}`).catch(() => undefined)
+        if (typeof text === 'string') files[name] = text
+      }
+
+      // The run files first; then only the files this tab draws, so a
+      // directory of old tickets costs a listing, not a read of each.
+      const [root, session] = await Promise.all([$.session.root(), $.session.id()])
+      await Promise.all([...names].filter(isRunName).map(load))
+      const run = ownRun(session, files)
+      const own = run === null ? ticketOf(root) : null
+      isWorker = own !== null
+      ownTicket = own
+      // The pane's run, when this tab shows the pane: its tickets and its settings file.
+      let pick = await read($, pickAtom)
+      const runs = run !== null || isBoardWanted ? runsOf(files, mtimes) : []
+      const shown = pickRun(runs, session, pick)
+      // Outside Gru's own run, the pane stays on the run it chose until `r` or
+      // that run's end: which run is most active changes as other runs' files do.
+      if (shown !== undefined && shown.session !== session && shown.launchId !== pick) {
+        pick = shown.launchId
+        await update($, pickAtom, () => shown.launchId)
+      }
+      const wanted = [
+        ...new Set([...(run !== null ? run.tickets : own === null ? [] : [own]), ...(shown?.tickets ?? [])]),
+      ]
+      await Promise.all([
+        ...wanted.flatMap(id => [load(`${id}.json`), load(`${id}.beat.json`)]),
+        ...(shown === undefined ? [] : [load(settingsName(shown.launchId))]),
+        ...(own === null ? [] : [load(ticketSettingsName(own))]),
+      ])
+
+      // A worker's own tab writes its heartbeat while its ticket's file
+      // exists, draws its own row from memory, and removes the heartbeat
+      // once the file is gone (Agnes deletes it at stand-down).
+      if (own !== null) {
+        const name = `${own}.beat.json`
+        if (!isSeeded) {
+          isSeeded = true
+          seedBeat(beat, files[name], session)
+        }
+        if (files[`${own}.json`] !== undefined) {
+          const text = JSON.stringify(beatFile(beat, own, session, now))
+          files[name] = text
+          if (isDirty && now - lastFlush >= BEAT_MS) {
+            isDirty = false
+            lastFlush = now
+            await writeWhole($, `${dir}/${name}`, text).catch(() => undefined)
+          }
+        } else if (names.has(name)) {
+          await $.process.run(['rm', '-f', `${dir}/${name}`]).catch(() => undefined)
+        }
+      }
+
+      const git: Record<string, GitSignal | null> = {}
+      for (const id of wanted) {
+        const worktree = worktreeOf(id, files[`${id}.json`], root)
+        git[id] = worktree === null ? null : gitFor($, worktree, now)
+      }
+
+      // Gru's tab opens the pane once, the first time its run is found.
+      if (run !== null && !isPaneOpened) {
+        isPaneOpened = true
+        void $.ui.open({ id: PANE, title: PANE_TITLE }).catch(() => undefined)
+      }
+      // No run to show (Gru deleted its run file at the end) clears the
+      // pane, so it never keeps drawing a finished run as live.
+      const shownBoard = shown === undefined ? null : buildBoard(session, pick, now, files, mtimes, git)
+      // Draw again when a file changed, or once a minute for the times.
+      const boardKey =
+        shownBoard === null ? 'null' : JSON.stringify([{ ...shownBoard, readAt: 0 }, Math.floor(now / 60_000)])
+      if (boardKey !== lastBoard) {
+        lastBoard = boardKey
+        await update($, board, () => shownBoard)
+      }
+
+      // A worker's tab opens the ticket pane once, the first time its ticket's file is found.
+      if (own !== null && files[`${own}.json`] !== undefined && !isTicketPaneOpened) {
+        isTicketPaneOpened = true
+        void $.ui.open({ id: TICKET_PANE, title: own }).catch(() => undefined)
+      }
+      const shownTicket = own === null ? null : buildTicket(own, now, files, mtimes, git[own] ?? null)
+      const ticketKey =
+        shownTicket === null ? 'null' : JSON.stringify([{ ...shownTicket, readAt: 0 }, Math.floor(now / 60_000)])
+      if (ticketKey !== lastTicket) {
+        lastTicket = ticketKey
+        await update($, ticketAtom, () => shownTicket)
+      }
+
+      const fresh = buildView(root, session, now, files, git)
+      const key = JSON.stringify(fresh)
+      if (key === last) return
+      last = key
+      await update($, view, () => fresh)
+    }
+    // A command or a press waits for a poll already reading, which may have read
+    // before its write, then polls again.
+    pollNow = async () => {
+      await polling.catch(() => undefined)
+      await poll()
+    }
     $.clock.every(POLL_MS, poll)
 
     return next(e)
@@ -251,6 +289,52 @@ export const register: Register = on => {
     })
   })
 
+  on('command.run', { command: 'ticket-board' }, async $ => {
+    await pollNow()
+    if (ownTicket === null) {
+      return { text: "This tab has no ticket: /ticket-board opens in a Minion's or Agnes's tab, whose worktree is named for its ticket." }
+    }
+    const opened = await $.ui.open({ id: TICKET_PANE, title: ownTicket, focus: true, closeOnEscape: true })
+
+    return { text: opened.isPlaced ? `The ticket pane for ${ownTicket} is open.` : `The ticket pane waits: ${opened.reason}.` }
+  })
+
+  on('ui.render', { component: 'Pane', requestId: TICKET_PANE }, async ($, e) => {
+    if (e.surface !== 'terminal') {
+      const { Text } = $.ui.resolve(e)
+      return <Text>The ticket pane draws in the terminal.</Text>
+    }
+    const ui = $.ui.resolve(e)
+    const shown = await read($, ticketAtom)
+
+    return drawTicketPane(ui, Math.max(e.props.bodyColumns, 40), {
+      ticket: shown,
+      tab: await read($, ticketTabAtom),
+      setTab: tab => update($, ticketTabAtom, () => tab),
+      // The whole settings, written as one file, as the contract asks; the worker reads it at three
+      // steps of the spine. Each press reads the file as it is now, after the presses before it.
+      set: (change: (s: TicketSettings) => Partial<TicketSettings>) => {
+        const id = shown?.id
+        ticketWrites = ticketWrites.catch(() => undefined).then(async () => {
+          if (id === undefined || stateDir === '') return
+          const path = `${stateDir}/${ticketSettingsName(id)}`
+          const before = ticketSettingsOf(await $.fs.read(path).catch(() => undefined))
+          const settings: TicketSettings = { ...before, ...change(before) }
+          try {
+            await writeWhole($, path, `${JSON.stringify(settings, null, 2)}\n`)
+          } catch {
+            await $.ui.toast('The settings were not saved.')
+            return
+          }
+          await update($, ticketAtom, t => (t !== null && t.id === id ? { ...t, settings } : t))
+          await pollNow()
+        })
+
+        return ticketWrites
+      },
+    })
+  })
+
   // The heartbeat: each tool call's start and end, subagents' included, in a
   // worker's own tab only.
   on('tool.call', async ($, e, next) => {
@@ -298,6 +382,8 @@ export const register: Register = on => {
         </Text>
       )
     }
+    // A worker's tab: the ticket pane holds the ticket. Its one row stands in while the pane is not placed.
+    if ((await $.ui.panes()).some(p => p.id === TICKET_PANE && p.isPlaced)) return next(e)
     const width = Math.max(...current.rows.map(tailWidth)) + 2
     const idWidth = Math.max(...current.rows.map(r => r.id.length)) + 1
     const inStageWidth = Math.max(6, ...current.rows.map(r => r.inStage.length))

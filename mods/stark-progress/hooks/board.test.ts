@@ -113,3 +113,22 @@ test('each verdict reads calmly, and the ones worth a look say why', () => {
   expect(board.isOwn).toBe(true)
   expect(board.rows.map(r => `${r.status} ${r.attention ?? ''}`).join(' ')).not.toMatch(/left|ETA|~\d/)
 })
+
+test('a held ticket is worth a look, even while its worker is quiet', () => {
+  const files: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1', 'STARK-2'] }),
+    'STARK-1.json': ticket('STARK-1', 'review', 120, { hold: 'merge' }),
+    'STARK-1.beat.json': JSON.stringify({ lastActivity: iso(40), running: null, minutes: [], recent: [] }),
+    'STARK-2.json': ticket('STARK-2', 'merged', 3, { hold: 'release' }),
+  }
+  const board = buildBoard('gru', '', T0, files, new Map(), {})
+  if (board === null) throw new Error('no board')
+  expect(board.rows[0]).toMatchObject({
+    tone: 'warn',
+    emoji: '✋',
+    status: 'held · merge · 2h00m',
+    at: 2,
+    attention: 'held by its settings: merge',
+  })
+  expect(board.rows[1]).toMatchObject({ at: 3, attention: 'held by its settings: release' })
+})

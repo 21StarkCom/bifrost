@@ -32,7 +32,7 @@ test('the track is a station per stage, the current one in its tone', () => {
 })
 
 test('the verdict follows the milestone age, and idle wins over it', () => {
-  const t = { title: '', stage: 'ticket' as const, pr: null, updated: NOW - 10 * MIN }
+  const t = { title: '', stage: 'ticket' as const, pr: null, updated: NOW - 10 * MIN, hold: null }
   const b = (lastMin: number, running: { tool: string; since: number } | null = null) => ({
     lastActivity: NOW - lastMin * MIN,
     running,
@@ -48,6 +48,19 @@ test('the verdict follows the milestone age, and idle wins over it', () => {
   expect(verdict(t, b(14), [NOW - 100 * MIN], NOW).word).toBe('stalled')
   expect(verdict(t, b(15), [NOW - 100 * MIN], NOW)).toEqual({ word: 'idle', text: 'idle 15m', tone: 'warn' })
   expect(verdict(t, b(22, { tool: 'Bash', since: NOW - 22 * MIN }), [NOW], NOW).text).toBe('idle 22m · in Bash')
+})
+
+test('a hold reads as held, over idle and stalled, and never over closed or blocked', () => {
+  const t = { title: '', stage: 'review' as const, pr: null, updated: NOW - 100 * MIN, hold: 'merge' as const }
+  const quiet = { lastActivity: NOW - 30 * MIN, running: null, minutes: new Map(), recent: [] }
+  expect(verdict(t, quiet, [NOW - 100 * MIN], NOW)).toEqual({ word: 'held', text: 'held · merge', tone: 'warn' })
+  expect(verdict({ ...t, stage: 'closed' }, null, [], NOW).word).toBe('done')
+  expect(verdict({ ...t, stage: 'blocked' }, null, [], NOW).word).toBe('blocked')
+  // A hold of the wrong type reads as no hold.
+  const files = { 'STARK-1.json': ticket('STARK-1', 'merged', 5, { hold: 'lunch' }) }
+  expect(row('STARK-1', files, null, NOW).verdict.word).not.toBe('held')
+  const held = { 'STARK-1.json': ticket('STARK-1', 'merged', 5, { hold: 'release' }) }
+  expect(row('STARK-1', held, null, NOW).verdict.text).toBe('held · release')
 })
 
 test('the timeline draws bars, failures, milestones, a long call, quiet and no data', () => {

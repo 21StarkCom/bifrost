@@ -15,7 +15,7 @@ export const MAX_WORKERS = 8
 export const launchIdOf = (runName: string) => runName.slice('run-'.length, -'.json'.length)
 export const settingsName = (launchId: string) => `run-${launchId}.settings.json`
 
-function parse(text: string | undefined): Record<string, unknown> | null {
+export function parse(text: string | undefined): Record<string, unknown> | null {
   if (!text) return null
   try {
     const value: unknown = JSON.parse(text)
@@ -128,7 +128,7 @@ export const clockOf = (ms: number) => {
 const STEP: Record<string, string> = { ticket: 'starting', pr: 'PR open', review: 'in review', merged: 'merged' }
 
 /** The calm reading of a band row: its tone, one emoji, a short status, and why it is worth a look. */
-function calm(r: Row, hasFile: boolean, lastActivity: number | null, now: number): Omit<BoardRow, 'name' | 'repo' | 'slice' | 'detail'> {
+export function calm(r: Row, hasFile: boolean, lastActivity: number | null, now: number): Omit<BoardRow, 'name' | 'repo' | 'slice' | 'detail'> {
   const base = { id: r.id, at: STAGES.indexOf(r.stage) }
   const v = r.verdict
   if (!hasFile) return { ...base, at: -1, tone: 'none', emoji: '💤', status: 'not started', attention: null }
@@ -143,6 +143,10 @@ function calm(r: Row, hasFile: boolean, lastActivity: number | null, now: number
       status: v.text,
       attention: v.text === 'blocked' ? 'blocked' : `blocked for ${v.text.slice('blocked '.length)}`,
     }
+  }
+  if (v.word === 'held') {
+    const status = r.inStage === '' ? v.text : `${v.text} · ${r.inStage}`
+    return { ...base, tone: 'warn', emoji: '✋', status, attention: `held by its settings: ${v.text.slice('held · '.length)}` }
   }
   if (v.word === 'idle') {
     const quiet = lastActivity === null ? '' : dur(now - lastActivity)
@@ -175,21 +179,27 @@ function detailOf(
   if (pr !== null) out.push(`Pull request: ${prName(pr)}`)
   if (updated !== null && r.stage !== 'closed') out.push(`In this step since ${clockOf(updated)}.`)
   if (r.diff !== null) out.push(`${r.diff} in its worktree.`)
-  if (beat !== null) {
-    const { minutes, recent, lastActivity } = beatFields(beat)
-    const running = (beat.running ?? null) as Record<string, unknown> | null
-    const since = typeof running?.since === 'string' ? Date.parse(running.since) : Number.NaN
-    if (typeof running?.tool === 'string' && Number.isFinite(since)) {
-      out.push(`Running ${running.tool} for ${dur(now - since)}.`)
-    } else if (lastActivity !== null) {
-      out.push(`Last tool call ${dur(now - lastActivity)} ago.`)
-    }
-    const first = Math.floor(now / MIN) - RECENT_CALLS_MIN + 1
-    const calls = [...minutes.values()].filter(m => m.at >= first).reduce((sum, m) => sum + m.calls, 0)
-    out.push(`${calls} tool calls in the last ${RECENT_CALLS_MIN} minutes.`)
-    const last = recent.slice(-RECENT)
-    if (last.length > 0) out.push(`${last.filter(Boolean).length} of the last ${last.length} calls failed.`)
+  if (beat !== null) out.push(...callsOf(beat, now))
+
+  return out
+}
+
+/** A heartbeat's lines: the running or last tool call, the calls in the last 15 minutes, the failures among the last 10. */
+export function callsOf(beat: Record<string, unknown>, now: number): string[] {
+  const out: string[] = []
+  const { minutes, recent, lastActivity } = beatFields(beat)
+  const running = (beat.running ?? null) as Record<string, unknown> | null
+  const since = typeof running?.since === 'string' ? Date.parse(running.since) : Number.NaN
+  if (typeof running?.tool === 'string' && Number.isFinite(since)) {
+    out.push(`Running ${running.tool} for ${dur(now - since)}.`)
+  } else if (lastActivity !== null) {
+    out.push(`Last tool call ${dur(now - lastActivity)} ago.`)
   }
+  const first = Math.floor(now / MIN) - RECENT_CALLS_MIN + 1
+  const calls = [...minutes.values()].filter(m => m.at >= first).reduce((sum, m) => sum + m.calls, 0)
+  out.push(`${calls} tool calls in the last ${RECENT_CALLS_MIN} minutes.`)
+  const last = recent.slice(-RECENT)
+  if (last.length > 0) out.push(`${last.filter(Boolean).length} of the last ${last.length} calls failed.`)
 
   return out
 }

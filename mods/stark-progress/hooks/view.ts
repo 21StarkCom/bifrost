@@ -1,4 +1,4 @@
-import type { BeatMinute, Cell, Count, GitSignal, Row, RunFile, Seg, Stage, Tone, Verdict, View } from '../types'
+import type { BeatMinute, Cell, Count, GitSignal, Hold, Row, RunFile, Seg, Stage, Tone, Verdict, View } from '../types'
 import { beatFields, RECENT } from './beat'
 
 // What a tab draws, from the contract's files (../README.md), git's signal for
@@ -87,7 +87,10 @@ export function worktreeOf(id: string, text: string | undefined, root: string): 
   return ticketOf(root) === id ? root : null
 }
 
-type Ticket = { title: string; stage: Stage; pr: string | null; updated: number | null }
+type Ticket = { title: string; stage: Stage; pr: string | null; updated: number | null; hold: Hold | null }
+
+/** A ticket file's `hold`: the step its settings hold, or null. */
+export const holdOf = (v: unknown): Hold | null => (v === 'merge' || v === 'release' ? v : null)
 type Beat = {
   lastActivity: number | null
   running: { tool: string; since: number } | null
@@ -105,6 +108,7 @@ function ticket(text: string): Ticket {
     stage: stage !== null && ALL_STAGES.includes(stage) ? (stage as Stage) : 'ticket',
     pr: str(t?.pr),
     updated: time(t?.updated),
+    hold: holdOf(t?.hold),
   }
 }
 
@@ -124,6 +128,8 @@ export function verdict(t: Ticket | null, b: Beat | null, milestones: number[], 
   if (t.stage === 'blocked') {
     return { word: 'blocked', text: t.updated === null ? 'blocked' : `blocked ${dur(now - t.updated)}`, tone: 'bad' }
   }
+  // A held worker waits on the operator in one background command: its quiet is no stall.
+  if (t.hold !== null) return { word: 'held', text: `held · ${t.hold}`, tone: 'warn' }
   if (b?.lastActivity != null && now - b.lastActivity >= IDLE_MIN * MIN) {
     const tool = b.running === null ? '' : ` · in ${b.running.tool}`
 
@@ -197,7 +203,7 @@ export function row(id: string, files: Record<string, string>, git: GitSignal | 
   const milestones = [...(t?.updated == null ? [] : [t.updated]), ...(git?.commits ?? [])]
   const v = verdict(t, b, milestones, now)
   const stage = t?.stage ?? 'ticket'
-  const isLive = v.word !== 'done' && v.word !== 'blocked' && v.word !== 'waiting'
+  const isLive = v.word !== 'done' && v.word !== 'blocked' && v.word !== 'held' && v.word !== 'waiting'
   const last = b?.recent.slice(-RECENT) ?? []
   const failed = last.filter(Boolean).length
 
