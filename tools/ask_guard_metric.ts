@@ -8,6 +8,11 @@
  * `merge`, `ship it`, …) or an option pick (`1`, `a`), and prints the
  * operator's baseline beside them.
  *
+ * It also reads the Claude Code transcripts (`projects/<folder>/<id>.jsonl` in
+ * the same folder, subagent folders skipped) and counts the turns that end on a
+ * question: tagged by the root rules (`Needs you (<tag>): …`) or untagged.
+ * Each untagged question points to a rule to fix, so it lists the newest.
+ *
  *   ask_guard_metric.ts [--week YYYY-MM-DD] [--json] [--notify]
  *   ask_guard_metric.ts --install-schedule | --uninstall-schedule
  *
@@ -31,7 +36,9 @@ export const USAGE = `usage: ask_guard_metric.ts [--week YYYY-MM-DD] [--json] [-
        ask_guard_metric.ts --install-schedule | --uninstall-schedule
 
 Counts one week (7 local days) of prompts and one-word replies in
-~/.claude/history.jsonl, beside the baseline.
+~/.claude/history.jsonl, beside the baseline, and the turns that end on a
+question, tagged (Needs you (<tag>): …) or untagged, in the transcripts
+~/.claude/projects/*/*.jsonl.
 
   --week YYYY-MM-DD     first day of the week (default: the 7 days before today)
   --json                print the result as JSON
@@ -120,6 +127,208 @@ function day(d: Date): string {
 
 const n = (v: number) => v.toLocaleString("en-US");
 
+/** The tags the root rules allow on a question that ends a turn, `Needs you (<tag>): …`. */
+export const QUESTION_KINDS = ["GO", "Yours", "Your hands", "Design approval"] as const;
+export type QuestionKind = (typeof QUESTION_KINDS)[number];
+
+/** The last assistant text of a turn, before the operator's next prompt or the end of the file. */
+export interface TurnEnd {
+  uuid: string;
+  ts: number;
+  text: string;
+  cwd: string;
+  sessionId: string;
+}
+
+/** A prompt the operator typed: not meta, not a compact summary, no tool result,
+ * and no text that starts with `<` (a slash command, a task notification), save
+ * the `<pasted_content …>` wrapper of a typed prompt that opens on a paste. */
+export function isPrompt(row: any): boolean {
+  if (row?.isMeta === true || row?.isCompactSummary === true) return false;
+  const c = row?.message?.content;
+  let texts: string[];
+  if (typeof c === "string") {
+    texts = [c];
+  } else if (Array.isArray(c)) {
+    if (c.some((b) => b?.type === "tool_result")) return false;
+    texts = c.filter((b) => b?.type === "text" && typeof b.text === "string").map((b) => b.text);
+  } else {
+    return false;
+  }
+  return texts.length > 0 && !texts.some((t) => /^<(?!pasted_content[\s>])/.test(t.trimStart()));
+}
+
+/** The turn ends of one transcript, in file order. A later `tool_use` cancels a
+ * text, across the lines one API message spans; sidechain lines are skipped. */
+export function turnEnds(lines: Iterable<string>): TurnEnd[] {
+  const out: TurnEnd[] = [];
+  let last: TurnEnd | undefined;
+  for (const line of lines) {
+    // A tool result (often the largest line) never moves a turn end: skip it unparsed.
+    // The quotes in a raw `"type":"tool_result"` are unescaped, so only a block writes it.
+    if (!line.includes('"type":"assistant"') && (!line.includes('"type":"user"') || line.includes('"type":"tool_result"'))) continue;
+    let row: any;
+    try {
+      row = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (row?.isSidechain === true) continue;
+    if (row?.type === "assistant") {
+      const blocks = row.message?.content;
+      if (!Array.isArray(blocks)) continue;
+      for (const b of blocks) {
+        if (b?.type === "tool_use") {
+          last = undefined;
+        } else if (b?.type === "text" && typeof b.text === "string" && b.text.trim() && typeof row.uuid === "string") {
+          const ts = Date.parse(row.timestamp);
+          if (Number.isNaN(ts)) continue;
+          last = { uuid: row.uuid, ts, text: b.text, cwd: String(row.cwd ?? ""), sessionId: String(row.sessionId ?? "") };
+        }
+      }
+    } else if (row?.type === "user" && isPrompt(row)) {
+      if (last) out.push(last);
+      last = undefined;
+    }
+  }
+  if (last) out.push(last);
+  return out;
+}
+
+const TAG = "Needs you (";
+const tagOf = (line: string) => (line.startsWith(TAG) ? QUESTION_KINDS.find((k) => line.startsWith(k, TAG.length)) : undefined);
+
+/** Sort the last non-empty line of a turn end: a tagged question, an untagged one, or none.
+ * `kinds` holds the tag of each line in the closing run of tagged lines, one per open question.
+ * A `?` makes a question only where it ends a word outside a code span, so a URL query does not. */
+export function classifyEnding(text: string): { kind: QuestionKind | "untagged" | "none"; line: string; kinds: QuestionKind[] } {
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const line = lines.at(-1) ?? "";
+  const kinds: QuestionKind[] = [];
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const k = tagOf(lines[i]);
+    if (!k) break;
+    kinds.unshift(k);
+  }
+  if (kinds.length) return { kind: kinds[kinds.length - 1], line, kinds };
+  const asks = /\?(?=$|[\s)\]"'*_])/.test(line.replace(/`[^`]*`/g, ""));
+  return { kind: asks ? "untagged" : "none", line, kinds };
+}
+
+export interface Untagged {
+  ts: number;
+  cwd: string;
+  sessionId: string;
+  line: string;
+}
+
+export interface QuestionCounts {
+  /** Turn ends inside the week. */
+  turnEnds: number;
+  tagged: Record<QuestionKind, number>;
+  untagged: Untagged[];
+  /** The oldest turn end read, inside the week or not (ms), when there is one. */
+  oldest?: number;
+  /** A transcript last changed before the week's start is on disk, so the transcripts reach its first day. */
+  reachesBack?: boolean;
+}
+
+const noKinds = () => Object.fromEntries(QUESTION_KINDS.map((k) => [k, 0])) as Record<QuestionKind, number>;
+
+/** Count the turn ends of each transcript inside the week, each `uuid` once. */
+export function countQuestions(transcripts: Iterable<Iterable<string>>, week: Week): QuestionCounts {
+  const out: QuestionCounts = { turnEnds: 0, tagged: noKinds(), untagged: [] };
+  const from = week.start.getTime();
+  const to = week.end.getTime();
+  const seen = new Set<string>();
+  for (const lines of transcripts) {
+    for (const t of turnEnds(lines)) {
+      if (seen.has(t.uuid)) continue;
+      seen.add(t.uuid);
+      if (out.oldest === undefined || t.ts < out.oldest) out.oldest = t.ts;
+      if (t.ts < from || t.ts >= to) continue;
+      out.turnEnds++;
+      const { kind, line, kinds } = classifyEnding(t.text);
+      if (kind === "untagged") out.untagged.push({ ts: t.ts, cwd: t.cwd, sessionId: t.sessionId, line });
+      for (const k of kinds) out.tagged[k]++;
+    }
+  }
+  return out;
+}
+
+/** The lines of a file, read in 1 MiB chunks so a large transcript is never one string. */
+export function* fileLines(file: string): Generator<string> {
+  let fd: number;
+  try {
+    fd = fs.openSync(file, "r");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw err;
+  }
+  try {
+    const buf = Buffer.allocUnsafe(1 << 20);
+    let parts: Buffer[] = [];
+    for (let got = fs.readSync(fd, buf); got > 0; got = fs.readSync(fd, buf)) {
+      const chunk = buf.subarray(0, got);
+      let at = 0;
+      for (let nl = chunk.indexOf(10); nl !== -1; nl = chunk.indexOf(10, at)) {
+        const tail = chunk.subarray(at, nl);
+        yield parts.length ? Buffer.concat([...parts, tail]).toString("utf8") : tail.toString("utf8");
+        parts = [];
+        at = nl + 1;
+      }
+      if (at < got) parts.push(Buffer.from(chunk.subarray(at)));
+    }
+    if (parts.length) yield Buffer.concat(parts).toString("utf8");
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/** `fn()`, or `undefined` when its path is gone (a session cleaned up while the walk runs). */
+function unlessGone<T>(fn: () => T): T | undefined {
+  try {
+    return fn();
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw err;
+  }
+}
+
+/** The transcripts `projects/<folder>/<id>.jsonl` changed on or after `since`; subfolders hold
+ * subagents and are skipped. `reachesBack` is true when a transcript changed before `since` is
+ * on disk, so a quiet first day of the week is not taken for a transcript cleanup. */
+export function transcriptFiles(dir: string, since: Date): { files: string[]; reachesBack: boolean } {
+  const root = path.join(dir, "projects");
+  const out = { files: [] as string[], reachesBack: false };
+  for (const f of unlessGone(() => fs.readdirSync(root, { withFileTypes: true })) ?? []) {
+    if (!f.isDirectory()) continue;
+    for (const e of unlessGone(() => fs.readdirSync(path.join(root, f.name), { withFileTypes: true })) ?? []) {
+      if (!e.isFile() || !e.name.endsWith(".jsonl")) continue;
+      const file = path.join(root, f.name, e.name);
+      const mtime = unlessGone(() => fs.statSync(file).mtimeMs);
+      if (mtime === undefined) continue;
+      if (mtime >= since.getTime()) out.files.push(file);
+      else out.reachesBack = true;
+    }
+  }
+  return out;
+}
+
+/** Cut to `max` characters, never inside a surrogate pair. */
+const cut = (s: string, max: number) => Array.from(s).slice(0, max).join("");
+
+export interface QuestionReport {
+  /** Turn ends inside the week. */
+  turn_ends: number;
+  tagged: Record<QuestionKind, number>;
+  untagged: number;
+  /** The date of the oldest turn end read, and the days of the week the transcripts reach. */
+  coverage: { oldest: string | null; whole_week: boolean; days: { from: string; last: string } | null };
+  /** Up to 10 untagged questions, newest first: local date, last segment of `cwd`, session, line cut to 160 characters. */
+  newest_untagged: { date: string; folder: string; session: string; line: string }[];
+}
+
 export interface Result {
   week: { start: string; last: string };
   prompts: number;
@@ -129,9 +338,23 @@ export interface Result {
   words: [string, number][];
   /** The operator's count, and this rule's count of the same week from today's history. */
   baseline: typeof BASELINE & { recount: { replies: number; go: number; prompts: number } };
+  questions: QuestionReport;
 }
 
-export function result(week: Week, p: PromptCounts, base: PromptCounts): Result {
+function coverage(week: Week, last: Date, oldest: number | undefined, reachesBack = false): QuestionReport["coverage"] {
+  if (oldest === undefined) {
+    return reachesBack
+      ? { oldest: null, whole_week: true, days: { from: day(week.start), last: day(last) } }
+      : { oldest: null, whole_week: false, days: null };
+  }
+  const o = new Date(oldest);
+  const oDay = new Date(o.getFullYear(), o.getMonth(), o.getDate());
+  const whole = reachesBack || oDay.getTime() <= week.start.getTime();
+  const days = whole ? { from: day(week.start), last: day(last) } : oDay < week.end ? { from: day(oDay), last: day(last) } : null;
+  return { oldest: day(oDay), whole_week: whole, days };
+}
+
+export function result(week: Week, p: PromptCounts, base: PromptCounts, q: QuestionCounts): Result {
   const last = new Date(week.end.getFullYear(), week.end.getMonth(), week.end.getDate() - 1);
   return {
     week: { start: day(week.start), last: day(last) },
@@ -140,16 +363,39 @@ export function result(week: Week, p: PromptCounts, base: PromptCounts): Result 
     go: p.go,
     words: Object.entries(p.words).sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0])),
     baseline: { ...BASELINE, recount: { replies: base.replies, go: base.go, prompts: base.prompts } },
+    questions: {
+      turn_ends: q.turnEnds,
+      tagged: { ...q.tagged },
+      untagged: q.untagged.length,
+      coverage: coverage(week, last, q.oldest, q.reachesBack),
+      newest_untagged: [...q.untagged]
+        .sort((x, y) => y.ts - x.ts)
+        .slice(0, 10)
+        .map((u) => ({ date: day(new Date(u.ts)), folder: path.basename(u.cwd), session: u.sessionId, line: cut(u.line, 160) })),
+    },
   };
 }
 
 export function title(r: Result): string {
-  return `Act, don't ask: ${r.one_word_replies} one-word replies (baseline ${BASELINE.replies})`;
+  return `Act, don't ask: ${r.one_word_replies} one-word replies (baseline ${BASELINE.replies}), ${r.questions.untagged} untagged questions`;
+}
+
+const tagged = (q: QuestionReport) => QUESTION_KINDS.map((k) => `${k} ${q.tagged[k]}`).join(", ");
+const taggedTotal = (q: QuestionReport) => QUESTION_KINDS.reduce((s, k) => s + q.tagged[k], 0);
+
+/** The line that names the days counted, when the transcripts do not reach the week's first day. */
+function coverageNote(q: QuestionReport): string | undefined {
+  const c = q.coverage;
+  if (c.whole_week) return undefined;
+  if (!c.days) return "no day of the week counted: no transcript reaches it";
+  return `only ${c.days.from} to ${c.days.last} counted: the transcripts start after the week's first day`;
 }
 
 export function render(r: Result): string {
   const words = r.words.map(([w, c]) => `${w} ${c}`).join(", ") || "none";
   const re = r.baseline.recount;
+  const q = r.questions;
+  const note = coverageNote(q);
   return [
     `Act, don't ask: week ${r.week.start} to ${r.week.last} (local)`,
     `  prompts           ${n(r.prompts)}`,
@@ -157,6 +403,17 @@ export function render(r: Result): string {
     `  go                ${n(r.go)}`,
     `  baseline, week of ${BASELINE.week}: ${BASELINE.replies} one-word replies, ${BASELINE.go} go, ${n(BASELINE.prompts)} prompts` +
       ` (this rule counts ${re.replies}, ${re.go}, ${n(re.prompts)})`,
+    `  turn ends         ${n(q.turn_ends)}`,
+    `  tagged questions  ${n(taggedTotal(q))} (${tagged(q)})`,
+    `  untagged          ${n(q.untagged)}`,
+    `  coverage          ${q.coverage.oldest ? `oldest turn end read ${q.coverage.oldest}` : "no turn end read"}`,
+    ...(note ? [`  ${note}`] : []),
+    ...(q.newest_untagged.length
+      ? [
+          `  untagged questions, newest first (${q.newest_untagged.length} of ${n(q.untagged)}):`,
+          ...q.newest_untagged.flatMap((u) => [`    ${[u.date, u.folder, u.session].filter(Boolean).join("  ")}`, `      ${u.line}`]),
+        ]
+      : []),
   ].join("\n");
 }
 
@@ -169,9 +426,13 @@ function readLines(file: string): string[] {
   }
 }
 
+/** `$CLAUDE_CONFIG_DIR`, else `~/.claude`: the folder of history.jsonl and the transcripts. */
+export function configDir(): string {
+  return process.env.CLAUDE_CONFIG_DIR?.trim() || path.join(os.homedir(), ".claude");
+}
+
 export function historyPath(): string {
-  const dir = process.env.CLAUDE_CONFIG_DIR?.trim() || path.join(os.homedir(), ".claude");
-  return path.join(dir, "history.jsonl");
+  return path.join(configDir(), "history.jsonl");
 }
 
 const xml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -265,10 +526,20 @@ function uninstallSchedule(): number {
   return 0;
 }
 
-function notify(r: Result): number {
-  const body =
+/** The push body: the week, the baseline, the question counts and the 5 newest untagged questions. */
+export function notifyBody(r: Result): string {
+  const q = r.questions;
+  const note = coverageNote(q);
+  return [
     `Week ${r.week.start} to ${r.week.last}: ${n(r.prompts)} prompts, ${r.go} go. ` +
-    `Baseline ${BASELINE.week}: ${BASELINE.replies} replies, ${BASELINE.go} go, ${n(BASELINE.prompts)} prompts.`;
+      `Baseline ${BASELINE.week}: ${BASELINE.replies} replies, ${BASELINE.go} go, ${n(BASELINE.prompts)} prompts.`,
+    `Questions: ${n(taggedTotal(q))} tagged (${tagged(q)}), ${n(q.untagged)} untagged.` + (note ? ` Note: ${note}.` : ""),
+    ...q.newest_untagged.slice(0, 5).map((u) => `${[u.date, u.folder].filter(Boolean).join(" ")}: ${u.line}`),
+  ].join("\n");
+}
+
+function notify(r: Result): number {
+  const body = notifyBody(r);
   const s = spawnSync("heimdall", ["send", "--body", body, "--", title(r)], { encoding: "utf8" });
   if (s.status !== 0) {
     process.stderr.write(`heimdall send failed (${s.error?.message ?? `exit ${s.status}`}): ${(s.stderr ?? "").trim()}\n`);
@@ -300,11 +571,9 @@ function main(argv: string[]): number {
     return 2;
   }
   const history = readLines(historyPath());
-  const r = result(
-    week,
-    countPrompts(history, week),
-    countPrompts(history, weekWindow(BASELINE.week)),
-  );
+  const transcripts = transcriptFiles(configDir(), week.start);
+  const questions = { ...countQuestions(transcripts.files.map((f) => fileLines(f)), week), reachesBack: transcripts.reachesBack };
+  const r = result(week, countPrompts(history, week), countPrompts(history, weekWindow(BASELINE.week)), questions);
   process.stdout.write(flags.has("json") ? JSON.stringify(r, null, 2) + "\n" : render(r) + "\n");
   if (flags.has("notify")) return notify(r);
   return 0;
