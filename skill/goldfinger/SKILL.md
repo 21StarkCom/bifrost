@@ -1,6 +1,6 @@
 ---
 name: goldfinger
-description: "Operate desktop apps in the background with the goldfinger CLI: list apps and windows, observe a window's accessibility tree, then click, type, press keys, scroll or set a value, move or resize a window, and read or write the clipboard (its text, and from 0.10.0 on its rich text, HTML, image and files), without taking the user's focus; open files in an app, hide or show an app, minimize a window, and send an element an accessibility action such as increment or a custom action; hover a target with the mouse pointer, held there and then put back, so hover-only UI shows; read a Safari page's or a web view's whole text, and Safari's tabs; press a menu-bar command, drag, restore a minimized window or put one in full screen, which briefly bring the app to the front; batch actions, record a session to replay it, take a full-resolution screenshot or a fixed-scale capture, and diagnose goldfinger itself with `goldfinger doctor`. Use when a task needs a native app that has no API, CLI or browser route, a menu-bar command, a drag or a hover in one, a window moved or resized, or the clipboard read or written; and before acting in a Chrome window, since Chrome page work goes to Huginn."
+description: "Operate desktop apps in the background with the goldfinger CLI: list apps and windows, observe a window's accessibility tree, then click, type, press keys, scroll or set a value, move or resize a window, and read or write the clipboard (its text, and from 0.10.0 on its rich text, HTML, image and files), without taking the user's focus; open files in an app, hide or show an app, minimize a window, and send an element an accessibility action such as increment or a custom action; hover a target with the mouse pointer, held there and then put back, so hover-only UI shows; read a Safari page's or a web view's whole text, and Safari's tabs; press a menu-bar command, drag, restore a minimized window or put one in full screen, which briefly bring the app to the front; batch actions, record a session to replay it, take a full-resolution screenshot or a fixed-scale capture, drive the real VoiceOver screen reader and read what it speaks, and diagnose goldfinger itself with `goldfinger doctor`. Use when a task needs a native app that has no API, CLI or browser route, a menu-bar command, a drag or a hover in one, a window moved or resized, the clipboard read or written, or an app heard through VoiceOver; and before acting in a Chrome window, since Chrome page work goes to Huginn."
 argument-hint: "[help]"
 ---
 
@@ -16,7 +16,9 @@ agent on the machine, holds the OS grants and does the work; every other command
 starts it on demand (`stop`, `watch` and `doctor` without `--fix` never do). No verb activates an
 app or raises a window but `setup` (interactive), `quit` of the frontmost app, and `menu`,
 `drag` and `window-state restore` under `--foreground`, from 0.13.0 on with `window-state
-full-screen` and `perform … show-menu` under it too, and only `hover` moves the mouse pointer, for its hold alone.
+full-screen` and `perform … show-menu` under it too, from 0.15.0 on `voiceover start`, which
+leaves its app frontmost until `voiceover stop`, and `voiceover stop`, which makes the app before
+frontmost again, and only `hover` moves the mouse pointer, for its hold alone.
 `click --right` activates nothing, but the menu it shows sits over every app and can bring
 the clicked window in front of the user's, where it stays (see The loop). So the user keeps
 working, but when any app activates during an action's 1 s guard, goldfinger puts back the app
@@ -44,6 +46,13 @@ No arguments: the work happens through `goldfinger` itself.
   5 minutes for both, else fails `permission_missing`. It restarts the daemon, ending every live
   session. Ask the operator; never click a grant. When a pane's list shows no Goldfinger, the
   operator adds the app with the `+` button under the list, then turns its switch on.
+- **VoiceOver** (from 0.15.0 on): the `voiceover` verbs need VoiceOver's AppleScript control and
+  the Automation grant for VoiceOver. The operator runs `goldfinger setup --voiceover` once, in a
+  terminal they watch: it opens VoiceOver Utility, where they turn on "Allow VoiceOver to be
+  controlled with AppleScript" with the admin password, then starts VoiceOver unless it runs,
+  raises the Automation prompt, waits up to 5 minutes for each, and turns off the VoiceOver it
+  started. It restarts nothing. `status --json` shows `voiceover_applescript` and
+  `voiceover_automation`.
 - **Safari** (from 0.13.0 on), the operator's too, and only for the Safari reads (see Page text
   and Safari's tabs): `goldfinger setup --safari`, run with Safari open, asks for the Automation
   grant for Safari alone and restarts nothing, so no session ends. `text --via apple-events` also
@@ -1063,6 +1072,41 @@ A session marks an agent's calls as its own, and its cursor shows the operator w
   `drag` can leave the mouse button held, a `hover` the pointer off its place, and a
   `--foreground` verb its app in front: observe before you act again.
 
+## VoiceOver: the real screen reader
+
+From 0.15.0 on, goldfinger drives the real VoiceOver, for an agent that must hear a page as a
+blind user does. VoiceOver reads only the frontmost app, so these verbs take the user's front:
+use them only when the task asks for VoiceOver, and stop VoiceOver when done.
+
+- `goldfinger voiceover start <pid> --json` makes the app frontmost, starts VoiceOver unless it
+  runs, and waits up to 15 s for it to answer: `{voiceover_pid, started, activated?, warnings}`.
+  With VoiceOver off, VoiceOver answers about 10 s after the start, which then waits for 1.5 s
+  of quiet, within its 15 s.
+- `goldfinger voiceover do <command> --json` sends one command: `top`, `next`, `previous`, `act`,
+  `interact`, `stop-interacting`, `heading-next`, `heading-previous`, `link-next`,
+  `link-previous`, `landmark-next`, `landmark-previous`, `form-control-next` or
+  `form-control-previous`. It returns `{phrases, text_under_cursor, cursor_bounds}`: each phrase
+  VoiceOver spoke after it, read every 0.1 s until none is new for 2.5 s (at most 10 s), and the
+  cursor's text and bounds. `phrases: []` is a repeat when the bounds moved, and silence when
+  they did not. On a page VoiceOver has not been taken into, `top` stays on the page as one item,
+  and `heading-next` from there goes into it.
+- `goldfinger voiceover type <text> --json` and `goldfinger voiceover press <combo> --json` type
+  the text, or press one combo (`cmd` and VoiceOver's `ctrl+option` combos too), into the
+  frontmost app as a person does, and return the same object. Move the cursor onto a field first
+  (`form-control-next`): in web content outside a field, VoiceOver can take letters as its own
+  quick keys.
+- `goldfinger voiceover speech --json` reads the last phrase now, with nothing sent.
+- `goldfinger voiceover stop --json` turns VoiceOver off, so it stays off at the next login, and
+  makes the app frontmost before `start` frontmost again.
+- Every verb but `start` fails `not_running` when VoiceOver does not run. The CLI also takes each
+  as one word, `goldfinger voiceover-start`.
+- `type` and `press` also need the Accessibility grant, which posts their keys. A `voiceover`
+  verb's `permission_missing` names `goldfinger setup --voiceover` or the Automation pane: ask
+  the operator.
+- The `voiceover` verbs are not recorded, keep no snapshot, and run in no `batch`.
+- A `timeout` from `start`, `stop` or `speech` may be retried. One from `do`, `type` or `press`
+  may have landed, unless `retryable` is true: run `voiceover speech` before you send it again.
+
 ## MCP
 
 `goldfinger mcp` serves the same client as an MCP server on stdio. Register it once, and its
@@ -1095,14 +1139,20 @@ boolean), `window-state` the 38th (`window_id` required, an integer; `state` req
 `drag` takes `via`, an array of at least one target, and `observe`. From 0.13.0 on, `text` is the
 40th (exactly one of `window_id`, an integer, and `target`, a string; `offset` and `limit`
 integers; `via` one of `ax`, `apple-events` and `extension`) and `safari-tabs` the 41st
-(`window_id` required, an integer): 41 in all. `text`'s result may run to 500,000 characters,
+(`window_id` required, an integer).
+From 0.15.0 on, `voiceover_start` (`pid` required, an integer), `voiceover_stop`,
+`voiceover_do` (`command` required, one of the fourteen), `voiceover_type` (`text` required),
+`voiceover_press` (`combo` required) and `voiceover_speech` are the 42nd to 47th: 47 in all.
+Their names take an underscore, not the socket verb's hyphen. `setup` takes `voiceover`, a
+boolean.
+`text`'s result may run to 500,000 characters,
 which Claude Code keeps in context (its `_meta` says so), and each of its stderr lines comes as
 a text block too. The other parameters from 0.13.0 on: the booleans `safari` on `setup`,
 `dom_classes` on `observe`, `text_anchors` on `record-start`, and `observe_ocr` on each tool
 that takes `observe` as a boolean; `ocr_language`, a string, on `observe`, `ocr` and
 `find-text`; `observe`'s `via`, `ax` or `extension`; `full-screen` as `window-state`'s `state`;
 and `show-menu` as `perform`'s `action`, the last two with `foreground: true`. `setup` with
-`safari` ends no session.
+`safari` or, from 0.15.0 on, `voiceover` ends no session.
 `screenshot` returns its path and no image: read the file. Parameters are the snake_case socket
 args (`window_id`, `max_nodes`, `new_instance`); `window-frame`'s `frame` is
 `{"x", "y", "width", "height"}`, and so are `observe`'s `ocr_region` and the `region` of `ocr` and `find-text`, `observe`'s `ocr` and `detect` booleans,
@@ -1185,5 +1235,6 @@ For `effect_unverified`, the press was sent and nothing read what it did: observ
 | `version_mismatch` | Two goldfinger versions met. Use the newer `goldfinger`. `goldfinger stop` and a retry also clears it, but stops the daemon other agents share. |
 | `session_limit` | All six session colors are held, so `session-start` started nothing. End a session of yours, or wait for one to idle out, then retry. |
 | `session_not_live` | The `--session` id is not live: never started, ended, idled out (its recording closed too) or an earlier daemon's. Nothing ran, and the same id fails again: run `goldfinger session-start`, and use the new id. |
+| `not_running` | From 0.15.0 on: a `voiceover` verb found no VoiceOver running, and nothing was sent; or VoiceOver quit before it answered, and a `do`, `type` or `press` may have landed. Run `goldfinger voiceover start <pid>`, then `goldfinger voiceover speech` to see where the cursor is, before you send the verb again. |
 
 Trust `retryable`: it says whether repeating the same request is safe, never whether it worked.
