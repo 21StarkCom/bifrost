@@ -213,6 +213,22 @@
         "gru",
         "mod"
       ]
+    },
+    {
+      "name": "decision-deck",
+      "source": "./mods/decision-deck",
+      "description": "A pane beside the chat that walks you through a deck of decisions: Claude presents the deck with its present tool, you pick options or write your own words for each one, and Send returns your answers to Claude as your next message.",
+      "version": "0.1.0",
+      "author": {
+        "name": "21 Stark AI",
+        "email": "engineering@21stark.com"
+      },
+      "category": "productivity",
+      "tags": [
+        "decisions",
+        "review",
+        "mod"
+      ]
     }
   ]
 }

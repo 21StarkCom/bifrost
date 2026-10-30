@@ -96,4 +96,11 @@ regexes = [
   '''^ghp_abcdefghijklmnopqrstuvwxyz0123456789$''',
   '''^abcdefghijklmnop$''',
   '''^supersecretvalue$''',
+  # ── A mod's UI key, not a credential (STARK-14189) ────────────────────────
+  # `mods/decision-deck/hooks/decision-deck.test.tsx` presses the option button
+  # `{ key: 'opt-C02-merged' }`: the button's React key, built from a decision id
+  # and an option id. gitleaks' stock `generic-api-key` rule reads `key: '<value>'`
+  # as a credential once the value's entropy passes its floor (3.52 here), and
+  # the test's other button keys stay under it.
+  '''^opt-C02-merged$''',
 ]
