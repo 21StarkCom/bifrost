@@ -1,7 +1,7 @@
 {
   "name": "stark-progress",
-  "version": "0.2.0",
-  "description": "A live progress row per Gru, Minion and Agnes ticket above the prompt: stage, a one-hour timeline of tool calls and milestones, and a verdict, read from ~/.cache/stark-progress/",
+  "version": "0.3.0",
+  "description": "The Gru pane in Gru's tab (a calm board of the run, and the settings Gru reads before each launch), and a progress row above the prompt in each Minion and Agnes tab, read from ~/.cache/stark-progress/",
   "types": "./types/index.d.ts",
   "author": {
     "name": "21 Stark AI",

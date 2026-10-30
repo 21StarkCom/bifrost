@@ -181,8 +181,10 @@ regardless of route, is observation, never operator authorization.
    another in-scope ticket as a dependency waits for it; otherwise tickets are
    independent. A ticket outside that set joins the run when a Minion files
    it as a follow-up, or when it blocks a ticket in scope (a `Blocked by`
-   link, or a dependency the ticket names). Add it to scope, rewrite the
-   run's [progress file](#progress-band), and name it in step 6's report. The
+   link, or a dependency the ticket names), unless the run's
+   [settings](#progress-pane) hold it: read them before each such change. Add
+   it to scope, rewrite the
+   run's [progress file](#progress-pane), and name it in step 6's report. The
    ticket it blocks waits for it like any dependency. A rerun `start` finds
    it again in that ticket's links and comments.
    **A ticket whose PRs span two repos or more** (its Files, or the code its
@@ -197,7 +199,8 @@ regardless of route, is observation, never operator authorization.
    dependency: wait for it. The ticket keeps its own
    repo's half; each other repo's half goes to a sub-ticket worked in that
    repo by its own Minion. File the sub-ticket yourself and ask the operator
-   nothing: your launch on the ticket is the GO for the split. Write it
+   nothing: your launch on the ticket is the GO for the split, unless the
+   run's [settings](#progress-pane) set `decideForMe` false. Write it
    with `/stark-ticket` (`$stark-ticket` on Codex), file it with
    `alfred task new --on-repo <other repo>`, and comment on the ticket with
    `alfred task comment --body-file <file> STARK-n`, the file opening
@@ -210,7 +213,7 @@ regardless of route, is observation, never operator authorization.
    rerun `start` (an epic's `list_children` and a `--tickets` list both miss
    it), and a ticket that carries one is split already, so a rerun files and
    raises nothing again.
-   Then write the run's [progress file](#progress-band) with every ticket in
+   Then write the run's [progress file](#progress-pane) with every ticket in
    scope, and write it again whenever a split adds one.
 2. **Read the board.** Ticket `done`/`Closed` → run step 5's confirm on it, then
    skip; a Minion can die between closing its ticket and sending its report, so a
@@ -223,7 +226,8 @@ regardless of route, is observation, never operator authorization.
    path segment is exactly the ticket id → a Minion owns it, do not relaunch.
    Ticket whose Minion reported `blocked` or `follow-up … stopping` → blocked
    until its block clears, and so is a ticket step 3 could not resolve
-   to a repo. You clear a follow-up's stop and a need in another repo
+   to a repo, and a ticket the run's [settings](#progress-pane) hold. You
+   clear a follow-up's stop and a need in another repo
    yourself (step 4); the operator clears the rest. When a block clears (the
    operator tells you, or step 5 confirms the ticket it waited on), confirm
    it on the real surface (the PR `MERGED`, the tag on the remote), then send
@@ -235,7 +239,9 @@ regardless of route, is observation, never operator authorization.
    "prework", and what the dependency will land is never pinned for a Minion
    in a brief or a message instead of in the spec. A contract two tickets
    share that the spec lacks is an escalation.
-3. **Launch.** For each ready ticket while live Minions < N:
+3. **Launch.** Read the run's [settings](#progress-pane) before each launch:
+   `maxWorkers` is N, and `minionAgent` is `<agent>` for a first launch. For
+   each ready ticket while live Minions < N:
    `valkyrie minion STARK-n --repo <ticket's repo> --agent <agent> --no-focus --json`.
    The ticket id comes first: any other first word starts a persona dev
    worker, not a ticket Minion. Always pass `--repo` (the default is the repo
@@ -333,7 +339,7 @@ regardless of route, is observation, never operator authorization.
 4. **Wait.** Minions report `done <PR> merged <sha> verified <check>`,
    `blocked <reason>`, or
    `follow-up STARK-m filed, stopping`. On a `blocked` or a `follow-up …
-   stopping`, stamp the ticket's [progress file](#progress-band) `blocked`.
+   stopping`, stamp the ticket's [progress file](#progress-pane) `blocked`.
    Between reports check `hermod msg peers`.
    A peer is dead only when Hermod reports its `liveness` dead or its `pid`
    gone, never because it is missing from the list (a fresh Claude session is
@@ -347,7 +353,8 @@ regardless of route, is observation, never operator authorization.
    peer whose ticket is **still open is a death, even when its PR already
    merged**: a Minion can die between the merge and the ticket close, and nobody
    else is going to close it. A dead Claude Minion that is a real death is
-   relaunched once with step 3's same `valkyrie minion` line, which re-enters its
+   relaunched once with step 3's same `valkyrie minion` line, the agent it had
+   included whatever `minionAgent` says now, which re-enters its
    worktree; the relaunch is a new session with no
    `from` address, so make step 3's first contact again after its ack. A dead
    Codex Minion is a blocker: `valkyrie minion` refuses its existing worktree, and
@@ -417,7 +424,7 @@ regardless of route, is observation, never operator authorization.
    that, and read the version output
    [the spine's §8](../../standards/worker-spine.md#8-releases-and-other-repos)
    step 6 has it comment on the ticket). Only then count it finished, stamp its
-   [progress file](#progress-band) `closed`, and release the tickets that
+   [progress file](#progress-pane) `closed`, and release the tickets that
    depended on it. The report
    names the live verification the Minion ran and the PR carries that run's
    command and output as a comment — read the comment (`gh pr view <PR>
@@ -443,21 +450,24 @@ regardless of route, is observation, never operator authorization.
    finished tickets with PR links, blocked tickets with the reason, each
    ticket that joined the run by step 1 (a follow-up a Minion filed, or a
    ticket that blocked one in scope) and each sub-ticket a split filed, with
-   the ticket it came from, and each open question you could not answer. A
+   the ticket it came from, each ticket the run's [settings](#progress-pane)
+   held or left on the board, with the choice it waits on, and each open
+   question you could not answer. A
    repo step 3 could not resolve by name gets one line naming it and the
    operator's fix, per repo and with the path
    you already resolved: `frigg repos set <repo> --path <p>` — the only
    command that reaches a checkout outside the fleet root that
    `frigg repos scan <root>` would sweep. Last, delete the run's
-   [progress file](#progress-band).
+   [progress file](#progress-pane) and its settings file.
 
-## Progress band
+## Progress pane
 
-The `stark-progress` mod (`mods/stark-progress/`, its own install) draws a
-row per ticket above your prompt from files under `~/.cache/stark-progress/`:
-its stage, a one-hour timeline of tool calls and milestones, and a verdict
-(`moving`, `slow`, `stalled`, `idle`, `blocked`, `done`). Its README is the
-contract. The files are yours to write whether or not the
+The `stark-progress` mod (`mods/stark-progress/`, its own install) shows your
+run in the Gru pane beside your chat, from files under
+`~/.cache/stark-progress/`: each ticket's stage and verdict (`moving`, `slow`,
+`stalled`, `idle`, `blocked`, `done`), the tickets worth a look, and the run's
+settings, which the operator changes there. Its README is the contract. The
+files are yours to write whether or not the
 mod is installed, on either runtime; a write that fails costs one line and
 never holds the run. Write each file whole, to a `.tmp` beside it renamed over
 it, as [the spine's command](../../standards/worker-spine.md#progress-file)
@@ -465,10 +475,30 @@ does for a ticket's file.
 
 - **The run file**, `~/.cache/stark-progress/run-<launch id>.json`, the launch
   id being the epic's or valkyrie's `GRU-<n>`:
-  `{"epic":"<STARK-epic, or the first ticket>","session":"<your session id>","tickets":["STARK-a",…]}`.
+  `{"epic":"<STARK-epic, or the first ticket>","session":"<your session id>","tickets":["STARK-a",…],"maxWorkers":<N>,"minionAgent":"<agent>"}`,
+  where `maxWorkers` and `minionAgent` are your `--max-workers` and
+  `--agent` (default 3 and `claude`).
   Your session id is `echo "$CLAUDE_CODE_SESSION_ID"` (`$CODEX_THREAD_ID` on
   Codex), run as its own command and pasted in. Step 1 writes it, a split
   rewrites it, and step 6 deletes it.
+- **The settings file**, `~/.cache/stark-progress/run-<launch id>.settings.json`,
+  is the operator's: the pane's Settings tab writes it, and you never do.
+  Read it with `cat` before each launch (step 3) and before each scope change
+  (step 1). A missing or unparsable file, or a field that is absent or of the
+  wrong type, means the run file's value.
+  - `maxWorkers` (1 to 8) is N.
+  - `minionAgent` (`claude` or `codex`) is the agent of each first launch. A
+    relaunch keeps the agent it had.
+  - `followUps` false: a ticket a Minion files, on a `follow-up … stopping`
+    report too, does not join the run. Leave it on the board and name it in
+    step 6's report; a ticket that waits on it stays blocked.
+  - `decideForMe` false: file no split, and add no ticket that joins by a
+    `Blocked by` link or a named dependency. Stamp the ticket that needs the
+    choice `blocked`, do not launch it, and name the choice in step 6's
+    report. A later read that finds it true again takes the choice as step 1
+    says.
+
+  Step 6 deletes it with the run file.
 - **A ticket's file**, `~/.cache/stark-progress/<STARK-n>.json`, is its
   worker's to write, with two stamps of yours, each the ticket's title and PR
   url (`pr` empty while it has none) written by

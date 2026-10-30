@@ -1,0 +1,245 @@
+import type { Board, BoardRow, GitSignal, GruSettings, Row } from '../types'
+import { beatFields, RECENT } from './beat'
+import { dur, isRunName, row, STAGES } from './view'
+
+// What the Gru pane draws (pane.tsx), from the contract's files (../README.md):
+// one run, picked as register.tsx says, with a calm status per ticket. Pure:
+// the poller reads the disk. Counts and elapsed times only, never a forecast.
+const MIN = 60_000
+const ACTIVE_MIN = 60
+const RECENT_CALLS_MIN = 15
+const DEFAULT_WORKERS = 3
+
+export const MAX_WORKERS = 8
+
+export const isSettingsName = (name: string) => name.startsWith('run-') && name.endsWith('.settings.json')
+export const launchIdOf = (runName: string) => runName.slice('run-'.length, -'.json'.length)
+export const settingsName = (launchId: string) => `run-${launchId}.settings.json`
+
+function parse(text: string | undefined): Record<string, unknown> | null {
+  if (!text) return null
+  try {
+    const value: unknown = JSON.parse(text)
+
+    return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null
+  } catch {
+    return null
+  }
+}
+
+const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null)
+const workers = (v: unknown): number | null =>
+  typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= MAX_WORKERS ? v : null
+const agent = (v: unknown): 'claude' | 'codex' | null => (v === 'claude' || v === 'codex' ? v : null)
+const flag = (v: unknown): boolean | null => (typeof v === 'boolean' ? v : null)
+
+/** One run file, read: its launch id (from the file's name), and when any of its files last changed. */
+export type RunEntry = {
+  name: string
+  launchId: string
+  epic: string
+  session: string
+  tickets: string[]
+  maxWorkers: number | null
+  minionAgent: 'claude' | 'codex' | null
+  active: number
+}
+
+/**
+ * Every run file, most recently active first: the latest change to the run
+ * file, its tickets' files or their heartbeats. A run file changes only at
+ * launch and at a split, so its own time says little about a live run.
+ */
+export function runsOf(files: Record<string, string>, mtimes: ReadonlyMap<string, number>): RunEntry[] {
+  const runs: RunEntry[] = []
+  for (const name of Object.keys(files).filter(isRunName).sort()) {
+    const run = parse(files[name])
+    if (run === null || !Array.isArray(run.tickets)) continue
+    const tickets = [...new Set(run.tickets.filter((id): id is string => typeof id === 'string'))]
+    const active = Math.max(
+      mtimes.get(name) ?? 0,
+      ...tickets.flatMap(id => [mtimes.get(`${id}.json`) ?? 0, mtimes.get(`${id}.beat.json`) ?? 0]),
+    )
+    runs.push({
+      name,
+      launchId: launchIdOf(name),
+      epic: str(run.epic) ?? launchIdOf(name),
+      session: str(run.session) ?? '',
+      tickets,
+      maxWorkers: workers(run.maxWorkers),
+      minionAgent: agent(run.minionAgent),
+      active,
+    })
+  }
+
+  return runs.sort((a, b) => b.active - a.active)
+}
+
+/**
+ * The settings Gru reads before each launch: the settings file's value, else
+ * the launch's (from the run file), else Gru's default. A field of the wrong
+ * type reads as absent.
+ */
+export function settingsOf(run: RunEntry, text: string | undefined): GruSettings {
+  const s = parse(text)
+
+  return {
+    decideForMe: flag(s?.decideForMe) ?? true,
+    maxWorkers: workers(s?.maxWorkers) ?? run.maxWorkers ?? DEFAULT_WORKERS,
+    followUps: flag(s?.followUps) ?? true,
+    minionAgent: agent(s?.minionAgent) ?? run.minionAgent ?? 'claude',
+  }
+}
+
+const KIND_TAG = /^\[[^\]]+\]\s*/
+const REPO_LEAD = /^([\w.-]+):\s+/
+const SLICE = /\s*\((slice \d+ of \d+)\)\s*$/
+
+/** A title without its `[bug]` tag, `repo: ` lead and `(slice n of m)` tail, and the two parts. */
+export function nameOf(title: string): { name: string; repo: string | null; slice: string | null } {
+  const untagged = title.replace(KIND_TAG, '')
+  const repo = REPO_LEAD.exec(untagged)?.[1] ?? null
+  const rest = untagged.replace(REPO_LEAD, '')
+  const slice = SLICE.exec(rest)?.[1] ?? null
+  const name = rest.replace(SLICE, '')
+
+  return { name: name.charAt(0).toUpperCase() + name.slice(1), repo, slice }
+}
+
+const prName = (url: string) => {
+  const m = /github\.com\/[^/]+\/([^/]+)\/pull\/(\d+)/.exec(url)
+
+  return m === null ? url : `${m[1]}#${m[2]}`
+}
+
+const two = (n: number) => String(n).padStart(2, '0')
+export const clockOf = (ms: number) => {
+  const d = new Date(ms)
+
+  return `${two(d.getHours())}:${two(d.getMinutes())}`
+}
+
+const STEP: Record<string, string> = { ticket: 'starting', pr: 'PR open', review: 'in review', merged: 'merged' }
+
+/** The calm reading of a band row: its tone, one emoji, a short status, and why it is worth a look. */
+function calm(r: Row, hasFile: boolean, lastActivity: number | null, now: number): Omit<BoardRow, 'name' | 'repo' | 'slice' | 'detail'> {
+  const base = { id: r.id, at: STAGES.indexOf(r.stage) }
+  const v = r.verdict
+  if (!hasFile) return { ...base, at: -1, tone: 'none', emoji: '💤', status: 'not started', attention: null }
+  if (v.word === 'done') return { ...base, at: STAGES.length, tone: 'done', emoji: '✅', status: 'done', attention: null }
+  if (v.word === 'blocked') {
+    const at = r.track.findIndex(s => s.ch === '✕')
+    return {
+      ...base,
+      at: at < 0 ? 0 : at / 2,
+      tone: 'warn',
+      emoji: '⏳',
+      status: v.text,
+      attention: v.text === 'blocked' ? 'blocked' : `blocked for ${v.text.slice('blocked '.length)}`,
+    }
+  }
+  if (v.word === 'idle') {
+    const quiet = lastActivity === null ? '' : dur(now - lastActivity)
+    return { ...base, tone: 'idle', emoji: '⏳', status: `quiet ${quiet}`, attention: `no tool call for ${quiet}` }
+  }
+  const word = STEP[r.stage] ?? r.stage
+  const status = r.inStage === '' ? word : `${word} · ${r.inStage}`
+  const emoji = r.stage === 'review' ? '👀' : r.stage === 'merged' ? '✅' : '🔨'
+  const failed = r.failed === null ? null : `${r.failed.replace(/^(\d+)\/(\d+) failed$/, '$1 of the last $2 calls failed')}`
+  if (v.word === 'stalled') {
+    const quiet = v.text.slice('stalled '.length)
+    return { ...base, tone: 'warn', emoji: '🧱', status, attention: failed ?? `no stage change or commit for ${quiet}` }
+  }
+
+  return { ...base, tone: failed === null ? 'move' : 'warn', emoji, status, attention: failed }
+}
+
+function detailOf(
+  title: string | null,
+  slice: string | null,
+  pr: string | null,
+  updated: number | null,
+  r: Row,
+  beat: Record<string, unknown> | null,
+  now: number,
+): string[] {
+  if (title === null) return ['Its worker has not started yet.']
+  const out = [title]
+  if (slice !== null) out.push(`This is ${slice}.`)
+  if (pr !== null) out.push(`Pull request: ${prName(pr)}`)
+  if (updated !== null && r.stage !== 'closed') out.push(`In this step since ${clockOf(updated)}.`)
+  if (r.diff !== null) out.push(`${r.diff} in its worktree.`)
+  if (beat !== null) {
+    const { minutes, recent, lastActivity } = beatFields(beat)
+    const running = (beat.running ?? null) as Record<string, unknown> | null
+    const since = typeof running?.since === 'string' ? Date.parse(running.since) : Number.NaN
+    if (typeof running?.tool === 'string' && Number.isFinite(since)) {
+      out.push(`Running ${running.tool} for ${dur(now - since)}.`)
+    } else if (lastActivity !== null) {
+      out.push(`Last tool call ${dur(now - lastActivity)} ago.`)
+    }
+    const first = Math.floor(now / MIN) - RECENT_CALLS_MIN + 1
+    const calls = [...minutes.values()].filter(m => m.at >= first).reduce((sum, m) => sum + m.calls, 0)
+    out.push(`${calls} tool calls in the last ${RECENT_CALLS_MIN} minutes.`)
+    const last = recent.slice(-RECENT)
+    if (last.length > 0) out.push(`${last.filter(Boolean).length} of the last ${last.length} calls failed.`)
+  }
+
+  return out
+}
+
+/**
+ * The board for one run: `pick` names a launch id to show; else Gru's own run
+ * (the one whose `session` is this session's), else the most recently active.
+ * The others are the runs with a change in the last hour.
+ */
+export function buildBoard(
+  session: string,
+  pick: string,
+  now: number,
+  files: Record<string, string>,
+  mtimes: ReadonlyMap<string, number>,
+  git: Record<string, GitSignal | null>,
+): Board | null {
+  const runs = runsOf(files, mtimes)
+  const own = runs.find(r => r.session === session) ?? null
+  const chosen = runs.find(r => r.launchId === pick) ?? own ?? runs[0]
+  if (chosen === undefined) return null
+  const rows: BoardRow[] = chosen.tickets.map(id => {
+    const text = files[`${id}.json`]
+    const t = parse(text)
+    const beat = parse(files[`${id}.beat.json`])
+    const r = row(id, files, git[id] ?? null, now)
+    const title = text === undefined ? null : (str(t?.title) ?? id)
+    const words = title === null ? null : nameOf(title)
+    const updated = typeof t?.updated === 'string' ? Date.parse(t.updated) : Number.NaN
+    const lastActivity = beat === null ? null : beatFields(beat).lastActivity
+
+    return {
+      ...calm(r, text !== undefined, lastActivity, now),
+      name: words?.name || id,
+      repo: words?.repo ?? null,
+      slice: words?.slice ?? null,
+      detail: detailOf(title, words?.slice ?? null, str(t?.pr), Number.isFinite(updated) ? updated : null, r, beat, now),
+    }
+  })
+  const done = chosen.tickets.filter(id => parse(files[`${id}.json`])?.stage === 'closed').length
+  const notStarted = rows.filter(r => r.tone === 'none').length
+
+  return {
+    launchId: chosen.launchId,
+    epic: chosen.epic,
+    isOwn: chosen === own,
+    repos: [...new Set(rows.flatMap(r => (r.repo === null ? [] : [r.repo])))],
+    rows,
+    done,
+    inProgress: rows.length - done - notStarted,
+    notStarted,
+    next: rows.filter(r => r.tone === 'none').map(r => r.id),
+    others: runs
+      .filter(r => r !== chosen && r.active > now - ACTIVE_MIN * MIN)
+      .map(r => ({ launchId: r.launchId, epic: r.epic })),
+    settings: settingsOf(chosen, files[settingsName(chosen.launchId)]),
+    readAt: now,
+  }
+}

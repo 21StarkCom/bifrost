@@ -1,17 +1,32 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Cell, GitSignal, Row, Seg, Tone } from '../types'
+import type { Cell, GitSignal, GruSettings, PaneTab, Row, Seg, Tone } from '../types'
 import { beatFile, callEnded, callStarted, newBeat, seedBeat } from './beat'
+import { buildBoard, runsOf, settingsName } from './board'
 import { readGit } from './git'
+import { drawPane } from './pane'
 import { buildView, isRunName, ownRun, ticketOf, worktreeOf } from './view'
 
 // The state contract is in ../README.md.
 const POLL_MS = 1000
 const GIT_MS = 30_000
 const BEAT_MS = 5000
+const PANE = 'gru-board'
+const PANE_TITLE = 'Gru'
 
 const view = atom({ plugin: 'stark-progress', key: 'view' } as const, null, { shape: 'view-2' })
+const board = atom({ plugin: 'stark-progress', key: 'board' } as const, null, { shape: 'board-1' })
+const tabAtom = atom({ plugin: 'stark-progress', key: 'tab' } as const, 'overview' as PaneTab)
+const focusAtom = atom({ plugin: 'stark-progress', key: 'focus' } as const, '')
+const pickAtom = atom({ plugin: 'stark-progress', key: 'pick' } as const, '')
+
+// The pane's run: Gru's tab shows its own; a session that asked for the pane
+// with /gru-board shows the most recently active run, or the one `r` picked.
+let isBoardWanted = false
+let isPaneOpened = false
+let stateDir = ''
+let pollNow: () => Promise<void> = async () => {}
 
 // A worker's own tab keeps its heartbeat here; a reload starts it over and
 // seeds it from the file this session wrote.
@@ -64,21 +79,29 @@ const tailWidth = (r: Row) =>
 
 export const register: Register = on => {
   let last = ''
+  let lastBoard = ''
   let isPolling = false
 
   on('session.start', async ($, e, next) => {
+    await $.command.register({
+      name: 'gru-board',
+      description: "Open the Gru board: a calm view of a Gru run's tickets, and the settings Gru reads",
+    })
     const home = await $.env.get('HOME')
     if (!home) return next(e)
     const dir = `${home}/.cache/stark-progress`
+    stateDir = dir
 
-    $.clock.every(POLL_MS, async () => {
+    const poll = async () => {
       // A slow tick must not overlap the next one and write an older view last.
       if (isPolling) return
       isPolling = true
       try {
         const now = await $.clock.now()
         const listed = await $.fs.list(dir).catch(() => [])
-        const names = new Set(listed.filter(f => f.kind === 'file' && f.name.endsWith('.json')).map(f => f.name))
+        const jsons = listed.filter(f => f.kind === 'file' && f.name.endsWith('.json'))
+        const names = new Set(jsons.map(f => f.name))
+        const mtimes = new Map(jsons.map(f => [f.name, f.mtimeMs]))
         const files: Record<string, string> = {}
         const load = async (name: string) => {
           if (!names.has(name)) return
@@ -93,8 +116,17 @@ export const register: Register = on => {
         const run = ownRun(session, files)
         const own = run === null ? ticketOf(root) : null
         isWorker = own !== null
-        const wanted = run !== null ? run.tickets : own === null ? [] : [own]
-        await Promise.all(wanted.flatMap(id => [load(`${id}.json`), load(`${id}.beat.json`)]))
+        // The pane's run, when this tab shows the pane: its tickets and its settings file.
+        const pick = await read($, pickAtom)
+        const runs = run !== null || isBoardWanted ? runsOf(files, mtimes) : []
+        const shown = runs.find(r => r.launchId === pick) ?? runs.find(r => r.session === session) ?? runs[0]
+        const wanted = [
+          ...new Set([...(run !== null ? run.tickets : own === null ? [] : [own]), ...(shown?.tickets ?? [])]),
+        ]
+        await Promise.all([
+          ...wanted.flatMap(id => [load(`${id}.json`), load(`${id}.beat.json`)]),
+          ...(shown === undefined ? [] : [load(settingsName(shown.launchId))]),
+        ])
 
         // A worker's own tab writes its heartbeat while its ticket's file
         // exists, draws its own row from memory, and removes the heartbeat
@@ -124,6 +156,21 @@ export const register: Register = on => {
           git[id] = worktree === null ? null : gitFor($, worktree, now)
         }
 
+        // Gru's tab opens the pane once, the first time its run is found.
+        if (run !== null && !isPaneOpened) {
+          isPaneOpened = true
+          void $.ui.open({ id: PANE, title: PANE_TITLE }).catch(() => undefined)
+        }
+        if (shown !== undefined) {
+          const fresh = buildBoard(session, pick, now, files, mtimes, git)
+          // Draw again when a file changed, or once a minute for the times.
+          const key = JSON.stringify([fresh === null ? null : { ...fresh, readAt: 0 }, Math.floor(now / 60_000)])
+          if (key !== lastBoard) {
+            lastBoard = key
+            await update($, board, () => fresh)
+          }
+        }
+
         const fresh = buildView(root, session, now, files, git)
         const key = JSON.stringify(fresh)
         if (key === last) return
@@ -132,9 +179,48 @@ export const register: Register = on => {
       } finally {
         isPolling = false
       }
-    })
+    }
+    pollNow = poll
+    $.clock.every(POLL_MS, poll)
 
     return next(e)
+  })
+
+  on('command.run', { command: 'gru-board' }, async $ => {
+    isBoardWanted = true
+    await pollNow()
+    const opened = await $.ui.open({ id: PANE, title: PANE_TITLE, focus: true, closeOnEscape: true })
+
+    return { text: opened.isPlaced ? 'The Gru board is open.' : `The Gru board waits: ${opened.reason}.` }
+  })
+
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+    if (e.surface !== 'terminal') {
+      const { Text } = $.ui.resolve(e)
+      return <Text>The Gru board draws in the terminal.</Text>
+    }
+    const ui = $.ui.resolve(e)
+    const shown = await read($, board)
+
+    return drawPane(ui, Math.max(e.props.bodyColumns, 40), {
+      board: shown,
+      tab: await read($, tabAtom),
+      focus: await read($, focusAtom),
+      setTab: tab => update($, tabAtom, () => tab),
+      setFocus: id => update($, focusAtom, () => id),
+      pick: async launchId => {
+        await update($, pickAtom, () => launchId)
+        await pollNow()
+      },
+      // The whole settings, written as one file, as the contract asks; Gru reads it before each launch.
+      set: async (change: Partial<GruSettings>) => {
+        if (shown === null || stateDir === '') return
+        const settings: GruSettings = { ...shown.settings, ...change }
+        await writeWhole($, `${stateDir}/${settingsName(shown.launchId)}`, `${JSON.stringify(settings, null, 2)}\n`)
+          .then(() => pollNow())
+          .catch(() => $.ui.toast('The settings were not saved.'))
+      },
+    })
   })
 
   // The heartbeat: each tool call's start and end, subagents' included, in a
@@ -168,6 +254,21 @@ export const register: Register = on => {
     }
 
     const { Box, Text } = $.ui.resolve(e)
+    // Gru's tab: the pane holds the run. One line stands in while the pane is not placed.
+    if (current.heading !== null) {
+      const isPlaced = (await $.ui.panes()).some(p => p.id === PANE && p.isPlaced)
+      if (isPlaced) return next(e)
+      const own = await read($, board)
+      const closed = current.rows.filter(r => r.stage === 'closed').length
+      const epic = own?.epic ?? current.heading.split(' · ')[1] ?? ''
+
+      return (
+        <Text wrap="truncate-end">
+          <Text bold>{`Gru · ${epic}`}</Text>
+          <Text dimColor>{` · ${closed} of ${current.rows.length} done · /gru-board opens the board`}</Text>
+        </Text>
+      )
+    }
     const width = Math.max(...current.rows.map(tailWidth)) + 2
     const idWidth = Math.max(...current.rows.map(r => r.id.length)) + 1
     const inStageWidth = Math.max(6, ...current.rows.map(r => r.inStage.length))

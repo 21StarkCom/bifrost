@@ -16,6 +16,21 @@ export type RunFile = {
   epic: string
   session: string
   tickets: string[]
+  /** The launch's `--max-workers` and Minion runtime; absent in a v1 file. */
+  maxWorkers?: number
+  minionAgent?: 'claude' | 'codex'
+}
+
+/**
+ * `~/.cache/stark-progress/run-<id>.settings.json`, the run's settings: the
+ * pane writes it, and Gru reads it before each launch. An absent field keeps
+ * the launch's value.
+ */
+export type GruSettings = {
+  decideForMe: boolean
+  maxWorkers: number
+  followUps: boolean
+  minionAgent: 'claude' | 'codex'
 }
 
 /** One minute of a heartbeat: `at` is the minute since the epoch. */
@@ -73,8 +88,59 @@ export type Count = { label: string; tone: Tone }
 /** What the band draws: a Gru run's rows with a header and a legend, or a worker's one row. */
 export type View = { heading: string | null; counts: Count[]; hasLegend: boolean; rows: Row[] }
 
+/** The color a ticket draws in on the Gru pane. */
+export type BoardTone = 'done' | 'move' | 'warn' | 'idle' | 'none'
+
+/** A ticket on the Gru pane: the band's row read calmly, with its detail. */
+export type BoardRow = {
+  id: string
+  /** The title without its `repo: ` lead and `(slice n of m)` tail. */
+  name: string
+  repo: string | null
+  slice: string | null
+  /** The station it is at: -1 not started, 5 past the last. */
+  at: number
+  tone: BoardTone
+  emoji: string
+  status: string
+  /** Why it is worth a look, or null. */
+  attention: string | null
+  /** The lines its row shows opened. */
+  detail: string[]
+}
+
+/** What the Gru pane draws: one run, its counts, and its settings. */
+export type Board = {
+  launchId: string
+  epic: string
+  /** True when the run is this session's own: Gru's tab. */
+  isOwn: boolean
+  repos: string[]
+  rows: BoardRow[]
+  /** Closed tickets, as the band counts them. */
+  done: number
+  inProgress: number
+  notStarted: number
+  /** The tickets with no file yet, in run order. */
+  next: string[]
+  /** The other runs with a change in the last hour. */
+  others: { launchId: string; epic: string }[]
+  settings: GruSettings
+  readAt: number
+}
+
+export type PaneTab = 'overview' | 'settings'
+
 declare module 'claude-code' {
   interface PluginState {
-    'stark-progress': { view: Shaped<View | null> }
+    'stark-progress': {
+      view: Shaped<View | null>
+      board: Shaped<Board | null>
+      tab: PaneTab
+      /** The ticket whose row is open on the pane, or ''. */
+      focus: string
+      /** The launch id the pane shows, or '' for this tab's own or the most active run. */
+      pick: string
+    }
   }
 }
