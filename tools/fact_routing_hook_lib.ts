@@ -164,7 +164,10 @@ export const SCAFFOLD_NAMES: ReadonlySet<string> = new Set(["contributing", "ind
 
 /** The fleet slugs to match when no corpus checkout answers (CI, a fresh
  *  machine): the vault-ecosystem entity folders as of 2026-10-02, plus
- *  `folkvang`, added by hand because the corpus has no folder for it yet. */
+ *  `folkvang`, added by hand because the corpus has no folder for it yet.
+ *  The hook reads this list only when the corpus yields no slugs, so where a
+ *  corpus is checked out it matches a slug only once the corpus has its
+ *  folder; memory_tidy unions this list with the corpus and always matches it. */
 export const FALLBACK_SLUGS: readonly string[] = [
   "21stark", "alfred", "apple-developer", "atlas", "bifrost", "draupnir",
   "ev-infra-group", "folkvang", "frigg", "heimdall", "hermod", "homebrew-tap",
