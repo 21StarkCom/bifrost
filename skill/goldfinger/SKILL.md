@@ -41,7 +41,8 @@ No arguments: the work happens through `goldfinger` itself.
 - **Grants:** the operator runs `goldfinger setup` once, in a terminal they watch: it asks for the
   Accessibility and Screen Recording grants, opens each settings pane in turn, and waits up to
   5 minutes for both, else fails `permission_missing`. It restarts the daemon, ending every live
-  session. Ask the operator; never click a grant.
+  session. Ask the operator; never click a grant. When a pane's list shows no Goldfinger, the
+  operator adds the app with the `+` button under the list, then turns its switch on.
 - **Check:** `goldfinger doctor --json` (see Diagnose), or `goldfinger status --json`, which shows
   `"permissions": {"accessibility": true, "screen_recording": true}`. Neither raises a prompt.
 
