@@ -147,8 +147,10 @@ quotes, each `'` inside written `'"'"'`, and no backslash. `jq` does the JSON
 quoting and writes the whole line in one append, so the mod never reads half
 a line. A relaunch appends to the log it finds and never empties it. Gru's
 stamps on your ticket's file append nothing here; Gru keeps its own run log.
-The log is extra, never a report, and a write that fails costs one line and
-never holds the ticket.
+The log sits beside the progress file, outside your worktree, so the same
+permission and sandbox terms apply. The log is extra, never a report, and a
+write that fails costs one line and never holds the ticket; never ask for an
+approval to make it.
 
 ## 2. Implement
 

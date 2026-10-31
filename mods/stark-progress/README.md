@@ -178,9 +178,9 @@ step shows its local time `HH:MM`, then whose it is (`Gru`, or the ticket's
 name) over its words. The writer words each step for a five-year-old, in 20
 words or fewer ([the worker spine's log file](../../standards/worker-spine.md#log-file));
 the pane keeps each to one line and cuts it at the 20th word, with `…`. On a
-tie, the later line of the later file comes first. When the steps shown
-span more than one day, a day line (`Today`, `Yesterday`, `Thu 29 Oct`) heads
-each day. The tab shows the 50 newest steps and counts the ones it leaves
+tie, the later line of the later file comes first. Unless every step shown
+is today's, a day line (`Today`, `Yesterday`, `Thu 29 Oct`) heads each day, so
+a closed ticket's old steps never read as today's. The tab shows the 50 newest steps and counts the ones it leaves
 out. With no step yet, it says who writes them.
 
 **Settings.** Four rows for the run, each a value you select to change. A

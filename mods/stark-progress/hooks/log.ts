@@ -18,10 +18,10 @@ export const runLogName = (launchId: string) => `run-${launchId}.log.jsonl`
 /** One line of a log file, read: when, and the words kept to one line of 20. */
 export type LogLine = { at: number; text: string }
 
-/** A writer's words as one line of at most LOG_WORDS words: each run of white space or control characters is one space. */
+/** A writer's words as one line of at most LOG_WORDS words: each run of white space or control characters (C0 and C1) is one space. */
 export function plain(text: string): string {
-  // A control character (a terminal escape, say) would draw as noise in the pane.
-  const words = text.replace(/[\s\u0000-\u001f\u007f]+/g, ' ').trim().split(' ').filter(w => w !== '')
+  // A control character (a terminal escape, say, or the one-byte CSI U+009B) would draw as noise in the pane.
+  const words = text.replace(/[\s\u0000-\u001f\u007f-\u009f]+/g, ' ').trim().split(' ').filter(w => w !== '')
 
   return words.length > LOG_WORDS ? `${words.slice(0, LOG_WORDS).join(' ')}…` : words.join(' ')
 }
@@ -68,32 +68,39 @@ export function dayOf(ms: number, now: number): string {
   return `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`
 }
 
-/** One log file and whose steps it holds: `Gru`, a ticket's name, or null in a pane of one ticket. */
-export type LogSource = { who: string | null; text: string | undefined }
+/**
+ * One log file and whose steps it holds: `Gru`, a ticket's name, or null in a
+ * pane of one ticket. `isRun` marks Gru's own log, so a ticket whose name reads
+ * `Gru` never takes Gru's color.
+ */
+export type LogSource = { who: string | null; isRun?: boolean; text: string | undefined }
 
 /**
  * The Log tab: every source's lines merged, newest first (a later line of one
  * file first on a tie), the newest LOG_SHOWN of them, in days. A day is named
- * only when the lines shown span more than one day.
+ * unless every line shown is today's.
  */
 export function buildLog(sources: readonly LogSource[], now: number): LogView {
-  const all: (LogLine & { who: string | null; order: number })[] = []
+  const all: (LogLine & { who: string | null; isRun: boolean; order: number })[] = []
   for (const source of sources) {
-    for (const line of logOf(source.text)) all.push({ ...line, who: source.who, order: all.length })
+    for (const line of logOf(source.text)) {
+      all.push({ ...line, who: source.who, isRun: source.isRun === true, order: all.length })
+    }
   }
   all.sort((a, b) => b.at - a.at || b.order - a.order)
   const shown = all.slice(0, LOG_SHOWN)
   const days: LogDay[] = []
   for (const line of shown) {
     const d = new Date(line.at)
-    const entry: LogEntry = { at: line.at, clock: `${two(d.getHours())}:${two(d.getMinutes())}`, who: line.who, text: line.text }
+    const clock = `${two(d.getHours())}:${two(d.getMinutes())}`
+    const entry: LogEntry = { at: line.at, clock, who: line.who, isRun: line.isRun, text: line.text }
     const label = dayOf(line.at, now)
     const last = days[days.length - 1]
     if (last !== undefined && last.label === label) last.entries.push(entry)
     else days.push({ label, entries: [entry] })
   }
-  // One day needs no name over it.
-  if (days.length === 1 && days[0] !== undefined) days[0].label = null
+  // Today alone needs no name over it; one older day does, or its times read as today's.
+  if (days.length === 1 && days[0]?.label === 'Today') days[0].label = null
 
   return { days, older: all.length - shown.length }
 }

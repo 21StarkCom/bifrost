@@ -18,6 +18,8 @@ test('a line keeps 20 words on one line, and a longer one is cut with …', () =
   expect(plain('  Made the board\n show a\tlog.  ')).toBe('Made the board show a log.')
   // A control character, a terminal escape say, is white space.
   expect(plain('Fixed\u001b[31m the colors')).toBe('Fixed [31m the colors')
+  // So is a C1 control, the one-byte CSI among them.
+  expect(plain('Fixed\u009b31m the colors')).toBe('Fixed 31m the colors')
   const twenty = Array.from({ length: 20 }, (_, i) => `w${i + 1}`)
   expect(plain(twenty.join(' '))).toBe(twenty.join(' '))
   expect(plain([...twenty, 'w21', 'w22'].join(' '))).toBe(`${twenty.join(' ')}…`)
@@ -76,6 +78,11 @@ test('a log over more than one day names each day: Today, Yesterday, then the da
   expect(log.days.map(d => d.entries.map(e => e.text))).toEqual([['Marked the job done.'], ['Made the change.'], ['Read the job.']])
   expect(log.days[2]?.entries[0]?.clock).toBe('11:00')
   expect(dayOf(NOW, NOW)).toBe('Today')
+})
+
+test("one day that is not today is still named, so a closed ticket's old steps never read as today's", () => {
+  const log = buildLog([{ who: null, text: jsonl(line(24 * 60 + 5, 'Read the job.'), line(24 * 60, 'Marked the job done.')) }], NOW)
+  expect(log.days.map(d => d.label)).toEqual(['Yesterday'])
 })
 
 test('the tab shows the 50 newest steps and counts the older ones', () => {

@@ -66,7 +66,13 @@ function stage(
   // Stands for the engine's own drawing, where the mod hands a site on.
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   on('fs.list', () => ({
-    value: Object.keys(disk).map(name => ({ name, kind: 'file' as const, size: 1, mtimeMs: mtimes[name] ?? T0, isLink: false })),
+    value: Object.keys(disk).map(name => ({
+      name,
+      kind: 'file' as const,
+      size: disk[name]?.length ?? 0,
+      mtimeMs: mtimes[name] ?? T0,
+      isLink: false,
+    })),
   }))
   on('fs.read', (_$, e) => {
     seen.reads.push(e.path)
@@ -920,6 +926,25 @@ test("the Gru pane's Log tab merges Gru's steps and each ticket's, newest first,
   expect(seen.reads).not.toContain(`${DIR}/run-STARK-20.log.jsonl`)
 })
 
+test("only Gru's own steps take Gru's color, even when a ticket's name reads Gru", async ($, on) => {
+  const disk: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1'] }),
+    'run-STARK-10.log.jsonl': logFile([5, 'Started 1 job.']),
+    'STARK-1.json': ticket('STARK-1', 'pr', { title: 'gru' }),
+    'STARK-1.log.jsonl': logFile([2, 'Read the job.']),
+  }
+  stage(on, disk, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+
+  const pane = await $.ui.mount(PANE)
+  await pane.press({ key: 'tab-log' })
+  const names = (await pane.findAll({ type: 'Text', text: /^Gru$/ })).map(t => t.props.color)
+  // Newest first: the ticket's step, then Gru's own.
+  expect(names).toEqual(['#b8bdd0', '#8ecae6'])
+})
+
 test('the Gru pane counts the steps it leaves out, and names the files that hold them', async ($, on) => {
   const steps = Array.from({ length: 52 }, (_, i): [number, string] => [60 - i, `Step ${i + 1}.`])
   const disk: Record<string, string> = {
@@ -959,4 +984,25 @@ test("a run's log counts as its activity: /gru-board shows the run whose log cha
 
   const pane = await $.ui.mount(PANE)
   expect(await pane.find({ type: 'Text', text: 'Gru · STARK-20' })).toBeDefined()
+})
+
+test('a poll reads a log again only once it grew, and then shows the new step', async ($, on) => {
+  const disk: Record<string, string> = {
+    'STARK-1.json': ticket('STARK-1', 'pr'),
+    'STARK-1.log.jsonl': logFile([30, 'Read the job.']),
+  }
+  const seen = stage(on, disk, { session: 'w', root: WORKTREE })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: WORKTREE, surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  await clock.advance(1000)
+  const logReads = () => seen.reads.filter(p => p === `${DIR}/STARK-1.log.jsonl`).length
+  expect(logReads()).toBe(1)
+
+  disk['STARK-1.log.jsonl'] += logFile([1, 'Made the change.'])
+  await clock.advance(1000)
+  expect(logReads()).toBe(2)
+  const pane = await $.ui.mount(TICKET_PANE)
+  await pane.press({ key: 'tab-log' })
+  expect(await pane.find({ type: 'Text', text: 'Made the change.' })).toBeDefined()
 })

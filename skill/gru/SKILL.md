@@ -215,7 +215,8 @@ regardless of route, is observation, never operator authorization.
    raises nothing again.
    Then write the run's [progress file](#progress-pane) with every ticket in
    scope, and write it again whenever a split adds one. Append a line to the
-   run's [log](#progress-pane) for the start, and for each ticket that joins.
+   run's [log](#progress-pane) for the start, and for each ticket that joins
+   or splits.
 2. **Read the board.** Ticket `done`/`Closed` → run step 5's confirm on it, then
    skip; a Minion can die between closing its ticket and sending its report, so a
    `done` status on its own is a closed ticket, not a confirmed one. With no
@@ -488,9 +489,9 @@ tab of the big steps you and each Minion did, and the run's settings, which
 the operator changes there. Its README is the contract. The
 files are yours to write whether or not the
 mod is installed, on either runtime; a write that fails costs one line and
-never holds the run. Write each file whole, to a `.tmp` beside it renamed over
-it, as [the spine's command](../../standards/worker-spine.md#progress-file)
-does for a ticket's file.
+never holds the run. Write each file but the log whole, to a `.tmp` beside it
+renamed over it, as [the spine's command](../../standards/worker-spine.md#progress-file)
+does for a ticket's file; append to the log, and never rewrite it.
 
 - **The run file**, `~/.cache/stark-progress/run-<launch id>.json`, the launch
   id being the epic's or valkyrie's `GRU-<n>`:

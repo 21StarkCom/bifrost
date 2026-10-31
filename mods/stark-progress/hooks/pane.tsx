@@ -372,7 +372,7 @@ export function logTab(ui: UI, w: number, log: LogView, empty: string, files: st
                 <Text color={P.hint}>{s.clock}</Text>
               </Box>
               <Box flexDirection="column">
-                {s.who !== null && <Text color={s.who === 'Gru' ? P.blue : P.text}>{cut(s.who, w - 7)}</Text>}
+                {s.who !== null && <Text color={s.isRun ? P.blue : P.text}>{cut(s.who, w - 7)}</Text>}
                 <Text>{s.text}</Text>
               </Box>
             </Box>

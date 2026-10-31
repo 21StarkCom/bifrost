@@ -128,10 +128,14 @@ export type BoardRow = {
   cells: Cell[]
 }
 
-/** One step on a Log tab: its local time, whose step it is (`Gru`, a ticket's name, or null in the ticket pane), and its words. */
-export type LogEntry = { at: number; clock: string; who: string | null; text: string }
+/**
+ * One step on a Log tab: its local time, whose step it is (`Gru`, a ticket's
+ * name, or null in the ticket pane), whether it is from Gru's own run log,
+ * and its words.
+ */
+export type LogEntry = { at: number; clock: string; who: string | null; isRun: boolean; text: string }
 
-/** The steps of one local day, newest first; `label` is null when the tab shows one day only. */
+/** The steps of one local day, newest first; `label` is null when every step shown is today's. */
 export type LogDay = { label: string | null; entries: LogEntry[] }
 
 /** What a Log tab draws: the newest steps in days, and how many older steps it leaves out. */

@@ -290,7 +290,7 @@ export function buildBoard(
     settings: settingsOf(chosen, files[settingsName(chosen.launchId)]),
     log: buildLog(
       [
-        { who: 'Gru', text: files[runLogName(chosen.launchId)] },
+        { who: 'Gru', isRun: true, text: files[runLogName(chosen.launchId)] },
         ...rows.map(r => ({ who: r.name, text: files[logName(r.id)] })),
       ],
       now,

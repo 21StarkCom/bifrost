@@ -101,6 +101,8 @@ export const register: Register = on => {
   let doneLastWrites: Promise<void> = Promise.resolve()
   let isPolling = false
   let polling: Promise<void> = Promise.resolve()
+  // A log only grows, and a poll reads it each second: keep its text until its size or time changes.
+  const logReads = new Map<string, { stamp: string; text: string }>()
 
   on('session.start', async ($, e, next) => {
     await $.command.register({
@@ -140,11 +142,21 @@ export const register: Register = on => {
       const jsons = listed.filter(f => f.kind === 'file' && (f.name.endsWith('.json') || f.name.endsWith('.jsonl')))
       const names = new Set(jsons.map(f => f.name))
       const mtimes = new Map(jsons.map(f => [f.name, f.mtimeMs]))
+      const stamps = new Map(jsons.map(f => [f.name, `${f.size}:${f.mtimeMs}`]))
+      for (const name of logReads.keys()) if (!names.has(name)) logReads.delete(name)
       const files: Record<string, string> = {}
       const load = async (name: string) => {
         if (!names.has(name)) return
+        const isLog = name.endsWith('.jsonl')
+        const kept = isLog ? logReads.get(name) : undefined
+        if (kept !== undefined && kept.stamp === stamps.get(name)) {
+          files[name] = kept.text
+          return
+        }
         const text = await $.fs.read(`${dir}/${name}`).catch(() => undefined)
-        if (typeof text === 'string') files[name] = text
+        if (typeof text !== 'string') return
+        files[name] = text
+        if (isLog) logReads.set(name, { stamp: stamps.get(name) ?? '', text })
       }
 
       // The run files first; then only the files this tab draws, so a
