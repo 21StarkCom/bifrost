@@ -167,6 +167,8 @@ export type TicketBoard = {
   attention: string | null
   /** The tool calls, failures, diff size and commits, one line each. */
   activity: string[]
+  /** The last hour in 12 cells of 5 minutes, as the Gru pane's opened row draws it. */
+  cells: Cell[]
   /** The next spine step, or null once the ticket is closed. */
   next: string | null
   settings: TicketSettings

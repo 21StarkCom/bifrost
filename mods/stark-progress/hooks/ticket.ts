@@ -72,6 +72,7 @@ export function buildTicket(
     hold,
     attention: hold === null ? reading.attention : `Held by your settings: ${hold}`,
     activity,
+    cells: r.cells,
     next: hold === null ? NEXT[r.stage] : `Wait for your ${hold} OK.`,
     settings: ticketSettingsOf(files[ticketSettingsName(id)]),
     readAt: now,

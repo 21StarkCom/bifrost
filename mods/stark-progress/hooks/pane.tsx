@@ -105,7 +105,7 @@ const markOf = (c: Cell) => (c.kind === 'fail' ? '✕' : c.ch)
  * no milestone, call or long call: a closed ticket's leftover heartbeat
  * would draw only dots.
  */
-function hour(ui: UI, cells: Cell[]) {
+export function hour(ui: UI, cells: Cell[]) {
   const { Box, Text } = ui
   if (!cells.some(c => ACTIVE.has(c.kind))) return null
   const kinds = new Set(cells.map(c => c.kind))
