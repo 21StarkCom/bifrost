@@ -1,7 +1,9 @@
 import type { Elements } from 'claude-code'
 
-import type { Board, BoardRow, BoardTone, Cell, GruSettings, LogView, PaneTab } from '../types'
+import type { Board, BoardRow, BoardTone, Cell, GruSettings, LogView, PaneTab, StatsView } from '../types'
 import { clockOf, MAX_WORKERS, stepCounts } from './board'
+import { dayOf } from './log'
+import { grouped, short } from './stats'
 import { bar, STAGES, STATION_LABELS } from './view'
 
 // The Gru pane: a calm board of one run (Overview) and the run's settings
@@ -360,12 +362,13 @@ export const settingRow = (ui: UI, w: number, label: string, control: ReturnType
   )
 }
 
-/** The pane's three tabs, each with its hotkey. */
+/** The pane's four tabs, each with its hotkey. */
 export function tabBar(ui: UI, tab: PaneTab, setTab: (tab: PaneTab) => unknown) {
   const { Box, Button, Text, P } = ui
   const tabs = [
     ['overview', 'o', 'Overview'],
     ['log', 'l', 'Log'],
+    ['stats', 't', 'Stats'],
     ['settings', 's', 'Settings'],
   ] as const
 
@@ -430,6 +433,130 @@ export function logTab(ui: UI, w: number, log: LogView, empty: string, files: st
           {`${log.older === 1 ? '1 older step is' : `${log.older} older steps are`} not shown. Every step is in ${files}.`}
         </Text>
       )}
+    </Box>
+  )
+}
+
+// A Stats tab: a table of counts, one column in the ticket pane and two in
+// the Gru pane (Gru's own, and the whole run's), then the tools with the most
+// calls and each session's model and effort. The model is stats.ts's.
+
+const STAT_LABEL = 'from other sessions  '.length
+const STAT_GAP = 2
+
+/** When the counts began: `12:03`, or `Thu 29 Oct 12:03` on an earlier day. */
+const sinceOf = (since: number, now: number) => {
+  const day = dayOf(since, now)
+
+  return day === 'Today' ? clockOf(since) : `${day} ${clockOf(since)}`
+}
+
+/** The started tickets that wrote no stats, named by id. */
+function missingLine(ui: UI, w: number, missing: readonly string[]) {
+  const { Box, Text, P } = ui
+
+  return (
+    <Box flexDirection="column">
+      <Text color={P.hint}>
+        {`${missing.length === 1 ? 'One ticket has' : `${missing.length} tickets have`} no stats: a Codex worker, a session without the mod, or no worker in this run.`}
+      </Text>
+      <Box flexWrap="wrap" columnGap={1} paddingLeft={2}>
+        {missing.map(id => (
+          <Box key={`x${id}`}>{ticketLabel(ui, id, '', w)}</Box>
+        ))}
+      </Box>
+    </Box>
+  )
+}
+
+/**
+ * A Stats tab. `who` says whose counts these are, `empty` what to read before
+ * any stats file exists, and `now` dates when the counts began.
+ */
+export function statsTab(ui: UI, w: number, view: StatsView, now: number, words: { title: string; who: string; empty: string }) {
+  const { Box, Text, P } = ui
+  if (view.since === null && view.sessions.length === 0) {
+    return (
+      <Box flexDirection="column" gap={1}>
+        <Text bold>{`📊 ${words.title}`}</Text>
+        <Text color={P.text}>{words.empty}</Text>
+        {view.missing.length > 0 && missingLine(ui, w, view.missing)}
+      </Box>
+    )
+  }
+  // Each column is as wide as its head or its widest value; the values right-align in it.
+  const cols = Math.max(view.columns.length, 1)
+  const widths = Array.from({ length: cols }, (_, i) =>
+    Math.max(view.columns[i]?.length ?? 0, ...view.groups.flatMap(g => g.rows.map(r => r.values[i]?.length ?? 0))),
+  )
+  const cells = (values: readonly string[]) => values.map((v, i) => v.padStart((widths[i] ?? 0) + STAT_GAP)).join('')
+
+  return (
+    <Box flexDirection="column" gap={1}>
+      <Box flexDirection="column">
+        <Text bold>{`📊 ${words.title}`}</Text>
+        <Text color={P.text}>
+          {`${words.who}${view.since === null ? '' : ` Counted since ${sinceOf(view.since, now)}.`}`}
+        </Text>
+      </Box>
+
+      <Box flexDirection="column">
+        {view.columns.length > 0 && (
+          <Text mono bold>
+            {`${''.padEnd(STAT_LABEL)}${cells(view.columns)}`}
+          </Text>
+        )}
+        {view.groups.map(g => (
+          <Box key={`g${g.title}`} flexDirection="column">
+            <Text bold>{g.title}</Text>
+            {g.rows.map(r => (
+              <Text key={`r${g.title}${r.label}`} mono>
+                <Text color={P.text}>{`  ${r.label}`.padEnd(STAT_LABEL)}</Text>
+                <Text>{cells(r.values)}</Text>
+              </Text>
+            ))}
+          </Box>
+        ))}
+      </Box>
+
+      {view.tools.length > 0 && (
+        <Box flexDirection="column">
+          <Text bold>{view.columns.length > 0 ? 'Most used tools, whole run' : 'Most used tools'}</Text>
+          {view.tools.map(t => {
+            // A long name (an MCP tool's) pushes its count right rather than lose its end too soon.
+            const name = `  ${cut(t.name, Math.max(STAT_LABEL - 4, w - 28))}`
+
+            return (
+              <Text key={`t${t.name}`} mono>
+                <Text color={P.text}>{name.padEnd(Math.max(STAT_LABEL, name.length + STAT_GAP))}</Text>
+                <Text>{`${grouped(t.calls)} calls`}</Text>
+                {t.fails > 0 && <Text color={P.amber}>{` · ${grouped(t.fails)} failed`}</Text>}
+              </Text>
+            )
+          })}
+        </Box>
+      )}
+
+      <Box flexDirection="column">
+        <Text bold>Model and effort</Text>
+        {view.sessions.map(s => (
+          <Box key={`s${s.id ?? 'own'}`} columnGap={1} paddingLeft={2}>
+            {s.id === null ? (
+              <Text color={P.blue}>{view.columns.length > 0 ? 'Gru' : 'This session'}</Text>
+            ) : (
+              ticketLabel(ui, s.id, '', w)
+            )}
+            <Text color={P.text}>{s.words}</Text>
+          </Box>
+        ))}
+        {view.models.map(m => (
+          <Text key={`m${m.id}`} color={P.hint}>
+            {`  ${m.id}: ${grouped(m.requests)} requests, ${short(m.output)} output tokens`}
+          </Text>
+        ))}
+      </Box>
+
+      {view.missing.length > 0 && missingLine(ui, w, view.missing)}
     </Box>
   )
 }
@@ -513,7 +640,13 @@ export function drawPane(ui: UI, w: number, view: PaneView) {
               'No step yet. Gru and each worker add one line here at each big step.',
               `~/.cache/stark-progress/run-${board.launchId}.log.jsonl and each ticket's .log.jsonl`,
             )
-          : overview(ui, w, board, view)}
+          : view.tab === 'stats'
+            ? statsTab(ui, w, board.stats, board.readAt, {
+                title: `Stats for ${board.epic}`,
+                who: "Gru's own counts, and the whole run's: Gru's and each ticket's, added.",
+                empty: "No stats yet. The mod counts in Gru's tab and in each worker's tab, once each has the mod.",
+              })
+            : overview(ui, w, board, view)}
     </Box>
   )
 }

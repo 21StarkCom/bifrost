@@ -2,11 +2,12 @@
 
 A Claude Code mod that shows a live view of each Gru, Minion and Agnes run.
 Gru's tab gets the Gru pane beside the chat: a calm board of the run, a log
-of the big steps in plain words, and the run's settings, which Gru reads
-before each launch. A Minion's or Agnes's tab gets the ticket pane beside the
-chat: its one ticket, its log, and the ticket's settings, which the worker
-reads before its review, its merge and its release; one progress row above
-the prompt stands in while that pane is not placed. Each says where a ticket
+of the big steps in plain words, the stats of Gru and of the whole run, and
+the run's settings, which Gru reads before each launch. A Minion's or Agnes's
+tab gets the ticket pane beside the chat: its one ticket, its log, its stats,
+and the ticket's settings, which the worker reads before its review, its
+merge and its release; one progress row above the prompt stands in while that
+pane is not placed. Each says where a ticket
 is, whether its worker is doing anything, and whether that work gets anywhere:
 a worker that is busy for hours with no commit and no stage change reads
 `stalled`, not "20% done". Neither ever forecasts the time left. Both draw in
@@ -24,7 +25,7 @@ Install it on its own; the seven skill plugins do not need it:
 Gru's tab, the Gru pane's Overview:
 
 ```
-Overview   Log   Settings
+Overview   Log   Stats   Settings
 
 Gru · STARK-1200                                       ● this run
 bragi · 4 tickets
@@ -60,7 +61,7 @@ Read from ~/.cache/stark-progress at 12:53.
 A Minion's or Agnes's tab, the ticket pane's Overview, with its merge held:
 
 ```
-Overview   Log   Settings
+Overview   Log   Stats   Settings
 
 Document the export flags
 STARK-1202 · bragi
@@ -99,10 +100,56 @@ The same tab, above the prompt, while the ticket pane is not placed:
 STARK-1202 ●━●━◉┄○┄○ review    36m  ▃▃◆▄◆▁─▂◆▃▃▄  moving · +234 −20  Document the export flags
 ```
 
+Gru's tab, the Gru pane's Stats:
+
+```
+Overview   Log   Stats   Settings
+
+📊 Stats for STARK-1200
+Gru's own counts, and the whole run's: Gru's and each ticket's, added. Counted since 11:02.
+
+                        Gru  Whole run
+Tokens
+  input               1,000        10k
+  output              2,000        32k
+  cache read           300k       2.3M
+  cache write          4,000        94k
+  model requests          1         41
+Work
+  lines added             —       +234
+  lines removed           —        −20
+  commits                 —          3
+  PRs opened              —          2
+  PRs merged              —          1
+  review rounds           0          1
+Tools
+  tools used              1          2
+  tool calls              2         44
+  failed calls            0          2
+Prompts and messages
+  prompts from you        1          1
+  from other sessions     0          2
+  other prompts           0          1
+  messages sent           0          3
+  workers launched        2          2
+
+Most used tools, whole run
+  Bash               32 calls · 2 failed
+  Edit               12 calls
+
+Model and effort
+  Gru claude-opus-5-5 · high
+  [STARK-1201] claude-opus-5-5 · xhigh
+  claude-opus-5-5: 41 requests, 32k output tokens
+
+One ticket has no stats: a Codex worker, a session without the mod, or no worker in this run.
+  [STARK-1202]
+```
+
 Gru's tab, the Gru pane's Log:
 
 ```
-Overview   Log   Settings
+Overview   Log   Stats   Settings
 
 📜 What got done
 The big steps, newest first, each told in plain words by whoever did it.
@@ -193,6 +240,29 @@ is today's, a day line (`Today`, `Yesterday`, `Thu 29 Oct`) heads each day, so
 a closed ticket's old steps never read as today's. The tab shows the 50 newest steps and counts the ones it leaves
 out. With no step yet, it says who writes them.
 
+**Stats.** `t` opens it. A table of counts in two columns: `Gru`, Gru's own,
+from the run's stats file, and `Whole run`, Gru's added to each ticket's,
+from the tickets' stats files. The counts begin when the mod loaded in each
+session, and the tab says when the earliest began. The rows:
+
+| Group | Rows | From |
+|---|---|---|
+| Tokens | input, output, cache read, cache write, model requests | each model request of the main loop and its subagents (`turn.step`'s usage) |
+| Work | lines added and removed, commits | each ticket's git signal while its worktree is there, else the last one its stats file kept |
+| Work | PRs opened and merged | the ticket files: a `pr` URL is a PR opened, and one at `merged` or `closed` a PR merged |
+| Work | review rounds | each run of the `code-review` skill, typed or by the Skill tool, and each `codex review` run that did not fail |
+| Tools | tools used, tool calls, failed calls | each tool call (`tool.call`), subagents' included; a refused call is a failed one |
+| Prompts and messages | prompts from you, from other sessions, other prompts | each prompt that entered, by its origin: typed, from a phone or a Slack ping is yours; a peer session's, a SendMessage delivery or a coordinator's is another session's; a notification, a schedule or a plugin's is other |
+| Prompts and messages | messages sent, workers launched | each SendMessage call that carries a message, each `hermod msg send` or `reply`, and each `valkyrie agnes`, `minion` or `gru` run, that did not fail |
+
+Gru writes no code, so its lines, commits and PRs read `—`. Under the table:
+the five tools with the most calls in the whole run, each session's main-loop
+model and effort (Gru's, then each ticket's), the requests and output tokens
+per model, and the started tickets with no stats file: a Codex worker, a
+session without the mod, or a ticket Gru found closed. With no stats file at
+all, the tab says where the counts come from. A hermod message reaches a
+Claude session through its own inbox, so it counts as from another session.
+
 **Settings.** Four rows for the run, each a value in a frame you select to change. A
 press on one writes all four to the run's settings file at once; Gru reads it
 before each launch and each scope change ([the Gru skill](../../skill/gru/SKILL.md#progress-pane)):
@@ -259,6 +329,12 @@ header and per status, and none in Settings.
 as the Gru pane's Log reads them, with no name over a step: each one is the
 worker's.
 
+**Stats.** `t` opens it. The Gru pane's table in one column: the counts of
+the ticket's worker sessions, from its stats file, its lines and commits from
+git, and its PR from the ticket file. Under it, the most used tools, the
+session's model and effort, and the requests and output tokens per model. A
+relaunch on the same ticket adds to the counts the file holds.
+
 **Settings.** Three rows, each a value in a frame you select to change. A press writes
 all three to the ticket's settings file at once, one press at a time, each
 over the one before it. The worker reads the file at three points of
@@ -315,8 +391,8 @@ A worker's band row:
 
 ## The state contract
 
-The skills write the ticket, run and log files; the mod writes the heartbeat and
-the settings files. The ticket, run, log and settings files are runtime-neutral: a
+The skills write the ticket, run and log files; the mod writes the heartbeat,
+the stats and the settings files. The ticket, run, log and settings files are runtime-neutral: a
 Codex Gru or worker writes and reads them too, and only a Claude Code session
 draws them. Every file but a log is whole JSON, written atomically: a writer writes
 `<name>.json.tmp` beside it and renames it over `<name>.json`, so a poll never
@@ -424,22 +500,52 @@ epoch), and `recent` the outcomes of the last 10 calls that ended, oldest
 first, `true` for a failure. After a reload the mod takes back the minutes,
 outcomes and last activity of a heartbeat its own session wrote.
 
+`~/.cache/stark-progress/<STARK-n>.stats.json`, one per ticket whose worker
+is a Claude session with the mod installed, and
+`~/.cache/stark-progress/run-<id>.stats.json`, one per Gru run whose Gru is:
+
+```json
+{ "session": "<the session that wrote it last>", "since": "<ISO 8601>", "updated": "<ISO 8601>",
+  "model": "claude-opus-5-5", "effort": "xhigh", "requests": 41,
+  "tokens": { "input": 10000, "output": 32000, "cacheRead": 2300000, "cacheWrite": 94000 },
+  "models": { "claude-opus-5-5": { "input": 10000, "output": 32000, "cacheRead": 2300000, "cacheWrite": 94000, "requests": 41 } },
+  "prompts": { "operator": 1, "peer": 2, "other": 1 }, "sent": 3, "launches": 0, "reviews": 1,
+  "tools": { "Bash": { "calls": 32, "fails": 2 } }, "git": { "added": 234, "removed": 20, "commits": 3 } }
+```
+
+Every session with the mod counts these in memory from its start (the Stats
+tab names each source); a worker's own tab writes the ticket's file and Gru's
+own tab the run's, at most once every 5 seconds after a count changed, and
+only while the ticket's or the run's file exists. Once that file is gone the
+mod removes the stats file; a Minion's stays after its close, as its ticket
+file does, so the Gru pane still adds it in. The first write of a tab adds
+its counts to the ones the file holds, so a reload or a relaunch on the same
+ticket or run keeps the total, and `session` names the last writer. `since`
+is when the counts began; `model` and `effort` are the main loop's at its
+last request (`null` before one); `git` is a worker's last git signal for its
+worktree, kept after the worktree goes, and `null` in a run's file. A field
+of the wrong type reads as zero or absent. A `*.stats.json` file is never a
+run file.
+
 ## Which tab shows what
 
 - A session that a run file names as its `session` is Gru's tab, even though
   it stands in a worktree named for its launch id (the epic's own `STARK-n`,
-  or `GRU-n`): it shows that run in the Gru pane.
+  or `GRU-n`): it shows that run in the Gru pane, and writes the run's stats
+  file.
 - Any other session whose project root (where it started, or the worktree it
   moved to; a shell `cd` does not move it) is a folder named `STARK-n`, a
   worker's worktree, shows that ticket in the ticket pane once its file
   exists, its band row while the pane is not placed, and writes its
-  heartbeat. `/ticket-board` opens the pane there, and only there.
+  heartbeat and its stats file. `/ticket-board` opens the pane there, and
+  only there.
 - Any session shows the Gru pane after `/gru-board`.
-- Nothing matching draws nothing.
+- Nothing matching draws nothing, and writes no stats file.
 
 Each poll lists the directory and reads the run files, then only the ticket,
-heartbeat, settings and log files the tab draws, so old files cost a listing and
-nothing more.
+heartbeat, stats, settings and log files the tab draws, so old files cost a
+listing and nothing more. A tab reads its own stats file once, for its first
+write: its counts are in memory after that.
 
 ## Not built (add when it hurts)
 
@@ -461,6 +567,10 @@ nothing more.
   time held, since no file says whether a worker lives; Gru's observation
   pass reads that from Hermod. The ticket pane dies with its tab.
 - A light-theme palette for the Gru pane and the ticket pane in the terminal.
+- Stats for a Codex Gru or worker, or for a Claude session's time before the
+  mod loaded: the mod counts events as they happen and reads no transcript.
+- Stats from GitHub (a PR's own line count, its review threads), or a cost in
+  dollars.
 
 ## Develop
 

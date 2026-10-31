@@ -1,6 +1,7 @@
 import type { Board, BoardRow, BoardTone, GitSignal, GruSettings, Row } from '../types'
 import { beatFields, RECENT } from './beat'
 import { buildLog, logName, runLogName } from './log'
+import { runStats } from './stats'
 import { dur, isRunName, row, STAGES, STATION_LABELS } from './view'
 
 // What the Gru pane draws (pane.tsx), from the contract's files (../README.md):
@@ -313,6 +314,7 @@ export function buildBoard(
       ],
       now,
     ),
+    stats: runStats(files, chosen.launchId, chosen.tickets, git),
     readAt: now,
   }
 }

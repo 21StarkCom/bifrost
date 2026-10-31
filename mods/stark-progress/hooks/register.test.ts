@@ -131,8 +131,9 @@ test("Gru's tab opens the pane once, and the band keeps one line only while the 
     `${DIR}/STARK-13631.json`,
     `${DIR}/run-STARK-10.json`,
   ])
-  // No worktree is named for these tickets here, so git never runs.
-  expect(seen.runs).toEqual([])
+  // No worktree is named for these tickets here, so git never runs: the one
+  // process is the rename of Gru's stats file, written once.
+  expect(seen.runs).toEqual([['mv', '-f', `${DIR}/run-STARK-10.stats.json.tmp`, `${DIR}/run-STARK-10.stats.json`]])
 })
 
 test('the pane draws the run: counts, a ticket worth a look, Up next, and a row opened to its detail', async ($, on) => {
@@ -280,7 +281,7 @@ test('Done tickets last lists the done tickets at the bottom, kept in the store 
   expect(await pane.find({ type: 'Text', text: 'The ticket list shows the done tickets at the bottom.' })).toBeDefined()
   expect(store.doneLast).toBe(true)
   // Gru reads the run's settings file; this choice is the pane's alone.
-  expect(seen.runs.filter(argv => argv[0] === 'mv')).toEqual([])
+  expect(seen.runs.filter(argv => argv[0] === 'mv' && argv[3]?.endsWith('.settings.json'))).toEqual([])
 
   await pane.press({ key: 'tab-overview' })
   // The open tickets in run order, then the done ones in run order.
@@ -1071,4 +1072,251 @@ test('the ticket pane draws its ticket on the desktop surface', async ($, on) =>
   expect(await pane.find({ type: 'Text', text: /draws in the terminal/ })).toBeUndefined()
   expect((await pane.find({ type: 'Text', text: 'STARK-1 · bragi' }))?.props.color).toBe('inactive')
   expect((await pane.find({ type: 'Text', text: /^ +ticket PR +review/ }))?.props.mono).toBe(true)
+})
+
+/** The four counts a model request reports, and the model that answered. */
+const usageOf = (model: string, input: number, output: number, cacheRead: number, cacheWrite: number) => ({
+  input_tokens: input,
+  output_tokens: output,
+  cache_read_input_tokens: cacheRead,
+  cache_creation_input_tokens: cacheWrite,
+  model,
+})
+
+/**
+ * The engine's own answers beneath the mod for the events the stats count:
+ * each model request answers with the usage the test queued, each prompt and
+ * skill enters as sent, and a Bash `false` fails.
+ */
+function engineAnswers(on: On, usages: ReturnType<typeof usageOf>[]) {
+  on('turn.step', async function* (_$, e) {
+    return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn' as const, usage: usages.shift() ?? null }
+  })
+  on('prompt.submit', (_$, e) => ({ text: e.text }))
+  on('skill.prompt', (_$, e) => ({ text: e.text }))
+  on('tool.call', (_$, e) => (e.tool === 'Bash' && e.command === 'false' ? { result: {}, isError: true } : { result: {} }))
+}
+
+/** One model request, read to its end as the engine reads it. */
+async function request(stream: AsyncGenerator<unknown, unknown> & { result: Promise<unknown> }) {
+  for await (const _ of stream) {
+    // The request streams its chunks; the stats read only its end.
+  }
+  await stream.result
+}
+
+/** A stats file a worker or Gru wrote, as the mod writes it. */
+const statsText = (session: string, fields: Record<string, unknown>) =>
+  JSON.stringify({
+    session,
+    since: new Date(T0 - 60 * MIN).toISOString(),
+    updated: new Date(T0 - MIN).toISOString(),
+    model: null,
+    effort: null,
+    requests: 0,
+    tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    models: {},
+    prompts: { operator: 0, peer: 0, other: 0 },
+    sent: 0,
+    launches: 0,
+    reviews: 0,
+    tools: {},
+    git: null,
+    ...fields,
+  })
+
+test("a worker's tab counts its requests, prompts, calls and reviews, writes its stats file, and drops it with its ticket file", async ($, on) => {
+  const disk: Record<string, string> = { 'STARK-1.json': ticket('STARK-1', 'review', { pr: 'https://github.com/o/r/pull/9' }) }
+  const seen = stage(on, disk, { session: 'w', root: WORKTREE })
+  const clock = mock.clock(on, { now: T0 })
+  engineAnswers(on, [usageOf('claude-opus-5-5', 1200, 3400, 56_000, 7800), usageOf('claude-haiku-5-5', 10, 20, 30, 40)])
+  await $.session.start({ cwd: WORKTREE, surface: 'terminal', isInteractive: true })
+
+  await request($.turn.step({ turnId: 't1', index: 0, model: 'claude-opus-5-5', effort: 'xhigh', messageCount: 1 }))
+  // A subagent's request adds its tokens, and leaves the main loop's model and effort.
+  await request($.turn.step({ turnId: 't2', index: 0, model: 'claude-haiku-5-5', messageCount: 1, agentId: 'a1' }))
+  await $.prompt.submit({ text: 'go on', wait: false, origin: { kind: 'composer' } })
+  await $.prompt.submit({ text: 'unblocked', wait: false, origin: { kind: 'peer' } })
+  await $.prompt.submit({ text: 'a task ended', wait: false, isMeta: true, origin: { kind: 'task-notification' } })
+  await $.tool.call({ tool: 'Bash', command: "hermod msg send --to gru --kind note -- 'done'" })
+  await $.tool.call({ tool: 'Bash', command: 'false' })
+  await $.tool.call({ tool: 'Read', file_path: '/r/a.ts' })
+  await $.skill.prompt({ skill: 'code-review', text: 'Review the diff.' })
+  // Another skill is no review round.
+  await $.skill.prompt({ skill: 'simplify', text: 'Simplify.' })
+  await clock.advance(1000)
+
+  const written = JSON.parse(disk['STARK-1.stats.json'] ?? '{}')
+  expect(written).toMatchObject({
+    session: 'w',
+    model: 'claude-opus-5-5',
+    effort: 'xhigh',
+    requests: 2,
+    tokens: { input: 1210, output: 3420, cacheRead: 56_030, cacheWrite: 7840 },
+    prompts: { operator: 1, peer: 1, other: 1 },
+    sent: 1,
+    launches: 0,
+    reviews: 1,
+    tools: { Bash: { calls: 2, fails: 1 }, Read: { calls: 1, fails: 0 } },
+  })
+  expect(written.models['claude-haiku-5-5']).toEqual({ input: 10, output: 20, cacheRead: 30, cacheWrite: 40, requests: 1 })
+
+  const pane = await $.ui.mount(TICKET_PANE)
+  expect(await pane.find({ type: 'Text', text: /^Stats$/ })).toBeDefined()
+  await pane.press({ key: 'tab-stats' })
+  expect(await pane.find({ type: 'Text', text: '📊 Stats for STARK-1' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /Counted since \d\d:\d\d\.$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^ {2}input +1,210$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^ {2}cache read +56k$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^ {2}PRs opened +1$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^ {2}PRs merged +0$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^ {2}prompts from you +1$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^ {2}Bash +2 calls · 1 failed$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'claude-opus-5-5 · xhigh' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '  claude-haiku-5-5: 1 requests, 20 output tokens' })).toBeDefined()
+  // One column: no head row, no Gru.
+  expect(await pane.find({ type: 'Text', text: /Whole run/ })).toBeUndefined()
+
+  delete disk['STARK-1.json']
+  await clock.advance(1000)
+  expect(seen.runs).toContainEqual(['rm', '-f', `${DIR}/STARK-1.stats.json`])
+})
+
+test('a relaunch on the same ticket adds its counts to the ones the stats file held, and reads that file once', async ($, on) => {
+  const kept = statsText('old', {
+    model: 'claude-opus-5-5',
+    effort: 'high',
+    requests: 5,
+    tokens: { input: 500, output: 600, cacheRead: 700, cacheWrite: 800 },
+    tools: { Bash: { calls: 4, fails: 1 } },
+    git: { added: 12, removed: 3, commits: 2 },
+  })
+  const disk: Record<string, string> = { 'STARK-1.json': ticket('STARK-1', 'pr'), 'STARK-1.stats.json': kept }
+  const seen = stage(on, disk, { session: 'w', root: WORKTREE })
+  const clock = mock.clock(on, { now: T0 })
+  engineAnswers(on, [usageOf('claude-opus-5-5', 1, 2, 3, 4)])
+  await $.session.start({ cwd: WORKTREE, surface: 'terminal', isInteractive: true })
+  await request($.turn.step({ turnId: 't1', index: 0, model: 'claude-opus-5-5', effort: 'medium', messageCount: 1 }))
+  await $.tool.call({ tool: 'Bash', command: 'ls' })
+  await clock.advance(1000)
+  await clock.advance(1000)
+  await clock.advance(5000)
+
+  const written = JSON.parse(disk['STARK-1.stats.json'] ?? '{}')
+  expect(written).toMatchObject({
+    session: 'w',
+    since: new Date(T0 - 60 * MIN).toISOString(),
+    effort: 'medium',
+    requests: 6,
+    tokens: { input: 501, output: 602, cacheRead: 703, cacheWrite: 804 },
+    tools: { Bash: { calls: 5, fails: 1 } },
+    // Git cannot read this worktree here: the lines the file kept stand.
+    git: { added: 12, removed: 3, commits: 2 },
+  })
+  expect(seen.reads.filter(path => path.endsWith('STARK-1.stats.json'))).toHaveLength(1)
+})
+
+test("Gru's tab writes its own stats file, and the Gru pane's Stats tab adds each ticket's to Gru's", async ($, on) => {
+  const disk: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1', 'STARK-2', 'STARK-3'] }),
+    'STARK-1.json': ticket('STARK-1', 'closed', { pr: 'https://github.com/o/r/pull/1' }),
+    'STARK-1.stats.json': statsText('w1', {
+      model: 'claude-opus-5-5',
+      effort: 'xhigh',
+      requests: 40,
+      tokens: { input: 9000, output: 30_000, cacheRead: 2_000_000, cacheWrite: 90_000 },
+      models: { 'claude-opus-5-5': { input: 9000, output: 30_000, cacheRead: 2_000_000, cacheWrite: 90_000, requests: 40 } },
+      prompts: { operator: 0, peer: 2, other: 1 },
+      sent: 3,
+      reviews: 1,
+      tools: { Bash: { calls: 30, fails: 2 }, Edit: { calls: 12, fails: 0 } },
+      git: { added: 234, removed: 20, commits: 3 },
+    }),
+    // A Codex worker: a ticket file, and no stats file.
+    'STARK-2.json': ticket('STARK-2', 'pr', { pr: 'https://github.com/o/r/pull/2' }),
+  }
+  const seen = stage(on, disk, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  const clock = mock.clock(on, { now: T0 })
+  engineAnswers(on, [usageOf('claude-opus-5-5', 1000, 2000, 300_000, 4000)])
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await request($.turn.step({ turnId: 't1', index: 0, model: 'claude-opus-5-5', effort: 'high', messageCount: 1 }))
+  await $.prompt.submit({ text: '/gru start STARK-10', wait: false, origin: { kind: 'composer' } })
+  await $.tool.call({ tool: 'Bash', command: 'valkyrie minion STARK-1 --json' })
+  await $.tool.call({ tool: 'Bash', command: 'valkyrie minion STARK-2 --agent codex --json' })
+  await clock.advance(1000)
+
+  expect(JSON.parse(disk['run-STARK-10.stats.json'] ?? '{}')).toMatchObject({
+    session: 'gru',
+    requests: 1,
+    launches: 2,
+    prompts: { operator: 1, peer: 0, other: 0 },
+    git: null,
+  })
+
+  const pane = await $.ui.mount(PANE)
+  await pane.press({ key: 'tab-stats' })
+  expect(await pane.find({ type: 'Text', text: '📊 Stats for STARK-10' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^ +Gru +Whole run$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^ {2}input +1,000 +10k$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^ {2}cache read +300k +2\.3M$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^ {2}lines added +— +\+234$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^ {2}PRs opened +— +2$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^ {2}PRs merged +— +1$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^ {2}workers launched +2 +2$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^ {2}from other sessions +0 +2$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'Most used tools, whole run' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^ {2}Bash +32 calls · 2 failed$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'claude-opus-5-5 · high' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'claude-opus-5-5 · xhigh' })).toBeDefined()
+  // STARK-2 started on Codex and wrote no stats; STARK-3 has not started, so it has nothing to count.
+  expect(
+    await pane.find({ type: 'Text', text: 'One ticket has no stats: a Codex worker, a session without the mod, or no worker in this run.' }),
+  ).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '[STARK-2]' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '[STARK-3]' })).toBeUndefined()
+
+  // Gru deletes its run file at the end: its stats file goes with it.
+  delete disk['run-STARK-10.json']
+  await clock.advance(1000)
+  expect(seen.runs).toContainEqual(['rm', '-f', `${DIR}/run-STARK-10.stats.json`])
+})
+
+test('/gru-board in another session reads the stats files and writes none of its own', async ($, on) => {
+  const disk: Record<string, string> = {
+    'run-GRU-5.json': JSON.stringify({ epic: 'GRU-5', session: 'gru', tickets: ['STARK-1'] }),
+    'STARK-1.json': ticket('STARK-1', 'pr'),
+  }
+  const seen = stage(on, disk, { session: 'other', root: '/r' })
+  const clock = mock.clock(on, { now: T0 })
+  engineAnswers(on, [usageOf('claude-opus-5-5', 1, 2, 3, 4)])
+  await $.session.start({ cwd: '/r', surface: 'terminal', isInteractive: true })
+  await request($.turn.step({ turnId: 't1', index: 0, model: 'claude-opus-5-5', effort: 'high', messageCount: 1 }))
+  await $.command.run(command('gru-board'))
+  await clock.advance(1000)
+
+  const pane = await $.ui.mount(PANE)
+  await pane.press({ key: 'tab-stats' })
+  expect(
+    await pane.find({ type: 'Text', text: "No stats yet. The mod counts in Gru's tab and in each worker's tab, once each has the mod." }),
+  ).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '[STARK-1]' })).toBeDefined()
+  // This session is neither Gru's nor a worker's: it writes no stats file.
+  expect(seen.runs.filter(argv => argv[0] === 'mv')).toEqual([])
+  expect(Object.keys(disk).filter(name => name.endsWith('.stats.json'))).toEqual([])
+})
+
+test('the Stats tab draws on the desktop surface too', async ($, on) => {
+  const disk: Record<string, string> = { 'STARK-1.json': ticket('STARK-1', 'pr') }
+  stage(on, disk, { session: 'w', root: WORKTREE })
+  const clock = mock.clock(on, { now: T0 })
+  engineAnswers(on, [usageOf('claude-opus-5-5', 1, 2, 3, 4)])
+  await $.session.start({ cwd: WORKTREE, surface: 'desktop', isInteractive: true })
+  await request($.turn.step({ turnId: 't1', index: 0, model: 'claude-opus-5-5', effort: 'high', messageCount: 1 }))
+  await clock.advance(1000)
+
+  const pane = await $.ui.mount({ ...TICKET_PANE, surface: 'desktop' })
+  await pane.press({ key: 'tab-stats' })
+  const row = await pane.find({ type: 'Text', text: /^ {2}output +2$/ })
+  // The columns line up in the desktop's fixed-width face.
+  expect(row?.props.mono).toBe(true)
 })

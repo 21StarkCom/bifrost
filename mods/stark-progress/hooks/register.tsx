@@ -3,13 +3,27 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Cell, GitSignal, GruSettings, PaneTab, Row, Seg, TicketSettings, Tone } from '../types'
 import { beatFile, callEnded, callStarted, newBeat, seedBeat } from './beat'
-import { buildBoard, pickRun, runsOf, settingsName } from './board'
+import { buildBoard, launchIdOf, pickRun, runsOf, settingsName } from './board'
 import { readGit } from './git'
 import { logName, runLogName } from './log'
 import { drawPane, paletteFor } from './pane'
+import {
+  addCall,
+  addPrompt,
+  addReview,
+  addStats,
+  addUsage,
+  newStats,
+  noteGit,
+  noteModel,
+  runStatsName,
+  statsFile,
+  statsName,
+  statsOf,
+} from './stats'
 import { buildTicket, ticketSettingsName, ticketSettingsOf } from './ticket'
 import { drawTicketPane } from './ticket-pane'
-import { buildView, isRunName, ownRun, ticketOf, worktreeOf } from './view'
+import { buildView, isRunName, ownRun, ownRunName, ticketOf, worktreeOf } from './view'
 
 // The state contract is in ../README.md.
 const POLL_MS = 1000
@@ -20,14 +34,14 @@ const PANE_TITLE = 'Gru'
 const TICKET_PANE = 'ticket-board'
 
 const view = atom({ plugin: 'stark-progress', key: 'view' } as const, null, { shape: 'view-2' })
-const board = atom({ plugin: 'stark-progress', key: 'board' } as const, null, { shape: 'board-4' })
+const board = atom({ plugin: 'stark-progress', key: 'board' } as const, null, { shape: 'board-5' })
 const tabAtom = atom({ plugin: 'stark-progress', key: 'tab' } as const, 'overview' as PaneTab)
 const focusAtom = atom({ plugin: 'stark-progress', key: 'focus' } as const, '')
 const pickAtom = atom({ plugin: 'stark-progress', key: 'pick' } as const, '')
 const doneLastAtom = atom({ plugin: 'stark-progress', key: 'doneLast' } as const, false)
 /** The `$.store` key that keeps the pane's doneLast choice across sessions. */
 const DONE_LAST = 'doneLast'
-const ticketAtom = atom({ plugin: 'stark-progress', key: 'ticket' } as const, null, { shape: 'ticket-4' })
+const ticketAtom = atom({ plugin: 'stark-progress', key: 'ticket' } as const, null, { shape: 'ticket-5' })
 const ticketTabAtom = atom({ plugin: 'stark-progress', key: 'ticketTab' } as const, 'overview' as PaneTab)
 
 // The pane's run: Gru's tab shows its own; a session that asked for the pane
@@ -48,6 +62,18 @@ let isSeeded = false
 let isDirty = false
 let lastFlush = 0
 let calls = 0
+
+// Every session counts its stats in memory from its start; a worker's tab and
+// Gru's tab write them to their stats file, seeded once from what that file
+// held, so a reload or a relaunch keeps the total. A reload starts it over.
+let stats = newStats()
+let isStatsDirty = false
+let lastStatsFlush = 0
+/** This tab's stats file and the file it lives beside (the ticket's or the run's), once found. */
+let statsAnchor: { base: string; name: string } | null = null
+/** Each stats file this tab wrote, by the file it lives beside, so each goes once that file does. */
+const statsWritten = new Map<string, string>()
+let statsSeededFor = ''
 const gitCache = new Map<string, { at: number; signal: GitSignal | null; isReading: boolean }>()
 
 /**
@@ -180,11 +206,23 @@ export const register: Register = on => {
       const wanted = [
         ...new Set([...(run !== null ? run.tickets : own === null ? [] : [own]), ...(shown?.tickets ?? [])]),
       ]
-      await Promise.all([
-        ...wanted.flatMap(id => [load(`${id}.json`), load(`${id}.beat.json`), load(logName(id))]),
-        ...(shown === undefined ? [] : [load(settingsName(shown.launchId)), load(runLogName(shown.launchId))]),
-        ...(own === null ? [] : [load(ticketSettingsName(own))]),
+      // This tab's stats file: a worker's ticket's, or Gru's run's.
+      const runName = run === null ? null : ownRunName(session, files)
+      statsAnchor =
+        own !== null
+          ? { base: `${own}.json`, name: statsName(own) }
+          : runName !== null
+            ? { base: runName, name: runStatsName(launchIdOf(runName)) }
+            : null
+      const reads = new Set([
+        ...wanted.flatMap(id => [`${id}.json`, `${id}.beat.json`, logName(id), statsName(id)]),
+        ...(shown === undefined ? [] : [settingsName(shown.launchId), runLogName(shown.launchId), runStatsName(shown.launchId)]),
+        ...(own === null ? [] : [ticketSettingsName(own)]),
+        ...(statsAnchor === null ? [] : [statsAnchor.name]),
       ])
+      // This tab's own stats file is read once, for the seed: its counts are in memory after that.
+      reads.delete(statsSeededFor)
+      await Promise.all([...reads].map(load))
 
       // A worker's own tab writes its heartbeat while its ticket's file
       // exists, draws its own row from memory, and removes the heartbeat
@@ -212,6 +250,42 @@ export const register: Register = on => {
       for (const id of wanted) {
         const worktree = worktreeOf(id, files[`${id}.json`], root)
         git[id] = worktree === null ? null : gitFor($, worktree, now)
+      }
+
+      // This tab's stats file, written as the heartbeat is: while the file it
+      // lives beside exists, at most once every BEAT_MS, and removed with it.
+      // Gru's tab outlives its run file, and then no longer knows its run: so
+      // each stats file it wrote is kept in mind until it goes.
+      for (const [name, base] of statsWritten) {
+        if (names.has(base)) continue
+        if (names.has(name)) await $.process.run(['rm', '-f', `${dir}/${name}`]).catch(() => undefined)
+        else statsWritten.delete(name)
+      }
+      if (statsAnchor !== null) {
+        const { base, name } = statsAnchor
+        if (names.has(base)) {
+          statsWritten.set(name, base)
+          if (statsSeededFor !== name) {
+            statsSeededFor = name
+            const kept = statsOf(files[name])
+            if (kept !== null) stats = addStats(kept, stats)
+            isStatsDirty = true
+          }
+          // A worker keeps its last git signal, so its lines and commits outlive its worktree.
+          if (own !== null && noteGit(stats, git[own] ?? null)) isStatsDirty = true
+          const text = JSON.stringify(statsFile(stats, session, now))
+          files[name] = text
+          if (isStatsDirty && now - lastStatsFlush >= BEAT_MS) {
+            isStatsDirty = false
+            lastStatsFlush = now
+            await writeWhole($, `${dir}/${name}`, text).catch(() => {
+              isStatsDirty = true
+            })
+          }
+        } else if (names.has(name) && !statsWritten.has(name)) {
+          // One an earlier load of the mod wrote, whose file is gone (Agnes deletes her ticket's at stand-down).
+          await $.process.run(['rm', '-f', `${dir}/${name}`]).catch(() => undefined)
+        }
       }
 
       // Gru's tab opens the pane once, the first time its run is found.
@@ -369,28 +443,71 @@ export const register: Register = on => {
     })
   })
 
-  // The heartbeat: each tool call's start and end, subagents' included, in a
-  // worker's own tab only.
+  // Each tool call, subagents' included: it counts in the stats of every
+  // session, and its start and end make the heartbeat in a worker's own tab.
   on('tool.call', async ($, e, next) => {
-    if (!isWorker) return next(e)
+    const isBeat = isWorker
     calls += 1
     const key = e.tool_use_id ?? `call-${calls}`
-    callStarted(beat, key, e.tool, await $.clock.now())
-    isDirty = true
+    if (isBeat) {
+      callStarted(beat, key, e.tool, await $.clock.now())
+      isDirty = true
+    }
+    let isFailed = true
     try {
       const result = await next(e)
       // A deny (a guard or a refused permission) is a failed call too.
-      callEnded(beat, key, result.isError === true || result.deny !== undefined, await $.clock.now())
+      isFailed = result.isError === true || result.deny !== undefined
 
       return result
-    } catch (err) {
-      callEnded(beat, key, true, await $.clock.now())
-      throw err
     } finally {
-      // The end changes the file too (`running`, the counts): a flush that
-      // ran while the call ran must not be the last one.
-      isDirty = true
+      const now = await $.clock.now()
+      const call = {
+        tool: e.tool,
+        command: e.tool === 'Bash' ? e.command : undefined,
+        hasMessage: e.tool === 'SendMessage' && typeof e.message === 'string' && e.message !== '',
+      }
+      addCall(stats, call, isFailed, now)
+      isStatsDirty = true
+      if (isBeat) {
+        callEnded(beat, key, isFailed, now)
+        // The end changes the file too (`running`, the counts): a flush that
+        // ran while the call ran must not be the last one.
+        isDirty = true
+      }
     }
+  })
+
+  // Each model request, the main loop's and its subagents': its tokens, and
+  // the main loop's model and effort. A request cut off before its response
+  // counts nothing.
+  on('turn.step', async function* ($, e, next) {
+    if (e.agentId === undefined) noteModel(stats, e.model, e.effort)
+    const response = yield* next(e)
+    addUsage(stats, response.usage, await $.clock.now())
+    isStatsDirty = true
+
+    return response
+  })
+
+  // Each prompt that entered, by where it came from: the operator, another
+  // session, or neither.
+  on('prompt.submit', async ($, e, next) => {
+    const entered = await next(e)
+    if (entered.drop === undefined) {
+      addPrompt(stats, e.origin.kind, e.isMeta === true, await $.clock.now())
+      isStatsDirty = true
+    }
+
+    return entered
+  })
+
+  // A review round: the code-review skill, typed as /code-review or run by the Skill tool.
+  on('skill.prompt', { skill: 'code-review' }, async ($, e, next) => {
+    addReview(stats, await $.clock.now())
+    isStatsDirty = true
+
+    return next(e)
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {

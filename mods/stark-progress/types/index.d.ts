@@ -74,6 +74,72 @@ export type BeatFile = {
 /** What git says of a worktree: commit times since its base (ms), and the diff size against it. */
 export type GitSignal = { commits: number[]; added: number; removed: number }
 
+/** The four token counts of model requests, summed. */
+export type Tokens = { input: number; output: number; cacheRead: number; cacheWrite: number }
+
+/** A tool's calls, and how many of them failed. */
+export type ToolTally = { calls: number; fails: number }
+
+/**
+ * `~/.cache/stark-progress/<STARK-n>.stats.json` (a worker's ticket) and
+ * `run-<id>.stats.json` (a Gru run): what the mod counted in that tab's
+ * Claude session, added to what the file held when the tab first wrote it.
+ * The mod writes it, in that session alone. A field of the wrong type reads
+ * as zero or absent.
+ */
+export type StatsFile = {
+  /** The session that wrote it last. */
+  session: string
+  /** When the counts began. */
+  since: string
+  updated: string
+  /** The main loop's model and effort at its last model request. */
+  model: string | null
+  effort: string | null
+  /** Model requests, the main loop's and its subagents'. */
+  requests: number
+  tokens: Tokens
+  /** Requests and tokens per model id, as the API reports it. */
+  models: Record<string, Tokens & { requests: number }>
+  /** Prompts by where they came from: the operator, another session, or neither (a notification, a schedule). */
+  prompts: { operator: number; peer: number; other: number }
+  /** SendMessage calls, and `hermod msg send` or `reply` runs. */
+  sent: number
+  /** `valkyrie agnes`, `minion` or `gru` runs. */
+  launches: number
+  /** `code-review` runs, and `codex review` runs. */
+  reviews: number
+  tools: Record<string, ToolTally>
+  /** A worker's last git signal for its worktree, kept after the worktree goes; null in Gru's file. */
+  git: { added: number; removed: number; commits: number } | null
+}
+
+/** One line of a Stats tab: its label, and its value in each column. */
+export type StatRow = { label: string; values: string[] }
+
+/** A titled group of lines on a Stats tab. */
+export type StatGroup = { title: string; rows: StatRow[] }
+
+/** One session's model and effort on a Stats tab: Gru's (`id` null) or a ticket's. */
+export type StatModel = { id: string | null; words: string }
+
+/** What a Stats tab draws: a table (one column, or Gru's and the whole run's), the top tools, the models and effort. */
+export type StatsView = {
+  /** The column heads; empty for one column. */
+  columns: string[]
+  groups: StatGroup[]
+  /** The tools with the most calls, in the last column's counts. */
+  tools: { name: string; calls: number; fails: number }[]
+  /** Each session's main-loop model and effort. */
+  sessions: StatModel[]
+  /** Requests and output tokens per model, in the last column's counts. */
+  models: { id: string; requests: number; output: number }[]
+  /** Started tickets with no stats file: a Codex worker, or a session without the mod. */
+  missing: string[]
+  /** When the earliest count began, or null with no stats file. */
+  since: number | null
+}
+
 export type Tone = 'good' | 'warn' | 'bad' | 'dim'
 
 export type Verdict = {
@@ -160,6 +226,8 @@ export type Board = {
   settings: GruSettings
   /** The run's log and its tickets' logs, merged, newest first. */
   log: LogView
+  /** Gru's own counts and the whole run's. */
+  stats: StatsView
   readAt: number
 }
 
@@ -189,10 +257,12 @@ export type TicketBoard = {
   settings: TicketSettings
   /** The ticket's log, newest first. */
   log: LogView
+  /** The counts of the ticket's worker session. */
+  stats: StatsView
   readAt: number
 }
 
-export type PaneTab = 'overview' | 'log' | 'settings'
+export type PaneTab = 'overview' | 'log' | 'stats' | 'settings'
 
 declare module 'claude-code' {
   interface PluginState {
