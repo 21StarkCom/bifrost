@@ -253,9 +253,9 @@ test('Done tickets last lists the done tickets at the bottom, kept in the store 
 
   await pane.press({ key: 'tab-settings' })
   expect(await pane.find({ type: 'Text', text: 'This pane' })).toBeDefined()
-  expect(await pane.find({ type: 'Text', text: "Where each ticket is keeps the run's order." })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'The ticket list keeps the order of the run.' })).toBeDefined()
   await pane.press({ key: 'set-done-last' })
-  expect(await pane.find({ type: 'Text', text: 'Where each ticket is lists the done tickets at the bottom.' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'The ticket list shows the done tickets at the bottom.' })).toBeDefined()
   expect(store.doneLast).toBe(true)
   // Gru reads the run's settings file; this choice is the pane's alone.
   expect(seen.runs.filter(argv => argv[0] === 'mv')).toEqual([])
@@ -278,6 +278,43 @@ test('a new session starts with the choice the store kept', async ($, on) => {
   await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
   await clock.advance(1000)
   const pane = await $.ui.mount(PANE)
+  expect(await listOrder(pane)).toEqual(['STARK-2', 'STARK-4', 'STARK-1', 'STARK-3'])
+})
+
+test('a store that cannot be read, or holds no true or false, leaves Done tickets last Off', async ($, on) => {
+  stage(on, { ...DONE_LAST_RUN }, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  on('store.get', () => {
+    throw new Error('EIO')
+  })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  expect(await listOrder(await $.ui.mount(PANE))).toEqual(['STARK-1', 'STARK-2', 'STARK-3', 'STARK-4'])
+})
+
+test('a stored value that is not true or false reads as Off', async ($, on) => {
+  stage(on, { ...DONE_LAST_RUN }, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  mock.store(on, { doneLast: 'yes' })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  expect(await listOrder(await $.ui.mount(PANE))).toEqual(['STARK-1', 'STARK-2', 'STARK-3', 'STARK-4'])
+})
+
+test('a store write that fails keeps the press on screen and says the choice was not saved', async ($, on) => {
+  const seen = stage(on, { ...DONE_LAST_RUN }, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  on('store.get', () => ({ value: undefined }))
+  on('store.set', () => {
+    throw new Error('ENOSPC')
+  })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  const pane = await $.ui.mount(PANE)
+  await pane.press({ key: 'tab-settings' })
+  await pane.press({ key: 'set-done-last' })
+  expect(seen.toasts).toEqual(['The choice was not saved.'])
+  await pane.press({ key: 'tab-overview' })
   expect(await listOrder(pane)).toEqual(['STARK-2', 'STARK-4', 'STARK-1', 'STARK-3'])
 })
 

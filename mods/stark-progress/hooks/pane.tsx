@@ -387,12 +387,12 @@ function settings(ui: UI, w: number, board: Board, view: PaneView) {
       )}
       <Box flexDirection="column">
         <Text bold>This pane</Text>
-        <Text color={P.text}>Only this pane reads these, in every run. Gru does not.</Text>
+        <Text color={P.text}>Only this pane uses this setting, in every run. Gru does not read it.</Text>
       </Box>
       {row(
         'Done tickets last',
         toggle(ui, 'done-last', view.doneLast, view.flipDoneLast),
-        view.doneLast ? 'Where each ticket is lists the done tickets at the bottom.' : "Where each ticket is keeps the run's order.",
+        view.doneLast ? 'The ticket list shows the done tickets at the bottom.' : 'The ticket list keeps the order of the run.',
       )}
     </Box>
   )

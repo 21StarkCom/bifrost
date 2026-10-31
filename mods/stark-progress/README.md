@@ -151,9 +151,9 @@ left, the pane says `No Gru run yet`.
   call, which never ends.
 - `👉 Up next`: the tickets with no file yet, in run order.
 
-**Settings.** Four rows, each a value you select to change. A press writes all
-four to the run's settings file at once; Gru reads it before each launch and
-each scope change ([the Gru skill](../../skill/gru/SKILL.md#progress-pane)):
+**Settings.** Four rows for the run, each a value you select to change. A
+press on one writes all four to the run's settings file at once; Gru reads it
+before each launch and each scope change ([the Gru skill](../../skill/gru/SKILL.md#progress-pane)):
 
 | Row | Field | What Gru does |
 |---|---|---|
@@ -165,8 +165,11 @@ each scope change ([the Gru skill](../../skill/gru/SKILL.md#progress-pane)):
 Under `This pane`, one more row that the pane alone reads, in every run:
 `Done tickets last`, Off by default. On, `🚇 Where each ticket is` lists the
 open tickets in run order, then the done ones in run order. The plugin's own
-store (`$.store`, key `doneLast`) keeps it across sessions. It is never in
-the run's settings file, and Gru never reads it.
+store (`$.store`, key `doneLast`) keeps it across sessions; it loads in the
+background at session start, and presses apply one at a time behind it. It is
+never in the run's settings file, and Gru never reads it. A store that cannot
+be read leaves it Off; a write that fails keeps the press on screen and says
+`The choice was not saved.`
 
 **Colors.** Every text color is 4.5:1 or more on the pane's `#262626`
 (secondary text 8.1:1); the track's lines and rings, which carry no words,
