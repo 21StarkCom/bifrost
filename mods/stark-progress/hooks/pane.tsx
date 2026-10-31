@@ -77,30 +77,30 @@ const MIN_BAR = 20
 /**
  * The tickets at each step, one bar a step on one scale: the full width is
  * all the run's tickets, so a bar grows as its step fills and never rescales.
- * The count follows the bar, then the ones worth a look. The scale leaves room
- * for the longest count and note the run can have, so a full bar keeps its
- * note; a pane too narrow for that leaves room for the count alone.
+ * The count comes before the bar, right-aligned in a column as wide as the
+ * run's ticket count; the ones worth a look follow the bar. The scale leaves
+ * room for the longest note the run can have, so a full bar keeps its note; a
+ * pane too narrow for that gives the bar the whole line.
  */
 function graph(ui: UI, w: number, rows: BoardRow[]) {
   const { Text } = ui
-  const bare = w - STEP_LABEL - 1 - String(rows.length).length
+  const digits = String(rows.length).length
+  const bare = w - STEP_LABEL - digits - 1
   const withNote = bare - ` · ${rows.length} worth a look`.length
   const room = Math.max(withNote >= MIN_BAR ? withNote : bare, 1)
 
   return stepCounts(rows).map(s => {
     const drawn = bar(s.count, rows.length, room)
     const ink = s.count === 0 ? P.hint : P.text
-    const count = `${drawn === '' ? '' : ' '}${s.count}`
     // The box of tickets worth a look names each one, so a line without room for the whole note drops it, never cuts it.
-    const left = w - STEP_LABEL - [...drawn].length - count.length
+    const left = bare - [...drawn].length
     const note = ` · ${s.looks} worth a look`
     const look = s.looks === 0 || note.length > left ? '' : note
 
     return (
       <Text key={`g${s.label}`}>
-        <Text color={ink}>{s.label.padEnd(STEP_LABEL)}</Text>
-        <Text color={TONE[s.tone]}>{drawn}</Text>
-        <Text color={ink}>{count}</Text>
+        <Text color={ink}>{`${s.label.padEnd(STEP_LABEL)}${String(s.count).padStart(digits)}`}</Text>
+        {drawn !== '' && <Text color={TONE[s.tone]}>{` ${drawn}`}</Text>}
         {look !== '' && <Text color={P.amber}>{look}</Text>}
       </Text>
     )
