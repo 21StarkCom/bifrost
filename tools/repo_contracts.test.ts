@@ -83,6 +83,7 @@ const EXPECTED_PLUGIN_COUNT = 7;
 const MOD_SOURCES: Record<string, string> = {
   "stark-progress": "./mods/stark-progress",
   "decision-deck": "./mods/decision-deck",
+  "needs-you": "./mods/needs-you",
 };
 
 interface Plugin {
