@@ -75,6 +75,51 @@ check failed exits `1` with its report, neither an error object.
 `goldfinger type k7.12:3 --json -- -x`. After it, `--json` and `--observe` are operands too: the
 text or value itself, else a usage error, printed as plain text on stderr when it was `--json`.
 
+## App policy: apps the user limits
+
+From 0.16.0 on, the user can name apps that goldfinger must not act on, or may act on only in
+part. The daemon then refuses a verb on such an app with `denied`, before it sends anything.
+
+- **The file is the user's.** It is `~/Library/Application Support/goldfinger/policy.json`,
+  `{"apps": {"<bundle id>": "<tier>", …}}`, written by hand. Never create, edit, move, `chmod` or
+  delete it, and never ask the user to loosen it so a task can go on: report the refusal, and
+  the user decides. The daemon only reads it, and an edit takes effect at the next request.
+- **Tiers.** A rule names one app by its bundle id, without case. Each tier allows its verbs and
+  every verb of the tiers above it; an app no rule names is `full`:
+  - `deny`: no verb that names the app, its reads included.
+  - `view`: `windows --pid`, `observe`, `find`, `text`, `safari-tabs`, `ocr`, `find-text`,
+    `screenshot <window_id>`, `capture`, `glide`, `launch`, `voiceover start` and
+    `voiceover speech`.
+  - `click`: adds `click`, `scroll`, `hover`, `reveal`, `perform`, `drag`, `menu`,
+    `window-frame`, `window-state`, `hide`, `unhide`, `quit` and `voiceover do`.
+  - `full`: adds `type`, `keys`, `set-value`, `open`, `voiceover type` and `voiceover press`.
+  An action's `--observe` goes with its action. `click` means no keyboard, not no change: a click
+  on a Paste item, or a `drag` of text, can still change the app. The built-in default list is
+  empty, so with no file every app is `full`, as before 0.16.0.
+- **The app a verb acts on** is its target's: a snapshot target's pid, a `window_id`'s owner, a
+  `pid`, or the `bundle_id` that `launch` and `open` name. `voiceover do`, `voiceover type`,
+  `voiceover press` and `voiceover speech` act on the frontmost app at the check. Verbs that name
+  no app have no tier: `status`, `setup`,
+  `stop`, `watch`, `apps`, `windows` without `--pid`, `screenshot` without a window, the
+  clipboard verbs, the session verbs, `record-start`, `record-stop`, `voiceover stop`,
+  `session-cursor` and `policy`.
+- **A broken file fails closed.** While it does not parse or cannot be read, every verb but
+  `status`, `stop`, `watch` and `policy` answers `denied`, naming the file and why. Tell the user;
+  `goldfinger doctor --json`'s `policy` check names it too (see Diagnose).
+- **Read the policy** (from 0.16.0 on) with `goldfinger policy --json`: `{"file", "state",
+  "apps"}`, `state` being `ok`, `none` (no file) or `unreadable` (then `error` says why), and
+  `apps` every rule in force, each `{"bundle_id", "tier", "from"}`, `from` being `default` or
+  `file`. It needs no grant, sends nothing, takes no `--session` (`usage`) and is never `denied`.
+  From 0.16.0 on, `goldfinger status --json` also holds `"policy": {"file", "state", "entries"}`,
+  and `status` is never `denied` either. Read the policy before a task in an app the user may
+  have limited, so the plan uses only the verbs its tier allows.
+- **No way around it.** On `denied`, do not retry, and do not reach the app another way: no
+  other verb, CLI, script or other app's keys to get past the refusal. A display `screenshot`,
+  an `observe --screenshot` whose PNG shows another app's window over its own, `clipboard-read`,
+  and `apps` and `windows` without `--pid` still show a denied app's pixels, text and titles:
+  never use them to read a denied app. The policy guards against mistakes; it is not a security
+  boundary, so honoring it is your part.
+
 ## The loop: observe, act, observe
 
 1. **Find the window.** `goldfinger apps --json` lists running apps (`pid`, `bundle_id`, `name`,
@@ -228,7 +273,13 @@ text or value itself, else a usage error, printed as plain text on stderr when i
    `[{text, box, target}]` in reading order, rows top to bottom and each row left to right. `box`
    is in the PNG's pixels, and `target` is the entry's text target, `<snapshot>:t<n>` (see Targets
    and staleness). It lists at most 500 entries, and adds `"ocr_truncated": true` when it cut the
-   list. `--ocr-region <x>,<y>,<w>,<h>`, in points from the window's top-left, reads only that
+   list. A line splits into entries where its ink leaves a gap wider than half its height, so two
+   controls side by side are two entries. From 0.16.0 on, a single space of monospace text is no
+   such gap: a single-spaced line of SF Mono or Menlo, a terminal's, is one entry, glowing or not,
+   so `find-text` of two words in it matches and its `target` aims at the whole line's centre.
+   It can still split at two spaces or more, between words too short to show the character grid
+   (`OK GO`), beside a one-character word, and at a word Vision misreads into more or fewer
+   characters. `--ocr-region <x>,<y>,<w>,<h>`, in points from the window's top-left, reads only that
    part; boxes and targets stay in the whole PNG's pixels. It reads `en-US` by default, and
    other scripts then come back as confident false Latin text. From 0.13.0 on,
    `--ocr-language <code>` (with `--ocr` only, else `usage`) reads one of the 33 languages
@@ -894,6 +945,12 @@ that `show-menu`, which closes its menu.
   SwiftUI's drags still drop. Check the drop with `--observe`. From 0.15.0 on, a `from` in
   LibreOffice is `background_unavailable`, even with `--foreground`, before anything is activated:
   the app places each mouse event at the mouse pointer, active or not.
+- **The drag's window comes to the front** (from 0.16.0 on). Before the press, `drag` raises the
+  window its targets are in, then the app's window over it at `from`, on every macOS. A drop lands
+  on whichever window is in front at the point, so before 0.16.0 a drop into one of the app's
+  windows that sat behind another app's window dropped nothing. After the restore those windows
+  stay in front of the windows they were behind. A window the app does not list, or a raise it
+  refuses, still drags.
 - `goldfinger drag <from> <to> [--via <target>]... [--observe] --foreground --json` (from 0.11.0
   on) drags along a path: one `--via` per point it passes through, in order, 1 to 64, each a
   target in `from`'s window, resolved and aimed as `to` is before anything is activated. Each
@@ -977,7 +1034,11 @@ printf '%s' '[{"verb": "click", "args": {"target": "k7.12:4", "observe": true}},
 It returns an entry per step that ran, `{"step": 0, "ok": true, "result": {…}}`, and a failed
 step's `{"step": 1, "ok": false, "error": {…}}` is always the last. A bad array (empty, over 10
 steps, another verb, `session` in a step's args, a reference to a step not earlier or without
-`observe`) is refused whole as `usage`, with nothing sent. The batch has one 20 s limit; a session
+`observe`) is refused whole as `usage`, with nothing sent. From 0.16.0 on, the app policy (see App
+policy) checks every step before step 0 runs: one step whose app's tier does not allow its verb
+refuses the whole batch as `denied`, naming the step's position and verb, with no step run
+(exit `1`). Each step is checked again as it runs, so a step on a snapshot an earlier step made
+can still fail `denied` as its own last entry, after the steps before it ran. The batch has one 20 s limit; a session
 cursor's glide adds up to 0.75 s a step: turn it off for a long batch
 (`session-cursor --session <id> off`, or MCP's `session-cursor` with `cursor: false`).
 
@@ -1010,7 +1071,8 @@ A session marks an agent's calls as its own, and its cursor shows the operator w
 - `goldfinger session-start [--idle-timeout <seconds>] --json` returns `{"session": "k7.s1",
   "color": "orange", "idle_timeout": 300, "cursor": true}`. Pass `--session <id>` on each call
   that belongs in it (one without runs in no session): every command takes it but
-  `session-start`, `session-list`, `watch`, `doctor`, `serve` and `mcp`, and `glide`,
+  `session-start`, `session-list`, `watch`, `doctor`, `serve`, `mcp` and, from 0.16.0 on,
+  `policy`, and `glide`,
   `record-start`, `record-stop`, `session-end` and `session-cursor` require it.
 - `goldfinger session-end --session <id> --json` ends it, `goldfinger session-list --json` lists
   the live ones, and `goldfinger session-cursor --session <id> on|off --json` shows or hides its
@@ -1087,7 +1149,9 @@ A session marks an agent's calls as its own, and its cursor shows the operator w
   `hover --click` re-finds its pressed element in the observe of the replayed hold, else
   `not_found` with nothing clicked, and a `glide` is skipped, uncounted, without `--session`. The
   first step that fails stops it, its error prefixed `step <k>: ` and not retryable, as a retry
-  repeats the steps before. A file that is no trajectory to the goldfinger replaying it is refused
+  repeats the steps before. From 0.16.0 on, the app policy checks each step as a request of its
+  own, so a step on an app whose tier does not allow its verb stops replay with `denied`, after
+  the steps before it ran (see App policy). A file that is no trajectory to the goldfinger replaying it is refused
   whole (`usage`), with nothing sent. One in trajectory format 1, whose line 1 holds
   `"trajectory": 1` in place of `"format"`, is refused so too, its message saying so: record it
   again.
@@ -1095,10 +1159,15 @@ A session marks an agent's calls as its own, and its cursor shows the operator w
 ## Diagnose: doctor, watch and Goldfinger Control
 
 - **`goldfinger doctor --json`** checks the install its binary belongs to and prints one report,
-  `{"checks": […], "fail_count", "warn_count"}`, with eleven checks always in this order: `app`,
+  `{"checks": […], "fail_count", "warn_count"}`, with twelve checks always in this order: `app`,
   `signature`, `notarization`, `path`, `daemon`, `versions`, `grants`, `safari`,
-  `safari_extension`, `orphans`, `control` (nine before 0.13.0, which adds `safari` and
-  `safari_extension`). `safari` reads the Automation grant for Safari and `safari_extension`
+  `safari_extension`, `orphans`, `control`, `policy` (nine before 0.13.0, which adds `safari` and
+  `safari_extension`, and eleven before 0.16.0, which adds `policy`). `policy` (from 0.16.0 on)
+  reads the app policy's file with the daemon's parser, so it needs no daemon: `ok` with no file or
+  one that parses, naming its count of entries; `fail` for one that does not parse, naming the
+  file and why, since the daemon then refuses nearly every verb; `warn` when another user owns it
+  or users other than its owner can write it. Its remedies (fix or remove the file, `chmod 600`,
+  `sudo chown`) are manual and the user's, and `--fix` never edits the file. `safari` reads the Automation grant for Safari and `safari_extension`
   goldfinger's Safari extension, both from `status`, with no prompt. Neither ever fails, as only
   the Safari reads need them (see Page text and Safari's tabs). `safari` skips when the grant was
   never asked for or Safari does not run, and `safari_extension` when the extension is off; both
@@ -1210,6 +1279,11 @@ From 0.15.0 on, `voiceover_start` (`pid` required, an integer), `voiceover_stop`
 `voiceover_press` (`combo` required) and `voiceover_speech` are the 42nd to 47th: 47 in all.
 Their names take an underscore, not the socket verb's hyphen. `setup` takes `voiceover`, a
 boolean.
+From 0.16.0 on, `policy` is the 48th (no parameters): 48 in all. It returns what
+`goldfinger policy --json` prints, and is never `denied`; a tool the app policy refuses returns
+the `denied` error, marked `isError` (see App policy). The server's `initialize` instructions
+also say that `denied` means the user's app policy limits that app, not to retry it or reach
+the app another way, and to tell the user.
 `text`'s result may run to 500,000 characters,
 which Claude Code keeps in context (its `_meta` says so), and each of its stderr lines comes as
 a text block too. The other parameters from 0.13.0 on: the booleans `safari` on `setup`,
@@ -1259,7 +1333,7 @@ Each connection has its own session, started at the first call that needs one, s
 it ends (an idle end, any agent's `stop`), and ended when the connection closes. `session-cursor`
 shows or hides that session's cursor, and `cursor: false` carries into the sessions the
 connection starts later. There are no `session-start` or `session-end` tools: the server owns the
-session. `session-list`, `doctor` and `watch` hold none and leave the connection's as it is, and
+session. `session-list`, `doctor`, `watch` and, from 0.16.0 on, `policy` hold none and leave the connection's as it is, and
 `setup` and `stop` end every session. From 0.10.0 on, `record-start` and `record-stop` record the
 connection's own session, and the recording closes with that session, at the latest when the
 connection closes. `replay` sends its steps in that session, so a recording running there records
@@ -1306,6 +1380,7 @@ For `effect_unverified`, the press was sent and nothing read what it did: observ
 | `version_mismatch` | Two goldfinger versions met. Use the newer `goldfinger`. `goldfinger stop` and a retry also clears it, but stops the daemon other agents share. |
 | `session_limit` | All six session colors are held, so `session-start` started nothing. End a session of yours, or wait for one to idle out, then retry. |
 | `session_not_live` | The `--session` id is not live: never started, ended, idled out (its recording closed too) or an earlier daemon's. Nothing ran, and the same id fails again: run `goldfinger session-start`, and use the new id. |
+| `denied` | From 0.16.0 on: the user's app policy refuses the verb on its app, and nothing was sent (see App policy). The message names the verb (for a `batch`, the step's position), the bundle id, its tier and where the tier came from (`policy.json` or the default list); for a broken file, it names the file and why it does not parse. No retry, relaunch, grant or `--foreground` lifts it, and only the user changes the file. Stop: do not retry, and do not reach the app another way. Tell the user the verb, the app and its tier, or the broken file. A refused `batch` ran no step, unless a step checked as it ran was refused after the steps before it ran; a `replay` ran the steps before. |
 | `not_running` | From 0.15.0 on: a `voiceover` verb found no VoiceOver running, and nothing was sent; or VoiceOver quit before it answered, and a `do`, `type` or `press` may have landed. Run `goldfinger voiceover start <pid>`, then `goldfinger voiceover speech` to see where the cursor is, before you send the verb again. |
 
 Trust `retryable`: it says whether repeating the same request is safe, never whether it worked.
