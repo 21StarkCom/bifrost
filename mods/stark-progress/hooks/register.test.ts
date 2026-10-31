@@ -1049,4 +1049,6 @@ test('the ticket pane draws its ticket on the desktop surface', async ($, on) =>
   expect(await pane.find({ type: 'Text', text: 'Read the words file' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: '🔨 PR open · 10m' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: /draws in the terminal/ })).toBeUndefined()
+  expect((await pane.find({ type: 'Text', text: 'STARK-1 · bragi' }))?.props.color).toBe('inactive')
+  expect((await pane.find({ type: 'Text', text: /^ +ticket PR +review/ }))?.props.mono).toBe(true)
 })

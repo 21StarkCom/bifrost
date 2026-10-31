@@ -42,8 +42,8 @@ const THEMED: Palette = {
 
 export const paletteFor = (surface: string): Palette => (surface === 'terminal' ? TERMINAL : THEMED)
 
-const toneOf = (P: Palette, tone: BoardTone) =>
-  ({ done: P.green, move: P.blue, warn: P.amber, idle: P.gray, none: P.track })[tone]
+const TONE: Record<BoardTone, keyof Palette> = { done: 'green', move: 'blue', warn: 'amber', idle: 'gray', none: 'track' }
+const toneOf = (P: Palette, tone: BoardTone) => P[TONE[tone]]
 
 export type PaneView = {
   board: Board | null
@@ -90,8 +90,15 @@ export function line(ui: UI, r: Pick<BoardRow, 'at' | 'tone'>, seg: number) {
   )
 }
 
-const inkOf = (P: Palette, kind: Cell['kind']) =>
-  ({ milestone: P.green, busy: P.text, fail: P.amber, running: P.hint, quiet: P.track, none: P.track })[kind]
+const CELL_INK: Record<Cell['kind'], keyof Palette> = {
+  milestone: 'green',
+  busy: 'text',
+  fail: 'amber',
+  running: 'hint',
+  quiet: 'track',
+  none: 'track',
+}
+const inkOf = (P: Palette, kind: Cell['kind']) => P[CELL_INK[kind]]
 
 /** The legend's words for each mark; a blank cell has no mark to show. */
 const MARKS: { kind: Cell['kind']; ch: string; words: string }[] = [
