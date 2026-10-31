@@ -4,6 +4,8 @@ import { beatFields, RECENT } from './beat'
 // What a tab draws, from the contract's files (../README.md), git's signal for
 // each ticket and the time. Pure: the poller in register.tsx reads the disk.
 export const STAGES: Stage[] = ['ticket', 'pr', 'review', 'merged', 'closed']
+/** The word a pane shows for each of the STAGES, in the same order. */
+export const STATION_LABELS = ['ticket', 'PR', 'review', 'merge', 'done'] as const
 const ALL_STAGES: string[] = [...STAGES, 'blocked']
 const TICKET_ID = /^STARK-\d+$/
 const MIN = 60_000
@@ -161,6 +163,19 @@ export function track(stage: Stage, hasPr: boolean, tone: Tone): Seg[] {
   }
 
   return segs
+}
+
+const EIGHTHS = ['', '▏', '▎', '▍', '▌', '▋', '▊', '▉']
+
+/**
+ * A horizontal bar for `count` of `total` in `width` cells, in eighths of a
+ * cell: `width` cells is all of `total`, and a count above 0 draws at least `▏`.
+ */
+export function bar(count: number, total: number, width: number): string {
+  if (count <= 0 || total <= 0 || width <= 0) return ''
+  const eighths = Math.min(Math.max(Math.round((count / total) * width * 8), 1), width * 8)
+
+  return '█'.repeat(Math.floor(eighths / 8)) + (EIGHTHS[eighths % 8] ?? '')
 }
 
 /**

@@ -151,6 +151,13 @@ test('the pane draws the run: counts, a ticket worth a look, Up next, and a row 
   expect(await pane.find({ type: 'Text', text: 'Gru · STARK-10' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: 'bragi · 4 tickets' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: '1 of 4 done · 2 in progress · 1 not started' })).toBeDefined()
+  // The graph: a bar a step, 48 cells all 4 tickets (80 less the label, the count and the longest note), and the stalled PR named worth a look.
+  expect(await pane.find({ type: 'Text', text: `not started  ${'█'.repeat(12)} 1` })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'ticket       0' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: `PR           ${'█'.repeat(12)} 1 · 1 worth a look` })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: `review       ${'█'.repeat(12)} 1` })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'merge        0' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: `done         ${'█'.repeat(12)} 1` })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: '🙋 1 ticket is worth a look' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: 'no stage change or commit for 2h00m' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: '👀 in review · 10m' })).toBeDefined()
@@ -163,6 +170,23 @@ test('the pane draws the run: counts, a ticket worth a look, Up next, and a row 
   expect(await pane.find({ type: 'Text', text: 'This is slice 2 of 3.' })).toBeDefined()
   // Counts and elapsed times only: nothing forecasts the time left.
   expect(await pane.find({ type: 'Text', text: /left|ETA|~\d/ })).toBeUndefined()
+})
+
+test('a full bar keeps its note: all tickets at one step, one of them worth a look', async ($, on) => {
+  const disk: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1', 'STARK-2'] }),
+    'STARK-1.json': ticket('STARK-1', 'pr'),
+    'STARK-2.json': ticket('STARK-2', 'pr', { updated: new Date(T0 - 120 * MIN).toISOString() }),
+  }
+  stage(on, disk, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+
+  const pane = await $.ui.mount(PANE)
+  // 80 columns: the label, 48 cells of bar, the count and the note fill the line and no more.
+  expect(await pane.find({ type: 'Text', text: `PR           ${'█'.repeat(48)} 2 · 1 worth a look` })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'not started  0' })).toBeDefined()
 })
 
 test('a settings press writes the run settings file whole, and the pane reads it back', async ($, on) => {

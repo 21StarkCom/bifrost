@@ -1,8 +1,8 @@
 import type { Elements } from 'claude-code'
 
 import type { Board, BoardRow, BoardTone, GruSettings, PaneTab } from '../types'
-import { clockOf, MAX_WORKERS } from './board'
-import { STAGES } from './view'
+import { clockOf, MAX_WORKERS, stepCounts } from './board'
+import { bar, STAGES, STATION_LABELS } from './view'
 
 // The Gru pane: a calm board of one run (Overview) and the run's settings
 // that Gru reads before each launch (Settings). The model is board.ts's. The
@@ -47,9 +47,8 @@ export const segFor = (w: number) => Math.max(2, Math.min(6, Math.floor((w - 2 -
 
 /** The words over the stations, each cut to fit before the next. */
 export function stationHeader(seg: number): string {
-  const labels = ['ticket', 'PR', 'review', 'merge', 'done']
   const cells: string[] = Array.from({ length: STAGES.length * (seg + 1) }, () => ' ')
-  labels.forEach((label, i) => [...label.slice(0, seg)].forEach((ch, k) => (cells[i * (seg + 1) + k] = ch)))
+  STATION_LABELS.forEach((label, i) => [...label.slice(0, seg)].forEach((ch, k) => (cells[i * (seg + 1) + k] = ch)))
 
   return cells.join('').trimEnd()
 }
@@ -72,12 +71,47 @@ export function line(ui: UI, r: Pick<BoardRow, 'at' | 'tone'>, seg: number) {
   )
 }
 
+const STEP_LABEL = 'not started  '.length
+const MIN_BAR = 20
+
+/**
+ * The tickets at each step, one bar a step on one scale: the full width is
+ * all the run's tickets, so a bar grows as its step fills and never rescales.
+ * The count follows the bar, then the ones worth a look. The scale leaves room
+ * for the longest count and note the run can have, so a full bar keeps its
+ * note; a pane too narrow for that leaves room for the count alone.
+ */
+function graph(ui: UI, w: number, rows: BoardRow[]) {
+  const { Text } = ui
+  const bare = w - STEP_LABEL - 1 - String(rows.length).length
+  const withNote = bare - ` · ${rows.length} worth a look`.length
+  const room = Math.max(withNote >= MIN_BAR ? withNote : bare, 1)
+
+  return stepCounts(rows).map(s => {
+    const drawn = bar(s.count, rows.length, room)
+    const ink = s.count === 0 ? P.hint : P.text
+    const count = `${drawn === '' ? '' : ' '}${s.count}`
+    // The box of tickets worth a look names each one, so a line without room for the whole note drops it, never cuts it.
+    const left = w - STEP_LABEL - [...drawn].length - count.length
+    const note = ` · ${s.looks} worth a look`
+    const look = s.looks === 0 || note.length > left ? '' : note
+
+    return (
+      <Text key={`g${s.label}`}>
+        <Text color={ink}>{s.label.padEnd(STEP_LABEL)}</Text>
+        <Text color={TONE[s.tone]}>{drawn}</Text>
+        <Text color={ink}>{count}</Text>
+        {look !== '' && <Text color={P.amber}>{look}</Text>}
+      </Text>
+    )
+  })
+}
+
 function overview(ui: UI, w: number, board: Board, view: PaneView) {
   const { Box, Button, Text } = ui
   const rows = board.rows
   const looks = rows.filter(r => r.attention !== null)
   const seg = segFor(w)
-  const segment = Math.max(Math.floor((w - (rows.length - 1)) / Math.max(rows.length, 1)), 1)
   // `r` steps through the other runs by launch id, so with three or more each one is reached.
   const others = [...board.others].sort((a, b) => a.launchId.localeCompare(b.launchId))
   const next = others.find(o => o.launchId.localeCompare(board.launchId) > 0) ?? others[0]
@@ -95,16 +129,10 @@ function overview(ui: UI, w: number, board: Board, view: PaneView) {
       </Box>
 
       <Box flexDirection="column">
-        <Text>
-          {rows.map((r, i) => (
-            <Text key={`b${r.id}`} color={TONE[r.tone]}>
-              {'━'.repeat(segment) + (i < rows.length - 1 ? ' ' : '')}
-            </Text>
-          ))}
-        </Text>
         <Text color={P.text}>
           {`${board.done} of ${rows.length} done · ${board.inProgress} in progress · ${board.notStarted} not started`}
         </Text>
+        {graph(ui, w, rows)}
       </Box>
 
       {looks.length === 0 ? (

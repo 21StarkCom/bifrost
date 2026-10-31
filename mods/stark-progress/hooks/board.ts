@@ -1,6 +1,6 @@
-import type { Board, BoardRow, GitSignal, GruSettings, Row } from '../types'
+import type { Board, BoardRow, BoardTone, GitSignal, GruSettings, Row } from '../types'
 import { beatFields, RECENT } from './beat'
-import { dur, isRunName, row, STAGES } from './view'
+import { dur, isRunName, row, STAGES, STATION_LABELS } from './view'
 
 // What the Gru pane draws (pane.tsx), from the contract's files (../README.md):
 // one run, picked as register.tsx says, with a calm status per ticket. Pure:
@@ -162,6 +162,31 @@ export function calm(r: Row, hasFile: boolean, lastActivity: number | null, now:
   }
 
   return { ...base, tone: failed === null ? 'move' : 'warn', emoji, status, attention: failed }
+}
+
+/** One bar of the Overview's graph: the tickets at one step of the spine, and how many of them are worth a look. */
+export type StepCount = { label: string; tone: BoardTone; count: number; looks: number }
+
+/**
+ * The Overview's graph, a bar for each step in the spine's order: not
+ * started, the four stations a worker is at, then done. A blocked ticket
+ * counts at the station it stopped at.
+ */
+export function stepCounts(rows: readonly Pick<BoardRow, 'at' | 'tone' | 'attention'>[]): StepCount[] {
+  const steps: StepCount[] = [
+    { label: 'not started', tone: 'none', count: 0, looks: 0 },
+    ...STATION_LABELS.slice(0, -1).map(label => ({ label, tone: 'move' as const, count: 0, looks: 0 })),
+    { label: 'done', tone: 'done', count: 0, looks: 0 },
+  ]
+  for (const r of rows) {
+    const i = r.tone === 'none' ? 0 : r.tone === 'done' ? steps.length - 1 : 1 + Math.min(Math.max(r.at, 0), STAGES.length - 2)
+    const step = steps[i]
+    if (step === undefined) continue
+    step.count += 1
+    if (r.attention !== null) step.looks += 1
+  }
+
+  return steps
 }
 
 function detailOf(
