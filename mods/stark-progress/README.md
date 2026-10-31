@@ -9,7 +9,8 @@ reads before its review, its merge and its release; one progress row above
 the prompt stands in while that pane is not placed. Each says where a ticket
 is, whether its worker is doing anything, and whether that work gets anywhere:
 a worker that is busy for hours with no commit and no stage change reads
-`stalled`, not "20% done". Neither ever forecasts the time left. The mod polls
+`stalled`, not "20% done". Neither ever forecasts the time left. Both draw in
+the terminal and in the Claude desktop app's Code tab. The mod polls
 the state files below once a second, and git once every 30 seconds.
 
 Install it on its own; the seven skill plugins do not need it:
@@ -183,7 +184,7 @@ is today's, a day line (`Today`, `Yesterday`, `Thu 29 Oct`) heads each day, so
 a closed ticket's old steps never read as today's. The tab shows the 50 newest steps and counts the ones it leaves
 out. With no step yet, it says who writes them.
 
-**Settings.** Four rows for the run, each a value you select to change. A
+**Settings.** Four rows for the run, each a value in a frame you select to change. A
 press on one writes all four to the run's settings file at once; Gru reads it
 before each launch and each scope change ([the Gru skill](../../skill/gru/SKILL.md#progress-pane)):
 
@@ -203,9 +204,16 @@ never in the run's settings file, and Gru never reads it. A store that cannot
 be read leaves it Off; a write that fails keeps the press on screen and says
 `The choice was not saved.`
 
-**Colors.** Every text color is 4.5:1 or more on the pane's `#262626`
-(secondary text 8.1:1); the track's lines and rings, which carry no words,
-are 3.5:1. They suit a dark theme.
+**Colors.** In the terminal, every text color is 4.5:1 or more on the pane's
+`#262626` (secondary text 8.1:1); the track's lines and rings, which carry no
+words, are 3.5:1. They suit a dark theme. On every other surface, the desktop
+app's Code tab included, each color is a theme key, so it follows the app's
+light or dark theme: on the desktop's light theme, each word measured 5.7:1 or
+more on the pane's white. A moving bar and track take the app's accent, which
+is blue in the active window and gray, as all of the app's accent, in an
+inactive one. The desktop draws text in a face of mixed widths, so the bar
+graph, the station words, the tracks and the last hour draw in its fixed-width
+face, and a Log tab's times in digits of one width; the terminal ignores both.
 
 ## The ticket pane
 
@@ -242,7 +250,7 @@ header and per status, and none in Settings.
 as the Gru pane's Log reads them, with no name over a step: each one is the
 worker's.
 
-**Settings.** Three rows, each a value you select to change. A press writes
+**Settings.** Three rows, each a value in a frame you select to change. A press writes
 all three to the ticket's settings file at once, one press at a time, each
 over the one before it. The worker reads the file at three points of
 [the worker spine](../../standards/worker-spine.md#ticket-settings):
@@ -438,7 +446,7 @@ nothing more.
 - A held worker whose session died reads `held` on the Gru pane, with its
   time held, since no file says whether a worker lives; Gru's observation
   pass reads that from Hermod. The ticket pane dies with its tab.
-- A light-theme palette for the Gru pane and the ticket pane.
+- A light-theme palette for the Gru pane and the ticket pane in the terminal.
 
 ## Develop
 

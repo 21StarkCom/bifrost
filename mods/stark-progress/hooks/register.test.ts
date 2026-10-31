@@ -155,6 +155,8 @@ test('the pane draws the run: counts, a ticket worth a look, Up next, and a row 
 
   const pane = await $.ui.mount(PANE)
   expect(await pane.find({ type: 'Text', text: 'Gru · STARK-10' })).toBeDefined()
+  // The terminal keeps its palette for a dark theme.
+  expect((await pane.find({ type: 'Text', text: '● this run' }))?.props.color).toBe('#95d5b2')
   expect(await pane.find({ type: 'Text', text: 'bragi · 4 tickets' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: '1 of 4 done · 2 in progress · 1 not started' })).toBeDefined()
   // The graph: the count, then a bar, 48 cells all 4 tickets (80 less the label, the count, a space and the longest note), and the stalled PR named worth a look.
@@ -919,6 +921,7 @@ test("the Gru pane's Log tab merges Gru's steps and each ticket's, newest first,
     clockAt(3),
     'Gru',
   ])
+  expect((await pane.find({ type: 'Text', text: clockAt(3) }))?.props.tabular).toBe(true)
   expect(texts[at('The change is now in the main code.') - 1]).toBe('Say the names')
   expect(texts[at('Made the change and asked for a check.') - 1]).toBe('Read the words file')
   expect(texts[at('Read the job.') - 1]).toBe('Say the names')
@@ -1005,4 +1008,45 @@ test('a poll reads a log again only once it grew, and then shows the new step', 
   const pane = await $.ui.mount(TICKET_PANE)
   await pane.press({ key: 'tab-log' })
   expect(await pane.find({ type: 'Text', text: 'Made the change.' })).toBeDefined()
+})
+
+test('the Gru pane draws on the desktop surface too, and a press there writes the run settings', async ($, on) => {
+  const disk: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1', 'STARK-2'] }),
+    'STARK-1.json': ticket('STARK-1', 'pr', { title: 'bragi: read the words file (slice 2 of 3)' }),
+  }
+  stage(on, disk, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'desktop', isInteractive: true })
+  await clock.advance(1000)
+
+  const pane = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await pane.find({ type: 'Text', text: 'Gru · STARK-10' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '0 of 2 done · 1 in progress · 1 not started' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /draws in the terminal/ })).toBeUndefined()
+  // The app's own theme, light or dark: theme keys, never the terminal's dark-only hex palette.
+  expect((await pane.find({ type: 'Text', text: '● this run' }))?.props.color).toBe('success')
+  expect((await pane.find({ type: 'Text', text: '0 of 2 done · 1 in progress · 1 not started' }))?.props.color).toBe('inactive')
+  // A bar takes its tone's theme key too: not started subtle, a moving PR the app's accent.
+  expect((await pane.findAll({ type: 'Text', text: /^ █/ })).map(n => n.props.color)).toEqual(['subtle', 'suggestion'])
+  // The station words line up over the track only in a face of one width.
+  expect((await pane.find({ type: 'Text', text: /^ +ticket PR +review/ }))?.props.mono).toBe(true)
+  await pane.press({ key: 'tab-settings' })
+  // A setting's value draws in a frame: a Button that is not plain.
+  expect((await pane.find({ type: 'Button', key: 'set-decide' }))?.props.plain).toBeUndefined()
+  await pane.press({ key: 'set-decide' })
+  expect(JSON.parse(disk['run-STARK-10.settings.json'] ?? '{}')).toMatchObject({ decideForMe: false })
+})
+
+test('the ticket pane draws its ticket on the desktop surface', async ($, on) => {
+  const disk: Record<string, string> = { 'STARK-1.json': ticket('STARK-1', 'pr', { title: 'bragi: read the words file' }) }
+  stage(on, disk, { session: 'w', root: WORKTREE })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: WORKTREE, surface: 'desktop', isInteractive: true })
+  await clock.advance(1000)
+
+  const pane = await $.ui.mount({ ...TICKET_PANE, surface: 'desktop' })
+  expect(await pane.find({ type: 'Text', text: 'Read the words file' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '🔨 PR open · 10m' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /draws in the terminal/ })).toBeUndefined()
 })

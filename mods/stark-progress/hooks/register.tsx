@@ -6,7 +6,7 @@ import { beatFile, callEnded, callStarted, newBeat, seedBeat } from './beat'
 import { buildBoard, pickRun, runsOf, settingsName } from './board'
 import { readGit } from './git'
 import { logName, runLogName } from './log'
-import { drawPane } from './pane'
+import { drawPane, paletteFor } from './pane'
 import { buildTicket, ticketSettingsName, ticketSettingsOf } from './ticket'
 import { drawTicketPane } from './ticket-pane'
 import { buildView, isRunName, ownRun, ticketOf, worktreeOf } from './view'
@@ -269,11 +269,8 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    if (e.surface !== 'terminal') {
-      const { Text } = $.ui.resolve(e)
-      return <Text>The Gru board draws in the terminal.</Text>
-    }
-    const ui = $.ui.resolve(e)
+    const { Box, Text, Button } = $.ui.resolve(e)
+    const ui = { Box, Text, Button, P: paletteFor(e.surface) }
     const shown = await read($, board)
 
     return drawPane(ui, Math.max(e.props.bodyColumns, 40), {
@@ -340,11 +337,8 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'Pane', requestId: TICKET_PANE }, async ($, e) => {
-    if (e.surface !== 'terminal') {
-      const { Text } = $.ui.resolve(e)
-      return <Text>The ticket pane draws in the terminal.</Text>
-    }
-    const ui = $.ui.resolve(e)
+    const { Box, Text, Button } = $.ui.resolve(e)
+    const ui = { Box, Text, Button, P: paletteFor(e.surface) }
     const shown = await read($, ticketAtom)
 
     return drawTicketPane(ui, Math.max(e.props.bodyColumns, 40), {

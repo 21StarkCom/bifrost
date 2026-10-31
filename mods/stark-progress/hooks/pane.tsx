@@ -7,11 +7,16 @@ import { bar, STAGES, STATION_LABELS } from './view'
 // The Gru pane: a calm board of one run (Overview) and the run's settings
 // that Gru reads before each launch (Settings). The model is board.ts's. The
 // ticket pane (ticket-pane.tsx) draws with the parts this file exports.
-export type UI = Elements['terminal']
 
-// Contrast on the pane's #262626 (WCAG): text 8.1:1, gray 6.8:1, hint 5.9:1;
-// track 3.5:1 for lines and rings alone, which carry no words.
-export const P = {
+export type Palette = Record<'text' | 'hint' | 'track' | 'blue' | 'green' | 'amber' | 'gray', string>
+
+/** The elements a pane draws with, and the palette of the surface it draws on. */
+export type UI = Pick<Elements['terminal'], 'Box' | 'Text' | 'Button'> & { P: Palette }
+
+// The terminal's, for its dark theme. Contrast on the pane's #262626 (WCAG):
+// text 8.1:1, gray 6.8:1, hint 5.9:1; track 3.5:1 for lines and rings alone,
+// which carry no words.
+const TERMINAL: Palette = {
   text: '#b8bdd0',
   hint: '#9ba1b8',
   track: '#727894',
@@ -21,13 +26,24 @@ export const P = {
   gray: '#a7adc2',
 }
 
-const TONE: Record<BoardTone, string> = {
-  done: P.green,
-  move: P.blue,
-  warn: P.amber,
-  idle: P.gray,
-  none: P.track,
+// Every other surface (the desktop app's Code tab, VS Code, mobile) draws in its own light or dark
+// theme: theme keys follow it, as the band's colors do. On the desktop's light theme, on the pane's
+// white, inactive measured 5.7:1, success 6.6:1 and warning 7.4:1. Its suggestion is its accent: blue
+// in the active window, and gray, as all of the app's accent, in an inactive one.
+const THEMED: Palette = {
+  text: 'inactive',
+  hint: 'inactive',
+  track: 'subtle',
+  blue: 'suggestion',
+  green: 'success',
+  amber: 'warning',
+  gray: 'inactive',
 }
+
+export const paletteFor = (surface: string): Palette => (surface === 'terminal' ? TERMINAL : THEMED)
+
+const toneOf = (P: Palette, tone: BoardTone) =>
+  ({ done: P.green, move: P.blue, warn: P.amber, idle: P.gray, none: P.track })[tone]
 
 export type PaneView = {
   board: Board | null
@@ -58,11 +74,11 @@ export function stationHeader(seg: number): string {
 
 /** A ticket's line: ● stations passed, ◉ the one it is at, ○ the ones to come. */
 export function line(ui: UI, r: Pick<BoardRow, 'at' | 'tone'>, seg: number) {
-  const { Text } = ui
-  const color = TONE[r.tone]
+  const { Text, P } = ui
+  const color = toneOf(P, r.tone)
 
   return (
-    <Text>
+    <Text mono>
       {STAGES.map((_, i) => (
         <Text key={`s${i}`}>
           {i < r.at ? <Text color={color}>●</Text> : i === r.at ? <Text bold color={color}>◉</Text> : <Text color={P.track}>○</Text>}
@@ -74,14 +90,8 @@ export function line(ui: UI, r: Pick<BoardRow, 'at' | 'tone'>, seg: number) {
   )
 }
 
-const CELL_INK: Record<Cell['kind'], string> = {
-  milestone: P.green,
-  busy: P.text,
-  fail: P.amber,
-  running: P.hint,
-  quiet: P.track,
-  none: P.track,
-}
+const inkOf = (P: Palette, kind: Cell['kind']) =>
+  ({ milestone: P.green, busy: P.text, fail: P.amber, running: P.hint, quiet: P.track, none: P.track })[kind]
 
 /** The legend's words for each mark; a blank cell has no mark to show. */
 const MARKS: { kind: Cell['kind']; ch: string; words: string }[] = [
@@ -106,16 +116,16 @@ const markOf = (c: Cell) => (c.kind === 'fail' ? '✕' : c.ch)
  * would draw only dots.
  */
 export function hour(ui: UI, cells: Cell[]) {
-  const { Box, Text } = ui
+  const { Box, Text, P } = ui
   if (!cells.some(c => ACTIVE.has(c.kind))) return null
   const kinds = new Set(cells.map(c => c.kind))
 
   return (
     <Box flexDirection="column" marginTop={1}>
-      <Text>
+      <Text mono>
         <Text color={P.hint}>{'Last hour  '}</Text>
         {cells.map((c, i) => (
-          <Text key={`c${i}`} color={CELL_INK[c.kind]}>
+          <Text key={`c${i}`} color={inkOf(P, c.kind)}>
             {markOf(c)}
           </Text>
         ))}
@@ -124,7 +134,7 @@ export function hour(ui: UI, cells: Cell[]) {
       <Box flexWrap="wrap" columnGap={2}>
         {MARKS.filter(m => kinds.has(m.kind)).map(m => (
           <Text key={`m${m.kind}`}>
-            {m.ch !== '' && <Text color={CELL_INK[m.kind]}>{`${m.ch} `}</Text>}
+            {m.ch !== '' && <Text color={inkOf(P, m.kind)}>{`${m.ch} `}</Text>}
             <Text color={P.hint}>{m.words}</Text>
           </Text>
         ))}
@@ -145,7 +155,7 @@ const MIN_BAR = 20
  * pane too narrow for that gives the bar the whole line.
  */
 function graph(ui: UI, w: number, rows: BoardRow[]) {
-  const { Text } = ui
+  const { Text, P } = ui
   const digits = String(rows.length).length
   const bare = w - STEP_LABEL - digits - 1
   const withNote = bare - ` · ${rows.length} worth a look`.length
@@ -160,9 +170,9 @@ function graph(ui: UI, w: number, rows: BoardRow[]) {
     const look = s.looks === 0 || note.length > left ? '' : note
 
     return (
-      <Text key={`g${s.label}`}>
+      <Text key={`g${s.label}`} mono>
         <Text color={ink}>{`${s.label.padEnd(STEP_LABEL)}${String(s.count).padStart(digits)}`}</Text>
-        {drawn !== '' && <Text color={TONE[s.tone]}>{` ${drawn}`}</Text>}
+        {drawn !== '' && <Text color={toneOf(P, s.tone)}>{` ${drawn}`}</Text>}
         {look !== '' && <Text color={P.amber}>{look}</Text>}
       </Text>
     )
@@ -170,7 +180,7 @@ function graph(ui: UI, w: number, rows: BoardRow[]) {
 }
 
 function overview(ui: UI, w: number, board: Board, view: PaneView) {
-  const { Box, Button, Text } = ui
+  const { Box, Button, Text, P } = ui
   const rows = board.rows
   const looks = rows.filter(r => r.attention !== null)
   // The list keeps the run's order, or puts the done tickets last in that order.
@@ -217,7 +227,7 @@ function overview(ui: UI, w: number, board: Board, view: PaneView) {
 
       <Box flexDirection="column">
         <Text bold>🚇 Where each ticket is</Text>
-        <Text color={P.hint}>{`  ${stationHeader(seg)}`}</Text>
+        <Text mono color={P.hint}>{`  ${stationHeader(seg)}`}</Text>
         {listed.map(r => {
           const isOpen = view.focus === r.id
           const isQuiet = r.tone === 'done' || r.tone === 'none'
@@ -279,12 +289,15 @@ function overview(ui: UI, w: number, board: Board, view: PaneView) {
   )
 }
 
+// A setting's value draws in a frame, so it reads as a control: a native button
+// on the desktop, `[ ● On ]` in the terminal.
+
 /** A setting's on and off value, which a press flips. */
 export const toggle = (ui: UI, key: string, on: boolean, onPress: () => unknown) => {
-  const { Button, Text } = ui
+  const { Button, Text, P } = ui
 
   return (
-    <Button key={`set-${key}`} plain onPress={onPress}>
+    <Button key={`set-${key}`} onPress={onPress}>
       {on ? <Text color={P.green}>● On</Text> : <Text color={P.gray}>○ Off</Text>}
     </Button>
   )
@@ -292,10 +305,10 @@ export const toggle = (ui: UI, key: string, on: boolean, onPress: () => unknown)
 
 /** A setting's value as words, which a press changes. */
 export const choice = (ui: UI, key: string, words: string, onPress: () => unknown) => {
-  const { Button, Text } = ui
+  const { Button, Text, P } = ui
 
   return (
-    <Button key={`set-${key}`} plain onPress={onPress}>
+    <Button key={`set-${key}`} onPress={onPress}>
       <Text color={P.blue}>{words}</Text>
     </Button>
   )
@@ -303,7 +316,7 @@ export const choice = (ui: UI, key: string, words: string, onPress: () => unknow
 
 /** One setting: its label and control on a line, and what it does below. */
 export const settingRow = (ui: UI, w: number, label: string, control: ReturnType<typeof toggle>, about: string) => {
-  const { Box, Text } = ui
+  const { Box, Text, P } = ui
 
   return (
     <Box flexDirection="column">
@@ -321,7 +334,7 @@ export const settingRow = (ui: UI, w: number, label: string, control: ReturnType
 
 /** The pane's three tabs, each with its hotkey. */
 export function tabBar(ui: UI, tab: PaneTab, setTab: (tab: PaneTab) => unknown) {
-  const { Box, Button, Text } = ui
+  const { Box, Button, Text, P } = ui
   const tabs = [
     ['overview', 'o', 'Overview'],
     ['log', 'l', 'Log'],
@@ -352,7 +365,7 @@ export function tabBar(ui: UI, tab: PaneTab, setTab: (tab: PaneTab) => unknown) 
  * files that hold every step, the older ones the tab leaves out included.
  */
 export function logTab(ui: UI, w: number, log: LogView, empty: string, files: string) {
-  const { Box, Text } = ui
+  const { Box, Text, P } = ui
   const steps = log.days.reduce((n, d) => n + d.entries.length, 0)
 
   return (
@@ -369,7 +382,10 @@ export function logTab(ui: UI, w: number, log: LogView, empty: string, files: st
           {day.entries.map((s, i) => (
             <Box key={`s${d}-${i}`} columnGap={2}>
               <Box flexShrink={0}>
-                <Text color={P.hint}>{s.clock}</Text>
+                {/* Digits of one width, so each step's words start in one column. */}
+                <Text tabular color={P.hint}>
+                  {s.clock}
+                </Text>
               </Box>
               <Box flexDirection="column">
                 {s.who !== null && <Text color={s.isRun ? P.blue : P.text}>{cut(s.who, w - 7)}</Text>}
@@ -389,7 +405,7 @@ export function logTab(ui: UI, w: number, log: LogView, empty: string, files: st
 }
 
 function settings(ui: UI, w: number, board: Board, view: PaneView) {
-  const { Box, Text } = ui
+  const { Box, Text, P } = ui
   const s = board.settings
   const step = (key: string, sign: string, onPress: () => unknown) => choice(ui, key, sign, onPress)
   const row = (label: string, control: ReturnType<typeof toggle>, about: string) => settingRow(ui, w, label, control, about)
@@ -443,7 +459,7 @@ function settings(ui: UI, w: number, board: Board, view: PaneView) {
 }
 
 export function drawPane(ui: UI, w: number, view: PaneView) {
-  const { Box, Text } = ui
+  const { Box, Text, P } = ui
   const board = view.board
   if (board === null) {
     return (
