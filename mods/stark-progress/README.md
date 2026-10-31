@@ -162,6 +162,12 @@ each scope change ([the Gru skill](../../skill/gru/SKILL.md#progress-pane)):
 | Pick up follow-ups | `followUps` | On: a ticket a Minion files joins the run. Off: it waits on the board, named in the report. |
 | Worker type | `minionAgent` | The runtime of each new Minion, `claude` or `codex`. A relaunch keeps its runtime. |
 
+Under `This pane`, one more row that the pane alone reads, in every run:
+`Done tickets last`, Off by default. On, `🚇 Where each ticket is` lists the
+open tickets in run order, then the done ones in run order. The plugin's own
+store (`$.store`, key `doneLast`) keeps it across sessions. It is never in
+the run's settings file, and Gru never reads it.
+
 **Colors.** Every text color is 4.5:1 or more on the pane's `#262626`
 (secondary text 8.1:1); the track's lines and rings, which carry no words,
 are 3.5:1. They suit a dark theme.

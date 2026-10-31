@@ -185,6 +185,8 @@ declare module 'claude-code' {
       focus: string
       /** The launch id the pane shows, or '' for this tab's own or the most active run. */
       pick: string
+      /** The pane's own choice: done tickets listed last. `$.store` keeps it across sessions; Gru never reads it. */
+      doneLast: boolean
       /** The ticket pane's model, in a worker's own tab. */
       ticket: Shaped<TicketBoard | null>
       ticketTab: PaneTab

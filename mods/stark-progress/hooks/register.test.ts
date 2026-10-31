@@ -225,6 +225,62 @@ test("a ticket's hour marks calls, a failed 5 minutes and blanks, and an hour wi
   expect(await pane.find({ type: 'Text', text: '· no calls' })).toBeUndefined()
 })
 
+/** The ticket rows of "Where each ticket is", top to bottom. */
+const listOrder = async (pane: { findAll: (q: { type: string }) => Promise<{ key: string | undefined }[]> }) =>
+  (await pane.findAll({ type: 'Button' })).map(b => b.key ?? '').filter(key => key.startsWith('row-')).map(key => key.slice('row-'.length))
+
+const DONE_LAST_RUN: Record<string, string> = {
+  'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1', 'STARK-2', 'STARK-3', 'STARK-4'] }),
+  'STARK-1.json': ticket('STARK-1', 'closed'),
+  'STARK-2.json': ticket('STARK-2', 'review'),
+  'STARK-3.json': ticket('STARK-3', 'closed'),
+}
+
+test('Done tickets last lists the done tickets at the bottom, kept in the store and never in the run settings', async ($, on) => {
+  const seen = stage(on, { ...DONE_LAST_RUN }, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  // The plugin's store, in memory, read back below.
+  const store: Record<string, unknown> = {}
+  on('store.get', (_$, e) => ({ value: store[e.key] }))
+  on('store.set', (_$, e) => {
+    store[e.key] = e.value
+    return { value: undefined }
+  })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  const pane = await $.ui.mount(PANE)
+  expect(await listOrder(pane)).toEqual(['STARK-1', 'STARK-2', 'STARK-3', 'STARK-4'])
+
+  await pane.press({ key: 'tab-settings' })
+  expect(await pane.find({ type: 'Text', text: 'This pane' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: "Where each ticket is keeps the run's order." })).toBeDefined()
+  await pane.press({ key: 'set-done-last' })
+  expect(await pane.find({ type: 'Text', text: 'Where each ticket is lists the done tickets at the bottom.' })).toBeDefined()
+  expect(store.doneLast).toBe(true)
+  // Gru reads the run's settings file; this choice is the pane's alone.
+  expect(seen.runs.filter(argv => argv[0] === 'mv')).toEqual([])
+
+  await pane.press({ key: 'tab-overview' })
+  // The open tickets in run order, then the done ones in run order.
+  expect(await listOrder(pane)).toEqual(['STARK-2', 'STARK-4', 'STARK-1', 'STARK-3'])
+
+  await pane.press({ key: 'tab-settings' })
+  await pane.press({ key: 'set-done-last' })
+  expect(store.doneLast).toBe(false)
+  await pane.press({ key: 'tab-overview' })
+  expect(await listOrder(pane)).toEqual(['STARK-1', 'STARK-2', 'STARK-3', 'STARK-4'])
+})
+
+test('a new session starts with the choice the store kept', async ($, on) => {
+  stage(on, { ...DONE_LAST_RUN }, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  mock.store(on, { doneLast: true })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  const pane = await $.ui.mount(PANE)
+  expect(await listOrder(pane)).toEqual(['STARK-2', 'STARK-4', 'STARK-1', 'STARK-3'])
+})
+
 test('a full bar keeps its note: all tickets at one step, one of them worth a look', async ($, on) => {
   const disk: Record<string, string> = {
     'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1', 'STARK-2'] }),
