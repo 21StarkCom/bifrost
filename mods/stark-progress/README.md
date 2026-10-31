@@ -83,6 +83,9 @@ Last tool call 12m ago.
 +234 −20 in its worktree.
 3 commits since its base.
 
+Last hour  ····▃▅▆▆▂◆··  now
+◆ milestone  ▃ tool calls per 5 min  · no calls
+
 👉 Up next
 Wait for your merge OK.
 
@@ -198,7 +201,9 @@ header and per status, and none in Settings.
   (`Held by your settings: <merge or release>`, and the setting that clears
   it). Else `🌿 Nothing needs you right now.`
 - `🔧 Activity`: the running or last tool call, the calls in the last 15
-  minutes, the failures among the last 10, the diff size, and the commits.
+  minutes, the failures among the last 10, the diff size, and the commits,
+  then its last hour, drawn as the Gru pane's opened row draws it (marks,
+  legend and when it shows nothing are the same).
 - `👉 Up next`: the next spine step. With a hold, `Wait for your merge OK.` or
   `Wait for your release OK.` Else by stage: `ticket` opens the PR, `pr`
   reviews it, `review` merges it, `merged` releases or closes, and `blocked`

@@ -718,6 +718,11 @@ test('the ticket pane draws the whole ticket: name, epic, track, activity and th
   expect(await pane.find({ type: 'Text', text: '🌿 Nothing needs you right now.' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: '4 tool calls in the last 15 minutes.' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: '0 of the last 2 calls failed.' })).toBeDefined()
+  // Its last hour, as the Gru pane draws an opened row: the stage change 10 minutes ago, then 4 calls 2 minutes ago.
+  expect(await pane.find({ type: 'Text', text: 'Last hour  ·········◆·▁  now' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '◆ milestone' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '▃ tool calls per 5 min' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '· no calls' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: 'Review the PR.' })).toBeDefined()
   // Counts and elapsed times only: nothing forecasts the time left.
   expect(await pane.find({ type: 'Text', text: /left|ETA|~\d/ })).toBeUndefined()
