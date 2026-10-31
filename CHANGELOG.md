@@ -13,6 +13,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=434 runId=434 sha=3cb6d1af -->
+- `needs-you` mod: a band above the prompt answers a turn's `Needs you (<tag>)` lines by key, takes picks with `a`, and sends the answers with `s`.
 <!-- idun:pr-merge pr=433 runId=433 sha=a8f4d34a -->
 - Worker spine: start the live surface once per round, re-run only what a `--fix` round changed on the final head, and run one full sweep per epic (stark-ops 0.38.0, stark-plan 0.14.0).
 <!-- idun:pr-merge pr=432 runId=432 sha=46876d48 -->
