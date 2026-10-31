@@ -35,6 +35,9 @@ export type PaneView = {
   focus: string
   setTab: (tab: PaneTab) => unknown
   setFocus: (id: string) => unknown
+  /** The pane's own choice: done tickets listed last. */
+  doneLast: boolean
+  flipDoneLast: () => unknown
   pick: (launchId: string) => unknown
   /** A change made from the settings as they are when it is written, so two quick presses both count. */
   set: (change: (s: GruSettings) => Partial<GruSettings>) => unknown
@@ -170,6 +173,8 @@ function overview(ui: UI, w: number, board: Board, view: PaneView) {
   const { Box, Button, Text } = ui
   const rows = board.rows
   const looks = rows.filter(r => r.attention !== null)
+  // The list keeps the run's order, or puts the done tickets last in that order.
+  const listed = view.doneLast ? [...rows.filter(r => r.tone !== 'done'), ...rows.filter(r => r.tone === 'done')] : rows
   const seg = segFor(w)
   // `r` steps through the other runs by launch id, so with three or more each one is reached.
   const others = [...board.others].sort((a, b) => a.launchId.localeCompare(b.launchId))
@@ -213,7 +218,7 @@ function overview(ui: UI, w: number, board: Board, view: PaneView) {
       <Box flexDirection="column">
         <Text bold>🚇 Where each ticket is</Text>
         <Text color={P.hint}>{`  ${stationHeader(seg)}`}</Text>
-        {rows.map(r => {
+        {listed.map(r => {
           const isOpen = view.focus === r.id
           const isQuiet = r.tone === 'done' || r.tone === 'none'
 
@@ -379,6 +384,15 @@ function settings(ui: UI, w: number, board: Board, view: PaneView) {
         'Worker type',
         choice(ui, 'agent', s.minionAgent, () => view.set(now => ({ minionAgent: now.minionAgent === 'claude' ? 'codex' : 'claude' }))),
         `Each new Minion runs on ${s.minionAgent}.`,
+      )}
+      <Box flexDirection="column">
+        <Text bold>This pane</Text>
+        <Text color={P.text}>Only this pane uses this setting, in every run. Gru does not read it.</Text>
+      </Box>
+      {row(
+        'Done tickets last',
+        toggle(ui, 'done-last', view.doneLast, view.flipDoneLast),
+        view.doneLast ? 'The ticket list shows the done tickets at the bottom.' : 'The ticket list keeps the order of the run.',
       )}
     </Box>
   )

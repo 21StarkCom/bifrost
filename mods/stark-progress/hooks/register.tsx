@@ -23,6 +23,9 @@ const board = atom({ plugin: 'stark-progress', key: 'board' } as const, null, { 
 const tabAtom = atom({ plugin: 'stark-progress', key: 'tab' } as const, 'overview' as PaneTab)
 const focusAtom = atom({ plugin: 'stark-progress', key: 'focus' } as const, '')
 const pickAtom = atom({ plugin: 'stark-progress', key: 'pick' } as const, '')
+const doneLastAtom = atom({ plugin: 'stark-progress', key: 'doneLast' } as const, false)
+/** The `$.store` key that keeps the pane's doneLast choice across sessions. */
+const DONE_LAST = 'doneLast'
 const ticketAtom = atom({ plugin: 'stark-progress', key: 'ticket' } as const, null, { shape: 'ticket-1' })
 const ticketTabAtom = atom({ plugin: 'stark-progress', key: 'ticketTab' } as const, 'overview' as PaneTab)
 
@@ -94,6 +97,7 @@ export const register: Register = on => {
   // Settings presses apply one at a time, each over the one before it.
   let settingsWrites: Promise<void> = Promise.resolve()
   let ticketWrites: Promise<void> = Promise.resolve()
+  let doneLastWrites: Promise<void> = Promise.resolve()
   let isPolling = false
   let polling: Promise<void> = Promise.resolve()
 
@@ -105,6 +109,12 @@ export const register: Register = on => {
     await $.command.register({
       name: 'ticket-board',
       description: "Open the ticket pane in a Minion's or Agnes's tab: its ticket, and the settings its worker reads",
+    })
+    // The pane's own choice outlives the session; a store that cannot be read leaves the default.
+    // It loads in the background, so no session waits on it, and a press queues behind it.
+    doneLastWrites = doneLastWrites.catch(() => undefined).then(async () => {
+      const stored = await $.store.get(DONE_LAST).catch(() => undefined)
+      if (typeof stored === 'boolean') await update($, doneLastAtom, () => stored)
     })
     const home = await $.env.get('HOME')
     if (!home) return next(e)
@@ -258,6 +268,21 @@ export const register: Register = on => {
       focus: await read($, focusAtom),
       setTab: tab => update($, tabAtom, () => tab),
       setFocus: id => update($, focusAtom, () => id),
+      doneLast: await read($, doneLastAtom),
+      // The pane's own choice, kept in the plugin's store, never in the run's settings file: Gru does not read it.
+      // Presses apply one at a time, after the load, so the store ends on the value the pane shows.
+      flipDoneLast: () => {
+        doneLastWrites = doneLastWrites.catch(() => undefined).then(async () => {
+          const isLast = await update($, doneLastAtom, now => !now)
+          try {
+            await $.store.set(DONE_LAST, isLast)
+          } catch {
+            await $.ui.toast('The choice was not saved.')
+          }
+        })
+
+        return doneLastWrites
+      },
       pick: async launchId => {
         await update($, pickAtom, () => launchId)
         await pollNow()
