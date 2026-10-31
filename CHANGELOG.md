@@ -13,6 +13,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=440 runId=440 sha=e6edbee7 -->
+- `stark-progress` 0.12.0: a Stats tab in the Gru pane and ticket pane counts tokens, tools, prompts, messages, launches and review rounds; fixes a frozen `/gru-board` after reload.
 <!-- idun:pr-merge pr=439 runId=439 sha=d34cc1cf -->
 - Gru, Minion and Agnes skills now read the repo registry through `urd repos get|set|scan` instead of frigg; stark-ops bumped to 0.40.2.
 <!-- idun:pr-merge pr=438 runId=438 sha=a6c2eb13 -->
