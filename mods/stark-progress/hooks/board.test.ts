@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { buildBoard, nameOf, runsOf, settingsOf } from './board'
+import { buildBoard, nameOf, runsOf, settingsOf, stepCounts } from './board'
 import { isRunName } from './view'
 
 const T0 = Date.parse('2026-10-29T12:00:00Z')
@@ -131,4 +131,25 @@ test('a held ticket is worth a look, even while its worker is quiet', () => {
     attention: 'held by its settings: merge',
   })
   expect(board.rows[1]).toMatchObject({ at: 3, attention: 'held by its settings: release' })
+})
+
+test('the graph counts each ticket at its step, and the ones worth a look there', () => {
+  const steps = stepCounts([
+    { at: -1, tone: 'none', attention: null },
+    { at: 5, tone: 'done', attention: null },
+    { at: 2, tone: 'move', attention: null },
+    { at: 1, tone: 'warn', attention: 'blocked' },
+    // A ticket file whose stage is no station counts at the first one.
+    { at: -1, tone: 'idle', attention: 'no tool call for 20m' },
+    { at: 3, tone: 'warn', attention: 'held by its settings: merge' },
+  ])
+  expect(steps.map(s => [s.label, s.count, s.looks])).toEqual([
+    ['not started', 1, 0],
+    ['ticket', 1, 1],
+    ['PR', 1, 1],
+    ['review', 1, 0],
+    ['merge', 1, 1],
+    ['done', 1, 0],
+  ])
+  expect(stepCounts([]).every(s => s.count === 0)).toBe(true)
 })

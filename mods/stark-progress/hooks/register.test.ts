@@ -151,6 +151,13 @@ test('the pane draws the run: counts, a ticket worth a look, Up next, and a row 
   expect(await pane.find({ type: 'Text', text: 'Gru · STARK-10' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: 'bragi · 4 tickets' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: '1 of 4 done · 2 in progress · 1 not started' })).toBeDefined()
+  // The graph: a bar a step, the full width all 4 tickets, and the stalled PR named worth a look.
+  expect(await pane.find({ type: 'Text', text: `not started  ${'█'.repeat(16)}▎ 1` })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'ticket       0' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: `PR           ${'█'.repeat(16)}▎ 1 · 1 worth a look` })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: `review       ${'█'.repeat(16)}▎ 1` })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'merge        0' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: `done         ${'█'.repeat(16)}▎ 1` })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: '🙋 1 ticket is worth a look' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: 'no stage change or commit for 2h00m' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: '👀 in review · 10m' })).toBeDefined()

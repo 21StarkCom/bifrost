@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { buildView, dur, row, timeline, track, verdict, worktreeOf } from './view'
+import { bar, buildView, dur, row, timeline, track, verdict, worktreeOf } from './view'
 
 const NOW = Date.parse('2026-10-29T12:00:00Z')
 const MIN = 60_000
@@ -61,6 +61,15 @@ test('a hold reads as held, over idle and stalled, and never over closed or bloc
   expect(row('STARK-1', files, null, NOW).verdict.word).not.toBe('held')
   const held = { 'STARK-1.json': ticket('STARK-1', 'merged', 5, { hold: 'release' }) }
   expect(row('STARK-1', held, null, NOW).verdict.text).toBe('held · release')
+})
+
+test('a graph bar is its share of the width, in eighths of a cell, and a count above 0 always shows', () => {
+  expect(bar(0, 4, 10)).toBe('')
+  expect(bar(4, 4, 10)).toBe('██████████')
+  expect(bar(1, 4, 10)).toBe('██▌')
+  expect(bar(3, 8, 5)).toBe('█▉')
+  expect(bar(1, 74, 10)).toBe('▏')
+  expect(bar(1, 1000, 10)).toBe('▏')
 })
 
 test('the timeline draws bars, failures, milestones, a long call, quiet and no data', () => {

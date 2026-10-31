@@ -163,6 +163,19 @@ export function track(stage: Stage, hasPr: boolean, tone: Tone): Seg[] {
   return segs
 }
 
+const EIGHTHS = ['', '▏', '▎', '▍', '▌', '▋', '▊', '▉']
+
+/**
+ * A horizontal bar for `count` of `total` in `width` cells, in eighths of a
+ * cell: `width` cells is all of `total`, and a count above 0 draws at least `▏`.
+ */
+export function bar(count: number, total: number, width: number): string {
+  if (count <= 0 || total <= 0 || width <= 0) return ''
+  const eighths = Math.min(Math.max(Math.round((count / total) * width * 8), 1), width * 8)
+
+  return '█'.repeat(Math.floor(eighths / 8)) + (EIGHTHS[eighths % 8] ?? '')
+}
+
 /**
  * The last hour in 12 cells of 5 minutes: a bar per the calls (6 a step,
  * capped at `▆`), failed when more than half failed, `◆` for a milestone, `─`
