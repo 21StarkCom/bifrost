@@ -97,27 +97,61 @@ test('a press moves a row to yes, then no, then no answer', async ($, on) => {
   await ui.unmount()
 })
 
-test('Take all picks says yes to each row but Your hands, and Send writes one line per row', async ($, on) => {
+test('Take all picks answers only a Yours row with a pick, and Send writes one line per row', async ($, on) => {
   const { sent } = engine(on)
   await $.turn.complete(end(ANSWER))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
 
   await ui.press({ key: 'all' })
-  expect((await ui.find({ key: 'row-2' }))?.text).toMatch(/○ +Your hands: Touch ID/)
-  expect(await ui.find({ type: 'Text', text: /3 of 4 answered/ })).toBeDefined()
+  expect((await ui.find({ key: 'row-0' }))?.text).toMatch(/✓ only Vertex/)
+  expect((await ui.find({ key: 'row-1' }))?.text).toMatch(/^○ +GO: terraform apply/)
+  expect((await ui.find({ key: 'row-2' }))?.text).toMatch(/^○ +Your hands: Touch ID/)
+  expect((await ui.find({ key: 'row-3' }))?.text).toMatch(/^○ +Design approval/)
+  await ui.press({ key: 'row-1' })
+  expect(await ui.find({ type: 'Text', text: /2 of 4 answered/ })).toBeDefined()
   await ui.press({ key: 'send' })
 
   expect(sent).toEqual([
     [
-      'My answers to your Needs you lines (3 of 4 answered):',
+      'My answers to your Needs you lines (2 of 4 answered):',
       '',
-      '1. Yours: clouds — your pick: only Vertex.',
-      '2. GO: terraform apply (prod) — go.',
-      '3. Your hands: Touch ID — no answer.',
-      '4. Design approval — approve.',
+      '1. Yours: clouds ("should v0 use only Vertex, or Bedrock too?") — your pick: only Vertex.',
+      '2. GO: terraform apply (prod) ("may I apply the plan?") — go.',
+      '3. Your hands: Touch ID ("approve the keychain prompt.") — no answer.',
+      '4. Design approval ("approve the v0 design in section 10.") — no answer.',
     ].join('\n'),
   ])
   expect(await rows(ui)).toHaveLength(0)
+  await ui.unmount()
+})
+
+test('Take all picks keeps an answer the person set', async ($, on) => {
+  engine(on)
+  await $.turn.complete(end(ANSWER))
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+
+  await ui.press({ key: 'row-0' })
+  await ui.press({ key: 'row-0' })
+  await ui.press({ key: 'all' })
+  expect((await ui.find({ key: 'row-0' }))?.text).toMatch(/✗ no /)
+  await ui.unmount()
+})
+
+test('with no pick row, the band shows no Take all picks', async ($, on) => {
+  engine(on)
+  await $.turn.complete(end('Needs you (GO: merge): merge the PR?\nNeeds you (Yours: name): odin or thor?'))
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect(await ui.find({ key: 'all' })).toBeUndefined()
+  expect(await ui.find({ key: 'send' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('a pick ends at its first sentence stop', async ($, on) => {
+  engine(on)
+  await $.turn.complete(end('Needs you (Yours: name): odin or thor? I recommend odin. Thor is slower.'))
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  await ui.press({ key: 'row-0' })
+  expect((await ui.find({ key: 'row-0' }))?.text).toMatch(/^✓ odin +Yours: name/)
   await ui.unmount()
 })
 
@@ -145,10 +179,10 @@ test("the person's prompt carries the answers above their words, then the rows c
     [
       'My answers to your Needs you lines (1 of 4 answered):',
       '',
-      '1. Yours: clouds — no answer.',
-      '2. GO: terraform apply (prod) — no answer.',
-      '3. Your hands: Touch ID — no answer.',
-      '4. Design approval — changes.',
+      '1. Yours: clouds ("should v0 use only Vertex, or Bedrock too?") — no answer.',
+      '2. GO: terraform apply (prod) ("may I apply the plan?") — no answer.',
+      '3. Your hands: Touch ID ("approve the keychain prompt.") — no answer.',
+      '4. Design approval ("approve the v0 design in section 10.") — changes.',
       '',
       'Use two regions, not one.',
     ].join('\n'),
@@ -182,15 +216,32 @@ test('a slash command and a task notification leave the answers alone', async ($
   await ui.unmount()
 })
 
-test('an answer with no Needs you lines clears the band; an interrupt keeps it', async ($, on) => {
+test('a turn end with no Needs you lines keeps the band and its answers', async ($, on) => {
   engine(on)
   await $.turn.complete(end(ANSWER))
-  await $.turn.complete(end('Partial work.', { reason: 'aborted' }))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  expect(await rows(ui)).toHaveLength(4)
+  await ui.press({ key: 'row-0' })
 
-  await $.turn.complete(end('Done. Nothing is pending.'))
-  expect(await rows(ui)).toHaveLength(0)
+  await $.turn.complete(end('Partial work.', { reason: 'aborted' }))
+  await $.turn.complete(end('Noted: the task finished.'))
+  expect(await rows(ui)).toHaveLength(4)
+  expect((await ui.find({ key: 'row-0' }))?.text).toMatch(/✓ only Vertex/)
+  await ui.unmount()
+})
+
+test('new Needs you lines replace the rows and keep the answer of a line asked again', async ($, on) => {
+  engine(on)
+  await $.turn.complete(end(ANSWER))
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  await ui.press({ key: 'row-1' })
+  await ui.press({ key: 'row-1' })
+
+  await $.turn.complete(
+    end('Needs you (GO: terraform apply (prod)): may I apply the plan?\nNeeds you (GO: merge): merge the PR?'),
+  )
+  expect(await rows(ui)).toHaveLength(2)
+  expect((await ui.find({ key: 'row-0' }))?.text).toMatch(/✗ no go +GO: terraform apply/)
+  expect((await ui.find({ key: 'row-1' }))?.text).toMatch(/^○ +GO: merge/)
   await ui.unmount()
 })
 
@@ -218,6 +269,16 @@ test('only the closing run counts, and an unknown tag ends it', async ($, on) =>
   expect(await rows(ui)).toHaveLength(1)
   await ui.press({ key: 'row-0' })
   expect((await ui.find({ key: 'row-0' }))?.text).toMatch(/✓ odin +Yours: name/)
+  await ui.unmount()
+})
+
+test('a cut never splits an emoji', async ($, on) => {
+  engine(on)
+  await $.turn.complete(end(`Needs you (Yours: name): ${'🚀'.repeat(60)}`))
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal', props: { ...BAND.props, bodyColumns: 40 } })
+  const row = (await ui.find({ key: 'row-0' }))?.text ?? ''
+  expect(row).toMatch(/🚀…$/)
+  expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(row)).toBe(false)
   await ui.unmount()
 })
 

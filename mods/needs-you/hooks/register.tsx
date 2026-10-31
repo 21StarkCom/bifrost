@@ -8,10 +8,21 @@ import type { Answer, Ask, Asks, Kind } from '../types'
 const asksAtom = atom({ plugin: 'needs-you', key: 'asks' } as const, null, { shape: 'asks-1' })
 
 // The root rules' tags, in the order `tools/ask_guard_metric.ts` reads them.
+// `tools/ask_guard_metric.test.ts` holds KINDS and LEAD to QUESTION_KINDS and TAG there.
 const KINDS: readonly Kind[] = ['GO', 'Yours', 'Your hands', 'Design approval']
 const LEAD = 'Needs you ('
 const RECOMMEND = /\bI recommend\s+(.+)$/i
 const PICK_CHIP_MAX = 24
+const QUESTION_MAX = 100
+
+// Cuts by code point, so an emoji or other astral character is never split.
+// A wide character still counts as one cell: the row may then wrap.
+function cut(s: string, n: number): string {
+  const points = Array.from(s)
+  if (n <= 0) return ''
+
+  return points.length <= n ? s : `${points.slice(0, n - 1).join('')}…`
+}
 
 // One `Needs you (<tag>): <question>` line, or null when the line is not one.
 export function parseLine(line: string): Ask | null {
@@ -31,7 +42,8 @@ export function parseLine(line: string): Ask | null {
   const tag = end === -1 ? kind : line.slice(LEAD.length, end).trim()
   const question = (end === -1 ? line.slice(LEAD.length + kind.length) : line.slice(end + 1)).replace(/^:\s*/, '').trim()
   const found = RECOMMEND.exec(question)
-  const pick = found?.[1]?.replace(/[.!]$/, '').trim()
+  // The pick ends at its first sentence stop: a reason after it is not the pick.
+  const pick = found?.[1]?.split(/[.!](?:\s|$)/)[0]?.trim()
 
   return { kind, tag, question, ...(pick ? { pick } : {}) }
 }
@@ -67,17 +79,21 @@ function labels(ask: Ask): { yes: string; no: string } {
   }
 }
 
-const cut = (s: string, n: number) => (n <= 0 ? '' : s.length <= n ? s : `${s.slice(0, Math.max(n - 1, 0))}…`)
+// Take all picks answers only a Yours row that carries a pick. A GO row, a
+// Design approval row, a Your hands row and a Yours row with no pick each
+// need the operator's own key.
+const hasPick = (ask: Ask) => ask.kind === 'Yours' && ask.pick !== undefined
 
 function chip(ask: Ask, answer: Answer | null): string {
   if (answer === null) return '○'
   if (answer === 'no') return `✗ ${labels(ask).no}`
   // A pick is the yes side of a Yours row: the chip shows the pick alone.
-  return `✓ ${ask.kind === 'Yours' && ask.pick !== undefined ? cut(ask.pick, PICK_CHIP_MAX) : labels(ask).yes}`
+  return `✓ ${hasPick(ask) ? cut(ask.pick ?? '', PICK_CHIP_MAX) : labels(ask).yes}`
 }
 
 const nextAnswer = (a: Answer | null): Answer | null => (a === null ? 'yes' : a === 'yes' ? 'no' : null)
 const answeredCount = (asks: Asks) => asks.answers.filter(a => a !== null).length
+const sameAsk = (a: Ask, b: Ask) => a.tag === b.tag && a.question === b.question
 
 export function messageFor(asks: Asks): string {
   return [
@@ -86,8 +102,11 @@ export function messageFor(asks: Asks): string {
     ...asks.items.map((ask, i) => {
       const answer = asks.answers[i] ?? null
       const said = answer === null ? 'no answer' : labels(ask)[answer]
+      // The question names the line, so an answer read after a newer turn
+      // still matches its own question. The recommendation is left out.
+      const asked = cut(ask.question.replace(/\s*\bI recommend\b.*$/i, ''), QUESTION_MAX)
 
-      return `${i + 1}. ${ask.tag} — ${said}.`
+      return `${i + 1}. ${ask.tag} ("${asked}") — ${said}.`
     }),
   ].join('\n')
 }
@@ -111,12 +130,22 @@ async function send($: EngineInterface): Promise<void> {
 
 export const register: Register = on => {
   on('turn.complete', async ($, e, next) => {
-    // Only an answer replaces the rows: an interrupt, a refusal or an error keeps them.
+    // New lines replace the rows; an answer the operator set on the same line stays.
+    // An end with no lines keeps them: a task notification's or a command's turn
+    // does not answer them. Only the operator's prompt or Send clears them.
     if (e.agentId === undefined && e.reason === 'answer') {
       const items = parseAsks(e.answer)
-      await update($, asksAtom, () =>
-        items.length === 0 ? null : { turnId: e.turnId, items, answers: items.map(() => null) },
-      )
+      if (items.length > 0) {
+        await update($, asksAtom, now => ({
+          turnId: e.turnId,
+          items,
+          answers: items.map(ask => {
+            const was = now?.items.findIndex(old => sameAsk(old, ask)) ?? -1
+
+            return was === -1 ? null : (now?.answers[was] ?? null)
+          }),
+        }))
+      }
     }
 
     return next(e)
@@ -147,20 +176,24 @@ export const register: Register = on => {
     const columns = e.props.bodyColumns
     const count = items.length
     // One chip width for every row and answer, so a press never moves the text.
-    const chipWidth = Math.max(...items.flatMap(ask => [chip(ask, 'yes'), chip(ask, 'no')].map(c => c.length)))
+    const chipWidth = Math.max(
+      ...items.flatMap(ask => [chip(ask, 'yes'), chip(ask, 'no')].map(c => Array.from(c).length)),
+    )
     const cycle = (i: number) =>
       update($, asksAtom, now =>
         now === null || now.turnId !== turnId
           ? now
           : { ...now, answers: now.answers.map((a, j) => (j === i ? nextAnswer(a) : a)) },
       )
+    // Fills only a pick row with no answer yet: an answer the person set stays.
     const takeAll = () =>
       update($, asksAtom, now =>
         now === null || now.turnId !== turnId
           ? now
-          : { ...now, answers: now.items.map((ask, j) => (ask.kind === 'Your hands' ? (now.answers[j] ?? null) : 'yes')) },
+          : { ...now, answers: now.items.map((ask, j) => now.answers[j] ?? (hasPick(ask) ? 'yes' : null)) },
       )
     const digits = count > 1 ? `1-${Math.min(count, 9)}` : '1'
+    const anyPick = items.some(hasPick)
 
     return (
       <Box flexDirection="column">
@@ -178,12 +211,13 @@ export const register: Register = on => {
           // `1: ` before the chip, two spaces after it.
           const room = columns - 3 - chipWidth - 2
           const tag = cut(ask.tag, room)
-          const question = cut(ask.question, room - tag.length - 3)
+          const question = cut(ask.question, room - Array.from(tag).length - 3)
+          const shown = chip(ask, answer)
 
           return (
             <Button key={`row-${i}`} plain {...hotkey} onPress={() => cycle(i)}>
               <Text color={answer === null ? 'inactive' : answer === 'yes' ? 'success' : 'warning'}>
-                {chip(ask, answer).padEnd(chipWidth)}
+                {shown + ' '.repeat(Math.max(chipWidth - Array.from(shown).length, 0))}
               </Text>
               {`  ${tag}`}
               <Text dimColor>{question === '' ? '' : ` · ${question}`}</Text>
@@ -191,11 +225,12 @@ export const register: Register = on => {
           )
         })}
         <Box columnGap={1}>
-          <Button key="all" hotkey="a" label="Take all picks" onPress={() => takeAll()} />
+          {anyPick && <Button key="all" hotkey="a" label="Take all picks" onPress={() => takeAll()} />}
           <Button key="send" hotkey="s" variant="primary" label="Send answers" onPress={() => send($)} />
         </Box>
         <Text dimColor>
-          {`${digits} in an empty prompt answers a row. a and s work after ctrl+x tab. Words you type and send go after your answers.`}
+          {`${digits} in an empty prompt answers a row; type a space first to start a prompt with a digit. ` +
+            `${anyPick ? 'a and s work' : 's works'} after ctrl+x tab. Words you type and send go after your answers.`}
         </Text>
       </Box>
     )
