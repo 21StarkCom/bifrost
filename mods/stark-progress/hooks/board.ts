@@ -128,7 +128,7 @@ export const clockOf = (ms: number) => {
 const STEP: Record<string, string> = { ticket: 'starting', pr: 'PR open', review: 'in review', merged: 'merged' }
 
 /** The calm reading of a band row: its tone, one emoji, a short status, and why it is worth a look. */
-export function calm(r: Row, hasFile: boolean, lastActivity: number | null, now: number): Omit<BoardRow, 'name' | 'repo' | 'slice' | 'detail'> {
+export function calm(r: Row, hasFile: boolean, lastActivity: number | null, now: number): Omit<BoardRow, 'name' | 'repo' | 'slice' | 'detail' | 'cells'> {
   const base = { id: r.id, at: STAGES.indexOf(r.stage) }
   const v = r.verdict
   if (!hasFile) return { ...base, at: -1, tone: 'none', emoji: '💤', status: 'not started', attention: null }
@@ -204,7 +204,8 @@ function detailOf(
   if (pr !== null) out.push(`Pull request: ${prName(pr)}`)
   if (updated !== null && r.stage !== 'closed') out.push(`In this step since ${clockOf(updated)}.`)
   if (r.diff !== null) out.push(`${r.diff} in its worktree.`)
-  if (beat !== null) out.push(...callsOf(beat, now))
+  // As row() reads it: on a closed ticket, a call still running is the stand-down's, which never ends.
+  if (beat !== null) out.push(...callsOf(r.stage === 'closed' ? { ...beat, running: null } : beat, now))
 
   return out
 }
@@ -261,6 +262,7 @@ export function buildBoard(
       repo: words?.repo ?? null,
       slice: words?.slice ?? null,
       detail: detailOf(title, words?.slice ?? null, str(t?.pr), Number.isFinite(updated) ? updated : null, r, beat, now),
+      cells: r.cells,
     }
   })
   const done = chosen.tickets.filter(id => parse(files[`${id}.json`])?.stage === 'closed').length

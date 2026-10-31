@@ -214,7 +214,9 @@ export function timeline(b: Beat | null, milestones: number[], now: number): Cel
 export function row(id: string, files: Record<string, string>, git: GitSignal | null, now: number): Row {
   const text = files[`${id}.json`]
   const t = text === undefined ? null : ticket(text)
-  const b = beat(files[`${id}.beat.json`])
+  // A worker stands down inside its last call, which never ends: on a closed ticket, a call still running is stale.
+  const raw = beat(files[`${id}.beat.json`])
+  const b = raw !== null && t?.stage === 'closed' ? { ...raw, running: null } : raw
   const milestones = [...(t?.updated == null ? [] : [t.updated]), ...(git?.commits ?? [])]
   const v = verdict(t, b, milestones, now)
   const stage = t?.stage ?? 'ticket'

@@ -1,6 +1,6 @@
 import type { Elements } from 'claude-code'
 
-import type { Board, BoardRow, BoardTone, GruSettings, PaneTab } from '../types'
+import type { Board, BoardRow, BoardTone, Cell, GruSettings, PaneTab } from '../types'
 import { clockOf, MAX_WORKERS, stepCounts } from './board'
 import { bar, STAGES, STATION_LABELS } from './view'
 
@@ -68,6 +68,65 @@ export function line(ui: UI, r: Pick<BoardRow, 'at' | 'tone'>, seg: number) {
         </Text>
       ))}
     </Text>
+  )
+}
+
+const CELL_INK: Record<Cell['kind'], string> = {
+  milestone: P.green,
+  busy: P.text,
+  fail: P.amber,
+  running: P.hint,
+  quiet: P.track,
+  none: P.track,
+}
+
+/** The legend's words for each mark; a blank cell has no mark to show. */
+const MARKS: { kind: Cell['kind']; ch: string; words: string }[] = [
+  { kind: 'milestone', ch: '◆', words: 'milestone' },
+  { kind: 'busy', ch: '▃', words: 'tool calls per 5 min' },
+  { kind: 'fail', ch: '✕', words: 'most calls failed' },
+  { kind: 'running', ch: '─', words: 'one long call' },
+  { kind: 'quiet', ch: '·', words: 'no calls' },
+  { kind: 'none', ch: '', words: 'blank: no heartbeat' },
+]
+
+/** The marks that say something happened in the hour. */
+const ACTIVE: ReadonlySet<Cell['kind']> = new Set(['milestone', 'busy', 'fail', 'running'])
+
+/** The band draws a failed 5 minutes as a bar in red; the pane draws `✕`, so a failure never rests on its color alone. */
+const markOf = (c: Cell) => (c.kind === 'fail' ? '✕' : c.ch)
+
+/**
+ * A ticket's last hour, as the band drew it: 12 cells of 5 minutes, oldest
+ * first, then a legend of the marks it shows. Nothing when the hour holds
+ * no milestone, call or long call: a closed ticket's leftover heartbeat
+ * would draw only dots.
+ */
+function hour(ui: UI, cells: Cell[]) {
+  const { Box, Text } = ui
+  if (!cells.some(c => ACTIVE.has(c.kind))) return null
+  const kinds = new Set(cells.map(c => c.kind))
+
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      <Text>
+        <Text color={P.hint}>{'Last hour  '}</Text>
+        {cells.map((c, i) => (
+          <Text key={`c${i}`} color={CELL_INK[c.kind]}>
+            {markOf(c)}
+          </Text>
+        ))}
+        <Text color={P.hint}>{'  now'}</Text>
+      </Text>
+      <Box flexWrap="wrap" columnGap={2}>
+        {MARKS.filter(m => kinds.has(m.kind)).map(m => (
+          <Text key={`m${m.kind}`}>
+            {m.ch !== '' && <Text color={CELL_INK[m.kind]}>{`${m.ch} `}</Text>}
+            <Text color={P.hint}>{m.words}</Text>
+          </Text>
+        ))}
+      </Box>
+    </Box>
   )
 }
 
@@ -180,6 +239,7 @@ function overview(ui: UI, w: number, board: Board, view: PaneView) {
                       {words}
                     </Text>
                   ))}
+                  {hour(ui, r.cells)}
                 </Box>
               )}
             </Box>

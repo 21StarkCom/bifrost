@@ -133,6 +133,22 @@ test('a held ticket is worth a look, even while its worker is quiet', () => {
   expect(board.rows[1]).toMatchObject({ at: 3, attention: 'held by its settings: release' })
 })
 
+test("a closed ticket's call still marked running is stale: no long call in its hour, no Running line", () => {
+  const files = (stage: string) => ({
+    'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 's', tickets: ['STARK-1'] }),
+    'STARK-1.json': ticket('STARK-1', stage, 30),
+    'STARK-1.beat.json': JSON.stringify({ lastActivity: iso(25), running: { tool: 'Bash', since: iso(25) }, minutes: [], recent: [] }),
+  })
+  const closed = buildBoard('s', '', T0, files('closed'), new Map(), {})?.rows[0]
+  expect(closed?.cells.some(c => c.kind === 'running')).toBe(false)
+  expect(closed?.detail.some(line => line.startsWith('Running'))).toBe(false)
+  expect(closed?.detail).toContain('Last tool call 25m ago.')
+  // The same heartbeat on an open ticket is a real long call.
+  const open = buildBoard('s', '', T0, files('review'), new Map(), {})?.rows[0]
+  expect(open?.cells.some(c => c.kind === 'running')).toBe(true)
+  expect(open?.detail).toContain('Running Bash for 25m.')
+})
+
 test('the graph counts each ticket at its step, and the ones worth a look there', () => {
   const steps = stepCounts([
     { at: -1, tone: 'none', attention: null },

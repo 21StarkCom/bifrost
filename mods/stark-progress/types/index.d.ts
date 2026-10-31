@@ -124,6 +124,8 @@ export type BoardRow = {
   attention: string | null
   /** The lines its row shows opened. */
   detail: string[]
+  /** The last hour in 12 cells of 5 minutes, as the band draws it; its row shows it opened. */
+  cells: Cell[]
 }
 
 /** What the Gru pane draws: one run, its counts, and its settings. */
