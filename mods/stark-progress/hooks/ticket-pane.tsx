@@ -1,6 +1,6 @@
 import type { Hold, PaneTab, TicketBoard, TicketSettings } from '../types'
 import { clockOf } from './board'
-import { choice, cut, hour, line, logTab, segFor, settingRow, stationHeader, tabBar, toggle } from './pane'
+import { choice, cut, hour, line, logTab, segFor, settingRow, stationHeader, statsTab, tabBar, toggle } from './pane'
 import type { UI } from './pane'
 
 // The ticket pane, in a Minion's or Agnes's own tab: one ticket, all of it at
@@ -148,7 +148,13 @@ export function drawTicketPane(ui: UI, w: number, view: TicketPaneView) {
               'No step yet. The worker adds one line here at each big step.',
               `~/.cache/stark-progress/${t.id}.log.jsonl`,
             )
-          : overview(ui, w, t)}
+          : view.tab === 'stats'
+            ? statsTab(ui, w, t.stats, t.readAt, {
+                title: `Stats for ${t.id}`,
+                who: "The counts of this ticket's worker sessions.",
+                empty: "No stats file yet. This tab writes one within a few seconds, if the worker's session has the mod.",
+              })
+            : overview(ui, w, t)}
     </Box>
   )
 }

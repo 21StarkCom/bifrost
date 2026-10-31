@@ -18,7 +18,8 @@ const BARS = '▁▂▃▄▅▆'
 const CALLS_A_STEP = 6
 const FAILED_OF_RECENT = 5
 
-function parse<T>(text: string | undefined): Partial<T> | null {
+/** A JSON object's fields, or null when the text is not one. */
+export function parse<T>(text: string | undefined): Partial<T> | null {
   if (!text) return null
   try {
     const value: unknown = JSON.parse(text)
@@ -36,9 +37,19 @@ const time = (v: unknown): number | null => {
   return Number.isFinite(ms) ? ms : null
 }
 
-/** A run file's name; a run's settings file (`run-<id>.settings.json`) is not one. */
+/** A run file's name; a run's settings file (`run-<id>.settings.json`) and stats file (`run-<id>.stats.json`) are not. */
 export const isRunName = (name: string) =>
-  name.startsWith('run-') && name.endsWith('.json') && !name.endsWith('.settings.json')
+  name.startsWith('run-') && name.endsWith('.json') && !name.endsWith('.settings.json') && !name.endsWith('.stats.json')
+
+/** The name of the first run file, by name, whose `session` is this session's: Gru's run. */
+function ownRunName(session: string, files: Record<string, string>): string | null {
+  for (const name of Object.keys(files).filter(isRunName).sort()) {
+    const run = parse<RunFile>(files[name])
+    if (run?.session === session && Array.isArray(run.tickets)) return name
+  }
+
+  return null
+}
 
 /** `7m`, `2h05m`. */
 export function dur(ms: number): string {
@@ -48,16 +59,13 @@ export function dur(ms: number): string {
 }
 
 /** The first run file, by name, whose `session` is this session's: Gru's run. */
-export function ownRun(session: string, files: Record<string, string>): RunFile | null {
-  for (const name of Object.keys(files).filter(isRunName).sort()) {
-    const run = parse<RunFile>(files[name])
-    if (run?.session !== session || !Array.isArray(run.tickets)) continue
-    const tickets = run.tickets.filter((id): id is string => typeof id === 'string')
+export function ownRun(session: string, files: Record<string, string>): (RunFile & { name: string }) | null {
+  const name = ownRunName(session, files)
+  const run = name === null ? null : parse<RunFile>(files[name])
+  if (name === null || run === null || !Array.isArray(run.tickets)) return null
+  const tickets = run.tickets.filter((id): id is string => typeof id === 'string')
 
-    return { epic: str(run.epic) ?? '', session, tickets: [...new Set(tickets)] }
-  }
-
-  return null
+  return { name, epic: str(run.epic) ?? '', session, tickets: [...new Set(tickets)] }
 }
 
 /** The ticket a worker's worktree is named for, from a path. */
