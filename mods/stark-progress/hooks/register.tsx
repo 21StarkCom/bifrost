@@ -23,7 +23,7 @@ import {
 } from './stats'
 import { buildTicket, ticketSettingsName, ticketSettingsOf } from './ticket'
 import { drawTicketPane } from './ticket-pane'
-import { buildView, isRunName, ownRun, ownRunName, ticketOf, worktreeOf } from './view'
+import { buildView, isRunName, ownRun, ticketOf, worktreeOf } from './view'
 
 // The state contract is in ../README.md.
 const POLL_MS = 1000
@@ -212,12 +212,11 @@ export const register: Register = on => {
         ...new Set([...(run !== null ? run.tickets : own === null ? [] : [own]), ...(shown?.tickets ?? [])]),
       ]
       // This tab's stats file: a worker's ticket's, or Gru's run's.
-      const runName = run === null ? null : ownRunName(session, files)
       statsAnchor =
         own !== null
           ? { base: `${own}.json`, name: statsName(own) }
-          : runName !== null
-            ? { base: runName, name: runStatsName(launchIdOf(runName)) }
+          : run !== null
+            ? { base: run.name, name: runStatsName(launchIdOf(run.name)) }
             : null
       const reads = new Set([
         ...wanted.flatMap(id => [`${id}.json`, `${id}.beat.json`, logName(id), statsName(id)]),
@@ -268,9 +267,13 @@ export const register: Register = on => {
       }
       if (statsAnchor !== null) {
         const { base, name } = statsAnchor
-        if (names.has(base)) {
+        // A stats file listed but not read this poll waits for the next: a seed without it would overwrite its total.
+        const isUnread = statsSeededFor !== name && names.has(name) && files[name] === undefined
+        if (names.has(base) && !isUnread) {
           statsWritten.set(name, base)
           if (statsSeededFor !== name) {
+            // A new run in the same tab starts its counts over: the last run's are its own file's.
+            if (statsSeededFor !== '') stats = { ...newStats(), model: stats.model, effort: stats.effort }
             statsSeededFor = name
             const kept = statsOf(files[name])
             if (kept !== null) stats = addStats(kept, stats)
@@ -287,7 +290,7 @@ export const register: Register = on => {
               isStatsDirty = true
             })
           }
-        } else if (names.has(name) && !statsWritten.has(name)) {
+        } else if (!names.has(base) && names.has(name) && !statsWritten.has(name)) {
           // One an earlier load of the mod wrote, whose file is gone (Agnes deletes her ticket's at stand-down).
           await $.process.run(['rm', '-f', `${dir}/${name}`]).catch(() => undefined)
         }

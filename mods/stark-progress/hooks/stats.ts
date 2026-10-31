@@ -105,13 +105,21 @@ const LEAD = String.raw`(?:^|[\s;&|(])`
 const SENT = new RegExp(`${LEAD}hermod\\s+msg\\s+(?:send|reply)\\b`, 'g')
 const LAUNCH = new RegExp(`${LEAD}valkyrie\\s+(?:agnes|minion|gru)\\b`, 'g')
 const CODEX_REVIEW = new RegExp(`${LEAD}codex\\s+(?:exec\\s+)?review\\b`, 'g')
-const HELP = /(?:^|\s)(?:--help|-h)(?:\s|$)/
+const HELP = /(?:^|\s)(?:--help|-h)(?=\s|$)/
+// A here-document's body, kept to its opening line; then a quoted string.
+const HEREDOC = /<<-?[ \t]*(['"]?)(\w+)\1([^\n]*)\n[\s\S]*?\n[ \t]*\2[ \t]*(?=\n|$)/g
+const QUOTED = /'[^']*'|"(?:[^"\\]|\\.)*"/g
+// The end of one simple command.
+const COMMAND_END = /[;&|\n)]/
 
 /** What one Bash command does that the stats count: messages to other sessions, worker launches and Codex reviews. */
 export function bashCounts(command: string): { sent: number; launches: number; reviews: number } {
-  // A `--help` run does nothing.
-  if (HELP.test(command)) return { sent: 0, launches: 0, reviews: 0 }
-  const count = (re: RegExp) => [...command.matchAll(re)].length
+  // A tool named in a quoted string or a here-document (a commit message, a PR body, a grep pattern) is not run.
+  const code = command.replace(HEREDOC, '<<$3').replace(QUOTED, "''")
+  // A `--help` run does nothing; a `-h` in another command of the line does not stop this one.
+  const count = (re: RegExp) =>
+    [...code.matchAll(re)].filter(m => !HELP.test(code.slice(m.index + m[0].length).split(COMMAND_END, 1)[0] ?? ''))
+      .length
 
   return { sent: count(SENT), launches: count(LAUNCH), reviews: count(CODEX_REVIEW) }
 }
@@ -191,7 +199,11 @@ export function statsOf(file: string | undefined): (Stats & { session: string | 
     launches: count(f.launches),
     reviews: count(f.reviews),
     tools,
-    git: f.git === null || f.git === undefined ? null : { added: count(git.added), removed: count(git.removed), commits: count(git.commits) },
+    // A `git` that is no object reads as absent, so the lines fall back past it.
+    git:
+      typeof f.git === 'object' && f.git !== null && !Array.isArray(f.git)
+        ? { added: count(git.added), removed: count(git.removed), commits: count(git.commits) }
+        : null,
   }
 }
 
@@ -267,7 +279,8 @@ export function statsFile(s: Stats, session: string, now: number): StatsFile {
 export function short(n: number): string {
   const whole = Math.round(n)
   if (whole < 10_000) return grouped(whole)
-  const [size, mark] = whole < 1e6 ? [1e3, 'k'] : whole < 1e9 ? [1e6, 'M'] : [1e9, 'B']
+  // The unit is picked on the rounded count: `999,999` reads `1M`, never `1000k`.
+  const [size, mark] = Math.round(whole / 1e3) < 1000 ? [1e3, 'k'] : Math.round(whole / 1e6) < 1000 ? [1e6, 'M'] : [1e9, 'B']
   const scaled = whole / size
 
   return `${scaled < 100 ? scaled.toFixed(1).replace(/\.0$/, '') : Math.round(scaled)}${mark}`

@@ -200,8 +200,9 @@ the spine's background command, and go on when it clears. Send no
 `hermod notify`: the operator set it.
 
 Delete the progress file, the settings file and the log, with any `.tmp` a failed
-write left beside them
-(`rm -f ~/.cache/stark-progress/STARK-n.json ~/.cache/stark-progress/STARK-n.json.tmp ~/.cache/stark-progress/STARK-n.settings.json ~/.cache/stark-progress/STARK-n.settings.json.tmp ~/.cache/stark-progress/STARK-n.log.jsonl`), at the
+write left beside them, and the heartbeat and stats files the mod writes, since
+your tab can close before the mod removes them
+(`rm -f ~/.cache/stark-progress/STARK-n.json ~/.cache/stark-progress/STARK-n.json.tmp ~/.cache/stark-progress/STARK-n.settings.json ~/.cache/stark-progress/STARK-n.settings.json.tmp ~/.cache/stark-progress/STARK-n.log.jsonl ~/.cache/stark-progress/STARK-n.beat.json ~/.cache/stark-progress/STARK-n.stats.json`), at the
 [stand-down](#stand-down), once the contract's checks pass and right before
 `hermod poison-pill --json`, which takes your session with it. A check that
 stops you there leaves the files, and the tab, standing.

@@ -152,7 +152,7 @@ export function drawTicketPane(ui: UI, w: number, view: TicketPaneView) {
             ? statsTab(ui, w, t.stats, t.readAt, {
                 title: `Stats for ${t.id}`,
                 who: "The counts of this ticket's worker sessions.",
-                empty: 'No stats yet. The mod counts here once this tab makes its first model request or tool call.',
+                empty: "No stats file yet. This tab writes one within a few seconds, if the worker's session has the mod.",
               })
             : overview(ui, w, t)}
     </Box>

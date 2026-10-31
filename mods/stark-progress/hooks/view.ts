@@ -42,7 +42,7 @@ export const isRunName = (name: string) =>
   name.startsWith('run-') && name.endsWith('.json') && !name.endsWith('.settings.json') && !name.endsWith('.stats.json')
 
 /** The name of the first run file, by name, whose `session` is this session's: Gru's run. */
-export function ownRunName(session: string, files: Record<string, string>): string | null {
+function ownRunName(session: string, files: Record<string, string>): string | null {
   for (const name of Object.keys(files).filter(isRunName).sort()) {
     const run = parse<RunFile>(files[name])
     if (run?.session === session && Array.isArray(run.tickets)) return name
@@ -59,13 +59,13 @@ export function dur(ms: number): string {
 }
 
 /** The first run file, by name, whose `session` is this session's: Gru's run. */
-export function ownRun(session: string, files: Record<string, string>): RunFile | null {
+export function ownRun(session: string, files: Record<string, string>): (RunFile & { name: string }) | null {
   const name = ownRunName(session, files)
   const run = name === null ? null : parse<RunFile>(files[name])
-  if (run === null || !Array.isArray(run.tickets)) return null
+  if (name === null || run === null || !Array.isArray(run.tickets)) return null
   const tickets = run.tickets.filter((id): id is string => typeof id === 'string')
 
-  return { epic: str(run.epic) ?? '', session, tickets: [...new Set(tickets)] }
+  return { name, epic: str(run.epic) ?? '', session, tickets: [...new Set(tickets)] }
 }
 
 /** The ticket a worker's worktree is named for, from a path. */

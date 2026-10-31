@@ -253,7 +253,7 @@ session, and the tab says when the earliest began. The rows:
 | Work | review rounds | each `/code-review` typed (`command.run`), and each Skill call of `code-review` and each `codex review` run that did not fail; `skill.prompt` would see both forms, but a built-in plugin above the mod passes it on past the mod |
 | Tools | tools used, tool calls, failed calls | each tool call (`tool.call`), subagents' included; a refused call is a failed one |
 | Prompts and messages | prompts from you, from other sessions, other prompts | each prompt that entered, by its origin: typed, from a phone or a Slack ping is yours; a peer session's, a SendMessage delivery or a coordinator's is another session's; a notification, a schedule or a plugin's is other |
-| Prompts and messages | messages sent, workers launched | each SendMessage call that carries a message, each `hermod msg send` or `reply`, and each `valkyrie agnes`, `minion` or `gru` run, that did not fail |
+| Prompts and messages | messages sent, workers launched | each SendMessage call that carries a message, each `hermod msg send` or `reply`, and each `valkyrie agnes`, `minion` or `gru` run, that did not fail; a tool named only in quoted text or a here-document (a commit message, a PR body) is not a run |
 
 Gru writes no code, so its lines, commits and PRs read `—`. Under the table:
 the five tools with the most calls in the whole run, each session's main-loop
@@ -494,8 +494,9 @@ whose worker is a Claude session with the mod installed:
 
 The mod writes it in a worker's own tab, from that session's tool calls
 (its subagents' included), at most once every 5 seconds, and only while the
-ticket's file exists; once the file is gone (Agnes deletes it at stand-down)
-the mod removes the heartbeat. `lastActivity` is when a call last started or
+ticket's file exists; once the file is gone the mod removes the heartbeat.
+Agnes deletes her heartbeat and stats files herself at stand-down, with her
+ticket's file, since her tab can close before the mod's next poll. `lastActivity` is when a call last started or
 ended, `running` the oldest call still running or `null`, `minutes` the calls
 and failures per minute for the last 60 minutes (`at` is minutes since the
 epoch), and `recent` the outcomes of the last 10 calls that ended, oldest

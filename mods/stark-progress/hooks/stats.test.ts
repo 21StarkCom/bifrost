@@ -92,6 +92,19 @@ test('a Bash command counts its messages to other sessions, its worker launches 
   // A `--help` run does nothing, and a word inside another word is not the tool.
   expect(bashCounts('valkyrie minion --help')).toEqual({ sent: 0, launches: 0, reviews: 0 })
   expect(bashCounts('hermod msg peers && myvalkyrie minion x && hermod msg ls')).toEqual({ sent: 0, launches: 0, reviews: 0 })
+  // A `-h` in another command of the line does not stop this one.
+  expect(bashCounts('valkyrie minion STARK-1 --json; du -h .')).toEqual({ sent: 0, launches: 1, reviews: 0 })
+  // A tool named in a quoted string or a here-document is not run.
+  expect(bashCounts('git commit -m "docs: launch with valkyrie minion STARK-1; then hermod msg send"')).toEqual({
+    sent: 0,
+    launches: 0,
+    reviews: 0,
+  })
+  expect(bashCounts("git commit -F - <<'EOF' && valkyrie agnes STARK-4\nvalkyrie minion STARK-1\nEOF\ncodex review")).toEqual({
+    sent: 0,
+    launches: 1,
+    reviews: 1,
+  })
 })
 
 test('a tool call counts under its tool, and only a call that did not fail counts what it does', () => {
@@ -145,7 +158,9 @@ test('a stats file reads back whole, and fields of the wrong type read as zero o
   expect(odd?.prompts).toEqual({ operator: 0, peer: 0, other: 0 })
   expect(odd?.tools).toEqual({ Bash: { calls: 0, fails: 0 } })
   expect(odd?.model).toBe(null)
-  expect(odd?.git).toEqual({ added: 0, removed: 0, commits: 0 })
+  // A `git` that is no object is absent, not zero lines.
+  expect(odd?.git).toBe(null)
+  expect(statsOf(JSON.stringify({ git: { added: 'many', removed: 2 } }))?.git).toEqual({ added: 0, removed: 2, commits: 0 })
   expect(odd?.since).toBe(null)
 })
 
@@ -180,6 +195,9 @@ test('a count reads short in a column', () => {
   expect(short(123_456)).toBe('123k')
   expect(short(1_234_567)).toBe('1.2M')
   expect(short(2_500_000_000)).toBe('2.5B')
+  // A count that rounds up to the next unit takes it.
+  expect(short(999_999)).toBe('1M')
+  expect(short(999_600_000)).toBe('1B')
 })
 
 test("the ticket pane's stats are its worker's counts, its lines from git, and its PR from the ticket file", () => {
