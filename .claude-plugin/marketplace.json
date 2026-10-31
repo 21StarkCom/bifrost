@@ -202,7 +202,7 @@
       "name": "stark-progress",
       "source": "./mods/stark-progress",
       "description": "The Gru pane beside Gru's chat: a calm board of the run (counts, a bar graph of the tickets at each step, the tickets worth a look, a metro line per ticket) and a Settings tab Gru reads before each launch. In each Minion and Agnes tab, the ticket pane beside the chat: the one ticket (its metro line, whether it is worth a look, its activity and the next step) and a Settings tab the worker reads before its review, its merge and its release; a progress row above the prompt stands in while it is not placed. All drawn from the state files under ~/.cache/stark-progress/.",
-      "version": "0.5.1",
+      "version": "0.6.0",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"

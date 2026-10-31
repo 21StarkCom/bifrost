@@ -168,6 +168,16 @@ test('the pane draws the run: counts, a ticket worth a look, Up next, and a row 
   await pane.press({ key: 'row-STARK-2' })
   expect(await pane.find({ type: 'Text', text: 'Running Bash for 1m.' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: 'This is slice 2 of 3.' })).toBeDefined()
+  // Its last hour: quiet, its stage change 10 minutes ago, and the Bash call running for the last minute.
+  expect(await pane.find({ type: 'Text', text: 'Last hour  ·········◆·─  now' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '◆ milestone' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '─ one long call' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '· no calls' })).toBeDefined()
+  // The legend names only the marks the hour shows.
+  expect(await pane.find({ type: 'Text', text: '▃ tool calls per 5 min' })).toBeUndefined()
+  // A ticket with no file has no heartbeat and no milestone, so its detail draws no hour.
+  await pane.press({ key: 'row-STARK-4' })
+  expect(await pane.find({ type: 'Text', text: /^Last hour/ })).toBeUndefined()
   // Counts and elapsed times only: nothing forecasts the time left.
   expect(await pane.find({ type: 'Text', text: /left|ETA|~\d/ })).toBeUndefined()
 })

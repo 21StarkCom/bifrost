@@ -19,7 +19,7 @@ const PANE_TITLE = 'Gru'
 const TICKET_PANE = 'ticket-board'
 
 const view = atom({ plugin: 'stark-progress', key: 'view' } as const, null, { shape: 'view-2' })
-const board = atom({ plugin: 'stark-progress', key: 'board' } as const, null, { shape: 'board-1' })
+const board = atom({ plugin: 'stark-progress', key: 'board' } as const, null, { shape: 'board-2' })
 const tabAtom = atom({ plugin: 'stark-progress', key: 'tab' } as const, 'overview' as PaneTab)
 const focusAtom = atom({ plugin: 'stark-progress', key: 'focus' } as const, '')
 const pickAtom = atom({ plugin: 'stark-progress', key: 'pick' } as const, '')

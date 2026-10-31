@@ -138,7 +138,11 @@ left, the pane says `No Gru run yet`.
   `⏳` for `blocked` or idle (`quiet <time>`), `💤 not started`. Select a name
   to open its detail: the whole title, the slice, the PR, when the step began,
   the diff size, the running or last tool call, the calls in the last 15
-  minutes, and the failures among the last 10.
+  minutes, the failures among the last 10, and its last hour: the band's
+  12 cells of 5 minutes, oldest first, with a legend of the marks it shows
+  (`◆` milestone, `▃` tool calls per 5 min, amber `▃` most calls failed, `─`
+  one long call, `·` no calls). A ticket with no heartbeat and no milestone in
+  the hour shows no hour.
 - `👉 Up next`: the tickets with no file yet, in run order.
 
 **Settings.** Four rows, each a value you select to change. A press writes all
