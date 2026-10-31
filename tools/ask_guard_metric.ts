@@ -195,7 +195,8 @@ export function turnEnds(lines: Iterable<string>): TurnEnd[] {
   return out;
 }
 
-const TAG = "Needs you (";
+/** What every tagged question line starts with; the needs-you mod reads the same lead. */
+export const TAG = "Needs you (";
 const tagOf = (line: string) => (line.startsWith(TAG) ? QUESTION_KINDS.find((k) => line.startsWith(k, TAG.length)) : undefined);
 
 /** Sort the last non-empty line of a turn end: a tagged question, an untagged one, or none.

@@ -229,6 +229,22 @@
         "review",
         "mod"
       ]
+    },
+    {
+      "name": "needs-you",
+      "source": "./mods/needs-you",
+      "description": "A band above the prompt for the Needs you lines a turn ends on: answer each with one key, take all of Claude's picks at once, and send the answers as your next message.",
+      "version": "0.1.0",
+      "author": {
+        "name": "21 Stark AI",
+        "email": "engineering@21stark.com"
+      },
+      "category": "productivity",
+      "tags": [
+        "decisions",
+        "questions",
+        "mod"
+      ]
     }
   ]
 }

@@ -10,6 +10,8 @@ import { test } from "node:test";
 import {
   BASELINE,
   LABEL,
+  QUESTION_KINDS,
+  TAG,
   type QuestionCounts,
   classifyEnding,
   countPrompts,
@@ -27,6 +29,7 @@ import {
   turnEnds,
   weekWindow,
 } from "./ask_guard_metric.ts";
+import { readRepoFile } from "./repo_files_lib.ts";
 
 const CLI = path.join(import.meta.dirname, "ask_guard_metric.ts");
 const at = (y: number, m: number, d: number, h = 12) => new Date(y, m - 1, d, h).getTime();
@@ -137,6 +140,19 @@ test("a turn end's last non-empty line is tagged by kind, an untagged question, 
   assert.deepEqual(two.kinds, ["GO", "Yours"]);
   assert.deepEqual(classifyEnding("Needs you (GO: a): A?\nShould I B?").kinds, []);
   assert.equal(classifyEnding("Done.\n  Should I ship it?  \n").line, "Should I ship it?");
+});
+
+test("the needs-you mod reads the same tags and lead as classifyEnding", () => {
+  const why = "The needs-you mod turns the lines this metric counts into rows; the two must read the same tags.";
+  const quoted = (s: string | undefined) => [...(s ?? "").matchAll(/'([^']*)'/g)].map((m) => m[1]);
+  const mod = readRepoFile("mods/needs-you/hooks/register.tsx", why);
+  const kinds = /const KINDS: readonly Kind\[\] = \[([^\]]*)\]/.exec(mod);
+  assert.ok(kinds, "mods/needs-you/hooks/register.tsx: no `const KINDS: readonly Kind[] = [...]` line");
+  assert.deepEqual(quoted(kinds[1]), [...QUESTION_KINDS], "the mod's KINDS differ from QUESTION_KINDS");
+  assert.equal(/const LEAD = '([^']*)'/.exec(mod)?.[1], TAG, "the mod's LEAD differs from TAG");
+  const types = readRepoFile("mods/needs-you/types/index.d.ts", why);
+  const kind = /export type Kind = ([^\n]*)/.exec(types)?.[1];
+  assert.deepEqual(quoted(kind), [...QUESTION_KINDS], "the mod's Kind type differs from QUESTION_KINDS");
 });
 
 test("a prompt is a typed user line, never a tool result, meta, summary or <tag> line", () => {
