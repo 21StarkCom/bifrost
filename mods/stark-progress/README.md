@@ -154,8 +154,9 @@ left, the pane says `No Gru run yet`.
 - A box of the tickets worth a look, with the reason: the band calls it
   `blocked`, `idle` or `stalled`, or 5 of its last 10 calls failed. With none,
   `🌿 Nothing needs you right now.`
-- `🚇 Where each ticket is`: a name (the title without its `<repo>: ` lead and
-  `(slice n of m)` tail), then the track and one emoji and status: `✅ done`,
+- `🚇 Where each ticket is`: a name, `[STARK-n] <title>` (the title without
+  its `[tag]`, `<repo>: ` lead and `(slice n of m)` tail), then the track and
+  one emoji and status: `✅ done`,
   `👀 in review · <time in stage>`, `🔨 PR open · <time>`, `🧱` for `stalled`,
   `⏳` for `blocked` or idle (`quiet <time>`), `💤 not started`. Select a name
   to open its detail: the whole title, the slice, the PR, when the step began,
@@ -173,10 +174,18 @@ left, the pane says `No Gru run yet`.
   call, which never ends.
 - `👉 Up next`: the tickets with no file yet, in run order.
 
+Each ticket the pane names (its row, the box of tickets worth a look, Up
+next and the Log tab) reads `[STARK-n] <title>`: the id in its own color,
+then the title in the text's color, dimmed on a done or not started row (and
+on the Log tab). In the terminal the id is lavender (`#c9b3f5`, 8.1:1 on the
+pane), a color no state uses; elsewhere it takes the app's accent. The title is
+the ticket file's, else the run file's `titles` entry; a ticket that neither
+names shows its id alone.
+
 **Log.** `l` opens it. The big steps of the run, newest first: Gru's own,
 from the run's log, merged with each ticket's, from its worker's log. Each
 step shows its local time `HH:MM`, then whose it is (`Gru`, or the ticket's
-name) over its words. The writer words each step for a five-year-old, in 20
+`[STARK-n] <title>`) over its words. The writer words each step for a five-year-old, in 20
 words or fewer ([the worker spine's log file](../../standards/worker-spine.md#log-file));
 the pane keeps each to one line and cuts it at the 20th word, with `…`. On a
 tie, the later line of the later file comes first. Unless every step shown
@@ -355,13 +364,18 @@ project root, and nowhere else.
 launch id (the epic's, or `GRU-n`):
 
 ```json
-{ "epic": "STARK-n", "session": "<Gru's session id>", "tickets": ["STARK-a", "STARK-b"], "maxWorkers": 3, "minionAgent": "claude" }
+{ "epic": "STARK-n", "session": "<Gru's session id>", "tickets": ["STARK-a", "STARK-b"],
+  "titles": { "STARK-a": "<ticket title>", "STARK-b": "<ticket title>" }, "maxWorkers": 3, "minionAgent": "claude" }
 ```
 
 `session` is Gru's own session id (`$CLAUDE_CODE_SESSION_ID`, or
-`$CODEX_THREAD_ID` on Codex). `maxWorkers` and `minionAgent` are the launch's
-`--max-workers` and Minion runtime; a v1 file has neither. A ticket with no
-file yet draws as `no file yet`.
+`$CODEX_THREAD_ID` on Codex). `titles` is each ticket's title at launch, which
+names a ticket on the Gru pane until its own file does; the ticket file's
+`title` wins, and a title that is not a string, or names no ticket of the run,
+is skipped. `maxWorkers` and `minionAgent` are the launch's `--max-workers` and
+Minion runtime; a v1 file has none of the three, and a file written before
+`titles` has no `titles`. A ticket with no file yet
+draws as `no file yet`.
 
 `~/.cache/stark-progress/run-<id>.settings.json`, the run's settings, which
 the Gru pane writes and Gru reads before each launch and each scope change:

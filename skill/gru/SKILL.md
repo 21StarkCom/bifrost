@@ -495,12 +495,22 @@ does for a ticket's file; append to the log, and never rewrite it.
 
 - **The run file**, `~/.cache/stark-progress/run-<launch id>.json`, the launch
   id being the epic's or valkyrie's `GRU-<n>`:
-  `{"epic":"<STARK-epic, or the first ticket>","session":"<your session id>","tickets":["STARK-a",…],"maxWorkers":<N>,"minionAgent":"<agent>"}`,
-  where `maxWorkers` and `minionAgent` are your `--max-workers` and
+  `{"epic":"<STARK-epic, or the first ticket>","session":"<your session id>","tickets":["STARK-a",…],"titles":{"STARK-a":"<its title>",…},"maxWorkers":<N>,"minionAgent":"<agent>"}`,
+  where `titles` holds each ticket's title as `alfred task show` gives it,
+  so the pane names a ticket before its worker writes a file, and
+  `maxWorkers` and `minionAgent` are your `--max-workers` and
   `--agent` (default 3 and `claude`).
   Your session id is `echo "$CLAUDE_CODE_SESSION_ID"` (`$CODEX_THREAD_ID` on
-  Codex), run as its own command and pasted in. Step 1 writes it, a split
-  rewrites it, and step 6 deletes it.
+  Codex), run as its own command and pasted in. Write it with this one
+  command, each ticket's id and then its title after `--args --`, in run order,
+  each value quoted under
+  [the spine's quoting rule](../../standards/worker-spine.md#progress-file):
+
+  ```
+  mkdir -p ~/.cache/stark-progress && jq -n --arg epic '<STARK-epic, or the first ticket>' --arg session '<your session id>' --argjson maxWorkers <N> --arg minionAgent '<agent>' '($ARGS.positional | [range(0; length; 2) as $i | {key: .[$i], value: .[$i + 1]}]) as $t | {epic: $epic, session: $session, tickets: ($t | map(.key)), titles: ($t | from_entries), maxWorkers: $maxWorkers, minionAgent: $minionAgent}' --args -- 'STARK-a' '<title of STARK-a>' 'STARK-b' '<title of STARK-b>' > ~/.cache/stark-progress/run-<launch id>.json.tmp && mv ~/.cache/stark-progress/run-<launch id>.json.tmp ~/.cache/stark-progress/run-<launch id>.json
+  ```
+
+  Step 1 writes it, a split rewrites it, and step 6 deletes it.
 - **The settings file**, `~/.cache/stark-progress/run-<launch id>.settings.json`,
   is the operator's: the pane's Settings tab writes it, and you never do.
   Read it with `cat` before each launch (step 3) and before each scope change

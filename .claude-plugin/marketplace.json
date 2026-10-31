@@ -103,7 +103,7 @@
       "name": "stark-ops",
       "source": "./",
       "description": "Repository operations beyond the spec-driven pipeline — coordinate Minions with Gru, cut releases, run session start/end, hand off work across sessions, run one ticket solo and unattended with Agnes, open a Lucius brainstorm in a tab of its own, and operate desktop apps in the background with goldfinger.",
-      "version": "0.39.0",
+      "version": "0.40.0",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -202,7 +202,7 @@
       "name": "stark-progress",
       "source": "./mods/stark-progress",
       "description": "The Gru pane beside Gru's chat: a calm board of the run (counts, a bar graph of the tickets at each step, the tickets worth a look, a metro line per ticket), a Log tab of the big steps Gru and each worker did, in plain words, and a Settings tab Gru reads before each launch. In each Minion and Agnes tab, the ticket pane beside the chat: the one ticket (its metro line, whether it is worth a look, its activity with its last hour and the next step), a Log tab of its steps, and a Settings tab the worker reads before its review, its merge and its release; a progress row above the prompt stands in while it is not placed. All drawn from the state files under ~/.cache/stark-progress/, in the terminal and the desktop app.",
-      "version": "0.10.0",
+      "version": "0.11.0",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"

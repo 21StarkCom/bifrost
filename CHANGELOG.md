@@ -13,6 +13,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=437 runId=437 sha=1618699c -->
+- stark-progress: the Gru pane names each ticket `[STARK-n] Title` (id in its own color) in rows, Up next and the Log tab; Gru writes run-file `titles`.
 <!-- idun:pr-merge pr=436 runId=436 sha=89f582a9 -->
 - The `stark-progress` mod's Gru and ticket panes now draw in the Claude desktop app's Code tab, with theme-aware colors and aligned columns (0.10.0).
 <!-- idun:pr-merge pr=435 runId=435 sha=6f8a5340 -->

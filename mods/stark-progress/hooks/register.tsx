@@ -20,14 +20,14 @@ const PANE_TITLE = 'Gru'
 const TICKET_PANE = 'ticket-board'
 
 const view = atom({ plugin: 'stark-progress', key: 'view' } as const, null, { shape: 'view-2' })
-const board = atom({ plugin: 'stark-progress', key: 'board' } as const, null, { shape: 'board-3' })
+const board = atom({ plugin: 'stark-progress', key: 'board' } as const, null, { shape: 'board-4' })
 const tabAtom = atom({ plugin: 'stark-progress', key: 'tab' } as const, 'overview' as PaneTab)
 const focusAtom = atom({ plugin: 'stark-progress', key: 'focus' } as const, '')
 const pickAtom = atom({ plugin: 'stark-progress', key: 'pick' } as const, '')
 const doneLastAtom = atom({ plugin: 'stark-progress', key: 'doneLast' } as const, false)
 /** The `$.store` key that keeps the pane's doneLast choice across sessions. */
 const DONE_LAST = 'doneLast'
-const ticketAtom = atom({ plugin: 'stark-progress', key: 'ticket' } as const, null, { shape: 'ticket-3' })
+const ticketAtom = atom({ plugin: 'stark-progress', key: 'ticket' } as const, null, { shape: 'ticket-4' })
 const ticketTabAtom = atom({ plugin: 'stark-progress', key: 'ticketTab' } as const, 'overview' as PaneTab)
 
 // The pane's run: Gru's tab shows its own; a session that asked for the pane
