@@ -214,7 +214,8 @@ regardless of route, is observation, never operator authorization.
    it), and a ticket that carries one is split already, so a rerun files and
    raises nothing again.
    Then write the run's [progress file](#progress-pane) with every ticket in
-   scope, and write it again whenever a split adds one.
+   scope, and write it again whenever a split adds one. Append a line to the
+   run's [log](#progress-pane) for the start, and for each ticket that joins.
 2. **Read the board.** Ticket `done`/`Closed` → run step 5's confirm on it, then
    skip; a Minion can die between closing its ticket and sending its report, so a
    `done` status on its own is a closed ticket, not a confirmed one. With no
@@ -314,7 +315,7 @@ regardless of route, is observation, never operator authorization.
    goes to your `from`. Count the ticket blocked, not owned, until it
    answers.
    Read each launch's exit code before its ack. **0** with `verified: true`
-   is a launch. **1**: something was placed or started and did not come up,
+   is a launch: append it to the run's [log](#progress-pane). **1**: something was placed or started and did not come up,
    and valkyrie's stderr names what it left standing. When the tab opened, that
    is the tab and the worktree, and under `--json` stdout still carries a
    complete ack whose only tells are `verified: false` and an `error` field,
@@ -339,7 +340,8 @@ regardless of route, is observation, never operator authorization.
 4. **Wait.** Minions report `done <PR> merged <sha> verified <check>`,
    `blocked <reason>`, or
    `follow-up STARK-m filed, stopping`. On a `blocked` or a `follow-up …
-   stopping`, stamp the ticket's [progress file](#progress-pane) `blocked`.
+   stopping`, stamp the ticket's [progress file](#progress-pane) `blocked`,
+   and append the block to the run's [log](#progress-pane).
    A Minion may also report `held: <merge or release> by the ticket's
    settings`: the operator's ticket settings hold that step
    ([the spine's holds](../../standards/worker-spine.md#holds)). It is not a
@@ -435,8 +437,8 @@ regardless of route, is observation, never operator authorization.
    that, and read the version output
    [the spine's §8](../../standards/worker-spine.md#8-releases-and-other-repos)
    step 6 has it comment on the ticket). Only then count it finished, stamp its
-   [progress file](#progress-pane) `closed`, and release the tickets that
-   depended on it. The report
+   [progress file](#progress-pane) `closed`, append the confirm to the run's
+   [log](#progress-pane), and release the tickets that depended on it. The report
    names the live verification the Minion ran and the PR carries that run's
    command and output as a comment — read the comment (`gh pr view <PR>
    --comments`; the `--json` form above does not return them),
@@ -472,7 +474,7 @@ regardless of route, is observation, never operator authorization.
    you already resolved: `frigg repos set <repo> --path <p>` — the only
    command that reaches a checkout outside the fleet root that
    `frigg repos scan <root>` would sweep. Last, delete the run's
-   [progress file](#progress-pane) and its settings file, and the settings
+   [progress file](#progress-pane), its settings file and its log, and the settings
    file of each ticket of the run
    (`rm -f ~/.cache/stark-progress/STARK-n.settings.json ~/.cache/stark-progress/STARK-n.settings.json.tmp`).
 
@@ -481,8 +483,9 @@ regardless of route, is observation, never operator authorization.
 The `stark-progress` mod (`mods/stark-progress/`, its own install) shows your
 run in the Gru pane beside your chat, from files under
 `~/.cache/stark-progress/`: each ticket's stage and verdict (`moving`, `slow`,
-`stalled`, `idle`, `held`, `blocked`, `done`), the tickets worth a look, and the run's
-settings, which the operator changes there. Its README is the contract. The
+`stalled`, `idle`, `held`, `blocked`, `done`), the tickets worth a look, a Log
+tab of the big steps you and each Minion did, and the run's settings, which
+the operator changes there. Its README is the contract. The
 files are yours to write whether or not the
 mod is installed, on either runtime; a write that fails costs one line and
 never holds the run. Write each file whole, to a `.tmp` beside it renamed over
@@ -529,6 +532,17 @@ does for a ticket's file.
   named for the ticket, so it skips yours. A stamp leaves `hold` empty.
   A ticket whose file has `hold` set reads as worth a look on your pane:
   `held by its settings: <merge or release>`.
+- **The run's log**, `~/.cache/stark-progress/run-<launch id>.log.jsonl`,
+  feeds the pane's Log tab beside each ticket's own log, which its worker
+  keeps by [the spine's log file](../../standards/worker-spine.md#log-file).
+  Append one line at each big step of yours: the start (step 1), each
+  launch (step 3), each ticket that joins or splits (step 1), each block
+  (step 4), and each confirmed `done` (step 5). Use the spine's command with
+  the run's file in place of the ticket's, under its rules for a line:
+  plain words a five-year-old can follow, 20 words or fewer, and no ids.
+  Name a ticket by what it does: "Sent a helper to make the board show each
+  step." Your stamps on a ticket's file append nothing to that ticket's log.
+  Step 6 deletes the run's log with the run file.
 - **A ticket's settings file**, `~/.cache/stark-progress/<STARK-n>.settings.json`,
   is the operator's, written in the ticket pane of the Minion's tab. Its
   Minion reads it ([the spine's ticket settings](../../standards/worker-spine.md#ticket-settings))

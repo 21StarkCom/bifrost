@@ -109,6 +109,47 @@ under a sandbox that can write `~/.cache` (`workspace-write` cannot). The file
 is extra, never a report, and a write that fails costs one line and never
 holds the ticket; never ask for an approval to make it.
 
+### Log file
+
+Append one line to `~/.cache/stark-progress/<STARK-n>.log.jsonl` at each big
+step, for the Log tab of the
+[stark-progress](../mods/stark-progress/README.md#the-state-contract) panes.
+The big steps are each [progress file](#progress-file) write (a hold and its
+end included), the live check of [§3](#3-verify-live), each review round's
+fixes, and a release by [§8](#8-releases-and-other-repos). Append the line
+right after the step, with this one command:
+
+```
+mkdir -p ~/.cache/stark-progress && jq -nc --arg text '<the step, in plain words>' '{at: (now | todate), text: $text}' >> ~/.cache/stark-progress/STARK-n.log.jsonl
+```
+
+Write the line so that a five-year-old can follow it:
+
+- Say what you did for this ticket, not what the stage means: "Made the
+  board show who did each step", not "Opened the PR".
+- Use 20 words or fewer. The pane cuts a longer line at the 20th word.
+- Use short, common words. Write no ticket id, PR number, path or tool name.
+- Write one step in one line, in the past tense, or the present for a wait.
+
+Lines of the right kind:
+
+- `ticket`: "Read the job: make the board tell, in plain words, what each helper did."
+- `pr`: "Made the change, and asked for it to join the main code."
+- A review round: "A careful check found two small mistakes. I fixed both."
+- The live check: "Tried the new tab for real. It showed each step, newest first."
+- `merged`: "The change is now part of the main code."
+- A hold: "Waiting: you asked to say OK before the merge."
+- `blocked`: "Stopped: the job needs a change in another project first."
+- `closed`: "Marked the job done."
+
+The value takes the [progress file](#progress-file)'s quoting rule: single
+quotes, each `'` inside written `'"'"'`, and no backslash. `jq` does the JSON
+quoting and writes the whole line in one append, so the mod never reads half
+a line. A relaunch appends to the log it finds and never empties it. Gru's
+stamps on your ticket's file append nothing here; Gru keeps its own run log.
+The log is extra, never a report, and a write that fails costs one line and
+never holds the ticket.
+
 ## 2. Implement
 
 In the worktree valkyrie cut for you, in the tab it placed through

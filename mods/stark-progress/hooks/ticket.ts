@@ -1,6 +1,7 @@
 import type { GitSignal, Stage, TicketBoard, TicketSettings } from '../types'
 import { beatFields } from './beat'
 import { calm, callsOf, nameOf, parse, runsOf } from './board'
+import { buildLog, logName } from './log'
 import { holdOf, row } from './view'
 
 // What the ticket pane draws (ticket-pane.tsx), from the contract's files
@@ -75,6 +76,7 @@ export function buildTicket(
     cells: r.cells,
     next: hold === null ? NEXT[r.stage] : `Wait for your ${hold} OK.`,
     settings: ticketSettingsOf(files[ticketSettingsName(id)]),
+    log: buildLog([{ who: null, text: files[logName(id)] }], now),
     readAt: now,
   }
 }

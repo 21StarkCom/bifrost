@@ -1,5 +1,6 @@
 import type { Board, BoardRow, BoardTone, GitSignal, GruSettings, Row } from '../types'
 import { beatFields, RECENT } from './beat'
+import { buildLog, logName, runLogName } from './log'
 import { dur, isRunName, row, STAGES, STATION_LABELS } from './view'
 
 // What the Gru pane draws (pane.tsx), from the contract's files (../README.md):
@@ -48,7 +49,7 @@ export type RunEntry = {
 
 /**
  * Every run file, most recently active first: the latest change to the run
- * file, its tickets' files or their heartbeats. A run file changes only at
+ * file, its log, its tickets' files, their heartbeats or their logs. A run file changes only at
  * launch and at a split, so its own time says little about a live run.
  */
 export function runsOf(files: Record<string, string>, mtimes: ReadonlyMap<string, number>): RunEntry[] {
@@ -59,7 +60,12 @@ export function runsOf(files: Record<string, string>, mtimes: ReadonlyMap<string
     const tickets = [...new Set(run.tickets.filter((id): id is string => typeof id === 'string'))]
     const active = Math.max(
       mtimes.get(name) ?? 0,
-      ...tickets.flatMap(id => [mtimes.get(`${id}.json`) ?? 0, mtimes.get(`${id}.beat.json`) ?? 0]),
+      mtimes.get(runLogName(launchIdOf(name))) ?? 0,
+      ...tickets.flatMap(id => [
+        mtimes.get(`${id}.json`) ?? 0,
+        mtimes.get(`${id}.beat.json`) ?? 0,
+        mtimes.get(logName(id)) ?? 0,
+      ]),
     )
     runs.push({
       name,
@@ -282,6 +288,13 @@ export function buildBoard(
       .filter(r => r !== chosen && r.active > now - ACTIVE_MIN * MIN)
       .map(r => ({ launchId: r.launchId, epic: r.epic })),
     settings: settingsOf(chosen, files[settingsName(chosen.launchId)]),
+    log: buildLog(
+      [
+        { who: 'Gru', text: files[runLogName(chosen.launchId)] },
+        ...rows.map(r => ({ who: r.name, text: files[logName(r.id)] })),
+      ],
+      now,
+    ),
     readAt: now,
   }
 }

@@ -128,6 +128,15 @@ export type BoardRow = {
   cells: Cell[]
 }
 
+/** One step on a Log tab: its local time, whose step it is (`Gru`, a ticket's name, or null in the ticket pane), and its words. */
+export type LogEntry = { at: number; clock: string; who: string | null; text: string }
+
+/** The steps of one local day, newest first; `label` is null when the tab shows one day only. */
+export type LogDay = { label: string | null; entries: LogEntry[] }
+
+/** What a Log tab draws: the newest steps in days, and how many older steps it leaves out. */
+export type LogView = { days: LogDay[]; older: number }
+
 /** What the Gru pane draws: one run, its counts, and its settings. */
 export type Board = {
   launchId: string
@@ -145,6 +154,8 @@ export type Board = {
   /** The other runs with a change in the last hour. */
   others: { launchId: string; epic: string }[]
   settings: GruSettings
+  /** The run's log and its tickets' logs, merged, newest first. */
+  log: LogView
   readAt: number
 }
 
@@ -172,10 +183,12 @@ export type TicketBoard = {
   /** The next spine step, or null once the ticket is closed. */
   next: string | null
   settings: TicketSettings
+  /** The ticket's log, newest first. */
+  log: LogView
   readAt: number
 }
 
-export type PaneTab = 'overview' | 'settings'
+export type PaneTab = 'overview' | 'log' | 'settings'
 
 declare module 'claude-code' {
   interface PluginState {

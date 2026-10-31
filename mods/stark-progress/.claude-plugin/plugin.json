@@ -1,7 +1,7 @@
 {
   "name": "stark-progress",
-  "version": "0.8.0",
-  "description": "The Gru pane in Gru's tab (a calm board of the run, and the settings Gru reads before each launch), and the ticket pane in each Minion and Agnes tab (its one ticket, and the settings the worker reads before its review, merge and release), with a progress row above the prompt while it is not placed, read from ~/.cache/stark-progress/",
+  "version": "0.9.0",
+  "description": "The Gru pane in Gru's tab (a calm board of the run, a log of the big steps in plain words, and the settings Gru reads before each launch), and the ticket pane in each Minion and Agnes tab (its one ticket, its log, and the settings the worker reads before its review, merge and release), with a progress row above the prompt while it is not placed, read from ~/.cache/stark-progress/",
   "types": "./types/index.d.ts",
   "author": {
     "name": "21 Stark AI",

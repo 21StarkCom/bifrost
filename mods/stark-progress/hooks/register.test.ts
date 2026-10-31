@@ -823,3 +823,140 @@ test("/ticket-board in Gru's tab opens nothing: its worktree is named for the ep
   expect(result.text).toMatch(/^This tab has no ticket/)
   expect(seen.opens).toEqual(['gru-board'])
 })
+
+/** A log file's text: one `{at, text}` a line, `minutesAgo` before T0. */
+const logFile = (...steps: [number, string][]) =>
+  steps.map(([minutesAgo, text]) => `${JSON.stringify({ at: new Date(T0 - minutesAgo * MIN).toISOString(), text })}\n`).join('')
+/** T0 less `minutesAgo`, as the Log tab writes a local time. */
+const clockAt = (minutesAgo: number) => {
+  const d = new Date(T0 - minutesAgo * MIN)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+test("the ticket pane's Log tab shows the ticket's steps newest first", async ($, on) => {
+  const long = 'Taught the board to show a list of the big steps each helper did, in short and plain words, one a line.'
+  const disk: Record<string, string> = {
+    'STARK-1.json': ticket('STARK-1', 'pr'),
+    'STARK-1.log.jsonl': `${logFile([30, 'Read the job: show what each helper did, in plain words.'], [12, long])}{"at": "2026-10`,
+    // Another ticket's log is not this tab's to read.
+    'STARK-2.log.jsonl': logFile([5, 'Not this ticket.']),
+  }
+  const seen = stage(on, disk, { session: 'w', root: WORKTREE })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: WORKTREE, surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+
+  const pane = await $.ui.mount(TICKET_PANE)
+  expect(await pane.find({ type: 'Text', text: /^Log$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '📜 What got done' })).toBeUndefined()
+  await pane.press({ key: 'tab-log' })
+  expect(await pane.find({ type: 'Text', text: '📜 What got done' })).toBeDefined()
+  const texts = (await pane.findAll({ type: 'Text' })).map(t => t.text)
+  const cutLong = `${long.split(' ').slice(0, 20).join(' ')}…`
+  // Newest first, each after its local time; a line past 20 words is cut at the 20th.
+  expect(texts.indexOf(cutLong)).toBeGreaterThan(-1)
+  expect(texts.indexOf(cutLong)).toBeLessThan(texts.indexOf('Read the job: show what each helper did, in plain words.'))
+  expect(texts[texts.indexOf(cutLong) - 1]).toBe(clockAt(12))
+  expect(texts[texts.indexOf('Read the job: show what each helper did, in plain words.') - 1]).toBe(clockAt(30))
+  // A half-written last line draws nothing, and the ticket pane names no one: every step is its worker's.
+  expect(texts.filter(t => /^\d\d:\d\d$/.test(t))).toHaveLength(2)
+  expect(texts).not.toContain('Not this ticket.')
+  expect(texts).not.toContain('Gru')
+  expect(seen.reads).toContain(`${DIR}/STARK-1.log.jsonl`)
+  expect(seen.reads).not.toContain(`${DIR}/STARK-2.log.jsonl`)
+  // Counts and elapsed times only: nothing forecasts the time left.
+  expect(await pane.find({ type: 'Text', text: /left|ETA|~\d/ })).toBeUndefined()
+})
+
+test("the ticket pane's Log tab says who writes the steps before the first one", async ($, on) => {
+  stage(on, { 'STARK-1.json': ticket('STARK-1', 'ticket') }, { session: 'w', root: WORKTREE })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: WORKTREE, surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+
+  const pane = await $.ui.mount(TICKET_PANE)
+  await pane.press({ key: 'tab-log' })
+  expect(await pane.find({ type: 'Text', text: 'No step yet. The worker adds one line here at each big step.' })).toBeDefined()
+})
+
+test("the Gru pane's Log tab merges Gru's steps and each ticket's, newest first, each named for whose it is", async ($, on) => {
+  const disk: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1', 'STARK-2'] }),
+    'run-STARK-10.log.jsonl': logFile([50, 'Started 2 jobs, with 2 helpers at once.'], [3, 'Checked the names job is really done.']),
+    'STARK-1.json': ticket('STARK-1', 'closed', { title: 'bragi: say the names (slice 1 of 3)' }),
+    'STARK-1.log.jsonl': logFile([45, 'Read the job.'], [8, 'The change is now in the main code.']),
+    'STARK-2.json': ticket('STARK-2', 'pr', { title: 'bragi: read the words file (slice 2 of 3)' }),
+    'STARK-2.log.jsonl': logFile([20, 'Made the change and asked for a check.']),
+    // Another run's log is not this pane's to read.
+    'run-STARK-20.log.jsonl': logFile([1, 'Another run.']),
+  }
+  const seen = stage(on, disk, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+
+  const pane = await $.ui.mount(PANE)
+  await pane.press({ key: 'tab-log' })
+  const texts = (await pane.findAll({ type: 'Text' })).map(t => t.text)
+  const order = [
+    'Checked the names job is really done.',
+    'The change is now in the main code.',
+    'Made the change and asked for a check.',
+    'Read the job.',
+    'Started 2 jobs, with 2 helpers at once.',
+  ].map(words => texts.indexOf(words))
+  expect(order.every(i => i >= 0)).toBe(true)
+  expect([...order].sort((a, b) => a - b)).toEqual(order)
+  // Each step names whose it is over its words, after its local time.
+  const at = (words: string) => texts.indexOf(words)
+  expect([texts[at('Checked the names job is really done.') - 2], texts[at('Checked the names job is really done.') - 1]]).toEqual([
+    clockAt(3),
+    'Gru',
+  ])
+  expect(texts[at('The change is now in the main code.') - 1]).toBe('Say the names')
+  expect(texts[at('Made the change and asked for a check.') - 1]).toBe('Read the words file')
+  expect(texts[at('Read the job.') - 1]).toBe('Say the names')
+  expect(texts).not.toContain('Another run.')
+  expect(seen.reads).not.toContain(`${DIR}/run-STARK-20.log.jsonl`)
+})
+
+test('the Gru pane counts the steps it leaves out, and names the files that hold them', async ($, on) => {
+  const steps = Array.from({ length: 52 }, (_, i): [number, string] => [60 - i, `Step ${i + 1}.`])
+  const disk: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1'] }),
+    'run-STARK-10.log.jsonl': logFile(...steps),
+  }
+  stage(on, disk, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+
+  const pane = await $.ui.mount(PANE)
+  await pane.press({ key: 'tab-log' })
+  expect(await pane.find({ type: 'Text', text: /^Step 52\.$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^Step 3\.$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^Step 2\.$/ })).toBeUndefined()
+  expect(
+    await pane.find({
+      type: 'Text',
+      text: "2 older steps are not shown. Every step is in ~/.cache/stark-progress/run-STARK-10.log.jsonl and each ticket's .log.jsonl.",
+    }),
+  ).toBeDefined()
+})
+
+test("a run's log counts as its activity: /gru-board shows the run whose log changed last", async ($, on) => {
+  const disk: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru-a', tickets: ['STARK-1'] }),
+    'run-STARK-20.json': JSON.stringify({ epic: 'STARK-20', session: 'gru-b', tickets: ['STARK-2'] }),
+    'run-STARK-20.log.jsonl': logFile([1, 'Started 1 job.']),
+  }
+  const mtimes = { 'run-STARK-10.json': T0 - 10 * MIN, 'run-STARK-20.json': T0 - 20 * MIN, 'run-STARK-20.log.jsonl': T0 - MIN }
+  stage(on, disk, { session: 'other', root: '/r', mtimes })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  await $.command.run(command('gru-board'))
+
+  const pane = await $.ui.mount(PANE)
+  expect(await pane.find({ type: 'Text', text: 'Gru · STARK-20' })).toBeDefined()
+})
