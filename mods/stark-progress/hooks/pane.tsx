@@ -3,7 +3,7 @@ import type { Elements } from 'claude-code'
 import type { Board, BoardRow, BoardTone, Cell, GruSettings, LogView, PaneTab, StatsView } from '../types'
 import { clockOf, MAX_WORKERS, stepCounts } from './board'
 import { dayOf } from './log'
-import { grouped, short } from './stats'
+import { counted, grouped, short } from './stats'
 import { bar, STAGES, STATION_LABELS } from './view'
 
 // The Gru pane: a calm board of one run (Overview) and the run's settings
@@ -529,7 +529,7 @@ export function statsTab(ui: UI, w: number, view: StatsView, now: number, words:
             return (
               <Text key={`t${t.name}`} mono>
                 <Text color={P.text}>{name.padEnd(Math.max(STAT_LABEL, name.length + STAT_GAP))}</Text>
-                <Text>{`${grouped(t.calls)} calls`}</Text>
+                <Text>{counted(t.calls, 'call')}</Text>
                 {t.fails > 0 && <Text color={P.amber}>{` · ${grouped(t.fails)} failed`}</Text>}
               </Text>
             )
@@ -551,7 +551,7 @@ export function statsTab(ui: UI, w: number, view: StatsView, now: number, words:
         ))}
         {view.models.map(m => (
           <Text key={`m${m.id}`} color={P.hint}>
-            {`  ${m.id}: ${grouped(m.requests)} requests, ${short(m.output)} output tokens`}
+            {`  ${m.id}: ${counted(m.requests, 'request')}, ${short(m.output)} output tokens`}
           </Text>
         ))}
       </Box>

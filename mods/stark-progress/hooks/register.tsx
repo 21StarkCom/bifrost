@@ -118,9 +118,11 @@ const tailWidth = (r: Row) =>
   r.verdict.text.length + (r.failed === null ? 0 : r.failed.length + 3) + (r.diff === null ? 0 : r.diff.length + 3)
 
 export const register: Register = on => {
+  // The first poll of each load always draws: after a reload, the session's
+  // state still holds what the last load drew, which may be old.
   let last = ''
-  let lastBoard = 'null'
-  let lastTicket = 'null'
+  let lastBoard = ''
+  let lastTicket = ''
   // Settings presses apply one at a time, each over the one before it.
   let settingsWrites: Promise<void> = Promise.resolve()
   let ticketWrites: Promise<void> = Promise.resolve()
@@ -193,6 +195,9 @@ export const register: Register = on => {
       const own = run === null ? ticketOf(root) : null
       isWorker = own !== null
       ownTicket = own
+      // A reload starts the module's own variables over: a board in the
+      // session's state says this tab asked for it with /gru-board.
+      if (!isBoardWanted && (await read($, board)) !== null) isBoardWanted = true
       // The pane's run, when this tab shows the pane: its tickets and its settings file.
       let pick = await read($, pickAtom)
       const runs = run !== null || isBoardWanted ? runsOf(files, mtimes) : []
@@ -465,6 +470,7 @@ export const register: Register = on => {
       const call = {
         tool: e.tool,
         command: e.tool === 'Bash' ? e.command : undefined,
+        skill: e.tool === 'Skill' ? e.skill : undefined,
         hasMessage: e.tool === 'SendMessage' && typeof e.message === 'string' && e.message !== '',
       }
       addCall(stats, call, isFailed, now)
@@ -502,12 +508,15 @@ export const register: Register = on => {
     return entered
   })
 
-  // A review round: the code-review skill, typed as /code-review or run by the Skill tool.
-  on('skill.prompt', { skill: 'code-review' }, async ($, e, next) => {
+  // A review round the operator typed: /code-review. (`skill.prompt` would
+  // see both forms, but a built-in plugin above the mod passes it on past
+  // this tier; the model's own run is a Skill tool call, counted in addCall.)
+  on('command.run', { command: 'code-review' }, async ($, e, next) => {
+    const ran = await next(e)
     addReview(stats, await $.clock.now())
     isStatsDirty = true
 
-    return next(e)
+    return ran
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {

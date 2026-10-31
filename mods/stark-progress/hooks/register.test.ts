@@ -1,6 +1,8 @@
 import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
+import { buildBoard } from './board'
+
 const T0 = Date.parse('2026-10-29T12:00:00Z')
 const MIN = 60_000
 const DIR = '/h/.cache/stark-progress'
@@ -1093,7 +1095,7 @@ function engineAnswers(on: On, usages: ReturnType<typeof usageOf>[]) {
     return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn' as const, usage: usages.shift() ?? null }
   })
   on('prompt.submit', (_$, e) => ({ text: e.text }))
-  on('skill.prompt', (_$, e) => ({ text: e.text }))
+  on('command.run', () => ({ text: '' }))
   on('tool.call', (_$, e) => (e.tool === 'Bash' && e.command === 'false' ? { result: {}, isError: true } : { result: {} }))
 }
 
@@ -1141,9 +1143,11 @@ test("a worker's tab counts its requests, prompts, calls and reviews, writes its
   await $.tool.call({ tool: 'Bash', command: "hermod msg send --to gru --kind note -- 'done'" })
   await $.tool.call({ tool: 'Bash', command: 'false' })
   await $.tool.call({ tool: 'Read', file_path: '/r/a.ts' })
-  await $.skill.prompt({ skill: 'code-review', text: 'Review the diff.' })
-  // Another skill is no review round.
-  await $.skill.prompt({ skill: 'simplify', text: 'Simplify.' })
+  // A review round typed, and one the model runs with the Skill tool; another skill or command is none.
+  await $.command.run(command('code-review'))
+  await $.command.run(command('simplify'))
+  await $.tool.call({ tool: 'Skill', skill: 'code-review', args: 'xhigh --fix' })
+  await $.tool.call({ tool: 'Skill', skill: 'simplify' })
   await clock.advance(1000)
 
   const written = JSON.parse(disk['STARK-1.stats.json'] ?? '{}')
@@ -1156,8 +1160,8 @@ test("a worker's tab counts its requests, prompts, calls and reviews, writes its
     prompts: { operator: 1, peer: 1, other: 1 },
     sent: 1,
     launches: 0,
-    reviews: 1,
-    tools: { Bash: { calls: 2, fails: 1 }, Read: { calls: 1, fails: 0 } },
+    reviews: 2,
+    tools: { Bash: { calls: 2, fails: 1 }, Read: { calls: 1, fails: 0 }, Skill: { calls: 2, fails: 0 } },
   })
   expect(written.models['claude-haiku-5-5']).toEqual({ input: 10, output: 20, cacheRead: 30, cacheWrite: 40, requests: 1 })
 
@@ -1173,7 +1177,10 @@ test("a worker's tab counts its requests, prompts, calls and reviews, writes its
   expect(await pane.find({ type: 'Text', text: /^ {2}prompts from you +1$/ })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: /^ {2}Bash +2 calls · 1 failed$/ })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: 'claude-opus-5-5 · xhigh' })).toBeDefined()
-  expect(await pane.find({ type: 'Text', text: '  claude-haiku-5-5: 1 requests, 20 output tokens' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '  claude-haiku-5-5: 1 request, 20 output tokens' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^ {2}Read +1 call$/ })).toBeDefined()
+  // Git cannot read this worktree here: no change reads 0, with no sign.
+  expect(await pane.find({ type: 'Text', text: /^ {2}lines added +0$/ })).toBeDefined()
   // One column: no head row, no Gru.
   expect(await pane.find({ type: 'Text', text: /Whole run/ })).toBeUndefined()
 
@@ -1303,6 +1310,35 @@ test('/gru-board in another session reads the stats files and writes none of its
   // This session is neither Gru's nor a worker's: it writes no stats file.
   expect(seen.runs.filter(argv => argv[0] === 'mv')).toEqual([])
   expect(Object.keys(disk).filter(name => name.endsWith('.stats.json'))).toEqual([])
+})
+
+test('after a reload, a /gru-board tab keeps showing its run, drawn from the files as they are now', async ($, on) => {
+  const old: Record<string, string> = {
+    'run-GRU-5.json': JSON.stringify({ epic: 'GRU-5', session: 'gru', tickets: ['STARK-1'] }),
+    'STARK-1.json': ticket('STARK-1', 'pr'),
+    'STARK-1.stats.json': statsText('w1', { requests: 1, tokens: { input: 7, output: 0, cacheRead: 0, cacheWrite: 0 } }),
+  }
+  // What the load before the reload drew, still in the session's state.
+  const stale = buildBoard('other', '', T0 - MIN, old, new Map(), {})
+  const disk: Record<string, string> = {
+    ...old,
+    'STARK-1.stats.json': statsText('w1', { requests: 9, tokens: { input: 4321, output: 0, cacheRead: 0, cacheWrite: 0 } }),
+  }
+  stage(on, disk, { session: 'other', root: '/r' })
+  let isSeeded = false
+  on('state.get', (_$, e, next) => {
+    if (e.key !== 'board' || isSeeded) return next(e)
+    isSeeded = true
+    return { value: { value: { shape: 'board-5', value: stale }, version: 1 } }
+  })
+  const clock = mock.clock(on, { now: T0 })
+  // No /gru-board in this load: the reload started the module over.
+  await $.session.start({ cwd: '/r', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+
+  const pane = await $.ui.mount(PANE)
+  await pane.press({ key: 'tab-stats' })
+  expect(await pane.find({ type: 'Text', text: /^ {2}input +0 +4,321$/ })).toBeDefined()
 })
 
 test('the Stats tab draws on the desktop surface too', async ($, on) => {

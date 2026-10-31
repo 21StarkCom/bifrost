@@ -94,7 +94,7 @@ export function addPrompt(s: Stats, kind: string, isMeta: boolean, now: number):
   s.prompts[promptKind(kind, isMeta)] += 1
 }
 
-/** One run of the code-review skill, typed or by the Skill tool. */
+/** One /code-review the operator typed. */
 export function addReview(s: Stats, now: number): void {
   begin(s, now)
   s.reviews += 1
@@ -117,11 +117,14 @@ export function bashCounts(command: string): { sent: number; launches: number; r
 }
 
 /**
- * A tool call, as the stats read it: the tool, a Bash call's command, and
- * whether a SendMessage call carries a message (a call with only
- * `notify_when_idle` sends none).
+ * A tool call, as the stats read it: the tool, a Bash call's command, a
+ * Skill call's skill, and whether a SendMessage call carries a message (a
+ * call with only `notify_when_idle` sends none).
  */
-export type Call = { tool: string; command?: string; hasMessage?: boolean }
+export type Call = { tool: string; command?: string; skill?: string; hasMessage?: boolean }
+
+/** The code-review skill, by its own name or a plugin's `<plugin>:code-review`. */
+const CODE_REVIEW = /(?:^|:)code-review$/
 
 /** One tool call ended. It counts under its tool; one that did not fail also counts what it does. */
 export function addCall(s: Stats, call: Call, isFailed: boolean, now: number): void {
@@ -132,6 +135,7 @@ export function addCall(s: Stats, call: Call, isFailed: boolean, now: number): v
   s.tools[call.tool] = tally
   if (isFailed) return
   if (call.tool === 'SendMessage' && call.hasMessage === true) s.sent += 1
+  if (call.tool === 'Skill' && call.skill !== undefined && CODE_REVIEW.test(call.skill)) s.reviews += 1
   if (call.tool === 'Bash' && call.command !== undefined) {
     const n = bashCounts(call.command)
     s.sent += n.sent
@@ -274,6 +278,9 @@ export function grouped(n: number): string {
   return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
 
+/** `1 call`, `2 calls`, `1,234 calls`. */
+export const counted = (n: number, word: string) => `${grouped(n)} ${n === 1 ? word : `${word}s`}`
+
 /** A model and its effort, in words: `claude-opus-5-5 · xhigh`. */
 export const modelWords = (s: Pick<Stats, 'model' | 'effort'>) =>
   s.model === null ? 'no model request yet' : s.effort === null ? s.model : `${s.model} · ${s.effort}`
@@ -306,8 +313,9 @@ function groupsOf(columns: Stats[], work: Work[]): StatGroup[] {
     {
       title: 'Work',
       rows: [
-        { label: 'lines added', values: ofWork(w => `+${grouped(w.added)}`) },
-        { label: 'lines removed', values: ofWork(w => `−${grouped(w.removed)}`) },
+        // A sign only on a count: no change reads `0`, not `+0`.
+        { label: 'lines added', values: ofWork(w => (w.added === 0 ? '0' : `+${grouped(w.added)}`)) },
+        { label: 'lines removed', values: ofWork(w => (w.removed === 0 ? '0' : `−${grouped(w.removed)}`)) },
         { label: 'commits', values: ofWork(w => grouped(w.commits)) },
         { label: 'PRs opened', values: ofWork(w => grouped(w.prs)) },
         { label: 'PRs merged', values: ofWork(w => grouped(w.merged)) },

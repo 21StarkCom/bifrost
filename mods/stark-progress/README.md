@@ -250,7 +250,7 @@ session, and the tab says when the earliest began. The rows:
 | Tokens | input, output, cache read, cache write, model requests | each model request of the main loop and its subagents (`turn.step`'s usage) |
 | Work | lines added and removed, commits | each ticket's git signal while its worktree is there, else the last one its stats file kept |
 | Work | PRs opened and merged | the ticket files: a `pr` URL is a PR opened, and one at `merged` or `closed` a PR merged |
-| Work | review rounds | each run of the `code-review` skill, typed or by the Skill tool, and each `codex review` run that did not fail |
+| Work | review rounds | each `/code-review` typed (`command.run`), and each Skill call of `code-review` and each `codex review` run that did not fail; `skill.prompt` would see both forms, but a built-in plugin above the mod passes it on past the mod |
 | Tools | tools used, tool calls, failed calls | each tool call (`tool.call`), subagents' included; a refused call is a failed one |
 | Prompts and messages | prompts from you, from other sessions, other prompts | each prompt that entered, by its origin: typed, from a phone or a Slack ping is yours; a peer session's, a SendMessage delivery or a coordinator's is another session's; a notification, a schedule or a plugin's is other |
 | Prompts and messages | messages sent, workers launched | each SendMessage call that carries a message, each `hermod msg send` or `reply`, and each `valkyrie agnes`, `minion` or `gru` run, that did not fail |
@@ -262,6 +262,8 @@ per model, and the started tickets with no stats file: a Codex worker, a
 session without the mod, or a ticket Gru found closed. With no stats file at
 all, the tab says where the counts come from. A hermod message reaches a
 Claude session through its own inbox, so it counts as from another session.
+The first prompt of a Gru or a worker, which valkyrie passes on the command
+line, arrives as typed, so `prompts from you` counts it too.
 
 **Settings.** Four rows for the run, each a value in a frame you select to change. A
 press on one writes all four to the run's settings file at once; Gru reads it

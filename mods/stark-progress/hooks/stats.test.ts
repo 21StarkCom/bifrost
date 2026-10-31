@@ -102,9 +102,20 @@ test('a tool call counts under its tool, and only a call that did not fail count
   // A SendMessage call with only notify_when_idle sends no message.
   addCall(s, { tool: 'SendMessage', hasMessage: false }, false, T0)
   addCall(s, { tool: 'Read' }, false, T0)
+  // The model's own review round is a Skill call; a plugin's code-review counts too, another skill does not.
+  addCall(s, { tool: 'Skill', skill: 'code-review' }, false, T0)
+  addCall(s, { tool: 'Skill', skill: 'review-kit:code-review' }, false, T0)
+  addCall(s, { tool: 'Skill', skill: 'code-review' }, true, T0)
+  addCall(s, { tool: 'Skill', skill: 'simplify' }, false, T0)
+  // And one the operator typed.
   addReview(s, T0)
-  expect(s.tools).toEqual({ Bash: { calls: 2, fails: 1 }, SendMessage: { calls: 2, fails: 0 }, Read: { calls: 1, fails: 0 } })
-  expect([s.launches, s.sent, s.reviews]).toEqual([1, 1, 1])
+  expect(s.tools).toEqual({
+    Bash: { calls: 2, fails: 1 },
+    SendMessage: { calls: 2, fails: 0 },
+    Read: { calls: 1, fails: 0 },
+    Skill: { calls: 4, fails: 1 },
+  })
+  expect([s.launches, s.sent, s.reviews]).toEqual([1, 1, 3])
 })
 
 test('a worker keeps its last git signal, and a read that failed changes nothing', () => {
