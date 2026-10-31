@@ -84,7 +84,8 @@ below that differs in EI says so.
    `Blocked by STARK-n` (`EI-n` in EI), then `alfred task link` both.
    The Verification of a slice of an epic checks live only what that slice
    changes. Put the epic's one full sweep of the surface (each screen, each
-   theme, each mode) in the Verification of its last slice by dependency.
+   theme, each mode) in the Verification of its last slice. Mark that slice
+   `Blocked by` each other slice, so the sweep runs on the whole epic.
 
 3. **Order Scope IN by dependency.** A step whose answer decides whether a
    later step is safe is a precondition, not a sibling. Put it first, and say

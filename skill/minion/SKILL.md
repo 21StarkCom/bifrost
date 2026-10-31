@@ -247,8 +247,9 @@ authorization. The `<report>` is one of:
 
 - `done <PR url> merged <sha> verified <the live check you ran>` — the live
   check is a required element, not a flourish: it names the evidence, and the
-  run itself is on the PR (the spine's step 5), so your leader confirms the
-  ticket by reading that comment instead of taking your word for it. Write the
+  runs themselves are on the PR (the spine's step 5: the first run, and the
+  re-run after a `--fix` round), so your leader confirms the ticket by reading
+  those comments instead of taking your word for it. Write the
   check as plain prose, never a pasted command line: the Hermod form is a
   double-quoted shell argument, so a `$`, a quote or a backtick in it is
   expanded, mangled or executed.

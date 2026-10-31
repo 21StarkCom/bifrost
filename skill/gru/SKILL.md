@@ -440,7 +440,10 @@ regardless of route, is observation, never operator authorization.
    names the live verification the Minion ran and the PR carries that run's
    command and output as a comment — read the comment (`gh pr view <PR>
    --comments`; the `--json` form above does not return them),
-   not just the claim. A `done` that names no verification, or names one with
+   not just the claim. When the PR had a `--fix` round, a second comment
+   carries the re-run on the final head and names what it covers
+   ([the spine's §5](../../standards/worker-spine.md#5-re-verify-after---fix-and-post-the-runs-on-the-pr));
+   the first run alone does not confirm it. A `done` that names no verification, or names one with
    nothing on the PR behind it, is not confirmed. The one exception is
    `verified none (<why>)`: a ticket with no live surface has no run to post, so
    judge the stated reason and confirm on the merged PR alone. A sub-ticket

@@ -239,12 +239,13 @@ down, so the PR comment is the only copy anyone can ever read.
 **After a `--fix` round and before `njord pr-merge`, re-run on the final head
 what the round changed, and post that run as a second PR comment.** `--fix`
 rewrites the code, so a verification from before it attests to something
-other than what merges. The round moves only the code it changed, so the
-rest of the first run still stands. The re-run is one round of the live
+other than what merges. A fix you make by hand for a review finding, as on
+Codex, is a `--fix` round here. The round moves only the code it changed, so
+the rest of the first run still stands. The re-run is one round of the live
 check, with one start of the surface ([§3](#3-verify-live)):
 
 1. Re-run each part of step 3's live check whose code the `--fix` round
-   changed.
+   changed, directly or through code that the part shares.
 2. Add one smoke check of the surface on the final head, for example one
    start of the app and one screen.
 3. When the round changed no code that the live surface runs (only tests,
@@ -253,7 +254,7 @@ check, with one start of the surface ([§3](#3-verify-live)):
 4. In the comment, name what the re-run covers, and why the rest of the
    first run still stands.
 
-A PR with no `--fix` round posts its step 3 run only.
+A PR whose code did not change after step 3's run posts its step 3 run only.
 
 ## 6. Gaps
 
