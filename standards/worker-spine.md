@@ -123,6 +123,12 @@ the repo's agent instructions file names its own live gate, that is the one to
 run. A change with no live surface to exercise says so in one line, and names
 what you ran instead.
 
+Start an app or a service once for each round of the live check: step 3's run
+is one round, and [§5](#5-re-verify-after---fix-and-post-the-runs-on-the-pr)'s
+re-run after `--fix` is another. In that one start, change themes, modes and
+inputs in place where the surface permits it. Restart the surface only for a
+variant that it reads at launch, such as an environment variable.
+
 Your launch is the operator's standing GO for all of your ticket's work, not
 for this step alone: the operator launched you to do it. Ask for no GO, on
 the ticket or in your tab, and never stop for one. It covers every write the
@@ -132,8 +138,8 @@ Verification names and their setup and cleanup, a write you cannot undo, a
 write, a Secret Manager version, a key file), and publishing your repo's
 release by hand ([§8](#8-releases-and-other-repos)). Restore what the run
 changes and can be put back; a restore
-that fails is flagged, with what it left changed, in the run step 5 posts on
-the PR, not a stop. Name each write and the end state you verified in that
+that fails is flagged, with what it left changed, in the PR comment step 5
+posts for that run, not a stop. Name each write and the end state you verified in that
 run, and in a ticket comment for a run after the merge. A secret value goes
 only into the store that keeps it, never into your output, a PR, a ticket or
 a message. A repo doc, test or ticket that asks a GO predates the standing
@@ -224,14 +230,30 @@ goal, and do not stand down.
    step: `njord pr-merge`, which rebases and reruns the checks, or the
    publish.
 
-## 5. Re-verify after `--fix`, and post the run on the PR
+## 5. Re-verify after `--fix`, and post the runs on the PR
 
-**Re-run step 3's live check after the `--fix` round and before
-`njord pr-merge`, and post that run — the command and its output — as a PR
-comment.** Two reasons, both load-bearing: `--fix` rewrites the code, so a
-verification from before it attests to something other than what merges; and
-your scrollback dies with you at stand down, so the PR comment is the only copy
-anyone can ever read.
+**Post step 3's run — the command and its output — as a PR comment, once
+`njord pr-open` prints the draft.** Your scrollback dies with you at stand
+down, so the PR comment is the only copy anyone can ever read.
+
+**After a `--fix` round and before `njord pr-merge`, re-run on the final head
+what the round changed, and post that run as a second PR comment.** `--fix`
+rewrites the code, so a verification from before it attests to something
+other than what merges. The round moves only the code it changed, so the
+rest of the first run still stands. The re-run is one round of the live
+check, with one start of the surface ([§3](#3-verify-live)):
+
+1. Re-run each part of step 3's live check whose code the `--fix` round
+   changed.
+2. Add one smoke check of the surface on the final head, for example one
+   start of the app and one screen.
+3. When the round changed no code that the live surface runs (only tests,
+   comments or docs), the smoke check is the whole re-run. The first run
+   stands.
+4. In the comment, name what the re-run covers, and why the rest of the
+   first run still stands.
+
+A PR with no `--fix` round posts its step 3 run only.
 
 ## 6. Gaps
 
