@@ -2,7 +2,7 @@ import type { Elements } from 'claude-code'
 
 import type { Board, BoardRow, BoardTone, GruSettings, PaneTab } from '../types'
 import { clockOf, MAX_WORKERS, stepCounts } from './board'
-import { bar, STAGES } from './view'
+import { bar, STAGES, STATION_LABELS } from './view'
 
 // The Gru pane: a calm board of one run (Overview) and the run's settings
 // that Gru reads before each launch (Settings). The model is board.ts's. The
@@ -47,9 +47,8 @@ export const segFor = (w: number) => Math.max(2, Math.min(6, Math.floor((w - 2 -
 
 /** The words over the stations, each cut to fit before the next. */
 export function stationHeader(seg: number): string {
-  const labels = ['ticket', 'PR', 'review', 'merge', 'done']
   const cells: string[] = Array.from({ length: STAGES.length * (seg + 1) }, () => ' ')
-  labels.forEach((label, i) => [...label.slice(0, seg)].forEach((ch, k) => (cells[i * (seg + 1) + k] = ch)))
+  STATION_LABELS.forEach((label, i) => [...label.slice(0, seg)].forEach((ch, k) => (cells[i * (seg + 1) + k] = ch)))
 
   return cells.join('').trimEnd()
 }
@@ -73,23 +72,29 @@ export function line(ui: UI, r: Pick<BoardRow, 'at' | 'tone'>, seg: number) {
 }
 
 const STEP_LABEL = 'not started  '.length
+const MIN_BAR = 20
 
 /**
  * The tickets at each step, one bar a step on one scale: the full width is
  * all the run's tickets, so a bar grows as its step fills and never rescales.
- * The count follows the bar; where the line has room, so do the ones worth a look.
+ * The count follows the bar, then the ones worth a look. The scale leaves room
+ * for the longest count and note the run can have, so a full bar keeps its
+ * note; a pane too narrow for that leaves room for the count alone.
  */
 function graph(ui: UI, w: number, rows: BoardRow[]) {
   const { Text } = ui
-  const room = Math.max(w - STEP_LABEL - 1 - String(rows.length).length, 1)
+  const bare = w - STEP_LABEL - 1 - String(rows.length).length
+  const withNote = bare - ` · ${rows.length} worth a look`.length
+  const room = Math.max(withNote >= MIN_BAR ? withNote : bare, 1)
 
   return stepCounts(rows).map(s => {
     const drawn = bar(s.count, rows.length, room)
     const ink = s.count === 0 ? P.hint : P.text
     const count = `${drawn === '' ? '' : ' '}${s.count}`
-    // The box of tickets worth a look names each one, so a line without room drops the words alone.
+    // The box of tickets worth a look names each one, so a line without room for the whole note drops it, never cuts it.
     const left = w - STEP_LABEL - [...drawn].length - count.length
-    const look = s.looks === 0 || left < 4 ? '' : cut(` · ${s.looks} worth a look`, left)
+    const note = ` · ${s.looks} worth a look`
+    const look = s.looks === 0 || note.length > left ? '' : note
 
     return (
       <Text key={`g${s.label}`}>

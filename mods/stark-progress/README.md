@@ -121,10 +121,13 @@ left, the pane says `No Gru run yet`.
 - A bar graph of the tickets at each step, one row a step in the spine's
   order: `not started`, `ticket`, `PR`, `review`, `merge`, `done`. A blocked
   ticket counts at the station it stopped at. All rows share one scale (the
-  full width is all the run's tickets), so a bar grows as its step fills and
+  full bar is all the run's tickets), so a bar grows as its step fills and
   the graph never rescales. Each bar is drawn in eighths of a cell, and a step
   with a ticket always shows one. The count follows the bar, then
-  `· <k> worth a look` in amber where the line has room.
+  `· <k> worth a look` in amber. The scale leaves room for the longest count
+  and note the run can have, so a full bar keeps its note; in a pane too
+  narrow for a 20-cell bar beside them, a note that does not fit is dropped
+  whole, and the box below still names each ticket.
 - A box of the tickets worth a look, with the reason: the band calls it
   `blocked`, `idle` or `stalled`, or 5 of its last 10 calls failed. With none,
   `🌿 Nothing needs you right now.`

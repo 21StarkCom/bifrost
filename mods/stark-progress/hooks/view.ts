@@ -4,6 +4,8 @@ import { beatFields, RECENT } from './beat'
 // What a tab draws, from the contract's files (../README.md), git's signal for
 // each ticket and the time. Pure: the poller in register.tsx reads the disk.
 export const STAGES: Stage[] = ['ticket', 'pr', 'review', 'merged', 'closed']
+/** The word a pane shows for each of the STAGES, in the same order. */
+export const STATION_LABELS = ['ticket', 'PR', 'review', 'merge', 'done'] as const
 const ALL_STAGES: string[] = [...STAGES, 'blocked']
 const TICKET_ID = /^STARK-\d+$/
 const MIN = 60_000

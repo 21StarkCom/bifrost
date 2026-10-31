@@ -1,6 +1,6 @@
 import type { Board, BoardRow, BoardTone, GitSignal, GruSettings, Row } from '../types'
 import { beatFields, RECENT } from './beat'
-import { dur, isRunName, row, STAGES } from './view'
+import { dur, isRunName, row, STAGES, STATION_LABELS } from './view'
 
 // What the Gru pane draws (pane.tsx), from the contract's files (../README.md):
 // one run, picked as register.tsx says, with a calm status per ticket. Pure:
@@ -175,11 +175,11 @@ export type StepCount = { label: string; tone: BoardTone; count: number; looks: 
 export function stepCounts(rows: readonly Pick<BoardRow, 'at' | 'tone' | 'attention'>[]): StepCount[] {
   const steps: StepCount[] = [
     { label: 'not started', tone: 'none', count: 0, looks: 0 },
-    ...['ticket', 'PR', 'review', 'merge'].map(label => ({ label, tone: 'move' as const, count: 0, looks: 0 })),
+    ...STATION_LABELS.slice(0, -1).map(label => ({ label, tone: 'move' as const, count: 0, looks: 0 })),
     { label: 'done', tone: 'done', count: 0, looks: 0 },
   ]
   for (const r of rows) {
-    const i = r.tone === 'none' ? 0 : r.tone === 'done' ? steps.length - 1 : 1 + Math.min(Math.max(r.at, 0), steps.length - 3)
+    const i = r.tone === 'none' ? 0 : r.tone === 'done' ? steps.length - 1 : 1 + Math.min(Math.max(r.at, 0), STAGES.length - 2)
     const step = steps[i]
     if (step === undefined) continue
     step.count += 1
