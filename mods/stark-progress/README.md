@@ -1,12 +1,12 @@
 # stark-progress
 
 A Claude Code mod that shows a live view of each Gru, Minion and Agnes run.
-Gru's tab gets the Gru pane beside the chat: a calm board of the run, and the
-run's settings, which Gru reads before each launch. A Minion's or Agnes's tab
-gets the ticket pane beside the chat: its one ticket, and the ticket's
-settings, which the worker reads before its review, its merge and its
-release; one progress row above the prompt stands in while that pane is not
-placed. Each says where a ticket
+Gru's tab gets the Gru pane beside the chat: a calm board of the run, a log
+of the big steps in plain words, and the run's settings, which Gru reads
+before each launch. A Minion's or Agnes's tab gets the ticket pane beside the
+chat: its one ticket, its log, and the ticket's settings, which the worker
+reads before its review, its merge and its release; one progress row above
+the prompt stands in while that pane is not placed. Each says where a ticket
 is, whether its worker is doing anything, and whether that work gets anywhere:
 a worker that is busy for hours with no commit and no stage change reads
 `stalled`, not "20% done". Neither ever forecasts the time left. The mod polls
@@ -23,7 +23,7 @@ Install it on its own; the seven skill plugins do not need it:
 Gru's tab, the Gru pane's Overview:
 
 ```
-Overview   Settings
+Overview   Log   Settings
 
 Gru · STARK-1200                                       ● this run
 bragi · 4 tickets
@@ -59,7 +59,7 @@ Read from ~/.cache/stark-progress at 12:53.
 A Minion's or Agnes's tab, the ticket pane's Overview, with its merge held:
 
 ```
-Overview   Settings
+Overview   Log   Settings
 
 Document the export flags
 STARK-1202 · bragi
@@ -98,6 +98,24 @@ The same tab, above the prompt, while the ticket pane is not placed:
 STARK-1202 ●━●━◉┄○┄○ review    36m  ▃▃◆▄◆▁─▂◆▃▃▄  moving · +234 −20  Document the export flags
 ```
 
+Gru's tab, the Gru pane's Log:
+
+```
+Overview   Log   Settings
+
+📜 What got done
+The big steps, newest first, each told in plain words by whoever did it.
+
+12:51  Gru
+       Checked the export command is really done, then sent a helper to the next job.
+12:48  Add the export command
+       The change is now part of the main code.
+12:30  Document the export flags
+       A careful check found two unclear lines. I made them plain.
+11:02  Gru
+       Started 4 jobs for the export, with 3 helpers at once.
+```
+
 ## The Gru pane
 
 The pane opens by itself in Gru's tab, once, when the poll first finds Gru's
@@ -107,7 +125,7 @@ line above the prompt: `Gru · <epic> · <n> of <m> done · /gru-board opens the
 board`. Gru's tab draws no band rows.
 
 **Which run.** Gru's tab shows its own run. Another session shows the run
-whose run file, ticket files or heartbeats changed last; a run file changes
+whose run file, ticket files, heartbeats or logs changed last; a run file changes
 only at launch, so its own time says little. It then stays on that run until
 you press `r` or the run ends, even when another run gets busier, so a Settings
 press always writes to the run on screen (a press that finds the board moved
@@ -153,6 +171,17 @@ left, the pane says `No Gru run yet`.
   in the hour, the detail and the band: a worker stands down inside its last
   call, which never ends.
 - `👉 Up next`: the tickets with no file yet, in run order.
+
+**Log.** `l` opens it. The big steps of the run, newest first: Gru's own,
+from the run's log, merged with each ticket's, from its worker's log. Each
+step shows its local time `HH:MM`, then whose it is (`Gru`, or the ticket's
+name) over its words. The writer words each step for a five-year-old, in 20
+words or fewer ([the worker spine's log file](../../standards/worker-spine.md#log-file));
+the pane keeps each to one line and cuts it at the 20th word, with `…`. On a
+tie, the later line of the later file comes first. Unless every step shown
+is today's, a day line (`Today`, `Yesterday`, `Thu 29 Oct`) heads each day, so
+a closed ticket's old steps never read as today's. The tab shows the 50 newest steps and counts the ones it leaves
+out. With no step yet, it says who writes them.
 
 **Settings.** Four rows for the run, each a value you select to change. A
 press on one writes all four to the run's settings file at once; Gru reads it
@@ -208,6 +237,10 @@ header and per status, and none in Settings.
   `Wait for your release OK.` Else by stage: `ticket` opens the PR, `pr`
   reviews it, `review` merges it, `merged` releases or closes, and `blocked`
   waits for the block to clear. A closed ticket has none.
+
+**Log.** `l` opens it. The ticket's own steps, from its worker's log, read
+as the Gru pane's Log reads them, with no name over a step: each one is the
+worker's.
 
 **Settings.** Three rows, each a value you select to change. A press writes
 all three to the ticket's settings file at once, one press at a time, each
@@ -265,15 +298,32 @@ A worker's band row:
 
 ## The state contract
 
-The skills write the ticket and run files; the mod writes the heartbeat and
-the settings files. The ticket, run and settings files are runtime-neutral: a
+The skills write the ticket, run and log files; the mod writes the heartbeat and
+the settings files. The ticket, run, log and settings files are runtime-neutral: a
 Codex Gru or worker writes and reads them too, and only a Claude Code session
-draws them. Every file is whole JSON, written atomically: a writer writes
+draws them. Every file but a log is whole JSON, written atomically: a writer writes
 `<name>.json.tmp` beside it and renames it over `<name>.json`, so a poll never
 reads a half-written file
 ([the worker spine's command](../../standards/worker-spine.md#progress-file)
 does this for a ticket's file). A field of the wrong type reads as absent: a
 `stage` that is not one of the six draws as `ticket`.
+
+A log is JSON Lines, one whole object a line, appended with `>>`:
+`~/.cache/stark-progress/<STARK-n>.log.jsonl`, one per ticket, which its
+worker appends to, and `~/.cache/stark-progress/run-<id>.log.jsonl`, one per
+Gru run, which Gru appends to:
+
+```json
+{"at":"<ISO 8601>","text":"<the step, in plain words, 20 words or fewer>"}
+```
+
+[The worker spine's log command](../../standards/worker-spine.md#log-file)
+writes each line with `jq -nc`, which writes it in one append. The mod skips
+a line that does not parse (a write not yet whole), and one with no words or
+no valid `at`. A worker appends at each big step, and Gru at each of its own;
+Gru's stamps on a ticket's file add no line to that ticket's log. A Minion's
+log stays after the close, as its ticket file does; Agnes deletes hers at her
+stand-down, and Gru deletes the run's log with the run file.
 
 `~/.cache/stark-progress/<STARK-n>.json`, one per ticket:
 
@@ -366,7 +416,7 @@ outcomes and last activity of a heartbeat its own session wrote.
 - Nothing matching draws nothing.
 
 Each poll lists the directory and reads the run files, then only the ticket,
-heartbeat and settings files the tab draws, so old files cost a listing and
+heartbeat, settings and log files the tab draws, so old files cost a listing and
 nothing more.
 
 ## Not built (add when it hurts)
@@ -375,6 +425,11 @@ nothing more.
 - Activity for Codex workers, from their session files.
 - A toast or a sound when a row becomes `stalled`.
 - A stage history that stays when the mod reloads.
+- Log lines the mod writes itself, from commits or stage changes, or words
+  a model writes: the worker words its own steps. Add one when a worker's log
+  proves unreliable.
+- A Gru run's log after the run: Gru deletes it with the run file, when the
+  pane has no run left to show.
 - Settings Gru cannot honor yet: workers on devbox (valkyrie cannot launch
   there), and a minimum worker count (Gru already fills to the maximum).
 - A merge hold, a review depth or a release stop for a whole Gru run: each

@@ -1,6 +1,6 @@
 import type { Elements } from 'claude-code'
 
-import type { Board, BoardRow, BoardTone, Cell, GruSettings, PaneTab } from '../types'
+import type { Board, BoardRow, BoardTone, Cell, GruSettings, LogView, PaneTab } from '../types'
 import { clockOf, MAX_WORKERS, stepCounts } from './board'
 import { bar, STAGES, STATION_LABELS } from './view'
 
@@ -319,11 +319,12 @@ export const settingRow = (ui: UI, w: number, label: string, control: ReturnType
   )
 }
 
-/** The pane's two tabs, each with its hotkey. */
+/** The pane's three tabs, each with its hotkey. */
 export function tabBar(ui: UI, tab: PaneTab, setTab: (tab: PaneTab) => unknown) {
   const { Box, Button, Text } = ui
   const tabs = [
     ['overview', 'o', 'Overview'],
+    ['log', 'l', 'Log'],
     ['settings', 's', 'Settings'],
   ] as const
 
@@ -340,6 +341,49 @@ export function tabBar(ui: UI, tab: PaneTab, setTab: (tab: PaneTab) => unknown) 
           )}
         </Button>
       ))}
+    </Box>
+  )
+}
+
+/**
+ * A Log tab: the big steps, newest first, each after its local time. In the
+ * Gru pane each step names whose it is (`Gru`, or a ticket's name) on a line
+ * above its words. `empty` says who writes the steps, and `files` names the
+ * files that hold every step, the older ones the tab leaves out included.
+ */
+export function logTab(ui: UI, w: number, log: LogView, empty: string, files: string) {
+  const { Box, Text } = ui
+  const steps = log.days.reduce((n, d) => n + d.entries.length, 0)
+
+  return (
+    <Box flexDirection="column" gap={1}>
+      <Box flexDirection="column">
+        <Text bold>📜 What got done</Text>
+        <Text color={P.text}>
+          {steps === 0 ? empty : 'The big steps, newest first, each told in plain words by whoever did it.'}
+        </Text>
+      </Box>
+      {log.days.map((day, d) => (
+        <Box key={`day${d}`} flexDirection="column">
+          {day.label !== null && <Text bold>{day.label}</Text>}
+          {day.entries.map((s, i) => (
+            <Box key={`s${d}-${i}`} columnGap={2}>
+              <Box flexShrink={0}>
+                <Text color={P.hint}>{s.clock}</Text>
+              </Box>
+              <Box flexDirection="column">
+                {s.who !== null && <Text color={s.isRun ? P.blue : P.text}>{cut(s.who, w - 7)}</Text>}
+                <Text>{s.text}</Text>
+              </Box>
+            </Box>
+          ))}
+        </Box>
+      ))}
+      {log.older > 0 && (
+        <Text color={P.hint}>
+          {`${log.older === 1 ? '1 older step is' : `${log.older} older steps are`} not shown. Every step is in ${files}.`}
+        </Text>
+      )}
     </Box>
   )
 }
@@ -413,7 +457,17 @@ export function drawPane(ui: UI, w: number, view: PaneView) {
   return (
     <Box flexDirection="column" gap={1}>
       {tabBar(ui, view.tab, view.setTab)}
-      {view.tab === 'settings' ? settings(ui, w, board, view) : overview(ui, w, board, view)}
+      {view.tab === 'settings'
+        ? settings(ui, w, board, view)
+        : view.tab === 'log'
+          ? logTab(
+              ui,
+              w,
+              board.log,
+              'No step yet. Gru and each worker add one line here at each big step.',
+              `~/.cache/stark-progress/run-${board.launchId}.log.jsonl and each ticket's .log.jsonl`,
+            )
+          : overview(ui, w, board, view)}
     </Box>
   )
 }

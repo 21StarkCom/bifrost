@@ -176,7 +176,10 @@ sets, is `MINION (<n>)`. Four things are yours on top of it:
   your leader reads to confirm your `done` instead of taking your word for it.
 - **Keep your ticket's progress file current** by [the spine's rule](../../standards/worker-spine.md#progress-file):
   `closed` once `alfred task move STARK-n done` lands, `blocked` when you stop
-  on a `blocked` or `follow-up … stopping` report. Once the close lands, also
+  on a `blocked` or `follow-up … stopping` report. Append each big step to
+  its log by [the spine's log file](../../standards/worker-spine.md#log-file),
+  in plain words a five-year-old can follow, 20 words or fewer. Leave the log
+  in place at the close: Gru's pane shows it. Once the close lands, also
   delete your ticket's settings file:
   `rm -f ~/.cache/stark-progress/STARK-n.settings.json ~/.cache/stark-progress/STARK-n.settings.json.tmp`.
 

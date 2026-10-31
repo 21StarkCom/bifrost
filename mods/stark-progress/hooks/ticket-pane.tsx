@@ -1,6 +1,6 @@
 import type { Hold, PaneTab, TicketBoard, TicketSettings } from '../types'
 import { clockOf } from './board'
-import { choice, cut, hour, line, P, segFor, settingRow, stationHeader, tabBar, toggle } from './pane'
+import { choice, cut, hour, line, logTab, P, segFor, settingRow, stationHeader, tabBar, toggle } from './pane'
 import type { UI } from './pane'
 
 // The ticket pane, in a Minion's or Agnes's own tab: one ticket, all of it at
@@ -138,7 +138,17 @@ export function drawTicketPane(ui: UI, w: number, view: TicketPaneView) {
   return (
     <Box flexDirection="column" gap={1}>
       {tabBar(ui, view.tab, view.setTab)}
-      {view.tab === 'settings' ? settings(ui, w, t, view) : overview(ui, w, t)}
+      {view.tab === 'settings'
+        ? settings(ui, w, t, view)
+        : view.tab === 'log'
+          ? logTab(
+              ui,
+              w,
+              t.log,
+              'No step yet. The worker adds one line here at each big step.',
+              `~/.cache/stark-progress/${t.id}.log.jsonl`,
+            )
+          : overview(ui, w, t)}
     </Box>
   )
 }

@@ -184,7 +184,9 @@ for it by that section's poll, not as a stopping exit.
 Keep your ticket's progress file by [the spine's rule](../../standards/worker-spine.md#progress-file),
 for the `stark-progress` mod to draw: in your tab, the ticket pane beside the
 chat (`/ticket-board` opens it), or one band row above the prompt while the
-pane is not placed. Your `closed` is once
+pane is not placed. Append each big step to its log by
+[the spine's log file](../../standards/worker-spine.md#log-file), in plain
+words a five-year-old can follow, 20 words or fewer: the pane's Log tab shows it. Your `closed` is once
 [self-confirmation](#self-confirmation) passes; one that stays wrong after its
 fix is a stopping exit, so `blocked`.
 
@@ -197,9 +199,9 @@ that holds your merge or your release is a
 the spine's background command, and go on when it clears. Send no
 `hermod notify`: the operator set it.
 
-Delete the progress file and the settings file, with any `.tmp` a failed
+Delete the progress file, the settings file and the log, with any `.tmp` a failed
 write left beside them
-(`rm -f ~/.cache/stark-progress/STARK-n.json ~/.cache/stark-progress/STARK-n.json.tmp ~/.cache/stark-progress/STARK-n.settings.json ~/.cache/stark-progress/STARK-n.settings.json.tmp`), at the
+(`rm -f ~/.cache/stark-progress/STARK-n.json ~/.cache/stark-progress/STARK-n.json.tmp ~/.cache/stark-progress/STARK-n.settings.json ~/.cache/stark-progress/STARK-n.settings.json.tmp ~/.cache/stark-progress/STARK-n.log.jsonl`), at the
 [stand-down](#stand-down), once the contract's checks pass and right before
 `hermod poison-pill --json`, which takes your session with it. A check that
 stops you there leaves the files, and the tab, standing.

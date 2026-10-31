@@ -5,6 +5,7 @@ import type { Cell, GitSignal, GruSettings, PaneTab, Row, Seg, TicketSettings, T
 import { beatFile, callEnded, callStarted, newBeat, seedBeat } from './beat'
 import { buildBoard, pickRun, runsOf, settingsName } from './board'
 import { readGit } from './git'
+import { logName, runLogName } from './log'
 import { drawPane } from './pane'
 import { buildTicket, ticketSettingsName, ticketSettingsOf } from './ticket'
 import { drawTicketPane } from './ticket-pane'
@@ -19,14 +20,14 @@ const PANE_TITLE = 'Gru'
 const TICKET_PANE = 'ticket-board'
 
 const view = atom({ plugin: 'stark-progress', key: 'view' } as const, null, { shape: 'view-2' })
-const board = atom({ plugin: 'stark-progress', key: 'board' } as const, null, { shape: 'board-2' })
+const board = atom({ plugin: 'stark-progress', key: 'board' } as const, null, { shape: 'board-3' })
 const tabAtom = atom({ plugin: 'stark-progress', key: 'tab' } as const, 'overview' as PaneTab)
 const focusAtom = atom({ plugin: 'stark-progress', key: 'focus' } as const, '')
 const pickAtom = atom({ plugin: 'stark-progress', key: 'pick' } as const, '')
 const doneLastAtom = atom({ plugin: 'stark-progress', key: 'doneLast' } as const, false)
 /** The `$.store` key that keeps the pane's doneLast choice across sessions. */
 const DONE_LAST = 'doneLast'
-const ticketAtom = atom({ plugin: 'stark-progress', key: 'ticket' } as const, null, { shape: 'ticket-2' })
+const ticketAtom = atom({ plugin: 'stark-progress', key: 'ticket' } as const, null, { shape: 'ticket-3' })
 const ticketTabAtom = atom({ plugin: 'stark-progress', key: 'ticketTab' } as const, 'overview' as PaneTab)
 
 // The pane's run: Gru's tab shows its own; a session that asked for the pane
@@ -100,6 +101,8 @@ export const register: Register = on => {
   let doneLastWrites: Promise<void> = Promise.resolve()
   let isPolling = false
   let polling: Promise<void> = Promise.resolve()
+  // A log only grows, and a poll reads it each second: keep its text until its size or time changes.
+  const logReads = new Map<string, { stamp: string; text: string }>()
 
   on('session.start', async ($, e, next) => {
     await $.command.register({
@@ -135,14 +138,25 @@ export const register: Register = on => {
     const tick = async () => {
       const now = await $.clock.now()
       const listed = await $.fs.list(dir).catch(() => [])
-      const jsons = listed.filter(f => f.kind === 'file' && f.name.endsWith('.json'))
+      // A log file is JSON Lines (`.jsonl`); every other file is whole JSON.
+      const jsons = listed.filter(f => f.kind === 'file' && (f.name.endsWith('.json') || f.name.endsWith('.jsonl')))
       const names = new Set(jsons.map(f => f.name))
       const mtimes = new Map(jsons.map(f => [f.name, f.mtimeMs]))
+      const stamps = new Map(jsons.map(f => [f.name, `${f.size}:${f.mtimeMs}`]))
+      for (const name of logReads.keys()) if (!names.has(name)) logReads.delete(name)
       const files: Record<string, string> = {}
       const load = async (name: string) => {
         if (!names.has(name)) return
+        const isLog = name.endsWith('.jsonl')
+        const kept = isLog ? logReads.get(name) : undefined
+        if (kept !== undefined && kept.stamp === stamps.get(name)) {
+          files[name] = kept.text
+          return
+        }
         const text = await $.fs.read(`${dir}/${name}`).catch(() => undefined)
-        if (typeof text === 'string') files[name] = text
+        if (typeof text !== 'string') return
+        files[name] = text
+        if (isLog) logReads.set(name, { stamp: stamps.get(name) ?? '', text })
       }
 
       // The run files first; then only the files this tab draws, so a
@@ -167,8 +181,8 @@ export const register: Register = on => {
         ...new Set([...(run !== null ? run.tickets : own === null ? [] : [own]), ...(shown?.tickets ?? [])]),
       ]
       await Promise.all([
-        ...wanted.flatMap(id => [load(`${id}.json`), load(`${id}.beat.json`)]),
-        ...(shown === undefined ? [] : [load(settingsName(shown.launchId))]),
+        ...wanted.flatMap(id => [load(`${id}.json`), load(`${id}.beat.json`), load(logName(id))]),
+        ...(shown === undefined ? [] : [load(settingsName(shown.launchId)), load(runLogName(shown.launchId))]),
         ...(own === null ? [] : [load(ticketSettingsName(own))]),
       ])
 
