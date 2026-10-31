@@ -204,7 +204,8 @@ function detailOf(
   if (pr !== null) out.push(`Pull request: ${prName(pr)}`)
   if (updated !== null && r.stage !== 'closed') out.push(`In this step since ${clockOf(updated)}.`)
   if (r.diff !== null) out.push(`${r.diff} in its worktree.`)
-  if (beat !== null) out.push(...callsOf(beat, now))
+  // As row() reads it: on a closed ticket, a call still running is the stand-down's, which never ends.
+  if (beat !== null) out.push(...callsOf(r.stage === 'closed' ? { ...beat, running: null } : beat, now))
 
   return out
 }

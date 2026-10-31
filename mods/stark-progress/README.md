@@ -146,6 +146,9 @@ left, the pane says `No Gru run yet`.
   draws `✕`, so a failure never rests on its color alone. An hour with no
   milestone, call or long call shows nothing, so a closed ticket's leftover
   heartbeat draws no row of dots.
+  On a closed ticket, a call the heartbeat still marks running is ignored,
+  in the hour, the detail and the band: a worker stands down inside its last
+  call, which never ends.
 - `👉 Up next`: the tickets with no file yet, in run order.
 
 **Settings.** Four rows, each a value you select to change. A press writes all
