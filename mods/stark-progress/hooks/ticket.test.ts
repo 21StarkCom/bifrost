@@ -55,6 +55,8 @@ test('the ticket pane reads the name, the repo, the epic, the activity and the n
     '+40 −3 in its worktree.',
     '2 commits since its base.',
   ])
+  // Its last hour, as the Gru pane's opened row reads it: the stage change, then a commit in each of the last two 5 minutes, whose marks win over the calls.
+  expect(t?.cells.map(c => c.ch).join('')).toBe('·········◆◆◆')
   expect(buildTicket('STARK-9', T0, files, new Map(), null)).toBe(null)
 })
 
