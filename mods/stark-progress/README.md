@@ -140,9 +140,12 @@ left, the pane says `No Gru run yet`.
   the diff size, the running or last tool call, the calls in the last 15
   minutes, the failures among the last 10, and its last hour: the band's
   12 cells of 5 minutes, oldest first, with a legend of the marks it shows
-  (`◆` milestone, `▃` tool calls per 5 min, amber `▃` most calls failed, `─`
-  one long call, `·` no calls). A ticket with no heartbeat and no milestone in
-  the hour shows no hour.
+  (`◆` milestone, `▃` tool calls per 5 min, amber `✕` most calls failed, `─`
+  one long call, `·` no calls, and `blank: no heartbeat` when the worker
+  writes none). The band draws a failed 5 minutes as a red bar; the pane
+  draws `✕`, so a failure never rests on its color alone. An hour with no
+  milestone, call or long call shows nothing, so a closed ticket's leftover
+  heartbeat draws no row of dots.
 - `👉 Up next`: the tickets with no file yet, in run order.
 
 **Settings.** Four rows, each a value you select to change. A press writes all

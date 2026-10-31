@@ -182,6 +182,49 @@ test('the pane draws the run: counts, a ticket worth a look, Up next, and a row 
   expect(await pane.find({ type: 'Text', text: /left|ETA|~\d/ })).toBeUndefined()
 })
 
+test("a ticket's hour marks calls, a failed 5 minutes and blanks, and an hour with nothing in it draws none", async ($, on) => {
+  const iso = (minutesAgo: number) => new Date(T0 - minutesAgo * MIN).toISOString()
+  const at = (minutesAgo: number) => Math.floor((T0 - minutesAgo * MIN) / MIN)
+  const disk: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1', 'STARK-2', 'STARK-3'] }),
+    // Calls 3 minutes ago, mostly failed calls 8 minutes ago, its stage change outside the hour.
+    'STARK-1.json': ticket('STARK-1', 'pr', { updated: iso(120) }),
+    'STARK-1.beat.json': JSON.stringify({
+      lastActivity: iso(3),
+      running: null,
+      minutes: [
+        { at: at(3), calls: 13, fails: 0 },
+        { at: at(8), calls: 10, fails: 8 },
+      ],
+      recent: [],
+    }),
+    // Closed hours ago; its heartbeat stays behind.
+    'STARK-2.json': ticket('STARK-2', 'closed', { updated: iso(180) }),
+    'STARK-2.beat.json': JSON.stringify({ lastActivity: iso(170), running: null, minutes: [], recent: [] }),
+    // No heartbeat, a stage change 20 minutes ago.
+    'STARK-3.json': ticket('STARK-3', 'review', { updated: iso(20) }),
+  }
+  stage(on, disk, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  const pane = await $.ui.mount(PANE)
+
+  await pane.press({ key: 'row-STARK-1' })
+  expect(await pane.find({ type: 'Text', text: 'Last hour  ··········✕▃  now' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '▃ tool calls per 5 min' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '✕ most calls failed' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '· no calls' })).toBeDefined()
+
+  await pane.press({ key: 'row-STARK-2' })
+  expect(await pane.find({ type: 'Text', text: /^Last hour/ })).toBeUndefined()
+
+  await pane.press({ key: 'row-STARK-3' })
+  expect(await pane.find({ type: 'Text', text: `Last hour  ${' '.repeat(7)}◆${' '.repeat(4)}  now` })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'blank: no heartbeat' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '· no calls' })).toBeUndefined()
+})
+
 test('a full bar keeps its note: all tickets at one step, one of them worth a look', async ($, on) => {
   const disk: Record<string, string> = {
     'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1', 'STARK-2'] }),
