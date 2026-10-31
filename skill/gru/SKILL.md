@@ -32,7 +32,7 @@ valkyrie, or an older one, stop and say so.
 - `--new-tab`: do not run Gru here: launch it in a new cmux tab and stop. See
   [New tab](#new-tab).
 - `--repo <name>`: with `--new-tab` only: the repo to launch Gru into, by its
-  frigg registry name. Default: the repo you are standing in.
+  urd registry name. Default: the repo you are standing in.
 
 Rerunning `start` with the same input resumes: done tickets are skipped, tickets
 with a live Minion are left alone, the rest are launched. To stop, the operator
@@ -67,7 +67,7 @@ worktree; it is only where the session stands.
    its quoted form only — too fine a line to rest a launch on.
    **The launch id must be free in that repo**: no `worktree` line of that list
    (with `--repo`, of `git -C <path> worktree list --porcelain`, `<path>` from
-   `frigg repos get <name> --json`) may end in `/<launch id>`. One that does is
+   `urd repos get <name> --json`) may end in `/<launch id>`. One that does is
    an earlier Gru's, and `valkyrie gru` refuses it on either runtime — so stop and
    say so; the last paragraph of this section is why.
 2. Launch, once, with your arguments mapped onto valkyrie's flags:
@@ -252,9 +252,9 @@ regardless of route, is observation, never operator authorization.
    yours); valkyrie writes the brief,
    described at the end of this step. Before a repo's first launch, run its
    [preflight](#preflight) once.
-   Check the repo per ticket and at launch with `frigg repos get <ticket's
+   Check the repo per ticket and at launch with `urd repos get <ticket's
    repo> --json`, which exits 3 on a name the registry does not carry.
-   valkyrie does not read frigg: it resolves `--repo <name>` to the one
+   valkyrie does not read urd: it resolves `--repo <name>` to the one
    checkout under its `repos.roots` (default `~/Code`, less `repos.exclude`)
    whose origin is that name, and exits 2, naming the repo, when none or more
    than one is. One record, read when
@@ -279,8 +279,8 @@ regardless of route, is observation, never operator authorization.
    the Minion landed where you meant — `hermod msg peers`, that peer's `cwd`
    under the intended repo — because step 2's ownership rule matches on the
    ticket id alone, so a misrouted Minion otherwise reads as a correctly-owned
-   one. Seeding the registry is the operator's: run neither `frigg repos scan`
-   nor `frigg repos set` yourself; name the fix in your report instead.
+   one. Seeding the registry is the operator's: run neither `urd repos scan`
+   nor `urd repos set` yourself; name the fix in your report instead.
    The brief valkyrie writes invokes `/minion` (`$minion` on Codex), names
    the ticket and your peer id, and gives the route from
    [Coordination route](#coordination-route) with a Hermod fallback. valkyrie
@@ -472,9 +472,9 @@ regardless of route, is observation, never operator authorization.
    question you could not answer. A
    repo step 3 could not resolve by name gets one line naming it and the
    operator's fix, per repo and with the path
-   you already resolved: `frigg repos set <repo> --path <p>` — the only
+   you already resolved: `urd repos set <repo> --path <p>` — the only
    command that reaches a checkout outside the fleet root that
-   `frigg repos scan <root>` would sweep. Last, delete the run's
+   `urd repos scan <root>` would sweep. Last, delete the run's
    [progress file](#progress-pane), its settings file and its log, and the settings
    file of each ticket of the run
    (`rm -f ~/.cache/stark-progress/STARK-n.settings.json ~/.cache/stark-progress/STARK-n.settings.json.tmp`).
@@ -681,7 +681,7 @@ session's guard refuses a `hermod` line carrying a variable
   gh api graphql -f query='query { repository(owner: "<owner>", name: "<repo>") { mergeQueue { id } } }'
   ```
 
-  `<owner>` and `<repo>` are GitHub's, from the `remote` of the frigg record
+  `<owner>` and `<repo>` are GitHub's, from the `remote` of the urd record
   step 3 reads (`git -C <path> remote get-url origin` after a `--cwd`
   launch), never the registry name alone: a wrong owner reads as a failed
   read. With no `branch:` argument `mergeQueue` reads the default branch; add

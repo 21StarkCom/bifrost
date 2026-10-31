@@ -47,7 +47,7 @@ work but you.
   after `--` on the valkyrie command line; use `--` in the skill invocation when
   text starts with a flag-shaped word.
 - `--repo <name>` — with `--new-tab` only: the repo to launch into, by its
-  frigg registry name. Default: the repo the ticket names, else the repo you
+  urd registry name. Default: the repo the ticket names, else the repo you
   are standing in.
 - `--agent claude|codex` — with `--new-tab` only: the agent that runs her.
   Default: `agents.launchers.agnes.agent` in idun's config, which valkyrie
@@ -81,7 +81,7 @@ spine, no report, no stand down. Launch her and stop.
    its quoted form only — too fine a line to rest a launch on.
    **The ticket's id must be free in that repo**: no `worktree` line of that
    list (with `--repo`, of `git -C <path> worktree list --porcelain`, `<path>`
-   from `frigg repos get <name> --json`) may end in `/<the ticket id>`. One that
+   from `urd repos get <name> --json`) may end in `/<the ticket id>`. One that
    does is somebody's already — yours, when this session was itself launched on
    the ticket, which is the likely case if you let the id default to your bound
    ticket. A Claude launch onto it exits 4 while a live session stands in it —

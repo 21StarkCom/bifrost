@@ -31,7 +31,7 @@ tab. You never wait on your leader for anything.
   to. A peer as `hermod msg peers` prints its `id` (`claude:<session-id>`,
   `codex:<thread-id>`), or `operator`: the Minion prints its reports in its
   own tab. Default: you.
-- `--repo <name>` — with `--new-tab` only: the repo to launch into, by its frigg
+- `--repo <name>` — with `--new-tab` only: the repo to launch into, by its urd
   registry name. Default: the repo the ticket names, else the repo you are
   standing in.
 - `--agent claude|codex` — with `--new-tab` only: the agent that runs the
@@ -73,7 +73,7 @@ operator wants, say so and stop.
    its quoted form only — too fine a line to rest a launch on.
    **The ticket's id must be free in that repo**: no `worktree` line of that
    list (with `--repo`, of `git -C <path> worktree list --porcelain`, `<path>`
-   from `frigg repos get <name> --json`) may end in `/<the ticket id>`. One that
+   from `urd repos get <name> --json`) may end in `/<the ticket id>`. One that
    does is somebody's already — yours, when this session was itself launched on
    the ticket, which is the likely case if you let the id default to your bound
    ticket. A Claude launch onto it exits 4 while a live session stands in it —
