@@ -1,6 +1,6 @@
 import type { Hold, PaneTab, TicketBoard, TicketSettings } from '../types'
 import { clockOf } from './board'
-import { choice, cut, hour, line, logTab, P, segFor, settingRow, stationHeader, tabBar, toggle } from './pane'
+import { choice, cut, hour, line, logTab, segFor, settingRow, stationHeader, tabBar, toggle } from './pane'
 import type { UI } from './pane'
 
 // The ticket pane, in a Minion's or Agnes's own tab: one ticket, all of it at
@@ -22,7 +22,7 @@ const CLEARS: Record<Hold, string> = {
 }
 
 function overview(ui: UI, w: number, t: TicketBoard) {
-  const { Box, Text } = ui
+  const { Box, Text, P } = ui
   const seg = segFor(w)
   const about = [t.id, t.repo, t.slice].filter((words): words is string => words !== null).join(' · ')
 
@@ -36,7 +36,7 @@ function overview(ui: UI, w: number, t: TicketBoard) {
 
       <Box flexDirection="column">
         <Text bold>🚇 Where it is</Text>
-        <Text color={P.hint}>{`  ${stationHeader(seg)}`}</Text>
+        <Text mono color={P.hint}>{`  ${stationHeader(seg)}`}</Text>
         <Box columnGap={2} paddingLeft={2}>
           <Box flexShrink={0}>{line(ui, t, seg)}</Box>
           <Text color={t.tone === 'warn' ? P.amber : P.text}>{`${t.emoji} ${t.status}`}</Text>
@@ -77,7 +77,7 @@ function overview(ui: UI, w: number, t: TicketBoard) {
 }
 
 function settings(ui: UI, w: number, t: TicketBoard, view: TicketPaneView) {
-  const { Box, Text } = ui
+  const { Box, Text, P } = ui
   const s = t.settings
 
   return (
@@ -124,7 +124,7 @@ function settings(ui: UI, w: number, t: TicketBoard, view: TicketPaneView) {
 }
 
 export function drawTicketPane(ui: UI, w: number, view: TicketPaneView) {
-  const { Box, Text } = ui
+  const { Box, Text, P } = ui
   const t = view.ticket
   if (t === null) {
     return (
