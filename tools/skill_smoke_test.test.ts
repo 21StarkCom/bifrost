@@ -740,6 +740,32 @@ test("skill smoke: standards — the standing GO lives in the spine's §3", () =
   }
 });
 
+// Minion and Agnes point at the spine's §5 for the scope of the re-run after
+// `--fix` instead of restating it, and check 6b reads only a link's file half,
+// so the heading that anchor lands on and the scoped rule under it are pinned
+// here, as is §3's one start of the surface for each round. Whitespace is
+// collapsed so a reflowed paragraph neither breaks a pin nor hides the old rule.
+test("skill smoke: standards — the scoped re-run after --fix lives in the spine's §5", () => {
+  const spine = fs.readFileSync(path.join(REPO_ROOT, "standards", "worker-spine.md"), "utf8");
+  const heading = "## 5. Re-verify after `--fix`, and post the runs on the PR";
+  assert.ok(spine.split("\n").includes(heading), "worker-spine.md lost §5's heading, which the worker skills anchor");
+  const sectionOf = (title: string) =>
+    (spine.split(`\n${title}\n`)[1] ?? "").split(/\n## /)[0].replace(/\s+/g, " ");
+  const section = sectionOf(heading);
+  assert.ok(section.includes("smoke check"), "worker-spine.md §5 no longer scopes the re-run to what --fix changed plus a smoke check");
+  assert.ok(section.includes("second PR comment"), "worker-spine.md §5 no longer posts the re-run as a second PR comment");
+  const verify = sectionOf("## 3. Verify live");
+  assert.ok(verify.includes("once for each round of the live check"), "worker-spine.md §3 no longer starts the surface once for each round");
+  for (const skill of ["agnes", "gru", "minion"]) {
+    const text = fs.readFileSync(path.join(SKILLS_ROOT, skill, "SKILL.md"), "utf8").replace(/\s+/g, " ");
+    assert.ok(
+      text.includes("worker-spine.md#5-re-verify-after---fix-and-post-the-runs-on-the-pr"),
+      `${skill} no longer points at the spine's §5 for the scope of the re-run`,
+    );
+    assert.ok(!text.includes("re-run the live check after a `--fix` round and post that"), `${skill} restates the old full re-run after --fix`);
+  }
+});
+
 // Minion, Agnes and Gru's stamps write a ticket's stark-progress file by the
 // spine's one command instead of restating it, and check 6b reads only a
 // link's file half, so the heading those anchors land on and the atomic,

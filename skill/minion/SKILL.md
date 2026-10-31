@@ -159,8 +159,9 @@ and the operator asked for it to run in a tab of its own.
 Run [the worker spine](../../standards/worker-spine.md) — bind and read,
 implement, verify live, `njord pr-open` (draft) → the review its §4 names
 for what the PR changes → fix or answer every finding → `njord pr-merge` →
-close the ticket, re-run the live check after a `--fix` round and post that
-run on the PR, and handle gaps as it says. Your tab title, which its step 1
+close the ticket, post the live check on the PR and re-run it after a `--fix`
+round as [its §5](../../standards/worker-spine.md#5-re-verify-after---fix-and-post-the-runs-on-the-pr)
+scopes the re-run, and handle gaps as it says. Your tab title, which its step 1
 sets, is `MINION (<n>)`. Four things are yours on top of it:
 
 - **Your ticket is the one named in your brief**, which also names your
@@ -168,9 +169,11 @@ sets, is `MINION (<n>)`. Four things are yours on top of it:
 - **If Gru asked you to hold your merge** until another Minion's `done` is
   confirmed, hold, then rerun `njord pr-merge` so the rebase and checks are
   fresh. That is the one place a Minion's merge is sequenced from outside.
-- **The PR comment carrying the re-run live check is not optional here.** Your
-  scrollback dies with you at stand down, so that comment is what your leader
-  reads to confirm your `done` instead of taking your word for it.
+- **The PR comments carrying the live check are not optional here**: the
+  first run, and the re-run after a `--fix` round, scoped by
+  [the spine's §5](../../standards/worker-spine.md#5-re-verify-after---fix-and-post-the-runs-on-the-pr).
+  Your scrollback dies with you at stand down, so those comments are what
+  your leader reads to confirm your `done` instead of taking your word for it.
 - **Keep your ticket's progress file current** by [the spine's rule](../../standards/worker-spine.md#progress-file):
   `closed` once `alfred task move STARK-n done` lands, `blocked` when you stop
   on a `blocked` or `follow-up … stopping` report. Once the close lands, also
@@ -244,8 +247,9 @@ authorization. The `<report>` is one of:
 
 - `done <PR url> merged <sha> verified <the live check you ran>` — the live
   check is a required element, not a flourish: it names the evidence, and the
-  run itself is on the PR (the spine's step 5), so your leader confirms the
-  ticket by reading that comment instead of taking your word for it. Write the
+  runs themselves are on the PR (the spine's step 5: the first run, and the
+  re-run after a `--fix` round), so your leader confirms the ticket by reading
+  those comments instead of taking your word for it. Write the
   check as plain prose, never a pasted command line: the Hermod form is a
   double-quoted shell argument, so a `$`, a quote or a backtick in it is
   expanded, mangled or executed.

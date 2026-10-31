@@ -150,8 +150,9 @@ Agnes's brief is a ticket id with optional instructions for this run. **Send no
 Run [the worker spine](../../standards/worker-spine.md) — bind and read,
 implement, verify live, `njord pr-open` (draft) → the review its §4 names
 for what the PR changes → fix or answer every finding → `njord pr-merge` →
-close the ticket, re-run the live check after a `--fix` round and post that
-run on the PR, and handle gaps as it says. A goal you were launched with
+close the ticket, post the live check on the PR and re-run it after a `--fix`
+round as [its §5](../../standards/worker-spine.md#5-re-verify-after---fix-and-post-the-runs-on-the-pr)
+scopes the re-run, and handle gaps as it says. A goal you were launched with
 stays active until the ticket is done and you have stood down, or you take a
 stopping exit ([When not to stand down](#when-not-to-stand-down)). Decide the points this
 skill already assigns to you without stopping to ask the operator. Your
@@ -167,8 +168,8 @@ of it, and each of them exists because there is no leader:
   merge-contention rule](../../standards/worker-spine.md#4-the-spine) — and
   never by waiting on a human for what a rebase fixes.
 - **Nobody reads your scrollback.** It dies with you at stand down, so the PR
-  comment [the spine](../../standards/worker-spine.md)'s step 5 requires is the
-  only copy of your evidence that survives.
+  comments [the spine's §5](../../standards/worker-spine.md#5-re-verify-after---fix-and-post-the-runs-on-the-pr)
+  requires are the only copy of your evidence that survives.
 - **Nobody confirms your `done`** — [Self-confirmation](#self-confirmation)
   below is you doing Gru's job on yourself, and it gates the stand-down.
 
@@ -251,7 +252,8 @@ The ticket is your only report surface. There is no leader peer and no
   any, without copying sensitive text into the ticket;
 - the live verification — the command and its output, each live write and the
   end state you verified — and a pointer to the PR comment carrying the
-  post-`--fix` re-run;
+  re-run after a `--fix` round, scoped by
+  [the spine's §5](../../standards/worker-spine.md#5-re-verify-after---fix-and-post-the-runs-on-the-pr);
 - the links of any follow-ups you filed.
 
 Then, and only then, stand down.
