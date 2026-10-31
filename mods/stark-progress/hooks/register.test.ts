@@ -151,7 +151,7 @@ test('the pane draws the run: counts, a ticket worth a look, Up next, and a row 
   expect(await pane.find({ type: 'Text', text: 'Gru · STARK-10' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: 'bragi · 4 tickets' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: '1 of 4 done · 2 in progress · 1 not started' })).toBeDefined()
-  // The graph: the count, then a bar, 48 cells all 4 tickets (80 less the label, the count and the longest note), and the stalled PR named worth a look.
+  // The graph: the count, then a bar, 48 cells all 4 tickets (80 less the label, the count, a space and the longest note), and the stalled PR named worth a look.
   expect(await pane.find({ type: 'Text', text: `not started  1 ${'█'.repeat(12)}` })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: 'ticket       0' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: `PR           1 ${'█'.repeat(12)} · 1 worth a look` })).toBeDefined()
@@ -205,6 +205,24 @@ test('the counts line up on the right in a column as wide as the run count', asy
   expect(await pane.find({ type: 'Text', text: `not started   9 ${'█'.repeat(41)}▍` })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: 'ticket        0' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: `done          1 ${'█'.repeat(4)}▋` })).toBeDefined()
+})
+
+test('a pane too narrow for a 20-cell bar and the note gives the bar the whole line and drops the note', async ($, on) => {
+  const disk: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1', 'STARK-2'] }),
+    'STARK-1.json': ticket('STARK-1', 'pr'),
+    'STARK-2.json': ticket('STARK-2', 'pr', { updated: new Date(T0 - 120 * MIN).toISOString() }),
+  }
+  stage(on, disk, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+
+  const pane = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 40 } })
+  // 40 columns: 25 cells are all 2 tickets (40 less the label, the count and a space), so the full bar leaves no room for its note.
+  expect(await pane.find({ type: 'Text', text: `PR           2 ${'█'.repeat(25)}` })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /· 1 worth a look/ })).toBeUndefined()
+  expect(await pane.find({ type: 'Text', text: '🙋 1 ticket is worth a look' })).toBeDefined()
 })
 
 test('a settings press writes the run settings file whole, and the pane reads it back', async ($, on) => {
