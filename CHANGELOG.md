@@ -14,7 +14,7 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 
 ### Added
 <!-- idun:pr-merge pr=440 runId=440 sha=e6edbee7 -->
-- `stark-progress` 0.12.0: a Stats tab in the Gru pane and ticket pane counts tokens, tools, prompts, messages, launches and review rounds; fixes a frozen `/gru-board` after reload.
+- `stark-progress` 0.12.0: a Stats tab in the Gru pane and ticket pane counts tokens, lines, commits, PRs, review rounds, tools, prompts, messages, launches, model and effort, with Gru's own column and the whole run's; fixes a frozen `/gru-board` after reload. stark-ops 0.40.3: Agnes deletes her heartbeat and stats files at stand-down.
 <!-- idun:pr-merge pr=439 runId=439 sha=d34cc1cf -->
 - Gru, Minion and Agnes skills now read the repo registry through `urd repos get|set|scan` instead of frigg; stark-ops bumped to 0.40.2.
 <!-- idun:pr-merge pr=438 runId=438 sha=a6c2eb13 -->
