@@ -8,14 +8,15 @@ import { bar, STAGES, STATION_LABELS } from './view'
 // that Gru reads before each launch (Settings). The model is board.ts's. The
 // ticket pane (ticket-pane.tsx) draws with the parts this file exports.
 
-export type Palette = Record<'text' | 'hint' | 'track' | 'blue' | 'green' | 'amber' | 'gray', string>
+export type Palette = Record<'text' | 'hint' | 'track' | 'blue' | 'green' | 'amber' | 'gray' | 'id', string>
 
 /** The elements a pane draws with, and the palette of the surface it draws on. */
 export type UI = Pick<Elements['terminal'], 'Box' | 'Text' | 'Button'> & { P: Palette }
 
 // The terminal's, for its dark theme. Contrast on the pane's #262626 (WCAG):
-// text 8.1:1, gray 6.8:1, hint 5.9:1; track 3.5:1 for lines and rings alone,
-// which carry no words.
+// text 8.1:1, id 8.1:1, gray 6.8:1, hint 5.9:1; track 3.5:1 for lines and
+// rings alone, which carry no words. The id's lavender is no tone's color, so
+// a ticket's id never reads as its state.
 const TERMINAL: Palette = {
   text: '#b8bdd0',
   hint: '#9ba1b8',
@@ -24,6 +25,7 @@ const TERMINAL: Palette = {
   green: '#95d5b2',
   amber: '#e9c46a',
   gray: '#a7adc2',
+  id: '#c9b3f5',
 }
 
 // Every other surface (the desktop app's Code tab, VS Code, mobile) draws in its own light or dark
@@ -38,6 +40,7 @@ const THEMED: Palette = {
   green: 'success',
   amber: 'warning',
   gray: 'inactive',
+  id: 'suggestion',
 }
 
 export const paletteFor = (surface: string): Palette => (surface === 'terminal' ? TERMINAL : THEMED)
@@ -60,6 +63,24 @@ export type PaneView = {
 }
 
 export const cut = (words: string, room: number) => (words.length > room ? `${words.slice(0, Math.max(room - 1, 1))}…` : words)
+
+/**
+ * A ticket as `[STARK-n] Title`: the id in its own color, then the name in the
+ * text's, cut to fit `room` cells. A ticket no file names yet shows its id alone.
+ */
+export function ticketLabel(ui: UI, id: string, name: string, room: number, how: { bold?: boolean; dim?: boolean } = {}) {
+  const { Text, P } = ui
+  const tag = `[${id}]`
+  const title = name === '' ? '' : cut(name, Math.max(room - tag.length - 1, 1))
+
+  return (
+    <Text bold={how.bold}>
+      <Text color={P.id}>{tag}</Text>
+      {title !== '' && ' '}
+      {title !== '' && <Text color={how.dim ? P.text : undefined}>{title}</Text>}
+    </Text>
+  )
+}
 
 /** The length of one track segment at a width, leaving room for a status after the track. */
 export const segFor = (w: number) => Math.max(2, Math.min(6, Math.floor((w - 2 - 5 - 2 - 24) / 4)))
@@ -225,7 +246,7 @@ function overview(ui: UI, w: number, board: Board, view: PaneView) {
           </Text>
           {looks.map(r => (
             <Box key={`a${r.id}`} flexDirection="column" marginTop={1}>
-              <Text>{cut(r.name, w - 4)}</Text>
+              {ticketLabel(ui, r.id, r.name, w - 4)}
               <Text color={P.text}>{r.attention}</Text>
             </Box>
           ))}
@@ -242,13 +263,7 @@ function overview(ui: UI, w: number, board: Board, view: PaneView) {
           return (
             <Box key={`r${r.id}`} flexDirection="column">
               <Button key={`row-${r.id}`} plain onPress={() => view.setFocus(isOpen ? '' : r.id)}>
-                {isQuiet ? (
-                  <Text bold={isOpen} color={P.text}>
-                    {cut(r.name, w - 1)}
-                  </Text>
-                ) : (
-                  <Text bold={isOpen}>{cut(r.name, w - 1)}</Text>
-                )}
+                {ticketLabel(ui, r.id, r.name, w - 1, { bold: isOpen, dim: isQuiet })}
               </Button>
               <Box columnGap={2} paddingLeft={2}>
                 <Box flexShrink={0}>{line(ui, r, seg)}</Box>
@@ -274,7 +289,10 @@ function overview(ui: UI, w: number, board: Board, view: PaneView) {
         <Box flexDirection="column">
           <Text bold>👉 Up next</Text>
           {board.next.map(id => (
-            <Text key={`n${id}`}>{`Start ${id}`}</Text>
+            <Text key={`n${id}`}>
+              {'Start '}
+              {ticketLabel(ui, id, rows.find(r => r.id === id)?.name ?? '', w - 'Start '.length)}
+            </Text>
           ))}
           {/* A `--tickets` run's epic is its first ticket, which no one closes as an epic. */}
           {!rows.some(r => r.id === board.epic) && (
@@ -395,7 +413,9 @@ export function logTab(ui: UI, w: number, log: LogView, empty: string, files: st
                 </Text>
               </Box>
               <Box flexDirection="column">
-                {s.who !== null && <Text color={s.isRun ? P.blue : P.text}>{cut(s.who, w - 7)}</Text>}
+                {s.id !== null
+                  ? ticketLabel(ui, s.id, s.who ?? '', w - 7, { dim: true })
+                  : s.who !== null && <Text color={s.isRun ? P.blue : P.text}>{cut(s.who, w - 7)}</Text>}
                 <Text>{s.text}</Text>
               </Box>
             </Box>

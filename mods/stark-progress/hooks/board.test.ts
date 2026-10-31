@@ -61,6 +61,41 @@ test("settings take the file's value, else the launch's, else the default; a wro
   expect(settingsOf(v1, undefined)).toEqual({ decideForMe: true, maxWorkers: 3, followUps: true, minionAgent: 'claude' })
 })
 
+test("a ticket's name comes from its file, else the run file's titles, else it has none", () => {
+  const files: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({
+      epic: 'STARK-10',
+      session: 'gru',
+      tickets: ['STARK-1', 'STARK-2', 'STARK-3', 'STARK-4', 'STARK-5'],
+      titles: {
+        'STARK-1': 'demo: the launch title',
+        'STARK-2': 'bragi: speak the hints (slice 2 of 3)',
+        'STARK-4': 42,
+        'STARK-9': 'not in this run',
+      },
+    }),
+    // The worker's title wins over the one Gru wrote at launch.
+    'STARK-1.json': ticket('STARK-1', 'pr'),
+    // A file that names no title, and no title in the run file.
+    'STARK-3.json': JSON.stringify({ id: 'STARK-3', stage: 'pr', pr: null, updated: iso(10) }),
+  }
+  const [run] = runsOf(files, new Map())
+  expect(run?.titles).toEqual({ 'STARK-1': 'demo: the launch title', 'STARK-2': 'bragi: speak the hints (slice 2 of 3)' })
+  const board = buildBoard('gru', '', T0, files, new Map(), {})
+  if (board === null) throw new Error('no board')
+  const by = (id: string) => board.rows.find(r => r.id === id)
+  expect(by('STARK-1')).toMatchObject({ name: 'Work on STARK-1', repo: 'demo' })
+  // A ticket with no file yet takes its name, repo and slice from the run file; its detail keeps the whole title.
+  expect(by('STARK-2')).toMatchObject({ name: 'Speak the hints', repo: 'bragi', slice: 'slice 2 of 3', tone: 'none' })
+  expect(by('STARK-2')?.detail).toEqual(['bragi: speak the hints (slice 2 of 3)', 'Its worker has not started yet.'])
+  expect(board.repos).toEqual(['demo', 'bragi'])
+  // No title anywhere, or one of the wrong type: no name, so the pane shows the id alone.
+  expect(by('STARK-3')?.name).toBe('')
+  expect(by('STARK-3')?.detail[0]).toMatch(/^In this step since/)
+  expect(by('STARK-4')).toMatchObject({ name: '', detail: ['Its worker has not started yet.'] })
+  expect(by('STARK-5')?.name).toBe('')
+})
+
 test('a name drops the repo lead and the slice tail', () => {
   expect(nameOf('bragi: speech-to-text hints from the words file (slice 4 of 7)')).toEqual({
     name: 'Speech-to-text hints from the words file',

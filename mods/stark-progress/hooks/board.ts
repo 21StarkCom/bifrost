@@ -42,9 +42,23 @@ export type RunEntry = {
   epic: string
   session: string
   tickets: string[]
+  /** Each ticket's title as Gru wrote it at launch, so a ticket with no file yet has a name. */
+  titles: Record<string, string>
   maxWorkers: number | null
   minionAgent: 'claude' | 'codex' | null
   active: number
+}
+
+/** A run file's `titles`: only the string titles of its own tickets count. */
+function titlesOf(v: unknown, tickets: readonly string[]): Record<string, string> {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return {}
+  const all = v as Record<string, unknown>
+
+  return Object.fromEntries(tickets.flatMap(id => {
+    const title = str(all[id])
+
+    return title === null ? [] : [[id, title]]
+  }))
 }
 
 /**
@@ -73,6 +87,7 @@ export function runsOf(files: Record<string, string>, mtimes: ReadonlyMap<string
       epic: str(run.epic) ?? launchIdOf(name),
       session: str(run.session) ?? '',
       tickets,
+      titles: titlesOf(run.titles, tickets),
       maxWorkers: launched(run.maxWorkers),
       minionAgent: agent(run.minionAgent),
       active,
@@ -196,6 +211,7 @@ export function stepCounts(rows: readonly Pick<BoardRow, 'at' | 'tone' | 'attent
 }
 
 function detailOf(
+  hasFile: boolean,
   title: string | null,
   slice: string | null,
   pr: string | null,
@@ -204,8 +220,8 @@ function detailOf(
   beat: Record<string, unknown> | null,
   now: number,
 ): string[] {
-  if (title === null) return ['Its worker has not started yet.']
-  const out = [title]
+  const out = title === null ? [] : [title]
+  if (!hasFile) return [...out, 'Its worker has not started yet.']
   if (slice !== null) out.push(`This is ${slice}.`)
   if (pr !== null) out.push(`Pull request: ${prName(pr)}`)
   if (updated !== null && r.stage !== 'closed') out.push(`In this step since ${clockOf(updated)}.`)
@@ -257,17 +273,19 @@ export function buildBoard(
     const t = parse(text)
     const beat = parse(files[`${id}.beat.json`])
     const r = row(id, files, git[id] ?? null, now)
-    const title = text === undefined ? null : (str(t?.title) ?? id)
+    // The worker's title, else the one Gru wrote at launch; the pane shows the id beside it, so none is no name.
+    const title = str(t?.title) ?? chosen.titles[id] ?? null
     const words = title === null ? null : nameOf(title)
     const updated = typeof t?.updated === 'string' ? Date.parse(t.updated) : Number.NaN
     const lastActivity = beat === null ? null : beatFields(beat).lastActivity
+    const hasFile = text !== undefined
 
     return {
-      ...calm(r, text !== undefined, lastActivity, now),
-      name: words?.name || id,
+      ...calm(r, hasFile, lastActivity, now),
+      name: words?.name ?? '',
       repo: words?.repo ?? null,
       slice: words?.slice ?? null,
-      detail: detailOf(title, words?.slice ?? null, str(t?.pr), Number.isFinite(updated) ? updated : null, r, beat, now),
+      detail: detailOf(hasFile, title, words?.slice ?? null, str(t?.pr), Number.isFinite(updated) ? updated : null, r, beat, now),
       cells: r.cells,
     }
   })
@@ -291,7 +309,7 @@ export function buildBoard(
     log: buildLog(
       [
         { who: 'Gru', isRun: true, text: files[runLogName(chosen.launchId)] },
-        ...rows.map(r => ({ who: r.name, text: files[logName(r.id)] })),
+        ...rows.map(r => ({ who: r.name, id: r.id, text: files[logName(r.id)] })),
       ],
       now,
     ),

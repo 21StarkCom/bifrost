@@ -142,11 +142,13 @@ test('the pane draws the run: counts, a ticket worth a look, Up next, and a row 
       epic: 'STARK-10',
       session: 'gru',
       tickets: ['STARK-1', 'STARK-2', 'STARK-3', 'STARK-4'],
+      titles: { 'STARK-4': 'bragi: speak the hints (slice 3 of 3)' },
     }),
     'STARK-1.json': ticket('STARK-1', 'closed', { title: 'bragi: say the names (slice 1 of 3)' }),
     'STARK-2.json': ticket('STARK-2', 'review', { title: 'bragi: read the words file (slice 2 of 3)' }),
     'STARK-2.beat.json': JSON.stringify({ lastActivity: iso(1), running: { tool: 'Bash', since: iso(1) }, minutes: [], recent: [] }),
-    'STARK-3.json': ticket('STARK-3', 'pr', { updated: iso(120) }),
+    // A file that names no title.
+    'STARK-3.json': ticket('STARK-3', 'pr', { updated: iso(120), title: undefined }),
   }
   stage(on, disk, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
   const clock = mock.clock(on, { now: T0 })
@@ -169,7 +171,17 @@ test('the pane draws the run: counts, a ticket worth a look, Up next, and a row 
   expect(await pane.find({ type: 'Text', text: '🙋 1 ticket is worth a look' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: 'no stage change or commit for 2h00m' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: '👀 in review · 10m' })).toBeDefined()
-  expect(await pane.find({ type: 'Text', text: 'Start STARK-4' })).toBeDefined()
+  // A ticket reads `[id] name`: the id in its own color, then the name, dimmed on a done or not started row.
+  expect(await pane.find({ type: 'Text', text: /^\[STARK-2\] Read the words file$/ })).toBeDefined()
+  expect((await pane.find({ type: 'Text', text: /^\[STARK-2\]$/ }))?.props.color).toBe('#c9b3f5')
+  expect((await pane.find({ type: 'Text', text: /^Read the words file$/ }))?.props.color).toBeUndefined()
+  expect((await pane.find({ type: 'Text', text: /^Say the names$/ }))?.props.color).toBe('#b8bdd0')
+  // A ticket with no file yet takes its title from the run file, in its row and in Up next.
+  expect(await pane.find({ type: 'Text', text: /^\[STARK-4\] Speak the hints$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^Start \[STARK-4\] Speak the hints$/ })).toBeDefined()
+  // A file that names no title shows the id alone, in its row and in the box of tickets worth a look.
+  expect(await pane.findAll({ type: 'Text', text: /^\[STARK-3\]$/ })).toHaveLength(4)
+  expect(await pane.find({ type: 'Text', text: /^\[STARK-3\] / })).toBeUndefined()
   // A name loses its repo lead and slice tail; the row's detail keeps the title whole.
   expect(await pane.find({ type: 'Text', text: 'Read the words file' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: 'Running Bash for 1m.' })).toBeUndefined()
@@ -186,6 +198,8 @@ test('the pane draws the run: counts, a ticket worth a look, Up next, and a row 
   // A ticket with no file has no heartbeat and no milestone, so its detail draws no hour.
   await pane.press({ key: 'row-STARK-4' })
   expect(await pane.find({ type: 'Text', text: /^Last hour/ })).toBeUndefined()
+  expect(await pane.find({ type: 'Text', text: 'bragi: speak the hints (slice 3 of 3)' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'Its worker has not started yet.' })).toBeDefined()
   // Counts and elapsed times only: nothing forecasts the time left.
   expect(await pane.find({ type: 'Text', text: /left|ETA|~\d/ })).toBeUndefined()
 })
@@ -925,6 +939,9 @@ test("the Gru pane's Log tab merges Gru's steps and each ticket's, newest first,
   expect(texts[at('The change is now in the main code.') - 1]).toBe('Say the names')
   expect(texts[at('Made the change and asked for a check.') - 1]).toBe('Read the words file')
   expect(texts[at('Read the job.') - 1]).toBe('Say the names')
+  // A ticket's step names it as its row does: `[id] name`, the id in its own color.
+  expect(texts).toContain('[STARK-1] Say the names')
+  expect((await pane.find({ type: 'Text', text: /^\[STARK-2\]$/ }))?.props.color).toBe('#c9b3f5')
   expect(texts).not.toContain('Another run.')
   expect(seen.reads).not.toContain(`${DIR}/run-STARK-20.log.jsonl`)
 })
@@ -1029,6 +1046,9 @@ test('the Gru pane draws on the desktop surface too, and a press there writes th
   expect((await pane.find({ type: 'Text', text: '0 of 2 done · 1 in progress · 1 not started' }))?.props.color).toBe('inactive')
   // A bar takes its tone's theme key too: not started subtle, a moving PR the app's accent.
   expect((await pane.findAll({ type: 'Text', text: /^ █/ })).map(n => n.props.color)).toEqual(['subtle', 'suggestion'])
+  // A ticket's id takes the app's accent; its name keeps the app's text color.
+  expect((await pane.find({ type: 'Text', text: /^\[STARK-1\]$/ }))?.props.color).toBe('suggestion')
+  expect((await pane.find({ type: 'Text', text: /^Read the words file$/ }))?.props.color).toBeUndefined()
   // The station words line up over the track only in a face of one width.
   expect((await pane.find({ type: 'Text', text: /^ +ticket PR +review/ }))?.props.mono).toBe(true)
   await pane.press({ key: 'tab-settings' })

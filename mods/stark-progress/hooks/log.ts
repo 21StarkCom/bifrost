@@ -70,10 +70,11 @@ export function dayOf(ms: number, now: number): string {
 
 /**
  * One log file and whose steps it holds: `Gru`, a ticket's name, or null in a
- * pane of one ticket. `isRun` marks Gru's own log, so a ticket whose name reads
- * `Gru` never takes Gru's color.
+ * pane of one ticket. `id` is the ticket's id, which the Gru pane draws before
+ * its name. `isRun` marks Gru's own log, so a ticket whose name reads `Gru`
+ * never takes Gru's color.
  */
-export type LogSource = { who: string | null; isRun?: boolean; text: string | undefined }
+export type LogSource = { who: string | null; id?: string; isRun?: boolean; text: string | undefined }
 
 /**
  * The Log tab: every source's lines merged, newest first (a later line of one
@@ -81,10 +82,10 @@ export type LogSource = { who: string | null; isRun?: boolean; text: string | un
  * unless every line shown is today's.
  */
 export function buildLog(sources: readonly LogSource[], now: number): LogView {
-  const all: (LogLine & { who: string | null; isRun: boolean; order: number })[] = []
+  const all: (LogLine & { who: string | null; id: string | null; isRun: boolean; order: number })[] = []
   for (const source of sources) {
     for (const line of logOf(source.text)) {
-      all.push({ ...line, who: source.who, isRun: source.isRun === true, order: all.length })
+      all.push({ ...line, who: source.who, id: source.id ?? null, isRun: source.isRun === true, order: all.length })
     }
   }
   all.sort((a, b) => b.at - a.at || b.order - a.order)
@@ -93,7 +94,7 @@ export function buildLog(sources: readonly LogSource[], now: number): LogView {
   for (const line of shown) {
     const d = new Date(line.at)
     const clock = `${two(d.getHours())}:${two(d.getMinutes())}`
-    const entry: LogEntry = { at: line.at, clock, who: line.who, isRun: line.isRun, text: line.text }
+    const entry: LogEntry = { at: line.at, clock, who: line.who, id: line.id, isRun: line.isRun, text: line.text }
     const label = dayOf(line.at, now)
     const last = days[days.length - 1]
     if (last !== undefined && last.label === label) last.entries.push(entry)

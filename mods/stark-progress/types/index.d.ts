@@ -111,7 +111,7 @@ export type BoardTone = 'done' | 'move' | 'warn' | 'idle' | 'none'
 /** A ticket on the Gru pane: the band's row read calmly, with its detail. */
 export type BoardRow = {
   id: string
-  /** The title without its `repo: ` lead and `(slice n of m)` tail. */
+  /** The title without its `[tag]`, `repo: ` lead and `(slice n of m)` tail; empty when no file names one. */
   name: string
   repo: string | null
   slice: string | null
@@ -130,10 +130,10 @@ export type BoardRow = {
 
 /**
  * One step on a Log tab: its local time, whose step it is (`Gru`, a ticket's
- * name, or null in the ticket pane), whether it is from Gru's own run log,
- * and its words.
+ * name, or null in the ticket pane), the ticket's id in the Gru pane (else
+ * null), whether it is from Gru's own run log, and its words.
  */
-export type LogEntry = { at: number; clock: string; who: string | null; isRun: boolean; text: string }
+export type LogEntry = { at: number; clock: string; who: string | null; id: string | null; isRun: boolean; text: string }
 
 /** The steps of one local day, newest first; `label` is null when every step shown is today's. */
 export type LogDay = { label: string | null; entries: LogEntry[] }
