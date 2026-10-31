@@ -96,6 +96,12 @@ test("a ticket's name comes from its file, else the run file's titles, else it h
   expect(by('STARK-5')?.name).toBe('')
 })
 
+test('a ticket id that names a built-in object key reads no title from the run file', () => {
+  const files = { 'run-X.json': JSON.stringify({ epic: 'X', session: 'gru', tickets: ['toString', 'constructor'], titles: {} }) }
+  const board = buildBoard('gru', '', T0, files, new Map(), {})
+  expect(board?.rows.map(r => r.name)).toEqual(['', ''])
+})
+
 test('a name drops the repo lead and the slice tail', () => {
   expect(nameOf('bragi: speech-to-text hints from the words file (slice 4 of 7)')).toEqual({
     name: 'Speech-to-text hints from the words file',

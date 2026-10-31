@@ -274,7 +274,7 @@ export function buildBoard(
     const beat = parse(files[`${id}.beat.json`])
     const r = row(id, files, git[id] ?? null, now)
     // The worker's title, else the one Gru wrote at launch; the pane shows the id beside it, so none is no name.
-    const title = str(t?.title) ?? chosen.titles[id] ?? null
+    const title = str(t?.title) ?? (Object.hasOwn(chosen.titles, id) ? chosen.titles[id] : undefined) ?? null
     const words = title === null ? null : nameOf(title)
     const updated = typeof t?.updated === 'string' ? Date.parse(t.updated) : Number.NaN
     const lastActivity = beat === null ? null : beatFields(beat).lastActivity

@@ -373,7 +373,8 @@ launch id (the epic's, or `GRU-n`):
 names a ticket on the Gru pane until its own file does; the ticket file's
 `title` wins, and a title that is not a string, or names no ticket of the run,
 is skipped. `maxWorkers` and `minionAgent` are the launch's `--max-workers` and
-Minion runtime; a v1 file has none of the three. A ticket with no file yet
+Minion runtime; a v1 file has none of the three, and a file written before
+`titles` has no `titles`. A ticket with no file yet
 draws as `no file yet`.
 
 `~/.cache/stark-progress/run-<id>.settings.json`, the run's settings, which

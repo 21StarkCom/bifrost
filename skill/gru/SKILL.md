@@ -502,12 +502,12 @@ does for a ticket's file; append to the log, and never rewrite it.
   `--agent` (default 3 and `claude`).
   Your session id is `echo "$CLAUDE_CODE_SESSION_ID"` (`$CODEX_THREAD_ID` on
   Codex), run as its own command and pasted in. Write it with this one
-  command, each ticket's id and then its title after `--args`, in run order,
+  command, each ticket's id and then its title after `--args --`, in run order,
   each value quoted under
   [the spine's quoting rule](../../standards/worker-spine.md#progress-file):
 
   ```
-  mkdir -p ~/.cache/stark-progress && jq -n --arg epic '<STARK-epic, or the first ticket>' --arg session '<your session id>' --argjson maxWorkers <N> --arg minionAgent '<agent>' '($ARGS.positional | [range(0; length; 2) as $i | {key: .[$i], value: .[$i + 1]}]) as $t | {epic: $epic, session: $session, tickets: ($t | map(.key)), titles: ($t | from_entries), maxWorkers: $maxWorkers, minionAgent: $minionAgent}' --args 'STARK-a' '<title of STARK-a>' 'STARK-b' '<title of STARK-b>' > ~/.cache/stark-progress/run-<launch id>.json.tmp && mv ~/.cache/stark-progress/run-<launch id>.json.tmp ~/.cache/stark-progress/run-<launch id>.json
+  mkdir -p ~/.cache/stark-progress && jq -n --arg epic '<STARK-epic, or the first ticket>' --arg session '<your session id>' --argjson maxWorkers <N> --arg minionAgent '<agent>' '($ARGS.positional | [range(0; length; 2) as $i | {key: .[$i], value: .[$i + 1]}]) as $t | {epic: $epic, session: $session, tickets: ($t | map(.key)), titles: ($t | from_entries), maxWorkers: $maxWorkers, minionAgent: $minionAgent}' --args -- 'STARK-a' '<title of STARK-a>' 'STARK-b' '<title of STARK-b>' > ~/.cache/stark-progress/run-<launch id>.json.tmp && mv ~/.cache/stark-progress/run-<launch id>.json.tmp ~/.cache/stark-progress/run-<launch id>.json
   ```
 
   Step 1 writes it, a split rewrites it, and step 6 deletes it.

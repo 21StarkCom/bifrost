@@ -71,7 +71,9 @@ export const cut = (words: string, room: number) => (words.length > room ? `${wo
 export function ticketLabel(ui: UI, id: string, name: string, room: number, how: { bold?: boolean; dim?: boolean } = {}) {
   const { Text, P } = ui
   const tag = `[${id}]`
-  const title = name === '' ? '' : cut(name, Math.max(room - tag.length - 1, 1))
+  // The title takes what the id and its space leave; with too little room for even `X…`, the id stands alone.
+  const left = room - tag.length - 1
+  const title = name === '' || left < 2 ? '' : cut(name, left)
 
   return (
     <Text bold={how.bold}>
@@ -210,6 +212,7 @@ function graph(ui: UI, w: number, rows: BoardRow[]) {
 function overview(ui: UI, w: number, board: Board, view: PaneView) {
   const { Box, Button, Text, P } = ui
   const rows = board.rows
+  const names = new Map(rows.map(r => [r.id, r.name]))
   const looks = rows.filter(r => r.attention !== null)
   // The list keeps the run's order, or puts the done tickets last in that order.
   const listed = view.doneLast ? [...rows.filter(r => r.tone !== 'done'), ...rows.filter(r => r.tone === 'done')] : rows
@@ -291,7 +294,7 @@ function overview(ui: UI, w: number, board: Board, view: PaneView) {
           {board.next.map(id => (
             <Text key={`n${id}`}>
               {'Start '}
-              {ticketLabel(ui, id, rows.find(r => r.id === id)?.name ?? '', w - 'Start '.length)}
+              {ticketLabel(ui, id, names.get(id) ?? '', w - 'Start '.length)}
             </Text>
           ))}
           {/* A `--tickets` run's epic is its first ticket, which no one closes as an epic. */}
