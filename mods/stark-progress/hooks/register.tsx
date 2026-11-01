@@ -12,6 +12,7 @@ import {
   addPrompt,
   addReview,
   addStats,
+  addTime,
   addUsage,
   newStats,
   noteGit,
@@ -78,6 +79,20 @@ let statsAnchor: { base: string; name: string } | null = null
 /** Each stats file this tab wrote, by the file it lives beside, so each goes once that file does. */
 const statsWritten = new Map<string, string>()
 let statsSeededFor = ''
+/**
+ * The last poll's time, for the session's open time; whether the main loop is
+ * inside a turn now; and the subagents' turns running now, by turn id, which
+ * count as working too (a background agent can run after the main turn ends).
+ */
+let lastTick = 0
+let isTurning = false
+const agentTurns = new Set<string>()
+/** Each epic's title as alfred gave it, and when each epic was last asked: a failed ask is tried again after ASK_AGAIN_MS. */
+const epicTitles = new Map<string, string>()
+const epicsAsked = new Map<string, number>()
+const ASK_AGAIN_MS = 5 * 60_000
+/** A ticket id alfred knows: never a value that could read as a flag. */
+const EPIC_ID = /^[A-Z][A-Z0-9]*-\d+$/
 const gitCache = new Map<string, { at: number; signal: GitSignal | null; isReading: boolean }>()
 
 /**
@@ -170,6 +185,9 @@ export const register: Register = on => {
     }
     const tick = async () => {
       const now = await $.clock.now()
+      // The time since the last poll: open, and busy while the main loop is in a turn.
+      if (addTime(stats, lastTick === 0 ? 0 : now - lastTick, isTurning || agentTurns.size > 0, now)) isStatsDirty = true
+      lastTick = now
       const listed = await $.fs.list(dir).catch(() => [])
       // A log file is JSON Lines (`.jsonl`); every other file is whole JSON.
       const jsons = listed.filter(f => f.kind === 'file' && (f.name.endsWith('.json') || f.name.endsWith('.jsonl')))
@@ -212,6 +230,26 @@ export const register: Register = on => {
       if (shown !== undefined && shown.session !== session && shown.launchId !== pick) {
         pick = shown.launchId
         await update($, pickAtom, () => shown.launchId)
+      }
+      // An epic that is no ticket of its run (whose own file or run-file title names it): ask alfred, in the
+      // background, and a later poll draws the answer. One answer is kept; a failed ask is tried again later.
+      const asked = shown === undefined ? undefined : epicsAsked.get(shown.epic)
+      if (
+        shown !== undefined &&
+        !shown.tickets.includes(shown.epic) &&
+        EPIC_ID.test(shown.epic) &&
+        !epicTitles.has(shown.epic) &&
+        (asked === undefined || now - asked >= ASK_AGAIN_MS)
+      ) {
+        const epic = shown.epic
+        epicsAsked.set(epic, now)
+        void $.process
+          .run(['alfred', 'task', 'show', epic, '--json'], { timeoutMs: 30_000 })
+          .then(r => {
+            const name = r.exitCode === 0 ? (parse(r.stdout)?.item as Record<string, unknown> | undefined)?.name : undefined
+            if (typeof name === 'string' && name !== '') epicTitles.set(epic, name)
+          })
+          .catch(() => undefined)
       }
       const wanted = [
         ...new Set([...(run !== null ? run.tickets : own === null ? [] : [own]), ...(shown?.tickets ?? [])]),
@@ -312,7 +350,7 @@ export const register: Register = on => {
       }
       // No run to show (Gru deleted its run file at the end) clears the
       // pane, so it never keeps drawing a finished run as live.
-      const shownBoard = shown === undefined ? null : buildBoard(session, pick, now, files, mtimes, git)
+      const shownBoard = shown === undefined ? null : buildBoard(session, pick, now, files, mtimes, git, epicTitles)
       // Draw again when a file changed, or once a minute for the times.
       const boardKey =
         shownBoard === null ? 'null' : JSON.stringify([{ ...shownBoard, readAt: 0 }, Math.floor(now / 60_000)])
@@ -510,6 +548,20 @@ export const register: Register = on => {
         isDirty = true
       }
     }
+  })
+
+  // The session's working time: while the main loop or a subagent is inside a turn, counted once however many run.
+  on('turn.start', async ($, e, next) => {
+    if (e.agentId === undefined) isTurning = true
+    else agentTurns.add(e.turnId)
+
+    return next(e)
+  })
+  on('turn.complete', async ($, e, next) => {
+    if (e.agentId === undefined) isTurning = false
+    else agentTurns.delete(e.turnId)
+
+    return next(e)
   })
 
   // Each model request, the main loop's and its subagents': its tokens, and

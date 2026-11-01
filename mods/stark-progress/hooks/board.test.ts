@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { buildBoard, nameOf, runsOf, settingsOf, stepCounts } from './board'
+import { buildBoard, nameOf, runsOf, settingsOf, startOf, stepCounts } from './board'
 import { isRunName } from './view'
 
 const T0 = Date.parse('2026-10-29T12:00:00Z')
@@ -100,6 +100,21 @@ test('a ticket id that names a built-in object key reads no title from the run f
   const files = { 'run-X.json': JSON.stringify({ epic: 'X', session: 'gru', tickets: ['toString', 'constructor'], titles: {} }) }
   const board = buildBoard('gru', '', T0, files, new Map(), {})
   expect(board?.rows.map(r => r.name)).toEqual(['', ''])
+})
+
+test("a run starts at its log's oldest line, else when Gru's stats began, else never", () => {
+  const line = (min: number) => JSON.stringify({ at: new Date(T0 - min * MIN).toISOString(), text: 'a step' })
+  const gru = JSON.stringify({ session: 'g', since: new Date(T0 - 30 * MIN).toISOString() })
+  // Lines are not in time order: the oldest wins, and a line that does not parse is skipped.
+  expect(startOf(`${line(5)}\n{ half\n${line(90)}\n`, gru)).toBe(T0 - 90 * MIN)
+  expect(startOf(undefined, gru)).toBe(T0 - 30 * MIN)
+  expect(startOf('{ half', undefined)).toBe(null)
+})
+
+test("an epic's title drops its `EPIC:` lead too", () => {
+  expect(nameOf('EPIC: goldfinger: agents list, open and use a menu bar icon').name).toBe('Agents list, open and use a menu bar icon')
+  expect(nameOf('epic: demo (slice 1 of 2)')).toEqual({ name: 'Demo', repo: null, slice: 'slice 1 of 2' })
+  expect(nameOf('EPIC: [bug] demo: say the names')).toEqual({ name: 'Say the names', repo: 'demo', slice: null })
 })
 
 test('a name drops the repo lead and the slice tail', () => {

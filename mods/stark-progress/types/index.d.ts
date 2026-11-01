@@ -114,6 +114,10 @@ export type StatsFile = {
   tools: Record<string, ToolTally>
   /** A worker's last git signal for its worktree, kept after the worktree goes; null in Gru's file. */
   git: { added: number; removed: number; commits: number } | null
+  /** How long the session was open, in ms: the time between polls, a gap of more than 5 s counted as 5 s. */
+  openMs: number
+  /** How long the main loop or a subagent was inside a turn, in ms, counted the same way. */
+  busyMs: number
 }
 
 /** One line of a Stats tab: its label, and its value in each column. */
@@ -237,6 +241,10 @@ export type LogView = { days: LogDay[]; older: number }
 export type Board = {
   launchId: string
   epic: string
+  /** The epic's title, without its `EPIC:`, `[tag]` and `repo: ` leads: the run file's, else alfred's; null when neither names one. */
+  title: string | null
+  /** When the run started: its log's oldest line, else when Gru's stats began; null with neither. */
+  started: number | null
   /** True when the run is this session's own: Gru's tab. */
   isOwn: boolean
   repos: string[]
