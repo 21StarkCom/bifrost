@@ -40,6 +40,20 @@ const command = (name: string) => ({
   presentation: { isFullscreen: true, columns: 160 },
 })
 
+/**
+ * The color and weight of a state word: `find` returns the outer Text first,
+ * and a state with no time is the outer Text's whole text, so the inner,
+ * colored one is the Text that carries a color.
+ */
+const inkOf = async (
+  pane: { findAll: (q: { type: string; text: RegExp }) => Promise<{ props: Record<string, unknown> }[]> },
+  text: RegExp,
+) => {
+  const inner = (await pane.findAll({ type: 'Text', text })).find(t => t.props.color !== undefined)
+
+  return inner === undefined ? undefined : { color: inner.props.color, bold: inner.props.bold }
+}
+
 /** Each pane opened so far, placed or not as `isPlaced` says, as `$.ui.panes()` lists them. */
 const panesOf = (opens: string[], isPlaced: boolean) =>
   [...new Set(opens)].map(id => ({ id, title: id, isShown: isPlaced, isFocused: false, isPlaced }))
@@ -51,11 +65,20 @@ const panesOf = (opens: string[], isPlaced: boolean) =>
 function stage(
   on: On,
   disk: Record<string, string>,
-  { session, root, mtimes = {} }: { session: string; root: string; mtimes?: Record<string, number> },
+  { session, root, mtimes = {}, env = {} }: { session: string; root: string; mtimes?: Record<string, number>; env?: Record<string, string> },
 ) {
-  const seen = { reads: [] as string[], runs: [] as string[][], opens: [] as string[], toasts: [] as string[], isPlaced: false, isMvFailing: false }
+  const seen = {
+    reads: [] as string[],
+    runs: [] as string[][],
+    opens: [] as string[],
+    toasts: [] as string[],
+    isPlaced: false,
+    isMvFailing: false,
+    /** What `hermod focus` answers. */
+    hermod: { exitCode: 0, stderr: '' },
+  }
   const writes: Record<string, string> = {}
-  mock.env(on, { HOME: '/h' })
+  mock.env(on, { HOME: '/h', ...env })
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('command.register', (_$, e) => ({ value: { command: e.name } }))
   on('session.root', () => ({ value: root }))
@@ -89,6 +112,9 @@ function stage(
   on('process.run', (_$, e) => {
     const argv = [...e.argv]
     seen.runs.push(argv)
+    if (argv[0] === 'hermod') {
+      return { value: { ...seen.hermod, stdout: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    }
     const isMoved = argv[0] === 'mv' && !seen.isMvFailing
     if (isMoved) disk[nameOf(argv[3] ?? '')] = writes[argv[2] ?? ''] ?? ''
     return { value: { exitCode: isMoved ? 0 : 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
@@ -173,7 +199,14 @@ test('the pane draws the run: counts, a ticket worth a look, Up next, and a row 
   expect(await pane.find({ type: 'Text', text: `done         1 ${'█'.repeat(12)}` })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: '🙋 1 ticket is worth a look' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: 'no stage change or commit for 2h00m' })).toBeDefined()
-  expect(await pane.find({ type: 'Text', text: '👀 in review · 10m' })).toBeDefined()
+  // A state is UPPERCASE in its own color with no emoji; its time stays as it is.
+  expect(await pane.find({ type: 'Text', text: /^IN REVIEW · 10m$/ })).toBeDefined()
+  expect(await inkOf(pane, /^IN REVIEW$/)).toMatchObject({ color: '#f4a6cd', bold: false })
+  expect(await inkOf(pane, /^DONE$/)).toMatchObject({ color: '#95d5b2', bold: false })
+  expect(await inkOf(pane, /^NOT STARTED$/)).toMatchObject({ color: '#a7adc2', bold: false })
+  // Only a state that wants a look has an emoji, and draws bold.
+  expect(await inkOf(pane, /^🐢 SLOW$/)).toMatchObject({ color: '#e9c46a', bold: true })
+  expect(await pane.find({ type: 'Text', text: /^🐢 SLOW · 2h00m$/ })).toBeDefined()
   // A ticket reads `[id] name`: the id in its own color, then the name, dimmed on a done or not started row.
   expect(await pane.find({ type: 'Text', text: /^\[STARK-2\] Read the words file$/ })).toBeDefined()
   expect((await pane.find({ type: 'Text', text: /^\[STARK-2\]$/ }))?.props.color).toBe('#c9b3f5')
@@ -254,6 +287,10 @@ test("a ticket's hour marks calls, a failed 5 minutes and blanks, and an hour wi
 const listOrder = async (pane: { findAll: (q: { type: string }) => Promise<{ key: string | undefined }[]> }) =>
   (await pane.findAll({ type: 'Button' })).map(b => b.key ?? '').filter(key => key.startsWith('row-')).map(key => key.slice('row-'.length))
 
+/** The lines over the groups of "Where each ticket is", top to bottom, without their rule. */
+const dividers = async (pane: { findAll: (q: { type: string; text: RegExp }) => Promise<{ text: string }[]> }) =>
+  (await pane.findAll({ type: 'Text', text: /^── .+ · \d+ ─+$/ })).map(t => t.text.replace(/─+$/, ''))
+
 const DONE_LAST_RUN: Record<string, string> = {
   'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1', 'STARK-2', 'STARK-3', 'STARK-4'] }),
   'STARK-1.json': ticket('STARK-1', 'closed'),
@@ -280,20 +317,112 @@ test('Done tickets last lists the done tickets at the bottom, kept in the store 
   expect(await pane.find({ type: 'Text', text: 'This pane' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: 'The ticket list keeps the order of the run.' })).toBeDefined()
   await pane.press({ key: 'set-done-last' })
-  expect(await pane.find({ type: 'Text', text: 'The ticket list shows the done tickets at the bottom.' })).toBeDefined()
+  expect(
+    await pane.find({ type: 'Text', text: 'The ticket list shows in progress, then to do, then done, each under its own line.' }),
+  ).toBeDefined()
   expect(store.doneLast).toBe(true)
   // Gru reads the run's settings file; this choice is the pane's alone.
   expect(seen.runs.filter(argv => argv[0] === 'mv' && argv[3]?.endsWith('.settings.json'))).toEqual([])
 
   await pane.press({ key: 'tab-overview' })
-  // The open tickets in run order, then the done ones in run order.
+  // In progress, then to do, then done, each group in run order under its own line.
   expect(await listOrder(pane)).toEqual(['STARK-2', 'STARK-4', 'STARK-1', 'STARK-3'])
+  expect(await dividers(pane)).toEqual(['── In progress · 1 ', '── To do · 1 ', '── Done · 2 '])
 
   await pane.press({ key: 'tab-settings' })
   await pane.press({ key: 'set-done-last' })
   expect(store.doneLast).toBe(false)
   await pane.press({ key: 'tab-overview' })
   expect(await listOrder(pane)).toEqual(['STARK-1', 'STARK-2', 'STARK-3', 'STARK-4'])
+  // The run's order has no groups, so no line.
+  expect(await dividers(pane)).toEqual([])
+})
+
+test('an empty group draws no line', async ($, on) => {
+  const disk: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1', 'STARK-2'] }),
+    'STARK-1.json': ticket('STARK-1', 'closed'),
+    'STARK-2.json': ticket('STARK-2', 'pr'),
+  }
+  stage(on, disk, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  mock.store(on, { doneLast: true })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  const pane = await $.ui.mount(PANE)
+  expect(await dividers(pane)).toEqual(['── In progress · 1 ', '── Done · 1 '])
+  // The line runs to the pane's edge: 80 columns.
+  expect((await pane.find({ type: 'Text', text: /^── Done · 1 ─+$/ }))?.text).toHaveLength(80)
+})
+
+const SURFACE = '0A1B2C3D-4E5F-4A6B-8C7D-9E0F1A2B3C4D'
+
+test("a ticket whose worker tab is open draws its id as a button that brings that tab to the front", async ($, on) => {
+  const iso = (minutesAgo: number) => new Date(T0 - minutesAgo * MIN).toISOString()
+  const beat = (updatedMin: number) =>
+    JSON.stringify({ updated: iso(updatedMin), lastActivity: iso(1), running: null, minutes: [], recent: [], surface: SURFACE })
+  const disk: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1', 'STARK-2'] }),
+    'STARK-1.json': ticket('STARK-1', 'pr'),
+    'STARK-1.beat.json': beat(1),
+    // Its heartbeat is 5 minutes old: the tab is gone.
+    'STARK-2.json': ticket('STARK-2', 'pr'),
+    'STARK-2.beat.json': beat(5),
+  }
+  const seen = stage(on, disk, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  const pane = await $.ui.mount(PANE)
+
+  // The open tab's id: dark on the lavender, as wide as `[STARK-1]`; the title beside it still opens the row.
+  const chip = await pane.find({ type: 'Text', text: /^ STARK-1 $/ })
+  expect(chip?.props).toMatchObject({ backgroundColor: '#c9b3f5', color: '#262626', bold: true })
+  expect(await pane.find({ type: 'Text', text: /^\[STARK-1\]/ })).toBeUndefined()
+  expect(await pane.find({ type: 'Text', text: /^\[STARK-2\] Title STARK-2$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'Select a name to see more, or a highlighted id to go to its tab.' })).toBeDefined()
+  await pane.press({ key: 'row-STARK-1' })
+  expect(await pane.find({ type: 'Text', text: /^In this step since/ })).toBeDefined()
+
+  await pane.press({ key: 'tab-STARK-1' })
+  expect(seen.runs).toContainEqual(['hermod', 'focus', SURFACE])
+  expect(seen.toasts).toEqual([])
+  // No button for a closed tab.
+  expect((await pane.findAll({ type: 'Button' })).map(b => b.key)).not.toContain('tab-STARK-2')
+})
+
+test('a press on a tab that hermod cannot bring to the front says why', async ($, on) => {
+  const disk: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1'] }),
+    'STARK-1.json': ticket('STARK-1', 'pr'),
+    'STARK-1.beat.json': JSON.stringify({ updated: new Date(T0).toISOString(), lastActivity: null, running: null, minutes: [], recent: [], surface: SURFACE }),
+  }
+  const seen = stage(on, disk, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  seen.hermod = { exitCode: 2, stderr: 'surface not found\nmore' }
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  const pane = await $.ui.mount(PANE)
+  await pane.press({ key: 'tab-STARK-1' })
+  expect(seen.toasts).toEqual(['The tab of STARK-1 did not come to the front: surface not found'])
+})
+
+test("a worker's tab writes its cmux surface into its heartbeat, and a keep-alive once a minute with no call", async ($, on) => {
+  const disk: Record<string, string> = { 'STARK-1.json': ticket('STARK-1', 'pr') }
+  const seen = stage(on, disk, { session: 'w', root: WORKTREE, env: { CMUX_SURFACE_ID: SURFACE } })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: WORKTREE, surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  const beatMoves = () => seen.runs.filter(argv => argv[0] === 'mv' && argv[3] === `${DIR}/STARK-1.beat.json`).length
+  // The first poll says the tab is open, with no call yet.
+  expect(beatMoves()).toBe(1)
+  expect(JSON.parse(disk['STARK-1.beat.json'] ?? '{}')).toMatchObject({ surface: SURFACE, lastActivity: null })
+  await clock.advance(30_000)
+  expect(beatMoves()).toBe(1)
+  await clock.advance(31_000)
+  expect(beatMoves()).toBe(2)
+  // 60 seconds after the first write, at the poll of T0 + 61 s.
+  expect(JSON.parse(disk['STARK-1.beat.json'] ?? '{}').updated).toBe(new Date(T0 + 61_000).toISOString())
 })
 
 test('a new session starts with the choice the store kept', async ($, on) => {
@@ -646,7 +775,10 @@ test('a call that ends after a flush is flushed again, and a deny counts as a fa
   await $.session.start({ cwd: worktree, surface: 'terminal', isInteractive: true })
   await clock.advance(1000)
   const pending = $.tool.call({ tool: 'Bash', command: 'sleep' })
+  // The first poll wrote the keep-alive: the call's start waits out the 5 seconds after it.
   await clock.advance(1000)
+  expect(JSON.parse(disk['STARK-1.beat.json'] ?? '{}').running).toBe(null)
+  await clock.advance(4000)
   expect(JSON.parse(disk['STARK-1.beat.json'] ?? '{}').running?.tool).toBe('Bash')
 
   // No later call starts: the end alone must reach the file.
@@ -739,7 +871,8 @@ test('the ticket pane draws the whole ticket: name, epic, track, activity and th
   expect(await pane.find({ type: 'Text', text: 'Read the words file' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: 'STARK-1 · bragi · slice 2 of 3' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: 'Part of STARK-10' })).toBeDefined()
-  expect(await pane.find({ type: 'Text', text: '🔨 PR open · 10m' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'PR OPEN · 10m' })).toBeDefined()
+  expect(await inkOf(pane, /^PR OPEN$/)).toMatchObject({ color: '#a5b4fc', bold: false })
   expect(await pane.find({ type: 'Text', text: '🌿 Nothing needs you right now.' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: '4 tool calls in the last 15 minutes.' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: '0 of the last 2 calls failed.' })).toBeDefined()
@@ -804,7 +937,8 @@ test('a held ticket reads as worth a look in the ticket pane and on the Gru pane
   expect(await pane.find({ type: 'Text', text: 'Held by your settings: merge' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: /Set Merge when checks pass to On/ })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: 'Wait for your merge OK.' })).toBeDefined()
-  expect(await pane.find({ type: 'Text', text: '✋ held · merge · 10m' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '✋ HELD · merge · 10m' })).toBeDefined()
+  expect(await inkOf(pane, /^✋ HELD$/)).toMatchObject({ color: '#e9c46a', bold: true })
   await pane.unmount()
 
   await $.command.run(command('gru-board'))
@@ -1070,7 +1204,9 @@ test('the ticket pane draws its ticket on the desktop surface', async ($, on) =>
 
   const pane = await $.ui.mount({ ...TICKET_PANE, surface: 'desktop' })
   expect(await pane.find({ type: 'Text', text: 'Read the words file' })).toBeDefined()
-  expect(await pane.find({ type: 'Text', text: '🔨 PR open · 10m' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'PR OPEN · 10m' })).toBeDefined()
+  // The desktop takes theme keys, so a state follows the app's light or dark theme.
+  expect(await inkOf(pane, /^PR OPEN$/)).toMatchObject({ color: 'permission' })
   expect(await pane.find({ type: 'Text', text: /draws in the terminal/ })).toBeUndefined()
   expect((await pane.find({ type: 'Text', text: 'STARK-1 · bragi' }))?.props.color).toBe('inactive')
   expect((await pane.find({ type: 'Text', text: /^ +ticket PR +review/ }))?.props.mono).toBe(true)
@@ -1329,7 +1465,7 @@ test('after a reload, a /gru-board tab keeps showing its run, drawn from the fil
   on('state.get', (_$, e, next) => {
     if (e.key !== 'board' || isSeeded) return next(e)
     isSeeded = true
-    return { value: { value: { shape: 'board-5', value: stale }, version: 1 } }
+    return { value: { value: { shape: 'board-6', value: stale }, version: 1 } }
   })
   const clock = mock.clock(on, { now: T0 })
   // No /gru-board in this load: the reload started the module over.

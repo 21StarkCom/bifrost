@@ -29,19 +29,21 @@ import { buildView, isRunName, ownRun, ticketOf, worktreeOf } from './view'
 const POLL_MS = 1000
 const GIT_MS = 30_000
 const BEAT_MS = 5000
+/** A worker's tab writes its heartbeat at least this often, with no call too, so the Gru pane sees the tab is open. */
+const ALIVE_MS = 60_000
 const PANE = 'gru-board'
 const PANE_TITLE = 'Gru'
 const TICKET_PANE = 'ticket-board'
 
 const view = atom({ plugin: 'stark-progress', key: 'view' } as const, null, { shape: 'view-2' })
-const board = atom({ plugin: 'stark-progress', key: 'board' } as const, null, { shape: 'board-5' })
+const board = atom({ plugin: 'stark-progress', key: 'board' } as const, null, { shape: 'board-6' })
 const tabAtom = atom({ plugin: 'stark-progress', key: 'tab' } as const, 'overview' as PaneTab)
 const focusAtom = atom({ plugin: 'stark-progress', key: 'focus' } as const, '')
 const pickAtom = atom({ plugin: 'stark-progress', key: 'pick' } as const, '')
 const doneLastAtom = atom({ plugin: 'stark-progress', key: 'doneLast' } as const, false)
 /** The `$.store` key that keeps the pane's doneLast choice across sessions. */
 const DONE_LAST = 'doneLast'
-const ticketAtom = atom({ plugin: 'stark-progress', key: 'ticket' } as const, null, { shape: 'ticket-5' })
+const ticketAtom = atom({ plugin: 'stark-progress', key: 'ticket' } as const, null, { shape: 'ticket-6' })
 const ticketTabAtom = atom({ plugin: 'stark-progress', key: 'ticketTab' } as const, 'overview' as PaneTab)
 
 // The pane's run: Gru's tab shows its own; a session that asked for the pane
@@ -62,6 +64,8 @@ let isSeeded = false
 let isDirty = false
 let lastFlush = 0
 let calls = 0
+/** This tab's cmux surface, from `CMUX_SURFACE_ID`; the heartbeat carries it, so the Gru pane can bring the tab to the front. */
+let surface: string | null = null
 
 // Every session counts its stats in memory from its start; a worker's tab and
 // Gru's tab write them to their stats file, seeded once from what that file
@@ -147,6 +151,7 @@ export const register: Register = on => {
       const stored = await $.store.get(DONE_LAST).catch(() => undefined)
       if (typeof stored === 'boolean') await update($, doneLastAtom, () => stored)
     })
+    surface = (await $.env.get('CMUX_SURFACE_ID').catch(() => undefined)) || null
     const home = await $.env.get('HOME')
     if (!home) return next(e)
     const dir = `${home}/.cache/stark-progress`
@@ -238,9 +243,10 @@ export const register: Register = on => {
           seedBeat(beat, files[name], session)
         }
         if (files[`${own}.json`] !== undefined) {
-          const text = JSON.stringify(beatFile(beat, own, session, now))
+          const text = JSON.stringify(beatFile(beat, own, session, now, surface))
           files[name] = text
-          if (isDirty && now - lastFlush >= BEAT_MS) {
+          // A call's change at most every BEAT_MS; with no call, a keep-alive every ALIVE_MS (the first poll's at once).
+          if ((isDirty && now - lastFlush >= BEAT_MS) || now - lastFlush >= ALIVE_MS) {
             isDirty = false
             lastFlush = now
             await writeWhole($, `${dir}/${name}`, text).catch(() => undefined)
@@ -379,6 +385,22 @@ export const register: Register = on => {
       pick: async launchId => {
         await update($, pickAtom, () => launchId)
         await pollNow()
+      },
+      // The worker's own cmux tab, by the surface its heartbeat names, as the board is now.
+      openTab: async id => {
+        const tab = (await read($, board))?.rows.find(r => r.id === id)?.tab ?? null
+        if (tab === null) {
+          await $.ui.toast(`The tab of ${id} is not open.`)
+          return
+        }
+        const focused = await $.process.run(['hermod', 'focus', tab], { timeoutMs: 10_000 }).catch((err: unknown) => ({
+          exitCode: -1,
+          stderr: err instanceof Error ? err.message : String(err),
+        }))
+        if (focused.exitCode !== 0) {
+          const why = focused.stderr.trim().split('\n')[0] ?? ''
+          await $.ui.toast(`The tab of ${id} did not come to the front${why === '' ? '.' : `: ${why}`}`)
+        }
       },
       // The whole settings, written as one file, as the contract asks; Gru reads it before each launch.
       // Each press reads the board as it is now, not as this render saw it, so quick presses all count,

@@ -1,4 +1,4 @@
-import type { Board, BoardRow, BoardTone, GitSignal, GruSettings, Row } from '../types'
+import type { Board, BoardRow, BoardState, BoardTone, GitSignal, GruSettings, Row } from '../types'
 import { beatFields, RECENT } from './beat'
 import { buildLog, logName, runLogName } from './log'
 import { runStats } from './stats'
@@ -11,6 +11,8 @@ const MIN = 60_000
 const ACTIVE_MIN = 60
 const RECENT_CALLS_MIN = 15
 const DEFAULT_WORKERS = 3
+/** A heartbeat younger than this says its worker's tab is open: the mod writes one at least once a minute. */
+const LIVE_MIN = 3
 
 export const MAX_WORKERS = 8
 
@@ -147,43 +149,87 @@ export const clockOf = (ms: number) => {
   return `${two(d.getHours())}:${two(d.getMinutes())}`
 }
 
-const STEP: Record<string, string> = { ticket: 'starting', pr: 'PR open', review: 'in review', merged: 'merged' }
+/** The state of a ticket that is moving, by its stage. */
+const STEP: Partial<Record<Row['stage'], BoardState>> = { ticket: 'starting', pr: 'pr', review: 'review', merged: 'merged' }
 
-/** The calm reading of a band row: its tone, one emoji, a short status, and why it is worth a look. */
-export function calm(r: Row, hasFile: boolean, lastActivity: number | null, now: number): Omit<BoardRow, 'name' | 'repo' | 'slice' | 'detail' | 'cells'> {
+/** The time after a verdict's word: `12m` of `blocked 12m`, or '' when it has none. */
+const timeOf = (text: string) => text.split(' ').slice(1).join(' ')
+
+/**
+ * The calm reading of a band row: its tone, its state, the words after the
+ * state, and why it is worth a look. `beat` is its parsed heartbeat, which
+ * tells a long call from no call.
+ */
+export function calm(
+  r: Row,
+  hasFile: boolean,
+  beat: Record<string, unknown> | null,
+  now: number,
+): Omit<BoardRow, 'name' | 'repo' | 'slice' | 'detail' | 'cells' | 'tab'> {
   const base = { id: r.id, at: STAGES.indexOf(r.stage) }
   const v = r.verdict
-  if (!hasFile) return { ...base, at: -1, tone: 'none', emoji: '💤', status: 'not started', attention: null }
-  if (v.word === 'done') return { ...base, at: STAGES.length, tone: 'done', emoji: '✅', status: 'done', attention: null }
+  if (!hasFile) return { ...base, at: -1, tone: 'none', state: 'todo', status: '', attention: null }
+  if (v.word === 'done') return { ...base, at: STAGES.length, tone: 'done', state: 'done', status: '', attention: null }
   if (v.word === 'blocked') {
     const at = r.track.findIndex(s => s.ch === '✕')
+    const time = timeOf(v.text)
     return {
       ...base,
       at: at < 0 ? 0 : at / 2,
       tone: 'warn',
-      emoji: '⏳',
-      status: v.text,
-      attention: v.text === 'blocked' ? 'blocked' : `blocked for ${v.text.slice('blocked '.length)}`,
+      state: 'blocked',
+      status: time,
+      attention: time === '' ? 'blocked' : `blocked for ${time}`,
     }
   }
   if (v.word === 'held') {
-    const status = r.inStage === '' ? v.text : `${v.text} · ${r.inStage}`
-    return { ...base, tone: 'warn', emoji: '✋', status, attention: `held by its settings: ${v.text.slice('held · '.length)}` }
+    const hold = v.text.slice('held · '.length)
+    const status = r.inStage === '' ? hold : `${hold} · ${r.inStage}`
+    return { ...base, tone: 'warn', state: 'held', status, attention: `held by its settings: ${hold}` }
   }
   if (v.word === 'idle') {
-    const quiet = lastActivity === null ? '' : dur(now - lastActivity)
-    return { ...base, tone: 'idle', emoji: '⏳', status: `quiet ${quiet}`, attention: `no tool call for ${quiet}` }
+    const call = runningOf(beat)
+    if (call !== null) {
+      const long = dur(now - call.since)
+      return { ...base, tone: 'idle', state: 'running', status: long, attention: `one ${call.tool} call has run for ${long}` }
+    }
+    const last = beat === null ? null : beatFields(beat).lastActivity
+    const quiet = last === null ? '' : dur(now - last)
+    return { ...base, tone: 'idle', state: 'quiet', status: quiet, attention: `no tool call for ${quiet}` }
   }
-  const word = STEP[r.stage] ?? r.stage
-  const status = r.inStage === '' ? word : `${word} · ${r.inStage}`
-  const emoji = r.stage === 'review' ? '👀' : r.stage === 'merged' ? '✅' : '🔨'
   const failed = r.failed === null ? null : `${r.failed.replace(/^(\d+)\/(\d+) failed$/, '$1 of the last $2 calls failed')}`
-  if (v.word === 'stalled') {
-    const quiet = v.text.slice('stalled '.length)
-    return { ...base, tone: 'warn', emoji: '🧱', status, attention: failed ?? `no stage change or commit for ${quiet}` }
+  if (v.word === 'slow' || v.word === 'stalled') {
+    // A slow ticket has an emoji; it is worth a look once the band calls it stalled.
+    const quiet = timeOf(v.text)
+    const attention = failed ?? (v.word === 'stalled' ? `no stage change or commit for ${quiet}` : null)
+    return { ...base, tone: 'warn', state: 'slow', status: quiet, attention }
   }
 
-  return { ...base, tone: failed === null ? 'move' : 'warn', emoji, status, attention: failed }
+  return { ...base, tone: failed === null ? 'move' : 'warn', state: STEP[r.stage] ?? 'starting', status: r.inStage, attention: failed }
+}
+
+/** A heartbeat's oldest running call, or null. */
+function runningOf(beat: Record<string, unknown> | null): { tool: string; since: number } | null {
+  const running = (beat?.running ?? null) as Record<string, unknown> | null
+  const since = typeof running?.since === 'string' ? Date.parse(running.since) : Number.NaN
+
+  return typeof running?.tool === 'string' && Number.isFinite(since) ? { tool: running.tool, since } : null
+}
+
+/** A cmux surface id: a UUID, so a value from a file never reads as a flag. */
+const SURFACE = /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/
+
+/**
+ * The cmux surface of a ticket's worker tab while it is open: the worker's mod
+ * writes its heartbeat at least once a minute while its tab lives, so one
+ * under LIVE_MIN old says the tab is open.
+ */
+export function tabOf(beat: Record<string, unknown> | null, now: number): string | null {
+  const surface = beat?.surface
+  const updated = typeof beat?.updated === 'string' ? Date.parse(beat.updated) : Number.NaN
+  if (typeof surface !== 'string' || !SURFACE.test(surface) || !Number.isFinite(updated)) return null
+
+  return now - updated < LIVE_MIN * MIN ? surface : null
 }
 
 /** One bar of the Overview's graph: the tickets at one step of the spine, and how many of them are worth a look. */
@@ -278,16 +324,16 @@ export function buildBoard(
     const title = str(t?.title) ?? (Object.hasOwn(chosen.titles, id) ? chosen.titles[id] : undefined) ?? null
     const words = title === null ? null : nameOf(title)
     const updated = typeof t?.updated === 'string' ? Date.parse(t.updated) : Number.NaN
-    const lastActivity = beat === null ? null : beatFields(beat).lastActivity
     const hasFile = text !== undefined
 
     return {
-      ...calm(r, hasFile, lastActivity, now),
+      ...calm(r, hasFile, beat, now),
       name: words?.name ?? '',
       repo: words?.repo ?? null,
       slice: words?.slice ?? null,
       detail: detailOf(hasFile, title, words?.slice ?? null, str(t?.pr), Number.isFinite(updated) ? updated : null, r, beat, now),
       cells: r.cells,
+      tab: tabOf(beat, now),
     }
   })
   const done = chosen.tickets.filter(id => parse(files[`${id}.json`])?.stage === 'closed').length

@@ -14,7 +14,9 @@ test('a heartbeat counts calls and failures per minute, the last ten outcomes an
     callStarted(b, `c${i}`, 'Read', T0 + MIN)
     callEnded(b, `c${i}`, false, T0 + MIN + 10)
   }
-  const file = beatFile(b, 'STARK-1', 's', T0 + MIN + 20)
+  const file = beatFile(b, 'STARK-1', 's', T0 + MIN + 20, 'surface-1')
+  expect(file.surface).toBe('surface-1')
+  expect(file.updated).toBe(new Date(T0 + MIN + 20).toISOString())
   expect(file.minutes).toEqual([
     { at: T0 / MIN, calls: 1, fails: 1 },
     { at: T0 / MIN + 1, calls: 12, fails: 0 },
@@ -28,8 +30,8 @@ test('a heartbeat drops minutes older than an hour', () => {
   const b = newBeat()
   callStarted(b, 'a', 'Bash', T0)
   callEnded(b, 'a', false, T0)
-  expect(beatFile(b, 'STARK-1', 's', T0 + 59 * MIN).minutes).toHaveLength(1)
-  expect(beatFile(b, 'STARK-1', 's', T0 + 60 * MIN).minutes).toHaveLength(0)
+  expect(beatFile(b, 'STARK-1', 's', T0 + 59 * MIN, null).minutes).toHaveLength(1)
+  expect(beatFile(b, 'STARK-1', 's', T0 + 60 * MIN, null).minutes).toHaveLength(0)
 })
 
 test("a reload takes back its own session's heartbeat, and no other", () => {

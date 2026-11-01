@@ -41,15 +41,18 @@ bragi · 4 tickets
 
 🚇 Where each ticket is
   ticket PR     review merge  done
-Add the export command
-  ●━━━━━━●━━━━━━●━━━━━━●━━━━━━●  ✅ done
-Document the export flags
-  ●━━━━━━●━━━━━━◉┄┄┄┄┄┄○┄┄┄┄┄┄○  👀 in review · 36m
-Cache the export index
-  ●━━━━━━◉┄┄┄┄┄┄○┄┄┄┄┄┄○┄┄┄┄┄┄○  🧱 PR open · 1h50m
-Sign the export bundle
-  ○┄┄┄┄┄┄○┄┄┄┄┄┄○┄┄┄┄┄┄○┄┄┄┄┄┄○  💤 not started
-Select a name to see more.
+── In progress · 2 ────────────────────────────────
+ STARK-1202  Document the export flags
+  ●━━━━━━●━━━━━━◉┄┄┄┄┄┄○┄┄┄┄┄┄○  IN REVIEW · 36m
+[STARK-1203] Cache the export index
+  ●━━━━━━◉┄┄┄┄┄┄○┄┄┄┄┄┄○┄┄┄┄┄┄○  🐢 SLOW · 1h38m
+── To do · 1 ──────────────────────────────────────
+[STARK-1204] Sign the export bundle
+  ○┄┄┄┄┄┄○┄┄┄┄┄┄○┄┄┄┄┄┄○┄┄┄┄┄┄○  NOT STARTED
+── Done · 1 ───────────────────────────────────────
+[STARK-1201] Add the export command
+  ●━━━━━━●━━━━━━●━━━━━━●━━━━━━●  DONE
+Select a name to see more, or a highlighted id to go to its tab.
 
 👉 Up next
 Start STARK-1204
@@ -69,7 +72,7 @@ Part of STARK-1200
 
 🚇 Where it is
   ticket PR     review merge  done
-  ●━━━━━━●━━━━━━◉┄┄┄┄┄┄○┄┄┄┄┄┄○  ✋ held · merge · 12m
+  ●━━━━━━●━━━━━━◉┄┄┄┄┄┄○┄┄┄┄┄┄○  ✋ HELD · merge · 12m
 
 ╭──────────────────────────────────────────────────╮
 │ 🙋 Worth a look                                   │
@@ -203,10 +206,21 @@ left, the pane says `No Gru run yet`.
   `🌿 Nothing needs you right now.`
 - `🚇 Where each ticket is`: a name, `[STARK-n] <title>` (the title without
   its `[tag]`, `<repo>: ` lead and `(slice n of m)` tail), then the track and
-  one emoji and status: `✅ done`,
-  `👀 in review · <time in stage>`, `🔨 PR open · <time>`, `🧱` for `stalled`,
-  `⏳` for `blocked` or idle (`quiet <time>`), `💤 not started`. Select a name
-  to open its detail: the whole title, the slice, the PR, when the step began,
+  its state: a word in UPPERCASE in its own color, then the words after it.
+  Six states move along the spine, with no emoji: `NOT STARTED`,
+  `STARTING · <time in stage>`, `PR OPEN · <time>`, `IN REVIEW · <time>`,
+  `MERGED · <time>` and `DONE`. Five want a look, and only these draw bold
+  with an emoji: `🚧 BLOCKED · <time>` (the stage is `blocked`), `✋ HELD ·
+  <merge or release> · <time>`, `⏳ LONG RUNNING · <time>` (no call started or
+  ended for 15 min while one call runs, the time that call has run), `💤
+  QUIET · <time>` (no call started or ended for 15 min, and none runs) and
+  `🐢 SLOW · <time>` (no stage change or commit for 45 min; it joins the box
+  of tickets worth a look at 90, where the band says `stalled`). A ticket
+  with 5 of its last 10 calls failed keeps its step's state; the box says why.
+  With `Done tickets last` On, the list draws three groups, each under a line
+  with its name and count: `In progress`, `To do`, then `Done`, each in run
+  order; an empty group draws no line. Off, the list keeps the run order with
+  no line. Select a name to open its detail: the whole title, the slice, the PR, when the step began,
   the diff size, the running or last tool call, the calls in the last 15
   minutes, the failures among the last 10, and its last hour: the band's
   12 cells of 5 minutes, oldest first, with a legend of the marks it shows
@@ -228,6 +242,17 @@ on the Log tab). In the terminal the id is lavender (`#c9b3f5`, 8.1:1 on the
 pane), a color no state uses; elsewhere it takes the app's accent. The title is
 the ticket file's, else the run file's `titles` entry; a ticket that neither
 names shows its id alone.
+
+**An open worker tab.** A row whose worker tab is open draws its id as
+` STARK-n `, bold, on the id's lavender (the pane's `#262626` on `#c9b3f5`,
+8.1:1; the app's accent elsewhere), as wide as `[STARK-n]`. It is a button: a
+press runs `hermod focus <surface>`, which brings that cmux tab to the front,
+and a toast says why when hermod fails. The title beside it is a button of its
+own that opens the row's detail (`details` when no file names a title). A tab
+is open when the ticket's heartbeat is under 3 minutes old and names a
+surface: a worker's tab writes it at least once a minute, with no call too.
+Only the list's rows draw it; the box, Up next and the Log and Stats tabs keep
+`[STARK-n]`.
 
 **Log.** `l` opens it. The big steps of the run, newest first: Gru's own,
 from the run's log, merged with each ticket's, from its worker's log. Each
@@ -278,7 +303,8 @@ before each launch and each scope change ([the Gru skill](../../skill/gru/SKILL.
 
 Under `This pane`, one more row that the pane alone reads, in every run:
 `Done tickets last`, Off by default. On, `🚇 Where each ticket is` lists the
-open tickets in run order, then the done ones in run order. The plugin's own
+tickets in three groups, each under its own line: in progress, to do, then
+done, each in run order. The plugin's own
 store (`$.store`, key `doneLast`) keeps it across sessions; it loads in the
 background at session start, and presses apply one at a time behind it. It is
 never in the run's settings file, and Gru never reads it. A store that cannot
@@ -287,10 +313,24 @@ be read leaves it Off; a write that fails keeps the press on screen and says
 
 **Colors.** In the terminal, every text color is 4.5:1 or more on the pane's
 `#262626` (secondary text 8.1:1); the track's lines and rings, which carry no
-words, are 3.5:1. They suit a dark theme. On every other surface, the desktop
-app's Code tab included, each color is a theme key, so it follows the app's
-light or dark theme: on the desktop's light theme, each word measured 5.7:1 or
-more on the pane's white. A moving bar and track take the app's accent, which
+words, are 3.5:1. They suit a dark theme. Each state's word has its own:
+
+| State | Terminal | Contrast | Elsewhere |
+|---|---|---|---|
+| `NOT STARTED` | `#a7adc2` gray | 6.8:1 | `inactive` |
+| `STARTING` | `#8ecae6` blue | 8.5:1 | `suggestion` |
+| `PR OPEN` | `#a5b4fc` periwinkle | 7.6:1 | `permission` |
+| `IN REVIEW` | `#f4a6cd` pink | 8.1:1 | `bashBorder` |
+| `MERGED` | `#c5e384` lime | 10.6:1 | `merged` |
+| `DONE` | `#95d5b2` green | 9.0:1 | `success` |
+| `BLOCKED` | `#ff8f87` red | 6.9:1 | `error` |
+| `HELD`, `LONG RUNNING`, `QUIET`, `SLOW` | `#e9c46a` amber | 9.1:1 | `warning` |
+
+The id's lavender is none of them, so an id never reads as a state. On every
+other surface, the desktop app's Code tab included, each color is a theme key,
+so it follows the app's light or dark theme: on the desktop's light theme,
+each word measured 5.7:1 or more on the pane's white (the four state keys
+added in 0.13.0 are not measured there yet). A moving bar and track take the app's accent, which
 is blue in the active window and gray, as all of the app's accent, in an
 inactive one. The desktop draws text in a face of mixed widths, so the bar
 graph, the station words, the tracks and the last hour draw in its fixed-width
@@ -312,8 +352,8 @@ header and per status, and none in Settings.
   `(slice n of m)` tail), then the id, the repo and the slice, and
   `Part of <epic>` when an epic's run file lists the ticket (a `--tickets`
   run, launched as `GRU-n`, has no epic to name).
-- `🚇 Where it is`: the five stations, one emoji and the status, as the Gru
-  pane reads them. A held ticket reads `✋ held · <merge or release> · <time>`.
+- `🚇 Where it is`: the five stations and the state, as the Gru pane draws
+  them. A held ticket reads `✋ HELD · <merge or release> · <time>`.
 - A box when the ticket is worth a look: the band calls it `blocked`, `idle`
   or `stalled`, 5 of its last 10 calls failed, or a setting holds it
   (`Held by your settings: <merge or release>`, and the setting that clears
@@ -489,12 +529,18 @@ whose worker is a Claude session with the mod installed:
 ```json
 { "id": "STARK-n", "session": "<the worker's session id>", "updated": "<ISO 8601>",
   "lastActivity": "<ISO 8601 or null>", "running": { "tool": "Bash", "since": "<ISO 8601>" },
-  "minutes": [{ "at": 29872800, "calls": 6, "fails": 1 }], "recent": [false, true] }
+  "minutes": [{ "at": 29872800, "calls": 6, "fails": 1 }], "recent": [false, true],
+  "surface": "<the tab's CMUX_SURFACE_ID, or null>" }
 ```
 
 The mod writes it in a worker's own tab, from that session's tool calls
-(its subagents' included), at most once every 5 seconds, and only while the
+(its subagents' included), at most once every 5 seconds after a call, and at
+least once every 60 seconds with no call (the first poll writes at once), so
+an `updated` under 3 minutes old says the tab is open. It writes only while the
 ticket's file exists; once the file is gone the mod removes the heartbeat.
+`surface` is the tab's `CMUX_SURFACE_ID`, `null` outside cmux, and absent in a
+heartbeat before 0.13.0; the Gru pane passes it to `hermod focus` only when it
+is a UUID.
 Agnes deletes her heartbeat and stats files herself at stand-down, with her
 ticket's file, since her tab can close before the mod's next poll. `lastActivity` is when a call last started or
 ended, `running` the oldest call still running or `null`, `minutes` the calls
@@ -567,8 +613,11 @@ write: its counts are in memory after that.
   ticket has its own, in its worker's ticket pane.
 - Activity for a Codex worker in its ticket pane (it writes no heartbeat).
 - A held worker whose session died reads `held` on the Gru pane, with its
-  time held, since no file says whether a worker lives; Gru's observation
-  pass reads that from Hermod. The ticket pane dies with its tab.
+  time held: the state does not read the heartbeat's age, though its id
+  loses the open-tab button. Gru's observation pass reads it from Hermod. The
+  ticket pane dies with its tab.
+- A button to a worker tab in tmux or outside cmux: the heartbeat names only
+  a cmux surface.
 - A light-theme palette for the Gru pane and the ticket pane in the terminal.
 - Stats for a Codex Gru or worker, or for a Claude session's time before the
   mod loaded: the mod counts events as they happen and reads no transcript.

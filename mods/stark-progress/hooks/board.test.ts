@@ -141,18 +141,20 @@ test('each verdict reads calmly, and the ones worth a look say why', () => {
   const board = buildBoard('gru', '', T0, files, new Map(), {})
   if (board === null) throw new Error('no board')
   const by = (id: string) => board.rows.find(r => r.id === id)
-  expect(by('STARK-1')).toMatchObject({ tone: 'done', emoji: '✅', status: 'done', at: 5, attention: null })
-  expect(by('STARK-2')).toMatchObject({ tone: 'move', emoji: '👀', status: 'in review · 10m', at: 2, attention: null })
-  expect(by('STARK-3')).toMatchObject({ tone: 'warn', emoji: '🧱', attention: 'no stage change or commit for 2h00m' })
+  expect(by('STARK-1')).toMatchObject({ tone: 'done', state: 'done', status: '', at: 5, attention: null })
+  expect(by('STARK-2')).toMatchObject({ tone: 'move', state: 'review', status: '10m', at: 2, attention: null })
+  // Stalled is slow that is worth a look.
+  expect(by('STARK-3')).toMatchObject({ tone: 'warn', state: 'slow', status: '2h00m', attention: 'no stage change or commit for 2h00m' })
   // A blocked ticket with a PR stopped at the PR station.
-  expect(by('STARK-4')).toMatchObject({ tone: 'warn', emoji: '⏳', at: 1, attention: 'blocked for 41m' })
-  expect(by('STARK-5')).toMatchObject({ tone: 'idle', status: 'quiet 20m', attention: 'no tool call for 20m' })
-  expect(by('STARK-6')).toMatchObject({ tone: 'warn', attention: '6 of the last 10 calls failed' })
-  expect(by('STARK-7')).toMatchObject({ tone: 'none', emoji: '💤', status: 'not started', at: -1 })
+  expect(by('STARK-4')).toMatchObject({ tone: 'warn', state: 'blocked', status: '41m', at: 1, attention: 'blocked for 41m' })
+  expect(by('STARK-5')).toMatchObject({ tone: 'idle', state: 'quiet', status: '20m', attention: 'no tool call for 20m' })
+  // A ticket whose calls fail keeps its step's state; the box says why it is worth a look.
+  expect(by('STARK-6')).toMatchObject({ tone: 'warn', state: 'pr', attention: '6 of the last 10 calls failed' })
+  expect(by('STARK-7')).toMatchObject({ tone: 'none', state: 'todo', status: '', at: -1 })
   expect([board.done, board.inProgress, board.notStarted]).toEqual([1, 5, 1])
   expect(board.next).toEqual(['STARK-7'])
   expect(board.isOwn).toBe(true)
-  expect(board.rows.map(r => `${r.status} ${r.attention ?? ''}`).join(' ')).not.toMatch(/left|ETA|~\d/)
+  expect(board.rows.map(r => `${r.state} ${r.status} ${r.attention ?? ''}`).join(' ')).not.toMatch(/left|ETA|~\d/)
 })
 
 test('a held ticket is worth a look, even while its worker is quiet', () => {
@@ -166,12 +168,72 @@ test('a held ticket is worth a look, even while its worker is quiet', () => {
   if (board === null) throw new Error('no board')
   expect(board.rows[0]).toMatchObject({
     tone: 'warn',
-    emoji: '✋',
-    status: 'held · merge · 2h00m',
+    state: 'held',
+    status: 'merge · 2h00m',
     at: 2,
     attention: 'held by its settings: merge',
   })
   expect(board.rows[1]).toMatchObject({ at: 3, attention: 'held by its settings: release' })
+})
+
+test('each step has its own state, and slow, a long call and no call each read apart', () => {
+  const beat = (lastMin: number, running: { tool: string; since: string } | null) =>
+    JSON.stringify({ lastActivity: iso(lastMin), running, minutes: [], recent: [] })
+  const files: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({
+      epic: 'STARK-10',
+      session: 'gru',
+      tickets: ['STARK-1', 'STARK-2', 'STARK-3', 'STARK-4', 'STARK-5', 'STARK-6'],
+    }),
+    'STARK-1.json': ticket('STARK-1', 'ticket', 30),
+    'STARK-2.json': ticket('STARK-2', 'pr', 0),
+    'STARK-3.json': ticket('STARK-3', 'merged', 5),
+    // 50 min with no stage change or commit: slow, and not yet worth a look.
+    'STARK-4.json': ticket('STARK-4', 'pr', 50),
+    'STARK-4.beat.json': beat(1, null),
+    // One Bash call has run 25 min, with no other: a long call, not a quiet worker.
+    'STARK-5.json': ticket('STARK-5', 'review', 30),
+    'STARK-5.beat.json': beat(25, { tool: 'Bash', since: iso(25) }),
+    'STARK-6.json': ticket('STARK-6', 'review', 30),
+    'STARK-6.beat.json': beat(25, null),
+  }
+  const board = buildBoard('gru', '', T0, files, new Map(), {})
+  if (board === null) throw new Error('no board')
+  const by = (id: string) => board.rows.find(r => r.id === id)
+  expect(by('STARK-1')).toMatchObject({ state: 'starting', status: '30m', tone: 'move' })
+  expect(by('STARK-2')).toMatchObject({ state: 'pr', status: '0m' })
+  expect(by('STARK-3')).toMatchObject({ state: 'merged', status: '5m' })
+  expect(by('STARK-4')).toMatchObject({ state: 'slow', status: '50m', tone: 'warn', attention: null })
+  expect(by('STARK-5')).toMatchObject({ state: 'running', status: '25m', tone: 'idle', attention: 'one Bash call has run for 25m' })
+  expect(by('STARK-6')).toMatchObject({ state: 'quiet', status: '25m', tone: 'idle', attention: 'no tool call for 25m' })
+})
+
+test("a ticket's tab is open while its heartbeat is under 3 minutes old and names a cmux surface", () => {
+  const SURFACE = '0A1B2C3D-4E5F-4A6B-8C7D-9E0F1A2B3C4D'
+  const beat = (updatedMin: number, surface: unknown) =>
+    JSON.stringify({ updated: iso(updatedMin), lastActivity: iso(1), running: null, minutes: [], recent: [], surface })
+  const files: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({
+      epic: 'STARK-10',
+      session: 'gru',
+      tickets: ['STARK-1', 'STARK-2', 'STARK-3', 'STARK-4', 'STARK-5'],
+    }),
+    'STARK-1.json': ticket('STARK-1', 'pr'),
+    'STARK-1.beat.json': beat(2, SURFACE),
+    // A heartbeat 3 min old: the tab closed, or its session ended.
+    'STARK-2.json': ticket('STARK-2', 'pr'),
+    'STARK-2.beat.json': beat(3, SURFACE),
+    // Outside cmux, and a heartbeat from before the surface, name no tab.
+    'STARK-3.json': ticket('STARK-3', 'pr'),
+    'STARK-3.beat.json': beat(0, null),
+    'STARK-4.json': ticket('STARK-4', 'pr'),
+    'STARK-4.beat.json': JSON.stringify({ updated: iso(0), lastActivity: iso(1), running: null, minutes: [], recent: [] }),
+    // A value that is no surface id never reaches hermod: it could read as a flag.
+    'STARK-5.json': ticket('STARK-5', 'pr'),
+    'STARK-5.beat.json': beat(0, '--help'),
+  }
+  const board = buildBoard('gru', '', T0, files, new Map(), {})
+  expect(board?.rows.map(r => r.tab)).toEqual([SURFACE, null, null, null, null])
 })
 
 test("a closed ticket's call still marked running is stale: no long call in its hour, no Running line", () => {
