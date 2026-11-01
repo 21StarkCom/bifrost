@@ -50,7 +50,7 @@ export function buildTicket(
   const beat = parse(files[`${id}.beat.json`])
   const lastActivity = beat === null ? null : beatFields(beat).lastActivity
   const r = row(id, files, git, now)
-  const reading = calm(r, true, lastActivity, now)
+  const reading = calm(r, true, beat, now)
   // The verdict reads a hold only while the ticket is neither closed nor blocked.
   const hold = r.verdict.word === 'held' ? holdOf(t?.hold) : null
   const words = nameOf(typeof t?.title === 'string' && t.title !== '' ? t.title : id)

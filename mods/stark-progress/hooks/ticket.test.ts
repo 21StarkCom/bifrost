@@ -41,8 +41,8 @@ test('the ticket pane reads the name, the repo, the epic, the activity and the n
     slice: 'slice 2 of 3',
     epic: 'STARK-10',
     at: 1,
-    emoji: '🔨',
-    status: 'PR open · 10m',
+    state: 'pr',
+    status: '10m',
     hold: null,
     attention: null,
     next: 'Review the PR.',
@@ -67,7 +67,7 @@ test('the next step follows the stage, and a hold waits for your OK', () => {
   expect(next('review')?.next).toBe('Merge the PR.')
   expect(next('merged')?.next).toBe('Release, or close the ticket.')
   expect(next('blocked')).toMatchObject({ next: 'Wait for the block to clear.', attention: 'blocked for 10m' })
-  expect(next('closed')).toMatchObject({ next: null, at: 5, emoji: '✅' })
+  expect(next('closed')).toMatchObject({ next: null, at: 5, state: 'done' })
   expect(next('review', { hold: 'merge' })).toMatchObject({
     hold: 'merge',
     next: 'Wait for your merge OK.',

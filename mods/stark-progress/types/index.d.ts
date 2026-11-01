@@ -65,6 +65,8 @@ export type BeatFile = {
   lastActivity: string | null
   /** The oldest tool call still running. */
   running: { tool: string; since: string } | null
+  /** The cmux surface of the worker's tab, from `CMUX_SURFACE_ID`; null outside cmux, absent before 0.13.0. */
+  surface?: string | null
   /** Calls and failures per minute, for the last 60 minutes. */
   minutes: BeatMinute[]
   /** The outcomes of the last 10 calls that ended, oldest first: `true` failed. */
@@ -146,6 +148,8 @@ export type Verdict = {
   word: 'done' | 'blocked' | 'held' | 'idle' | 'moving' | 'slow' | 'stalled' | 'waiting'
   text: string
   tone: Tone
+  /** The time the text names, in ms: blocked since the stage changed, idle since the last call, slow or stalled since the last milestone. */
+  age?: number
 }
 
 /** One piece of the stage track: done stages, the stages to come, or the current stage in its verdict's tone. */
@@ -174,6 +178,25 @@ export type View = { heading: string | null; counts: Count[]; hasLegend: boolean
 /** The color a ticket draws in on the Gru pane. */
 export type BoardTone = 'done' | 'move' | 'warn' | 'idle' | 'none'
 
+/**
+ * A ticket's state on the panes: the six steps a ticket moves through, and
+ * the five a pane flags with an emoji: `blocked`, `held`, `running` (one call
+ * has run 15 min with no other), `quiet` (no call for 15 min) and `slow` (no
+ * stage change or commit for 45 min).
+ */
+export type BoardState =
+  | 'todo'
+  | 'starting'
+  | 'pr'
+  | 'review'
+  | 'merged'
+  | 'done'
+  | 'blocked'
+  | 'held'
+  | 'running'
+  | 'quiet'
+  | 'slow'
+
 /** A ticket on the Gru pane: the band's row read calmly, with its detail. */
 export type BoardRow = {
   id: string
@@ -184,7 +207,8 @@ export type BoardRow = {
   /** The station it is at: -1 not started, 5 past the last. */
   at: number
   tone: BoardTone
-  emoji: string
+  state: BoardState
+  /** The words after the state: its time, and a hold's step; empty when none. */
   status: string
   /** Why it is worth a look, or null. */
   attention: string | null
@@ -192,6 +216,8 @@ export type BoardRow = {
   detail: string[]
   /** The last hour in 12 cells of 5 minutes, as the band draws it; its row shows it opened. */
   cells: Cell[]
+  /** The cmux surface of its worker's tab while that tab is open (a heartbeat under 3 min old), else null. */
+  tab: string | null
 }
 
 /**
@@ -243,7 +269,8 @@ export type TicketBoard = {
   /** The station it is at: 5 past the last. */
   at: number
   tone: BoardTone
-  emoji: string
+  state: BoardState
+  /** The words after the state: its time, and a hold's step; empty when none. */
   status: string
   hold: Hold | null
   /** Why it is worth a look, or null. */

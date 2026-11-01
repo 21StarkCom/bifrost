@@ -72,8 +72,11 @@ export function callEnded(beat: Beat, key: string, isFailed: boolean, now: numbe
   if (beat.recent.length > RECENT) beat.recent.splice(0, beat.recent.length - RECENT)
 }
 
-/** The file the contract names, with the minutes older than the window dropped. */
-export function beatFile(beat: Beat, id: string, session: string, now: number): BeatFile {
+/**
+ * The file the contract names, with the minutes older than the window
+ * dropped. `surface` is the worker tab's cmux surface, or null outside cmux.
+ */
+export function beatFile(beat: Beat, id: string, session: string, now: number, surface: string | null): BeatFile {
   const oldest = Math.floor(now / 60_000) - WINDOW_MIN + 1
   for (const at of beat.minutes.keys()) if (at < oldest) beat.minutes.delete(at)
   let first: { tool: string; since: number } | null = null
@@ -87,5 +90,6 @@ export function beatFile(beat: Beat, id: string, session: string, now: number): 
     running: first === null ? null : { tool: first.tool, since: new Date(first.since).toISOString() },
     minutes: [...beat.minutes.values()].sort((a, b) => a.at - b.at),
     recent: [...beat.recent],
+    surface,
   }
 }

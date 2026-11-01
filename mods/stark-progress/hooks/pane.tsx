@@ -1,6 +1,6 @@
 import type { Elements } from 'claude-code'
 
-import type { Board, BoardRow, BoardTone, Cell, GruSettings, LogView, PaneTab, StatsView } from '../types'
+import type { Board, BoardRow, BoardState, BoardTone, Cell, GruSettings, LogView, PaneTab, StatsView } from '../types'
 import { clockOf, MAX_WORKERS, stepCounts } from './board'
 import { dayOf } from './log'
 import { counted, grouped, short } from './stats'
@@ -10,15 +10,34 @@ import { bar, STAGES, STATION_LABELS } from './view'
 // that Gru reads before each launch (Settings). The model is board.ts's. The
 // ticket pane (ticket-pane.tsx) draws with the parts this file exports.
 
-export type Palette = Record<'text' | 'hint' | 'track' | 'blue' | 'green' | 'amber' | 'gray' | 'id', string>
+export type Palette = Record<
+  | 'text'
+  | 'hint'
+  | 'track'
+  | 'blue'
+  | 'green'
+  | 'amber'
+  | 'gray'
+  | 'id'
+  | 'starting'
+  | 'pr'
+  | 'review'
+  | 'merged'
+  | 'blocked'
+  | 'chip'
+  | 'chipText',
+  string
+>
 
 /** The elements a pane draws with, and the palette of the surface it draws on. */
 export type UI = Pick<Elements['terminal'], 'Box' | 'Text' | 'Button'> & { P: Palette }
 
 // The terminal's, for its dark theme. Contrast on the pane's #262626 (WCAG):
-// text 8.1:1, id 8.1:1, gray 6.8:1, hint 5.9:1; track 3.5:1 for lines and
-// rings alone, which carry no words. The id's lavender is no tone's color, so
-// a ticket's id never reads as its state.
+// text 8.1:1, id 8.1:1, gray 6.8:1, hint 5.9:1; the states' words: blue 8.5:1,
+// pr 7.6:1, review 8.1:1, merged 10.6:1, green 9.0:1, amber 9.1:1, blocked
+// 6.9:1; track 3.5:1 for lines and rings alone, which carry no words. The
+// id's lavender is no state's color, so a ticket's id never reads as its
+// state; an open tab's id is the pane's dark on that lavender, 8.1:1.
 const TERMINAL: Palette = {
   text: '#b8bdd0',
   hint: '#9ba1b8',
@@ -28,6 +47,13 @@ const TERMINAL: Palette = {
   amber: '#e9c46a',
   gray: '#a7adc2',
   id: '#c9b3f5',
+  starting: '#8ecae6',
+  pr: '#a5b4fc',
+  review: '#f4a6cd',
+  merged: '#c5e384',
+  blocked: '#ff8f87',
+  chip: '#c9b3f5',
+  chipText: '#262626',
 }
 
 // Every other surface (the desktop app's Code tab, VS Code, mobile) draws in its own light or dark
@@ -43,12 +69,53 @@ const THEMED: Palette = {
   amber: 'warning',
   gray: 'inactive',
   id: 'suggestion',
+  // Neither is `suggestion` or `permission`, the id's color and one close to it: an id never reads as a state.
+  starting: 'ide',
+  pr: 'planMode',
+  review: 'bashBorder',
+  merged: 'merged',
+  blocked: 'error',
+  chip: 'suggestion',
+  chipText: 'inverseText',
 }
 
 export const paletteFor = (surface: string): Palette => (surface === 'terminal' ? TERMINAL : THEMED)
 
 const TONE: Record<BoardTone, keyof Palette> = { done: 'green', move: 'blue', warn: 'amber', idle: 'gray', none: 'track' }
 const toneOf = (P: Palette, tone: BoardTone) => P[TONE[tone]]
+
+/**
+ * How each state reads: its word in UPPERCASE, in its own color. Only a state
+ * that wants a look has an emoji, and draws bold.
+ */
+const LOOK: Record<BoardState, { word: string; ink: keyof Palette; flag: string | null }> = {
+  todo: { word: 'NOT STARTED', ink: 'gray', flag: null },
+  starting: { word: 'STARTING', ink: 'starting', flag: null },
+  pr: { word: 'PR OPEN', ink: 'pr', flag: null },
+  review: { word: 'IN REVIEW', ink: 'review', flag: null },
+  merged: { word: 'MERGED', ink: 'merged', flag: null },
+  done: { word: 'DONE', ink: 'green', flag: null },
+  blocked: { word: 'BLOCKED', ink: 'blocked', flag: '🚧' },
+  held: { word: 'HELD', ink: 'amber', flag: '✋' },
+  running: { word: 'LONG RUNNING', ink: 'amber', flag: '⏳' },
+  quiet: { word: 'QUIET', ink: 'amber', flag: '💤' },
+  slow: { word: 'SLOW', ink: 'amber', flag: '🐢' },
+}
+
+/** A ticket's state, `PR OPEN · 46m` or `🚧 BLOCKED · 12m`: the word in its color, then its time. */
+export function stateText(ui: UI, state: BoardState, status: string) {
+  const { Text, P } = ui
+  const look = LOOK[state]
+
+  return (
+    <Text>
+      <Text bold={look.flag !== null} color={P[look.ink]}>
+        {look.flag === null ? look.word : `${look.flag} ${look.word}`}
+      </Text>
+      {status !== '' && <Text color={P.text}>{` · ${status}`}</Text>}
+    </Text>
+  )
+}
 
 export type PaneView = {
   board: Board | null
@@ -60,6 +127,8 @@ export type PaneView = {
   doneLast: boolean
   flipDoneLast: () => unknown
   pick: (launchId: string) => unknown
+  /** Brings the open tab of a ticket's worker to the front. */
+  openTab: (id: string) => unknown
   /** A change made from the settings as they are when it is written, so two quick presses both count. */
   set: (change: (s: GruSettings) => Partial<GruSettings>) => unknown
 }
@@ -73,15 +142,70 @@ export const cut = (words: string, room: number) => (words.length > room ? `${wo
 export function ticketLabel(ui: UI, id: string, name: string, room: number, how: { bold?: boolean; dim?: boolean } = {}) {
   const { Text, P } = ui
   const tag = `[${id}]`
-  // The title takes what the id and its space leave; with too little room for even `X…`, the id stands alone.
-  const left = room - tag.length - 1
-  const title = name === '' || left < 2 ? '' : cut(name, left)
+  const title = titleOf(id, name, room)
 
   return (
     <Text bold={how.bold}>
       <Text color={P.id}>{tag}</Text>
       {title !== '' && ' '}
       {title !== '' && <Text color={how.dim ? P.text : undefined}>{title}</Text>}
+    </Text>
+  )
+}
+
+/**
+ * A ticket's title, cut to what its `[id]` and a space leave of `room`; empty
+ * with too little room for even `X…`, so the id stands alone.
+ */
+const titleOf = (id: string, name: string, room: number) => {
+  const left = room - `[${id}]`.length - 1
+
+  return name === '' || left < 2 ? '' : cut(name, left)
+}
+
+/**
+ * A row's name whose worker tab is open: the id is a button on the lavender,
+ * as wide as `[id]`, which brings that tab to the front; the title beside it
+ * opens the row, as a name does.
+ */
+function liveLabel(ui: UI, r: BoardRow, room: number, how: { bold: boolean; dim: boolean }, view: PaneView) {
+  const { Box, Button, Text, P } = ui
+  // A named ticket keeps at least `X…` of its name, however narrow; only one no file names says `details`.
+  const title = r.name === '' ? '' : cut(r.name, Math.max(room - `[${r.id}]`.length - 1, 2))
+
+  return (
+    <Box columnGap={1}>
+      <Button key={`tab-${r.id}`} plain onPress={() => view.openTab(r.id)}>
+        <Text bold backgroundColor={P.chip} color={P.chipText}>{` ${r.id} `}</Text>
+      </Button>
+      {/* A ticket no file names yet still opens: its button says `details`. */}
+      <Button key={`row-${r.id}`} plain onPress={() => view.setFocus(view.focus === r.id ? '' : r.id)}>
+        {title === '' ? (
+          <Text bold={how.bold} color={P.hint}>
+            details
+          </Text>
+        ) : (
+          <Text bold={how.bold} color={how.dim ? P.text : undefined}>
+            {title}
+          </Text>
+        )}
+      </Button>
+    </Box>
+  )
+}
+
+/** A line over a group of the list: its name and count, then a rule to the pane's edge. */
+function divider(ui: UI, w: number, name: string, count: number) {
+  const { Text, P } = ui
+  const words = ` ${name} · ${count} `
+  const rule = Math.max(w - 2 - words.length, 2)
+
+  return (
+    <Text key={`g${name}`}>
+      <Text color={P.track}>{'──'}</Text>
+      <Text bold>{` ${name}`}</Text>
+      <Text color={P.hint}>{` · ${count} `}</Text>
+      <Text color={P.track}>{'─'.repeat(rule)}</Text>
     </Text>
   )
 }
@@ -216,8 +340,14 @@ function overview(ui: UI, w: number, board: Board, view: PaneView) {
   const rows = board.rows
   const names = new Map(rows.map(r => [r.id, r.name]))
   const looks = rows.filter(r => r.attention !== null)
-  // The list keeps the run's order, or puts the done tickets last in that order.
-  const listed = view.doneLast ? [...rows.filter(r => r.tone !== 'done'), ...rows.filter(r => r.tone === 'done')] : rows
+  // The list keeps the run's order, or groups the tickets under a line each, done last, each group in that order.
+  const groups: { name: string | null; rows: BoardRow[] }[] = view.doneLast
+    ? [
+        { name: 'In progress', rows: rows.filter(r => r.tone !== 'none' && r.tone !== 'done') },
+        { name: 'To do', rows: rows.filter(r => r.tone === 'none') },
+        { name: 'Done', rows: rows.filter(r => r.tone === 'done') },
+      ].filter(g => g.rows.length > 0)
+    : [{ name: null, rows }]
   const seg = segFor(w)
   // `r` steps through the other runs by launch id, so with three or more each one is reached.
   const others = [...board.others].sort((a, b) => a.launchId.localeCompare(b.launchId))
@@ -261,18 +391,24 @@ function overview(ui: UI, w: number, board: Board, view: PaneView) {
       <Box flexDirection="column">
         <Text bold>🚇 Where each ticket is</Text>
         <Text mono color={P.hint}>{`  ${stationHeader(seg)}`}</Text>
-        {listed.map(r => {
+        {groups.flatMap(g => [
+          ...(g.name === null ? [] : [divider(ui, w, g.name, g.rows.length)]),
+          ...g.rows.map(r => {
           const isOpen = view.focus === r.id
           const isQuiet = r.tone === 'done' || r.tone === 'none'
 
           return (
             <Box key={`r${r.id}`} flexDirection="column">
-              <Button key={`row-${r.id}`} plain onPress={() => view.setFocus(isOpen ? '' : r.id)}>
-                {ticketLabel(ui, r.id, r.name, w - 1, { bold: isOpen, dim: isQuiet })}
-              </Button>
+              {r.tab !== null ? (
+                liveLabel(ui, r, w - 1, { bold: isOpen, dim: isQuiet }, view)
+              ) : (
+                <Button key={`row-${r.id}`} plain onPress={() => view.setFocus(isOpen ? '' : r.id)}>
+                  {ticketLabel(ui, r.id, r.name, w - 1, { bold: isOpen, dim: isQuiet })}
+                </Button>
+              )}
               <Box columnGap={2} paddingLeft={2}>
                 <Box flexShrink={0}>{line(ui, r, seg)}</Box>
-                <Text color={r.tone === 'warn' ? P.amber : P.text}>{`${r.emoji} ${r.status}`}</Text>
+                {stateText(ui, r.state, r.status)}
               </Box>
               {isOpen && (
                 <Box flexDirection="column" paddingLeft={2} marginBottom={1}>
@@ -286,8 +422,15 @@ function overview(ui: UI, w: number, board: Board, view: PaneView) {
               )}
             </Box>
           )
-        })}
-        {view.focus === '' && <Text color={P.hint}>Select a name to see more.</Text>}
+          }),
+        ])}
+        {view.focus === '' && (
+          <Text color={P.hint}>
+            {rows.some(r => r.tab !== null)
+              ? 'Select a name to see more, or a highlighted id to go to its tab.'
+              : 'Select a name to see more.'}
+          </Text>
+        )}
       </Box>
 
       {board.next.length > 0 && (
@@ -609,7 +752,9 @@ function settings(ui: UI, w: number, board: Board, view: PaneView) {
       {row(
         'Done tickets last',
         toggle(ui, 'done-last', view.doneLast, view.flipDoneLast),
-        view.doneLast ? 'The ticket list shows the done tickets at the bottom.' : 'The ticket list keeps the order of the run.',
+        view.doneLast
+          ? 'The ticket list shows in progress, then to do, then done, each under its own line.'
+          : 'The ticket list keeps the order of the run.',
       )}
     </Box>
   )

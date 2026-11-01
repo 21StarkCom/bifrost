@@ -1,6 +1,6 @@
 import type { Hold, PaneTab, TicketBoard, TicketSettings } from '../types'
 import { clockOf } from './board'
-import { choice, cut, hour, line, logTab, segFor, settingRow, stationHeader, statsTab, tabBar, toggle } from './pane'
+import { choice, cut, hour, line, logTab, segFor, settingRow, stateText, stationHeader, statsTab, tabBar, toggle } from './pane'
 import type { UI } from './pane'
 
 // The ticket pane, in a Minion's or Agnes's own tab: one ticket, all of it at
@@ -39,7 +39,7 @@ function overview(ui: UI, w: number, t: TicketBoard) {
         <Text mono color={P.hint}>{`  ${stationHeader(seg)}`}</Text>
         <Box columnGap={2} paddingLeft={2}>
           <Box flexShrink={0}>{line(ui, t, seg)}</Box>
-          <Text color={t.tone === 'warn' ? P.amber : P.text}>{`${t.emoji} ${t.status}`}</Text>
+          {stateText(ui, t.state, t.status)}
         </Box>
       </Box>
 
