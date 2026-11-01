@@ -212,19 +212,24 @@ function liveLabel(ui: UI, r: BoardRow, room: number, how: { bold: boolean; dim:
   )
 }
 
-/** A line over a group of the list: its name and count, then a rule to the pane's edge. */
-function divider(ui: UI, w: number, name: string, count: number) {
-  const { Text, P } = ui
+/**
+ * A line over a group of a list: its name and count, then a rule to the pane's
+ * edge. `spaced` adds an empty row above and below it, for a list with no gap.
+ */
+function divider(ui: UI, w: number, name: string, count: number, spaced = false) {
+  const { Box, Text, P } = ui
   const words = ` ${name} · ${count} `
   const rule = Math.max(w - 2 - words.length, 2)
 
   return (
-    <Text key={`g${name}`}>
-      <Text color={P.track}>{'──'}</Text>
-      <Text bold>{` ${name}`}</Text>
-      <Text color={P.hint}>{` · ${count} `}</Text>
-      <Text color={P.track}>{'─'.repeat(rule)}</Text>
-    </Text>
+    <Box key={`g${name}`} marginY={spaced ? 1 : 0}>
+      <Text>
+        <Text color={P.track}>{'──'}</Text>
+        <Text bold>{` ${name}`}</Text>
+        <Text color={P.hint}>{` · ${count} `}</Text>
+        <Text color={P.track}>{'─'.repeat(rule)}</Text>
+      </Text>
+    </Box>
   )
 }
 
@@ -412,11 +417,13 @@ function overview(ui: UI, w: number, board: Board, view: PaneView) {
       <Box flexDirection="column">
         <Text bold>🚇 Where each ticket is</Text>
         <Text mono color={P.hint}>{`  ${stationHeader(seg)}`}</Text>
-        {groups.flatMap(g => [
-          ...(g.name === null ? [] : [divider(ui, w, g.name, g.rows.length)]),
-          ...g.rows.map(r => {
+        {groups.flatMap((g, gi) => [
+          ...(g.name === null ? [] : [divider(ui, w, g.name, g.rows.length, true)]),
+          ...g.rows.map((r, ri) => {
           const isOpen = view.focus === r.id
           const isQuiet = r.tone === 'done' || r.tone === 'none'
+          // A group's line below already leaves an empty row: an open last row adds none.
+          const isAboveLine = gi < groups.length - 1 && ri === g.rows.length - 1
 
           return (
             <Box key={`r${r.id}`} flexDirection="column">
@@ -432,7 +439,7 @@ function overview(ui: UI, w: number, board: Board, view: PaneView) {
                 {stateText(ui, r.state, r.status)}
               </Box>
               {isOpen && (
-                <Box flexDirection="column" paddingLeft={2} marginBottom={1}>
+                <Box flexDirection="column" paddingLeft={2} marginBottom={isAboveLine ? 0 : 1}>
                   {r.detail.map((words, i) => (
                     <Text key={`d${i}`} color={P.text}>
                       {words}
@@ -779,8 +786,8 @@ function settings(ui: UI, w: number, board: Board, view: PaneView) {
         'Done tickets last',
         toggle(ui, 'done-last', view.doneLast, view.flipDoneLast),
         view.doneLast
-          ? 'The ticket list shows in progress, then to do, then done, each under its own line.'
-          : 'The ticket list keeps the order of the run.',
+          ? 'The ticket list shows in progress, then to do, then done, each under its own line. The GitHub tab shows open PRs, then merged, then closed.'
+          : 'The ticket list and the GitHub tab keep the order of the run.',
       )}
     </Box>
   )
@@ -824,8 +831,8 @@ function runsLine(ui: UI, label: string, runs: readonly GithubRun[], now: number
         {runs.map((r, i) => (
           <Text key={`${key}${i}`}>
             {markText(ui, r.mark, `${key}m${i}`)}
-            <Text color={P.text}>{` ${r.name} #${r.number} `}</Text>
-            <Text color={P.hint}>{runTime(r, now)}</Text>
+            <Text color={P.text}>{` ${r.name} `}</Text>
+            <Text color={P.hint}>{`#${r.number} ${runTime(r, now)}`.trimEnd()}</Text>
           </Text>
         ))}
       </Box>
@@ -839,13 +846,13 @@ function prDetail(ui: UI, w: number, pr: GithubPr, now: number) {
   const runs = [...pr.runs.map(r => ({ r, after: false })), ...pr.mergeRuns.map(r => ({ r, after: true }))]
 
   return (
-    <Box flexDirection="column" paddingLeft={4} marginBottom={1}>
+    <Box flexDirection="column" paddingLeft={4}>
       {runs.map(({ r, after }, i) => (
         <Box key={`run${i}`} flexDirection="column">
           <Text>
             {markText(ui, r.mark, `rm${i}`)}
-            <Text>{` ${r.name} #${r.number}${after ? ', after merge' : ''} `}</Text>
-            <Text color={P.hint}>{runTime(r, now)}</Text>
+            <Text>{` ${r.name} `}</Text>
+            <Text color={P.hint}>{`#${r.number}${after ? ', after merge' : ''} ${runTime(r, now)}`.trimEnd()}</Text>
           </Text>
           {r.jobs.map((j, k) => (
             <Text key={`job${i}-${k}`}>
@@ -878,10 +885,103 @@ function prDetail(ui: UI, w: number, pr: GithubPr, now: number) {
   )
 }
 
-/** The GitHub tab: the counts, then each ticket's PR in run order, then the tickets with no PR. */
-export function githubTab(ui: UI, w: number, gh: GithubView, now: number, view: Pick<PaneView, 'ghFocus' | 'setGhFocus'>) {
+/**
+ * Counts as `8 merged · 0 open`: each count above 0 bold in its own color,
+ * each 0 in the hint's, so the eye goes to what is there. Bold keeps a draft's
+ * gray apart from a 0's hint, two grays close in tone.
+ */
+function countsText(ui: UI, lead: string, counts: readonly (readonly [number, string, keyof Palette])[]) {
+  const { Text, P } = ui
+
+  return (
+    <Text color={P.text}>
+      {lead}
+      {counts.map(([n, word, ink], i) => (
+        <Text key={`c${word}`}>
+          {i > 0 && <Text color={P.hint}>{' · '}</Text>}
+          <Text bold={n > 0} color={n > 0 ? P[ink] : P.hint}>{`${n} ${word}`}</Text>
+        </Text>
+      ))}
+    </Text>
+  )
+}
+
+/** One ticket's PR on the GitHub tab: its name, the PR, its runs and its commits, and its detail when open. */
+function prCard(ui: UI, w: number, item: GithubView['prs'][number], now: number, view: Pick<PaneView, 'ghFocus' | 'setGhFocus'>) {
   const { Box, Button, Text, P } = ui
+  const { id, name, pr } = item
+  const isOpen = view.ghFocus === id
+  const end = pr.merged ?? pr.closed
+  const times = [
+    `opened ${sinceOf(pr.created, now)}`,
+    ...(pr.merged !== null ? [`merged ${sinceOf(pr.merged, now)}`] : pr.closed !== null ? [`closed ${sinceOf(pr.closed, now)}`] : []),
+    `open ${dur((end ?? now) - pr.created)}`,
+  ]
+  const newest = pr.commits[0]
+  // One line: the headline takes what the indent, the label and the words before it leave.
+  const lead = newest === undefined ? '' : `${pr.commitCount} · last ${newest.at === null ? '' : `${sinceOf(newest.at, now)} `}`
+  const room = newest === undefined ? 0 : w - 2 - GH_LABEL - lead.length - newest.oid.length - 1
+
+  return (
+    <Box key={`gh${id}`} flexDirection="column">
+      <Button key={`gh-${id}`} plain onPress={() => view.setGhFocus(isOpen ? '' : id)}>
+        {ticketLabel(ui, id, name, w - 1, { bold: isOpen })}
+      </Button>
+      <Box paddingLeft={2}>
+        <Text>
+          <Text>{`PR #${pr.number} `}</Text>
+          <Text bold color={P[PR_INK[pr.state]]}>
+            {pr.state}
+          </Text>
+          <Text color={P.text}>{` · ${times.join(' · ')} · `}</Text>
+          {/* GitHub's own colors for a diff's size: lines added in green, lines removed in red. */}
+          <Text color={P.green}>{`+${grouped(pr.additions)}`}</Text>
+          <Text color={P.blocked}>{` −${grouped(pr.deletions)}`}</Text>
+        </Text>
+      </Box>
+      {runsLine(ui, 'Checks', pr.runs, now, `rk${id}`)}
+      {pr.mergeRuns.length > 0 && runsLine(ui, 'After merge', pr.mergeRuns, now, `ra${id}`)}
+      <Box paddingLeft={2}>
+        <Box flexShrink={0} width={GH_LABEL}>
+          <Text color={P.hint}>Commits</Text>
+        </Box>
+        {newest === undefined ? (
+          <Text color={P.text}>{String(pr.commitCount)}</Text>
+        ) : (
+          <Text color={P.text}>
+            {lead}
+            <Text color={P.id}>{newest.oid}</Text>
+            {` ${cut(newest.headline, Math.max(room, 10))}`}
+          </Text>
+        )}
+      </Box>
+      {isOpen && prDetail(ui, w, pr, now)}
+    </Box>
+  )
+}
+
+/** The PR groups while done tickets go last: open and draft PRs first, then merged, then closed, each in run order. */
+const PR_GROUPS: readonly (readonly [string, readonly GithubPr['state'][]])[] = [
+  ['Open', ['OPEN', 'DRAFT']],
+  ['Merged', ['MERGED']],
+  ['Closed', ['CLOSED']],
+]
+
+/** The GitHub tab: the counts, then each ticket's PR in run order or in groups, then the tickets with no PR. */
+export function githubTab(
+  ui: UI,
+  w: number,
+  gh: GithubView,
+  now: number,
+  view: Pick<PaneView, 'ghFocus' | 'setGhFocus' | 'doneLast'>,
+) {
+  const { Box, Text, P } = ui
   const c = gh.counts
+  const groups: { name: string | null; prs: GithubView['prs'] }[] = view.doneLast
+    ? PR_GROUPS.map(([name, states]) => ({ name, prs: gh.prs.filter(p => states.includes(p.pr.state)) })).filter(
+        g => g.prs.length > 0,
+      )
+    : [{ name: null, prs: gh.prs }]
 
   return (
     <Box flexDirection="column" gap={1}>
@@ -892,16 +992,19 @@ export function githubTab(ui: UI, w: number, gh: GithubView, now: number, view: 
             {gh.waiting.length > 0 ? 'Asking GitHub for the PRs.' : 'No ticket of this run has a PR yet.'}
           </Text>
         ) : (
-          <Text color={P.text}>
-            {`${c.prs === 1 ? '1 PR' : `${c.prs} PRs`}: ${c.merged} merged · ${c.open} open · ${c.draft} draft · ${c.closed} closed`}
-          </Text>
+          countsText(ui, `${c.prs === 1 ? '1 PR' : `${c.prs} PRs`}: `, [
+            [c.merged, 'merged', 'merged'],
+            [c.open, 'open', 'pr'],
+            [c.draft, 'draft', 'gray'],
+            [c.closed, 'closed', 'blocked'],
+          ])
         )}
-        {c.prs > 0 && (
-          <Text>
-            <Text color={c.failing > 0 ? P.blocked : P.text}>{`runs: ${c.failing} failing`}</Text>
-            <Text color={P.text}>{` · ${c.running} running`}</Text>
-          </Text>
-        )}
+        {c.prs > 0 &&
+          countsText(ui, 'runs: ', [
+            [c.passed, 'passed', 'green'],
+            [c.failing, 'failing', 'blocked'],
+            [c.running, 'running', 'blue'],
+          ])}
         {gh.readAt !== null && (
           <Text color={P.hint}>{`Read from GitHub at ${clockOf(gh.readAt)}. The tab asks again each minute while it is open.`}</Text>
         )}
@@ -912,53 +1015,13 @@ export function githubTab(ui: UI, w: number, gh: GithubView, now: number, view: 
         ))}
       </Box>
 
+      {/* An empty row between two PRs, and above and below each group's line. */}
       {gh.prs.length > 0 && (
-        <Box flexDirection="column">
-          {gh.prs.map(({ id, name, pr }) => {
-            const isOpen = view.ghFocus === id
-            const end = pr.merged ?? pr.closed
-            const times = [
-              `opened ${sinceOf(pr.created, now)}`,
-              ...(pr.merged !== null ? [`merged ${sinceOf(pr.merged, now)}`] : pr.closed !== null ? [`closed ${sinceOf(pr.closed, now)}`] : []),
-              `open ${dur((end ?? now) - pr.created)}`,
-            ]
-            const newest = pr.commits[0]
-            // One line: the headline takes what the indent, the label and the words before it leave.
-            const lead =
-              newest === undefined
-                ? ''
-                : `${pr.commitCount} · last ${newest.at === null ? '' : `${sinceOf(newest.at, now)} `}${newest.oid} `
-
-            return (
-              <Box key={`gh${id}`} flexDirection="column">
-                <Button key={`gh-${id}`} plain onPress={() => view.setGhFocus(isOpen ? '' : id)}>
-                  {ticketLabel(ui, id, name, w - 1, { bold: isOpen })}
-                </Button>
-                <Box paddingLeft={2}>
-                  <Text>
-                    <Text>{`PR #${pr.number} `}</Text>
-                    <Text bold color={P[PR_INK[pr.state]]}>
-                      {pr.state}
-                    </Text>
-                    <Text color={P.text}>{` · ${times.join(' · ')} · +${grouped(pr.additions)} −${grouped(pr.deletions)}`}</Text>
-                  </Text>
-                </Box>
-                {runsLine(ui, 'Checks', pr.runs, now, `rk${id}`)}
-                {pr.mergeRuns.length > 0 && runsLine(ui, 'After merge', pr.mergeRuns, now, `ra${id}`)}
-                <Box paddingLeft={2}>
-                  <Box flexShrink={0} width={GH_LABEL}>
-                    <Text color={P.hint}>Commits</Text>
-                  </Box>
-                  <Text color={P.text}>
-                    {newest === undefined
-                      ? String(pr.commitCount)
-                      : `${lead}${cut(newest.headline, Math.max(w - 2 - GH_LABEL - lead.length, 10))}`}
-                  </Text>
-                </Box>
-                {isOpen && prDetail(ui, w, pr, now)}
-              </Box>
-            )
-          })}
+        <Box flexDirection="column" gap={1}>
+          {groups.flatMap(g => [
+            ...(g.name === null ? [] : [divider(ui, w, g.name, g.prs.length)]),
+            ...g.prs.map(item => prCard(ui, w, item, now, view)),
+          ])}
           {view.ghFocus === '' && <Text color={P.hint}>Select a name to see each job and the newest commits.</Text>}
         </Box>
       )}

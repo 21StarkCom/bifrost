@@ -44,15 +44,21 @@ bragi · 4 tickets · started 11:02, 1h51m ago
 
 🚇 Where each ticket is
   ticket PR     review merge  done
+
 ── In progress · 2 ────────────────────────────────
+
  STARK-1202  Document the export flags
   ●━━━━━━●━━━━━━◉┄┄┄┄┄┄○┄┄┄┄┄┄○  IN REVIEW · 36m
 [STARK-1203] Cache the export index
   ●━━━━━━◉┄┄┄┄┄┄○┄┄┄┄┄┄○┄┄┄┄┄┄○  🐢 SLOW · 1h38m
+
 ── To do · 1 ──────────────────────────────────────
+
 [STARK-1204] Sign the export bundle
   ○┄┄┄┄┄┄○┄┄┄┄┄┄○┄┄┄┄┄┄○┄┄┄┄┄┄○  NOT STARTED
+
 ── Done · 1 ───────────────────────────────────────
+
 [STARK-1201] Add the export command
   ●━━━━━━●━━━━━━●━━━━━━●━━━━━━●  DONE
 Select a name to see more, or a highlighted id to go to its tab.
@@ -173,25 +179,31 @@ The big steps, newest first, each told in plain words by whoever did it.
        Started 4 jobs for the export, with 3 helpers at once.
 ```
 
-Gru's tab, the Gru pane's GitHub tab:
+Gru's tab, the Gru pane's GitHub tab, with `Done tickets last` On:
 
 ```
 Overview   Log   Stats   GitHub   Settings
 
 🐙 GitHub
 2 PRs: 1 merged · 0 open · 1 draft · 0 closed
-runs: 0 failing · 1 running
+runs: 3 passed · 0 failing · 1 running
 Read from GitHub at 12:53. The tab asks again each minute while it is open.
+
+── Open · 1 ───────────────────────────────────────
+
+[STARK-1202] Document the export flags
+  PR #447 DRAFT · opened 12:41 · open 12m · +275 −26
+  Checks       ● ci #1280 running 2m  ✓ secret-scan #582 11s
+  Commits      1 · last 12:40 5e09724 feat(STARK-1202): document the flags
+
+── Merged · 1 ─────────────────────────────────────
 
 [STARK-1201] Add the export command
   PR #446 MERGED · opened 12:02 · merged 12:17 · open 15m · +681 −120
   Checks       ✓ ci #1278 1m43s  ✓ secret-scan #580 15s
   After merge  ✓ ci #1279 1m40s  ✓ secret-scan #581 14s
   Commits      3 · last 12:14 0966587 chore(changelog): stark-progress 0.1…
-[STARK-1202] Document the export flags
-  PR #447 DRAFT · opened 12:41 · open 12m · +275 −26
-  Checks       ● ci #1280 running 2m  ✓ secret-scan #582 11s
-  Commits      1 · last 12:40 5e09724 feat(STARK-1202): document the flags
+
 Select a name to see each job and the newest commits.
 
 No PR yet:
@@ -262,9 +274,9 @@ left, the pane says `No Gru run yet`.
   of tickets worth a look at 90, where the band says `stalled`). A ticket
   with 5 of its last 10 calls failed keeps its step's state; the box says why.
   With `Done tickets last` On, the list draws three groups, each under a line
-  with its name and count: `In progress`, `To do`, then `Done`, each in run
-  order; an empty group draws no line. Off, the list keeps the run order with
-  no line. Select a name to open its detail: the whole title, the slice, the PR, when the step began,
+  with its name and count, with an empty row above and below the line:
+  `In progress`, `To do`, then `Done`, each in run order; an empty group draws
+  no line. Off, the list keeps the run order with no line. Select a name to open its detail: the whole title, the slice, the PR, when the step began,
   the diff size, the running or last tool call, the calls in the last 15
   minutes, the failures among the last 10, and its last hour: the band's
   12 cells of 5 minutes, oldest first, with a legend of the marks it shows
@@ -336,25 +348,35 @@ The first prompt of a Gru or a worker, which valkyrie passes on the command
 line, arrives as typed, so `prompts from you` counts it too.
 
 **GitHub.** `g` opens it. For each ticket whose file names a PR (`pr`, a
-`https://github.com/<owner>/<repo>/pull/<n>` URL), in run order:
+`https://github.com/<owner>/<repo>/pull/<n>` URL), in run order, with an empty
+row between two PRs:
 
 - `PR #<n>`, its state in UPPERCASE and its own color (`OPEN` periwinkle,
   `DRAFT` gray, `MERGED` lime, `CLOSED` red), when it opened and merged or
-  closed, how long it was open, and its size.
+  closed, how long it was open, and its size: `+<lines added>` in green and
+  `−<lines removed>` in red.
 - `Checks`: each GitHub Actions workflow run on its head commit, with its
-  mark, `#<run number>` and duration (`1m43s`, `running 2m`, or `queued`).
-  `After merge`: the runs on its merge commit, once it merged.
-- `Commits`: how many, then the newest one's time, short id and headline.
-  Select a name to open each run's jobs with their durations, and the newest
-  10 commits, each with its checks' mark.
+  mark, its name, then `#<run number>` and duration (`1m43s`, `running 2m`,
+  or `queued`) in the hint's color. `After merge`: the runs on its merge
+  commit, once it merged.
+- `Commits`: how many, then the newest one's time, short id (in the id's
+  color) and headline. Select a name to open each run's jobs with their
+  durations, and the newest 10 commits, each with its checks' mark.
+
+With `Done tickets last` On, the PRs draw in three groups, each under the
+Overview's line with an empty row above and below it: `Open` (open and draft
+PRs), `Merged`, then `Closed`, each in run order; an empty group draws no
+line. Off, the PRs keep the run order with no line.
 
 A mark is `✓` passed, `✕` failed (also timed out, a startup failure or an
 action required), `●` running, `○` queued or waiting, and `–` cancelled,
 skipped, neutral or stale: a different glyph each, so none rests on its color
 alone. A commit's mark is its status rollup's. Above the PRs: the counts of
-PRs by state, and of the head commits' runs that fail or run (a check suite
-of another app, with no workflow run, never counts; nor do the runs after a
-merge). Below them: the tickets GitHub has not answered for yet, and the
+PRs by state, and of the head commits' runs that passed, fail or run (a check
+suite of another app, with no workflow run, never counts; nor do the runs
+after a merge). Each count above 0 draws bold with its word in its own color
+(merged lime, open periwinkle, draft gray, closed red; passed green, failing
+red, running blue), and each 0 in the hint's. Below them: the tickets GitHub has not answered for yet, and the
 tickets with no PR.
 
 The tab asks GitHub only while the Gru pane is placed and shows it: one
@@ -383,7 +405,8 @@ before each launch and each scope change ([the Gru skill](../../skill/gru/SKILL.
 Under `This pane`, one more row that the pane alone reads, in every run:
 `Done tickets last`, Off by default. On, `🚇 Where each ticket is` lists the
 tickets in three groups, each under its own line: in progress, to do, then
-done, each in run order. The plugin's own
+done, each in run order; the GitHub tab lists open PRs, then merged, then
+closed, the same way. The plugin's own
 store (`$.store`, key `doneLast`) keeps it across sessions; it loads in the
 background at session start, and presses apply one at a time behind it. It is
 never in the run's settings file, and Gru never reads it. A store that cannot

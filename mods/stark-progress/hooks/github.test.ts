@@ -92,8 +92,8 @@ test("the tab lists each ticket's PR in run order, the ones GitHub has not answe
   ])
   expect(view.noPr).toEqual(['STARK-3'])
   expect(view.waiting).toEqual(['STARK-4'])
-  // Head-commit runs only: one in progress, none failing; the runs after a merge never count.
-  expect(view.counts).toEqual({ prs: 2, merged: 1, open: 0, draft: 1, closed: 0, failing: 0, running: 1 })
+  // Head-commit runs only, never the runs after a merge: #446's ci and secret-scan passed; #447's secret-scan passed, its ci runs.
+  expect(view.counts).toEqual({ prs: 2, merged: 1, open: 0, draft: 1, closed: 0, passed: 3, failing: 0, running: 1 })
   expect(view.readAt).toBe(1000)
 
   // A repo whose last ask failed keeps its last answer and names the failure.

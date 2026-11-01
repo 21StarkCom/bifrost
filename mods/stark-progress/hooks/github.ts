@@ -219,6 +219,7 @@ export function buildGithub(
       open: all.filter(p => p.state === 'OPEN').length,
       draft: all.filter(p => p.state === 'DRAFT').length,
       closed: all.filter(p => p.state === 'CLOSED').length,
+      passed: runs.filter(r => r.mark === '✓').length,
       failing: runs.filter(r => r.mark === '✕').length,
       running: runs.filter(r => r.mark === '●').length,
     },

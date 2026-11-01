@@ -399,9 +399,25 @@ test("a ticket's hour marks calls, a failed 5 minutes and blanks, and an hour wi
 const listOrder = async (pane: { findAll: (q: { type: string }) => Promise<{ key: string | undefined }[]> }) =>
   (await pane.findAll({ type: 'Button' })).map(b => b.key ?? '').filter(key => key.startsWith('row-')).map(key => key.slice('row-'.length))
 
-/** The lines over the groups of "Where each ticket is", top to bottom, without their rule. */
+/** The lines over the groups of a list, top to bottom, without their rule. */
 const dividers = async (pane: { findAll: (q: { type: string; text: RegExp }) => Promise<{ text: string }[]> }) =>
   (await pane.findAll({ type: 'Text', text: /^── .+ · \d+ ─+$/ })).map(t => t.text.replace(/─+$/, ''))
+
+type Drawn = { type?: string; props?: Record<string, unknown>; children?: unknown[] }
+
+/** The element of a drawn tree whose props carry `key`, and the element that holds it. */
+const byKey = (node: unknown, key: string, parent?: Drawn): { node: Drawn; parent: Drawn | undefined } | undefined => {
+  if (typeof node !== 'object' || node === null) return undefined
+  const n = node as Drawn
+  if (n.props?.key === key) return { node: n, parent }
+  for (const child of n.children ?? []) {
+    const hit = byKey(child, key, n)
+    if (hit !== undefined) return hit
+  }
+
+  return undefined
+}
+const parentOf = (tree: unknown, key: string) => byKey(tree, key)?.parent
 
 const DONE_LAST_RUN: Record<string, string> = {
   'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1', 'STARK-2', 'STARK-3', 'STARK-4'] }),
@@ -427,10 +443,10 @@ test('Done tickets last lists the done tickets at the bottom, kept in the store 
 
   await pane.press({ key: 'tab-settings' })
   expect(await pane.find({ type: 'Text', text: 'This pane' })).toBeDefined()
-  expect(await pane.find({ type: 'Text', text: 'The ticket list keeps the order of the run.' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'The ticket list and the GitHub tab keep the order of the run.' })).toBeDefined()
   await pane.press({ key: 'set-done-last' })
   expect(
-    await pane.find({ type: 'Text', text: 'The ticket list shows in progress, then to do, then done, each under its own line.' }),
+    await pane.find({ type: 'Text', text: 'The ticket list shows in progress, then to do, then done, each under its own line. The GitHub tab shows open PRs, then merged, then closed.' }),
   ).toBeDefined()
   expect(store.doneLast).toBe(true)
   // Gru reads the run's settings file; this choice is the pane's alone.
@@ -478,6 +494,48 @@ test('an empty group draws no line', async ($, on) => {
   expect(await dividers(pane)).toEqual(['── In progress · 1 ', '── Done · 1 '])
   // The line runs to the pane's edge: 80 columns.
   expect((await pane.find({ type: 'Text', text: /^── Done · 1 ─+$/ }))?.text).toHaveLength(80)
+})
+
+test('each group line has an empty row above and below it, and an open row above a line adds no second one', async ($, on) => {
+  stage(on, { ...DONE_LAST_RUN }, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  mock.store(on, { doneLast: true })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  const pane = await $.ui.mount(PANE)
+  for (const name of ['In progress', 'To do', 'Done']) expect((await pane.find({ key: `g${name}` }))?.props).toMatchObject({ marginY: 1 })
+
+  // STARK-2, the last of In progress, opens: the line under it gives the one empty row.
+  await pane.press({ key: 'row-STARK-2' })
+  const last = byKey(await pane.drawn(), 'rSTARK-2')?.node
+  expect(last?.children?.at(-1)).toMatchObject({ props: { marginBottom: 0 } })
+  // STARK-1, the first of Done but not its last, keeps its own empty row.
+  await pane.press({ key: 'row-STARK-1' })
+  const first = byKey(await pane.drawn(), 'rSTARK-1')?.node
+  expect(first?.children?.at(-1)).toMatchObject({ props: { marginBottom: 1 } })
+})
+
+test('with Done tickets last on, the GitHub tab groups the PRs: open and draft, then merged, then closed', async ($, on) => {
+  const seen = stage(on, { ...GH_RUN }, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  seen.gh = { exitCode: 0, stdout: JSON.stringify(ANSWER), stderr: '' }
+  seen.isPlaced = true
+  mock.store(on, { doneLast: true })
+  const clock = mock.clock(on, { now: Date.parse('2026-11-01T14:43:30Z') })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  const pane = await $.ui.mount(PANE)
+  await pane.press({ key: 'tab-github' })
+  await clock.advance(1000)
+  await clock.advance(1000)
+
+  // #447 is a draft, so STARK-2 comes first; no PR is closed, so no Closed line.
+  expect(await dividers(pane)).toEqual(['── Open · 1 ', '── Merged · 1 '])
+  const cards = (await pane.findAll({ type: 'Button' })).map(b => b.key ?? '').filter(k => k.startsWith('gh-'))
+  expect(cards).toEqual(['gh-STARK-2', 'gh-STARK-1'])
+  // The lines and the PRs share one list with an empty row between each two.
+  const tree = await pane.drawn()
+  expect(parentOf(tree, 'gOpen')?.props?.gap).toBe(1)
+  expect(parentOf(tree, 'ghSTARK-1')).toBe(parentOf(tree, 'gOpen'))
 })
 
 const GH_RUN: Record<string, string> = {
@@ -539,16 +597,33 @@ test("the GitHub tab draws each ticket's PR, its runs and its newest commit, and
   await clock.advance(1000)
 
   expect(await pane.find({ type: 'Text', text: '2 PRs: 1 merged · 0 open · 1 draft · 0 closed' })).toBeDefined()
-  expect(await pane.find({ type: 'Text', text: 'runs: 0 failing · 1 running' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'runs: 3 passed · 0 failing · 1 running' })).toBeDefined()
+  // A count above 0 bold in its state's color, a 0 in the hint's.
+  expect(await inkOf(pane, /^1 merged$/)).toMatchObject({ color: '#c5e384', bold: true })
+  expect(await inkOf(pane, /^1 draft$/)).toMatchObject({ color: '#a7adc2', bold: true })
+  expect(await inkOf(pane, /^0 open$/)).toMatchObject({ color: '#9ba1b8', bold: false })
+  expect(await inkOf(pane, /^3 passed$/)).toMatchObject({ color: '#95d5b2', bold: true })
+  expect(await inkOf(pane, /^0 failing$/)).toMatchObject({ color: '#9ba1b8', bold: false })
+  expect(await inkOf(pane, /^1 running$/)).toMatchObject({ color: '#8ecae6', bold: true })
   expect(await pane.find({ type: 'Text', text: /^PR #446 MERGED · opened \d\d:\d\d · merged \d\d:\d\d · open 15m · \+681 −120$/ })).toBeDefined()
   expect(await inkOf(pane, /^MERGED$/)).toMatchObject({ color: '#c5e384' })
   expect(await inkOf(pane, /^DRAFT$/)).toMatchObject({ color: '#a7adc2' })
+  // Lines added in green, lines removed in red.
+  expect(await inkOf(pane, /^\+681$/)).toMatchObject({ color: '#95d5b2' })
+  expect(await inkOf(pane, /^ −120$/)).toMatchObject({ color: '#ff8f87' })
   expect(await pane.find({ type: 'Text', text: /^✓ ci #1278 1m43s$/ })).toBeDefined()
+  expect(await inkOf(pane, /^#1278 1m43s$/)).toMatchObject({ color: '#9ba1b8' })
   expect(await pane.find({ type: 'Text', text: /^● ci #1280 running 2m$/ })).toBeDefined()
   // The merged PR's runs on its merge commit; the draft has none.
   expect(await pane.findAll({ type: 'Text', text: 'After merge' })).toHaveLength(1)
   expect(await pane.find({ type: 'Text', text: /^✓ ci #1279 1m40s$/ })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: /^3 · last \d\d:\d\d 0966587 chore\(changelog\)/ })).toBeDefined()
+  expect(await inkOf(pane, /^0966587$/)).toMatchObject({ color: '#c9b3f5' })
+  // Each Commits line fits the 80-column pane, less its 2-cell indent.
+  for (const c of await pane.findAll({ type: 'Text', text: /^\d+ · last / })) expect([...c.text].length).toBeLessThanOrEqual(78 - 'After merge  '.length)
+  // An empty row between two PRs; with Done tickets last off, no group lines.
+  expect(parentOf(await pane.drawn(), 'ghSTARK-1')?.props?.gap).toBe(1)
+  expect(await dividers(pane)).toEqual([])
   expect(await pane.find({ type: 'Text', text: 'No PR yet:' })).toBeDefined()
   // A name opens the PR's jobs and commits.
   await pane.press({ key: 'gh-STARK-1' })
