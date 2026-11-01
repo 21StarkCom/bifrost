@@ -446,7 +446,7 @@ test('Done tickets last lists the done tickets at the bottom, kept in the store 
   expect(await pane.find({ type: 'Text', text: 'The ticket list and the GitHub tab keep the order of the run.' })).toBeDefined()
   await pane.press({ key: 'set-done-last' })
   expect(
-    await pane.find({ type: 'Text', text: 'The ticket list shows in progress, then to do, then done, each under its own line. The GitHub tab shows open PRs, then merged, then closed.' }),
+    await pane.find({ type: 'Text', text: 'The ticket list shows in progress, then to do, then done, each under its own line. The GitHub tab shows open and draft PRs, then merged, then closed.' }),
   ).toBeDefined()
   expect(store.doneLast).toBe(true)
   // Gru reads the run's settings file; this choice is the pane's alone.
@@ -496,7 +496,7 @@ test('an empty group draws no line', async ($, on) => {
   expect((await pane.find({ type: 'Text', text: /^── Done · 1 ─+$/ }))?.text).toHaveLength(80)
 })
 
-test('each group line has an empty row above and below it, and an open row above a line adds no second one', async ($, on) => {
+test('each group line has an empty row above and below it, and an open last row of a group adds no second one', async ($, on) => {
   stage(on, { ...DONE_LAST_RUN }, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
   mock.store(on, { doneLast: true })
   const clock = mock.clock(on, { now: T0 })
@@ -513,6 +513,10 @@ test('each group line has an empty row above and below it, and an open row above
   await pane.press({ key: 'row-STARK-1' })
   const first = byKey(await pane.drawn(), 'rSTARK-1')?.node
   expect(first?.children?.at(-1)).toMatchObject({ props: { marginBottom: 1 } })
+  // STARK-3, the last of the list: the list's gap below gives the one empty row.
+  await pane.press({ key: 'row-STARK-3' })
+  const end = byKey(await pane.drawn(), 'rSTARK-3')?.node
+  expect(end?.children?.at(-1)).toMatchObject({ props: { marginBottom: 0 } })
 })
 
 test('with Done tickets last on, the GitHub tab groups the PRs: open and draft, then merged, then closed', async ($, on) => {
@@ -536,6 +540,29 @@ test('with Done tickets last on, the GitHub tab groups the PRs: open and draft, 
   const tree = await pane.drawn()
   expect(parentOf(tree, 'gOpen')?.props?.gap).toBe(1)
   expect(parentOf(tree, 'ghSTARK-1')).toBe(parentOf(tree, 'gOpen'))
+})
+
+test('in a narrow pane each commit line still fits: the headline shrinks to its first letter', async ($, on) => {
+  const seen = stage(on, { ...GH_RUN }, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  seen.gh = { exitCode: 0, stdout: JSON.stringify(ANSWER), stderr: '' }
+  seen.isPlaced = true
+  const clock = mock.clock(on, { now: Date.parse('2026-11-01T14:43:30Z') })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  const pane = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 40 } })
+  await pane.press({ key: 'tab-github' })
+  await clock.advance(1000)
+  await clock.advance(1000)
+  await pane.press({ key: 'gh-STARK-1' })
+
+  // The Commits line: 40 columns less its 2-cell indent and its label.
+  const summary = await pane.findAll({ type: 'Text', text: /^\d+ · last / })
+  expect(summary.length).toBeGreaterThan(0)
+  for (const c of summary) expect([...c.text].length).toBeLessThanOrEqual(40 - 2 - 'After merge  '.length)
+  // The open detail's commits: 40 columns less its 4-cell indent.
+  const commits = await pane.findAll({ type: 'Text', text: /^[✓✕● ] \d\d:\d\d [0-9a-f]{7} / })
+  expect(commits).toHaveLength(3)
+  for (const c of commits) expect([...c.text].length).toBeLessThanOrEqual(40 - 4)
 })
 
 const GH_RUN: Record<string, string> = {
@@ -597,7 +624,7 @@ test("the GitHub tab draws each ticket's PR, its runs and its newest commit, and
   await clock.advance(1000)
 
   expect(await pane.find({ type: 'Text', text: '2 PRs: 1 merged · 0 open · 1 draft · 0 closed' })).toBeDefined()
-  expect(await pane.find({ type: 'Text', text: 'runs: 3 passed · 0 failing · 1 running' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'runs: 3 passed · 0 failing · 1 running · 0 queued' })).toBeDefined()
   // A count above 0 bold in its state's color, a 0 in the hint's.
   expect(await inkOf(pane, /^1 merged$/)).toMatchObject({ color: '#c5e384', bold: true })
   expect(await inkOf(pane, /^1 draft$/)).toMatchObject({ color: '#a7adc2', bold: true })

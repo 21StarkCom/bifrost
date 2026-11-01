@@ -186,7 +186,7 @@ Overview   Log   Stats   GitHub   Settings
 
 🐙 GitHub
 2 PRs: 1 merged · 0 open · 1 draft · 0 closed
-runs: 3 passed · 0 failing · 1 running
+runs: 3 passed · 0 failing · 1 running · 0 queued
 Read from GitHub at 12:53. The tab asks again each minute while it is open.
 
 ── Open · 1 ───────────────────────────────────────
@@ -372,11 +372,11 @@ A mark is `✓` passed, `✕` failed (also timed out, a startup failure or an
 action required), `●` running, `○` queued or waiting, and `–` cancelled,
 skipped, neutral or stale: a different glyph each, so none rests on its color
 alone. A commit's mark is its status rollup's. Above the PRs: the counts of
-PRs by state, and of the head commits' runs that passed, fail or run (a check
+PRs by state, and of the head commits' runs that passed, fail, run or wait to start (a check
 suite of another app, with no workflow run, never counts; nor do the runs
 after a merge). Each count above 0 draws bold with its word in its own color
 (merged lime, open periwinkle, draft gray, closed red; passed green, failing
-red, running blue), and each 0 in the hint's. Below them: the tickets GitHub has not answered for yet, and the
+red, running blue, queued gray), and each 0 in the hint's. Below them: the tickets GitHub has not answered for yet, and the
 tickets with no PR.
 
 The tab asks GitHub only while the Gru pane is placed and shows it: one
@@ -405,7 +405,7 @@ before each launch and each scope change ([the Gru skill](../../skill/gru/SKILL.
 Under `This pane`, one more row that the pane alone reads, in every run:
 `Done tickets last`, Off by default. On, `🚇 Where each ticket is` lists the
 tickets in three groups, each under its own line: in progress, to do, then
-done, each in run order; the GitHub tab lists open PRs, then merged, then
+done, each in run order; the GitHub tab lists open and draft PRs, then merged, then
 closed, the same way. The plugin's own
 store (`$.store`, key `doneLast`) keeps it across sessions; it loads in the
 background at session start, and presses apply one at a time behind it. It is

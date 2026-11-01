@@ -222,6 +222,7 @@ export function buildGithub(
       passed: runs.filter(r => r.mark === '✓').length,
       failing: runs.filter(r => r.mark === '✕').length,
       running: runs.filter(r => r.mark === '●').length,
+      queued: runs.filter(r => r.mark === '○').length,
     },
     readAt: times.length === 0 ? null : Math.min(...times),
     errors,

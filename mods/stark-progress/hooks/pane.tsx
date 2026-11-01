@@ -417,13 +417,13 @@ function overview(ui: UI, w: number, board: Board, view: PaneView) {
       <Box flexDirection="column">
         <Text bold>🚇 Where each ticket is</Text>
         <Text mono color={P.hint}>{`  ${stationHeader(seg)}`}</Text>
-        {groups.flatMap((g, gi) => [
+        {groups.flatMap(g => [
           ...(g.name === null ? [] : [divider(ui, w, g.name, g.rows.length, true)]),
           ...g.rows.map((r, ri) => {
           const isOpen = view.focus === r.id
           const isQuiet = r.tone === 'done' || r.tone === 'none'
-          // A group's line below already leaves an empty row: an open last row adds none.
-          const isAboveLine = gi < groups.length - 1 && ri === g.rows.length - 1
+          // The next group's line, or the list's gap below, already leaves an empty row: an open last row adds none.
+          const isLast = ri === g.rows.length - 1
 
           return (
             <Box key={`r${r.id}`} flexDirection="column">
@@ -439,7 +439,7 @@ function overview(ui: UI, w: number, board: Board, view: PaneView) {
                 {stateText(ui, r.state, r.status)}
               </Box>
               {isOpen && (
-                <Box flexDirection="column" paddingLeft={2} marginBottom={isAboveLine ? 0 : 1}>
+                <Box flexDirection="column" paddingLeft={2} marginBottom={isLast ? 0 : 1}>
                   {r.detail.map((words, i) => (
                     <Text key={`d${i}`} color={P.text}>
                       {words}
@@ -786,7 +786,7 @@ function settings(ui: UI, w: number, board: Board, view: PaneView) {
         'Done tickets last',
         toggle(ui, 'done-last', view.doneLast, view.flipDoneLast),
         view.doneLast
-          ? 'The ticket list shows in progress, then to do, then done, each under its own line. The GitHub tab shows open PRs, then merged, then closed.'
+          ? 'The ticket list shows in progress, then to do, then done, each under its own line. The GitHub tab shows open and draft PRs, then merged, then closed.'
           : 'The ticket list and the GitHub tab keep the order of the run.',
       )}
     </Box>
@@ -877,7 +877,7 @@ function prDetail(ui: UI, w: number, pr: GithubPr, now: number) {
               {when}
             </Text>
             <Text color={P.id}>{c.oid}</Text>
-            <Text color={P.text}>{` ${cut(c.headline, Math.max(room, 10))}`}</Text>
+            <Text color={P.text}>{` ${cut(c.headline, Math.max(room, 2))}`}</Text>
           </Text>
         )
       })}
@@ -951,7 +951,7 @@ function prCard(ui: UI, w: number, item: GithubView['prs'][number], now: number,
           <Text color={P.text}>
             {lead}
             <Text color={P.id}>{newest.oid}</Text>
-            {` ${cut(newest.headline, Math.max(room, 10))}`}
+            {` ${cut(newest.headline, Math.max(room, 2))}`}
           </Text>
         )}
       </Box>
@@ -1004,6 +1004,7 @@ export function githubTab(
             [c.passed, 'passed', 'green'],
             [c.failing, 'failing', 'blocked'],
             [c.running, 'running', 'blue'],
+            [c.queued, 'queued', 'gray'],
           ])}
         {gh.readAt !== null && (
           <Text color={P.hint}>{`Read from GitHub at ${clockOf(gh.readAt)}. The tab asks again each minute while it is open.`}</Text>

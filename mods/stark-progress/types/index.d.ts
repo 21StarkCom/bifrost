@@ -356,10 +356,11 @@ export type GithubView = {
     open: number
     draft: number
     closed: number
-    /** The workflow runs on the PRs' head commits that passed, failed or run now. */
+    /** The workflow runs on the PRs' head commits that passed, failed, run now or wait to start. */
     passed: number
     failing: number
     running: number
+    queued: number
   }
   /** When the oldest answer drawn came, or null with none. */
   readAt: number | null
