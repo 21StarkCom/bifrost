@@ -350,7 +350,18 @@ export type GithubView = {
   noPr: string[]
   /** The tickets with a PR GitHub has not answered for yet. */
   waiting: string[]
-  counts: { prs: number; merged: number; open: number; draft: number; closed: number; failing: number; running: number }
+  counts: {
+    prs: number
+    merged: number
+    open: number
+    draft: number
+    closed: number
+    /** The workflow runs on the PRs' head commits that passed, failed, run now or wait to start. */
+    passed: number
+    failing: number
+    running: number
+    queued: number
+  }
   /** When the oldest answer drawn came, or null with none. */
   readAt: number | null
   /** One line for each repo whose last query failed. */

@@ -92,9 +92,18 @@ test("the tab lists each ticket's PR in run order, the ones GitHub has not answe
   ])
   expect(view.noPr).toEqual(['STARK-3'])
   expect(view.waiting).toEqual(['STARK-4'])
-  // Head-commit runs only: one in progress, none failing; the runs after a merge never count.
-  expect(view.counts).toEqual({ prs: 2, merged: 1, open: 0, draft: 1, closed: 0, failing: 0, running: 1 })
+  // Head-commit runs only, never the runs after a merge: #446's ci and secret-scan passed; #447's secret-scan passed, its ci runs.
+  expect(view.counts).toEqual({ prs: 2, merged: 1, open: 0, draft: 1, closed: 0, passed: 3, failing: 0, running: 1, queued: 0 })
   expect(view.readAt).toBe(1000)
+
+  // A run that waits to start counts as queued, so the runs line never reads as all done.
+  const merged = prs.get(446)!
+  const waits = new Map(prs).set(446, { ...merged, runs: [{ ...merged.runs[0]!, mark: '○' as const, ended: null }, ...merged.runs.slice(1)] })
+  const queued = buildGithub(
+    [{ id: 'STARK-1', name: '', pr: 'https://github.com/21StarkCom/bifrost/pull/446' }],
+    new Map<string, RepoAnswer>([['21StarkCom/bifrost', { at: 1000, prs: waits, error: null }]]),
+  )
+  expect(queued.counts).toMatchObject({ passed: 1, failing: 0, running: 0, queued: 1 })
 
   // A repo whose last ask failed keeps its last answer and names the failure.
   const failed = new Map<string, RepoAnswer>([['21StarkCom/bifrost', { at: 1000, prs, error: '21StarkCom/bifrost: GitHub did not answer at 12:05: timed out' }]])
