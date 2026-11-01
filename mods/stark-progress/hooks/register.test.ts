@@ -1727,3 +1727,31 @@ test('the Stats tab draws on the desktop surface too', async ($, on) => {
   // The columns line up in the desktop's fixed-width face.
   expect(row?.props.mono).toBe(true)
 })
+
+test("a PR number GitHub does not know keeps the repo's other PRs and names the error", async ($, on) => {
+  const seen = stage(on, { ...GH_RUN }, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  // `gh` exits 1 on a GraphQL error, yet prints the PRs it found.
+  const { p446 } = ANSWER.data.repository
+  seen.gh = {
+    exitCode: 1,
+    stdout: JSON.stringify({ data: { repository: { p446, p447: null } }, errors: [{ type: 'NOT_FOUND', path: ['repository', 'p447'] }] }),
+    stderr: 'gh: Could not resolve to a PullRequest with the number of 447.',
+  }
+  seen.isPlaced = true
+  const clock = mock.clock(on, { now: Date.parse('2026-11-01T14:43:30Z') })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  const pane = await $.ui.mount(PANE)
+  await pane.press({ key: 'tab-github' })
+  await clock.advance(1000)
+  await clock.advance(1000)
+
+  expect(await pane.find({ type: 'Text', text: /^PR #446 MERGED/ })).toBeDefined()
+  expect(
+    await pane.find({
+      type: 'Text',
+      text: /^21StarkCom\/bifrost: GitHub answered at \d\d:\d\d with an error: gh: Could not resolve to a PullRequest with the number of 447\.$/,
+    }),
+  ).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'Waiting for GitHub:' })).toBeDefined()
+})

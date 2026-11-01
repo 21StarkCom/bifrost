@@ -101,4 +101,7 @@ test("the tab lists each ticket's PR in run order, the ones GitHub has not answe
   const kept = buildGithub([{ id: 'STARK-1', name: '', pr: 'https://github.com/21StarkCom/bifrost/pull/446' }], failed)
   expect(kept.prs).toHaveLength(1)
   expect(kept.errors).toEqual(['21StarkCom/bifrost: GitHub did not answer at 12:05: timed out'])
+  // Another run's repo, still in the answers, adds no line.
+  const other = buildGithub([{ id: 'STARK-4', name: '', pr: 'https://github.com/21StarkCom/idun/pull/9' }], failed)
+  expect(other.errors).toEqual([])
 })

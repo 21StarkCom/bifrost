@@ -187,12 +187,14 @@ export function buildGithub(
   const noPr: string[] = []
   const waiting: string[] = []
   const times: number[] = []
+  const repos = new Set<string>()
   for (const t of tickets) {
     const ref = prRefOf(t.pr)
     if (ref === null) {
       noPr.push(t.id)
       continue
     }
+    repos.add(repoKey(ref))
     const answer = answers.get(repoKey(ref))
     const pr = answer?.prs.get(ref.number)
     if (answer?.at != null && pr !== undefined) times.push(answer.at)
@@ -201,7 +203,11 @@ export function buildGithub(
   }
   const all = prs.map(p => p.pr)
   const runs = all.flatMap(p => p.runs)
-  const errors = [...answers.values()].flatMap(a => (a.error === null ? [] : [a.error]))
+  // Only this run's repos: the answers outlive a run, and another run's failure is no line of this one.
+  const errors = [...repos].flatMap(k => {
+    const error = answers.get(k)?.error
+    return error == null ? [] : [error]
+  })
 
   return {
     prs,

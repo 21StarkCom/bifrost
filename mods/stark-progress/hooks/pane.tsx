@@ -526,7 +526,7 @@ export const settingRow = (ui: UI, w: number, label: string, control: ReturnType
   )
 }
 
-/** The pane's four tabs, each with its hotkey. */
+/** The pane's tabs, each with its hotkey. */
 export function tabBar(ui: UI, tab: PaneTab, setTab: (tab: PaneTab) => unknown, hasGithub = false) {
   const { Box, Button, Text, P } = ui
   // Only the Gru pane has a GitHub tab, between Stats and Settings.
@@ -792,12 +792,9 @@ const MARK_INK: Record<Mark, keyof Palette> = { '✓': 'green', '✕': 'blocked'
 const PR_INK: Record<GithubPr['state'], keyof Palette> = { OPEN: 'pr', DRAFT: 'gray', MERGED: 'merged', CLOSED: 'blocked' }
 const GH_LABEL = 'After merge  '.length
 
-/** A time on the tab: `14:02`, or `Sat 31 Oct 14:02` on an earlier day. */
-const whenOf = (ms: number, now: number) => sinceOf(ms, now)
-
-/** A run's duration: `1m43s` once it ended, `running 2m` while it runs, `queued` before it starts. */
+/** A run's duration: `1m43s` once it ended, `running 2m` while it runs, `queued` before it starts; none for a job that ended unstarted. */
 function runTime(r: { mark: Mark; started: number | null; ended: number | null }, now: number): string {
-  if (r.ended !== null && r.started !== null) return secs(r.ended - r.started)
+  if (r.ended !== null) return r.started === null ? '' : secs(r.ended - r.started)
   if (r.mark === '○' || r.started === null) return 'queued'
 
   return `running ${dur(now - r.started)}`
@@ -862,7 +859,7 @@ function prDetail(ui: UI, w: number, pr: GithubPr, now: number) {
       ))}
       <Text bold>{pr.commitCount > pr.commits.length ? `Newest ${pr.commits.length} of ${pr.commitCount} commits` : 'Commits'}</Text>
       {pr.commits.map((c, i) => {
-        const when = ` ${c.at === null ? '' : whenOf(c.at, now)} `
+        const when = ` ${c.at === null ? '' : sinceOf(c.at, now)} `
         // One line each: the headline takes what the indent, the mark, the time and the id leave.
         const room = w - 4 - 1 - when.length - c.oid.length - 1
 
@@ -921,11 +918,16 @@ export function githubTab(ui: UI, w: number, gh: GithubView, now: number, view: 
             const isOpen = view.ghFocus === id
             const end = pr.merged ?? pr.closed
             const times = [
-              `opened ${whenOf(pr.created, now)}`,
-              ...(pr.merged !== null ? [`merged ${whenOf(pr.merged, now)}`] : pr.closed !== null ? [`closed ${whenOf(pr.closed, now)}`] : []),
+              `opened ${sinceOf(pr.created, now)}`,
+              ...(pr.merged !== null ? [`merged ${sinceOf(pr.merged, now)}`] : pr.closed !== null ? [`closed ${sinceOf(pr.closed, now)}`] : []),
               `open ${dur((end ?? now) - pr.created)}`,
             ]
             const newest = pr.commits[0]
+            // One line: the headline takes what the indent, the label and the words before it leave.
+            const lead =
+              newest === undefined
+                ? ''
+                : `${pr.commitCount} · last ${newest.at === null ? '' : `${sinceOf(newest.at, now)} `}${newest.oid} `
 
             return (
               <Box key={`gh${id}`} flexDirection="column">
@@ -950,7 +952,7 @@ export function githubTab(ui: UI, w: number, gh: GithubView, now: number, view: 
                   <Text color={P.text}>
                     {newest === undefined
                       ? String(pr.commitCount)
-                      : `${pr.commitCount} · last ${newest.at === null ? '' : `${whenOf(newest.at, now)} `}${newest.oid} ${cut(newest.headline, Math.max(w - GH_LABEL - 30, 10))}`}
+                      : `${lead}${cut(newest.headline, Math.max(w - 2 - GH_LABEL - lead.length, 10))}`}
                   </Text>
                 </Box>
                 {isOpen && prDetail(ui, w, pr, now)}

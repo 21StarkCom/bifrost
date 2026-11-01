@@ -363,7 +363,10 @@ background, once a minute, and at once when the tab opens (10 s after the
 last ask at the soonest). A closed pane, or another tab, asks nothing. Each
 repo keeps its last good answer; a failure keeps it and adds one line,
 `<owner>/<repo>: GitHub did not answer at <HH:MM>: <first line of the error>`.
-`Read from GitHub at <HH:MM>` is the oldest answer the tab draws. The calls
+An answer with an error (a PR number GitHub does not know) keeps the PRs it
+holds and adds one line,
+`<owner>/<repo>: GitHub answered at <HH:MM> with an error: <first line of the error>`.
+The tab shows only the lines of this run's repos. `Read from GitHub at <HH:MM>` is the oldest answer the tab draws. The calls
 read only, as the `gh` login of the machine.
 
 **Settings.** Four rows for the run, each a value in a frame you select to change. A

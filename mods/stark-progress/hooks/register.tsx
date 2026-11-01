@@ -150,9 +150,14 @@ function askGithub($: EngineInterface, refs: readonly PrRef[], now: number, isNe
     void $.process
       .run(['gh', 'api', 'graphql', '-f', `query=${query}`], { timeoutMs: GH_TIMEOUT_MS })
       .then(r => {
-        const answer = r.exitCode === 0 ? parseGithub(r.stdout) : null
-        if (answer !== null) ghAnswers.set(key, { at: now, prs: answer, error: null, asked: now, isReading: false })
-        else failed(r.stderr.trim().split('\n')[0] || `gh exited ${r.exitCode}`)
+        // `gh` exits 1 on any GraphQL error, a wrong PR number too, yet still prints the other PRs: keep them.
+        const answer = parseGithub(r.stdout)
+        const why = r.exitCode === 0 ? null : r.stderr.trim().split('\n')[0] || `gh exited ${r.exitCode}`
+        if (answer === null) failed(why ?? 'no answer')
+        else {
+          const error = why === null ? null : `${key}: GitHub answered at ${clockOf(now)} with an error: ${why}`
+          ghAnswers.set(key, { at: now, prs: answer, error, asked: now, isReading: false })
+        }
       })
       .catch((err: unknown) => failed(err instanceof Error ? err.message : String(err)))
   }
