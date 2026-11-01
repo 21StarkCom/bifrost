@@ -12,7 +12,8 @@ is, whether its worker is doing anything, and whether that work gets anywhere:
 a worker that is busy for hours with no commit and no stage change reads
 `stalled`, not "20% done". Neither ever forecasts the time left. Both draw in
 the terminal and in the Claude desktop app's Code tab. The mod polls
-the state files below once a second, and git once every 30 seconds.
+the state files below once a second, and git once every 30 seconds; it asks
+alfred for an epic's title once each time it loads.
 
 Install it on its own; the seven skill plugins do not need it:
 
@@ -28,7 +29,8 @@ Gru's tab, the Gru pane's Overview:
 Overview   Log   Stats   Settings
 
 Gru · STARK-1200                                       ● this run
-bragi · 4 tickets
+Export the reading list
+bragi · 4 tickets · started 11:02, 1h51m ago
 ━━━━━━━━━━━━ ━━━━━━━━━━━━ ━━━━━━━━━━━━ ━━━━━━━━━━━━
 1 of 4 done · 2 in progress · 1 not started
 
@@ -109,9 +111,12 @@ Gru's tab, the Gru pane's Stats:
 Overview   Log   Stats   Settings
 
 📊 Stats for STARK-1200
-Gru's own counts, and the whole run's: Gru's and each ticket's, added. Counted since 11:02.
+Gru's own counts, and the whole run's: Gru's and each ticket's, added. The run started 11:02, 1h51m ago. Counted since 11:02.
 
                         Gru  Whole run
+Time
+  session time        1h51m      5h12m
+  working time          22m      3h40m
 Tokens
   input               1,000        10k
   output              2,000        32k
@@ -187,7 +192,17 @@ left, the pane says `No Gru run yet`.
 
 **Overview.** From the top:
 
-- The epic, the repos (each from a title's `<repo>: ` lead) and the ticket count.
+- The epic; its title on its own line; then the repos (each from a title's
+  `<repo>: ` lead), the ticket count, and when the run started:
+  `started 11:02, 1h51m ago`, or `started Sat 31 Oct 11:02, 26h05m ago` on an
+  earlier day. The title loses its `EPIC:`, `[tag]` and `<repo>: ` leads. It
+  is the run file's `titles` entry for the epic (a `--tickets` run's epic is
+  its first ticket), else `alfred task show <epic> --json`'s `item.name`, run
+  in the session's working folder once each time the mod loads, in the
+  background, with a 30 s timeout; a failed ask shows no title and is not
+  repeated until the mod loads again. The start is the oldest
+  line of the run's log (Gru writes one at launch), else when Gru's stats
+  began; with neither, the line names no start.
 - The counts `<n> of <m> done · <k> in progress · <j> not started`. Done
   means closed, as the band counts it.
 - A bar graph of the tickets at each step, one row a step in the spine's
@@ -274,6 +289,7 @@ session, and the tab says when the earliest began. The rows:
 
 | Group | Rows | From |
 |---|---|---|
+| Time | session time, working time | each poll: the time since the last one counts as open, and as working while the main loop is inside a turn (`turn.start` to `turn.complete` with no `agentId`); a gap over 5 s counts as 5 s, so a sleep of the computer adds almost nothing. The whole run adds each session's: three workers busy for one hour add three hours |
 | Tokens | input, output, cache read, cache write, model requests | each model request of the main loop and its subagents (`turn.step`'s usage) |
 | Work | lines added and removed, commits | each ticket's git signal while its worktree is there, else the last one its stats file kept |
 | Work | PRs opened and merged | the ticket files: a `pr` URL is a PR opened, and one at `merged` or `closed` a PR merged |
@@ -566,7 +582,8 @@ is a Claude session with the mod installed, and
   "tokens": { "input": 10000, "output": 32000, "cacheRead": 2300000, "cacheWrite": 94000 },
   "models": { "claude-opus-5-5": { "input": 10000, "output": 32000, "cacheRead": 2300000, "cacheWrite": 94000, "requests": 41 } },
   "prompts": { "operator": 1, "peer": 2, "other": 1 }, "sent": 3, "launches": 0, "reviews": 1,
-  "tools": { "Bash": { "calls": 32, "fails": 2 } }, "git": { "added": 234, "removed": 20, "commits": 3 } }
+  "tools": { "Bash": { "calls": 32, "fails": 2 } }, "git": { "added": 234, "removed": 20, "commits": 3 },
+  "openMs": 6660000, "busyMs": 1320000 }
 ```
 
 Every session with the mod counts these in memory from its start (the Stats
@@ -579,9 +596,12 @@ its counts to the ones the file holds, so a reload or a relaunch on the same
 ticket or run keeps the total, and `session` names the last writer. `since`
 is when the counts began; `model` and `effort` are the main loop's at its
 last request (`null` before one); `git` is a worker's last git signal for its
-worktree, kept after the worktree goes, and `null` in a run's file. A field
-of the wrong type reads as zero or absent. A `*.stats.json` file is never a
-run file.
+worktree, kept after the worktree goes, and `null` in a run's file. `openMs`
+is how long the session was open and `busyMs` how long its main loop was in
+a turn, in ms, as the Stats tab's `Time` rows count them; time alone writes
+the file only when one of them reaches a new minute. A file written before
+0.14.0 has neither, and reads as no time. A field of the wrong type reads as
+zero or absent. A `*.stats.json` file is never a run file.
 
 ## Which tab shows what
 
@@ -628,6 +648,11 @@ write: its counts are in memory after that.
 - A light-theme palette for the Gru pane and the ticket pane in the terminal.
 - Stats for a Codex Gru or worker, or for a Claude session's time before the
   mod loaded: the mod counts events as they happen and reads no transcript.
+  A reload in the middle of a turn counts that turn's rest as open, not as
+  working, until the next turn starts.
+- An epic's title for an epic alfred does not know (an EI epic, or no alfred),
+  or in a `/gru-board` session whose working folder is no git checkout:
+  `alfred task show` refuses there. Gru's own tab is always in a checkout.
 - Stats from GitHub (a PR's own line count, its review threads), or a cost in
   dollars.
 

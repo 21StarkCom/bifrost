@@ -4,7 +4,7 @@ import type { Board, BoardRow, BoardState, BoardTone, Cell, GruSettings, LogView
 import { clockOf, MAX_WORKERS, stepCounts } from './board'
 import { dayOf } from './log'
 import { counted, grouped, short } from './stats'
-import { bar, STAGES, STATION_LABELS } from './view'
+import { bar, dur, STAGES, STATION_LABELS } from './view'
 
 // The Gru pane: a calm board of one run (Overview) and the run's settings
 // that Gru reads before each launch (Settings). The model is board.ts's. The
@@ -360,8 +360,11 @@ function overview(ui: UI, w: number, board: Board, view: PaneView) {
           <Text bold>{`Gru · ${board.epic}`}</Text>
           <Text color={P.green}>{board.isOwn ? '● this run' : '● live'}</Text>
         </Box>
+        {board.title !== null && <Text>{board.title}</Text>}
         <Text color={P.text}>
-          {`${board.repos.length > 0 ? board.repos.join(' + ') : board.launchId} · ${rows.length} tickets`}
+          {`${board.repos.length > 0 ? board.repos.join(' + ') : board.launchId} · ${rows.length} tickets${
+            board.started === null ? '' : ` · started ${startedWords(board.started, board.readAt)}`
+          }`}
         </Text>
       </Box>
 
@@ -594,6 +597,9 @@ const sinceOf = (since: number, now: number) => {
   return day === 'Today' ? clockOf(since) : `${day} ${clockOf(since)}`
 }
 
+/** When a run started and how long ago: `12:03, 2h10m ago`, or `Sat 31 Oct 12:03, 26h05m ago` on an earlier day. Never a forecast. */
+export const startedWords = (started: number, now: number) => `${sinceOf(started, now)}, ${dur(now - started)} ago`
+
 /** The started tickets that wrote no stats, named by id. */
 function missingLine(ui: UI, w: number, missing: readonly string[]) {
   const { Box, Text, P } = ui
@@ -788,7 +794,9 @@ export function drawPane(ui: UI, w: number, view: PaneView) {
           : view.tab === 'stats'
             ? statsTab(ui, w, board.stats, board.readAt, {
                 title: `Stats for ${board.epic}`,
-                who: "Gru's own counts, and the whole run's: Gru's and each ticket's, added.",
+                who: `Gru's own counts, and the whole run's: Gru's and each ticket's, added.${
+                  board.started === null ? '' : ` The run started ${startedWords(board.started, board.readAt)}.`
+                }`,
                 empty: "No stats yet. The mod counts in Gru's tab and in each worker's tab, once each has the mod.",
               })
             : overview(ui, w, board, view)}

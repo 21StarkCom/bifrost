@@ -5,6 +5,7 @@ import {
   addPrompt,
   addReview,
   addStats,
+  addTime,
   addUsage,
   bashCounts,
   newStats,
@@ -23,6 +24,31 @@ import type { Stats } from './stats'
 
 const T0 = Date.parse('2026-10-29T12:00:00Z')
 const MIN = 60_000
+
+test("a session's time: each poll's gap counts open, and busy in a turn; a gap over 5 s counts 5 s", () => {
+  const s = newStats()
+  expect(addTime(s, 1000, false)).toBe(false)
+  addTime(s, 1000, true)
+  // The computer slept for an hour: 5 s, not an hour.
+  addTime(s, 3_600_000, true)
+  expect([s.openMs, s.busyMs]).toEqual([7000, 6000])
+  // True only when a shown minute changes, so the file is worth writing.
+  const t = newStats()
+  for (let i = 0; i < 59; i++) expect(addTime(t, 1000, false)).toBe(false)
+  expect(addTime(t, 1000, false)).toBe(true)
+  // A clock that went back adds nothing.
+  addTime(t, -5000, true)
+  expect([t.openMs, t.busyMs]).toEqual([60_000, 0])
+})
+
+test('a stats file from before the time counts reads no time, and a seed adds the times', () => {
+  const old = statsOf(JSON.stringify({ session: 's', since: '2026-10-29T12:00:00Z', requests: 2 }))
+  expect([old?.openMs, old?.busyMs]).toEqual([0, 0])
+  const a: Stats = { ...newStats(), openMs: 60_000, busyMs: 30_000 }
+  const b: Stats = { ...newStats(), openMs: 5000, busyMs: 1000 }
+  expect(addStats(a, b)).toMatchObject({ openMs: 65_000, busyMs: 31_000 })
+  expect(statsFile(addStats(a, b), 's', T0)).toMatchObject({ openMs: 65_000, busyMs: 31_000 })
+})
 const usage = (model: string, input: number, output: number, cacheRead = 0, cacheWrite = 0) => ({
   input_tokens: input,
   output_tokens: output,

@@ -1,5 +1,5 @@
 import type { GitSignal, StatGroup, StatModel, StatsFile, StatsView, Tokens, ToolTally } from '../types'
-import { parse as parseAs } from './view'
+import { dur, parse as parseAs } from './view'
 
 const parse = (text: string | undefined) => parseAs<Record<string, unknown>>(text)
 
@@ -33,7 +33,26 @@ export function newStats(): Stats {
     reviews: 0,
     tools: {},
     git: null,
+    openMs: 0,
+    busyMs: 0,
   }
+}
+
+/** The most one poll adds to a session's time: a longer gap is a sleep of the computer, not time open. */
+export const TIME_GAP_MS = 5000
+
+/**
+ * The time since the last poll: it counts as open, and as busy while the main
+ * loop is in a turn. A gap over TIME_GAP_MS counts as TIME_GAP_MS. True when
+ * a shown minute changed, so the file is worth writing.
+ */
+export function addTime(s: Stats, gap: number, isBusy: boolean): boolean {
+  const ms = Math.min(Math.max(gap, 0), TIME_GAP_MS)
+  const before = [Math.floor(s.openMs / 60_000), Math.floor(s.busyMs / 60_000)]
+  s.openMs += ms
+  if (isBusy) s.busyMs += ms
+
+  return Math.floor(s.openMs / 60_000) !== before[0] || Math.floor(s.busyMs / 60_000) !== before[1]
 }
 
 /** The API's four counts, as a model request's usage carries them. */
@@ -204,6 +223,9 @@ export function statsOf(file: string | undefined): (Stats & { session: string | 
       typeof f.git === 'object' && f.git !== null && !Array.isArray(f.git)
         ? { added: count(git.added), removed: count(git.removed), commits: count(git.commits) }
         : null,
+    // A file written before 0.14.0 has neither: it reads as no time.
+    openMs: count(f.openMs),
+    busyMs: count(f.busyMs),
   }
 }
 
@@ -250,6 +272,8 @@ export function addStats(older: Stats, newer: Stats): Stats {
     reviews: older.reviews + newer.reviews,
     tools,
     git: newer.git ?? older.git,
+    openMs: older.openMs + newer.openMs,
+    busyMs: older.busyMs + newer.busyMs,
   }
 }
 
@@ -270,6 +294,8 @@ export function statsFile(s: Stats, session: string, now: number): StatsFile {
     reviews: s.reviews,
     tools: s.tools,
     git: s.git,
+    openMs: Math.round(s.openMs),
+    busyMs: Math.round(s.busyMs),
   }
 }
 
@@ -313,6 +339,14 @@ function groupsOf(columns: Stats[], work: Work[]): StatGroup[] {
   const ofWork = (f: (w: NonNullable<Work>) => string) => work.map(w => (w === null ? DASH : f(w)))
 
   return [
+    {
+      title: 'Time',
+      rows: [
+        // Each session's own, added: three workers busy for an hour add three hours.
+        { label: 'session time', values: columns.map(s => dur(s.openMs)) },
+        { label: 'working time', values: columns.map(s => dur(s.busyMs)) },
+      ],
+    },
     {
       title: 'Tokens',
       rows: [

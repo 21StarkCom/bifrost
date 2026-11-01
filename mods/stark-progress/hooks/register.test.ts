@@ -77,6 +77,8 @@ function stage(
     isMvFailing: false,
     /** What `hermod focus` answers. */
     hermod: { exitCode: 0, stderr: '' },
+    /** What `alfred task show --json` answers: by default, no such ticket. */
+    alfred: { exitCode: 1, stdout: '' },
   }
   const writes: Record<string, string> = {}
   mock.env(on, { HOME: '/h', ...env })
@@ -115,6 +117,9 @@ function stage(
     seen.runs.push(argv)
     if (argv[0] === 'hermod') {
       return { value: { ...seen.hermod, stdout: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    }
+    if (argv[0] === 'alfred') {
+      return { value: { ...seen.alfred, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     }
     const isMoved = argv[0] === 'mv' && !seen.isMvFailing
     if (isMoved) disk[nameOf(argv[3] ?? '')] = writes[argv[2] ?? ''] ?? ''
@@ -160,9 +165,84 @@ test("Gru's tab opens the pane once, and the band keeps one line only while the 
     `${DIR}/STARK-13631.json`,
     `${DIR}/run-STARK-10.json`,
   ])
-  // No worktree is named for these tickets here, so git never runs: the one
-  // process is the rename of Gru's stats file, written once.
-  expect(seen.runs).toEqual([['mv', '-f', `${DIR}/run-STARK-10.stats.json.tmp`, `${DIR}/run-STARK-10.stats.json`]])
+  // No worktree is named for these tickets here, so git never runs: the processes
+  // are one ask of alfred for the epic's title, over two polls, and the rename of
+  // Gru's stats file, written once.
+  expect(seen.runs).toEqual([
+    ['alfred', 'task', 'show', 'STARK-10', '--json'],
+    ['mv', '-f', `${DIR}/run-STARK-10.stats.json.tmp`, `${DIR}/run-STARK-10.stats.json`],
+  ])
+})
+
+test("the Overview names the epic and the run's start; the Stats tab adds the start and each session's time", async ($, on) => {
+  const iso = (minutesAgo: number) => new Date(T0 - minutesAgo * MIN).toISOString()
+  const disk: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1'] }),
+    'STARK-1.json': ticket('STARK-1', 'pr'),
+    // Gru's first step 2h10m ago: the run's start. A later step does not move it.
+    'run-STARK-10.log.jsonl': `${JSON.stringify({ at: iso(130), text: 'Started 1 job.' })}\n${JSON.stringify({ at: iso(5), text: 'Checked a job.' })}\n`,
+    'STARK-1.stats.json': JSON.stringify({ session: 'w', since: iso(120), updated: iso(1), openMs: 2 * 60 * MIN, busyMs: 90 * MIN }),
+  }
+  const seen = stage(on, disk, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  seen.alfred = { exitCode: 0, stdout: JSON.stringify({ item: { kind: 'epic', name: 'EPIC: demo: read the words file aloud' } }) }
+  // Stands for the engine beneath the mod's turn hooks.
+  on('turn.start', (_$, e) => ({ turnId: e.turnId }))
+  on('turn.complete', () => ({ text: '' }))
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  // A turn of the main loop over three polls; a subagent's turn inside it adds nothing.
+  await $.turn.start({ text: '', turnId: 't1' } as never)
+  await clock.advance(1000)
+  await $.turn.start({ text: '', turnId: 's1', agentId: 'a1' } as never)
+  await clock.advance(1000)
+  await $.turn.complete({ turnId: 's1', agentId: 'a1', reason: 'answer', answer: '', durationMs: 1000, isAborted: false } as never)
+  await clock.advance(1000)
+  await $.turn.complete({ turnId: 't1', reason: 'answer', answer: '', durationMs: 3000, isAborted: false } as never)
+  await clock.advance(1000)
+  await clock.advance(1000)
+
+  const pane = await $.ui.mount(PANE)
+  // alfred's title, less its `EPIC:` and `repo: ` leads.
+  expect(await pane.find({ type: 'Text', text: /^Read the words file aloud$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^STARK-10 · 1 tickets · started \d\d:\d\d, 2h10m ago$/ })).toBeDefined()
+  expect(seen.runs.filter(argv => argv[0] === 'alfred')).toHaveLength(1)
+
+  await pane.press({ key: 'tab-stats' })
+  expect(await pane.find({ type: 'Text', text: /The run started \d\d:\d\d, 2h10m ago\. Counted since \d\d:\d\d\.$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'Time' })).toBeDefined()
+  // Gru's own time, then the whole run's: Gru's added to the worker's 2h00m and 1h30m.
+  expect(await pane.find({ type: 'Text', text: /^ {2}session time +0m +2h00m$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^ {2}working time +0m +1h30m$/ })).toBeDefined()
+  // Gru's file: time alone writes it when a shown minute changes, at the poll that makes 60 s open,
+  // with the 2 s between the three polls inside its main-loop turn (the first poll counts no gap);
+  // the subagent's turn inside it counts once.
+  await clock.advance(60_000)
+  const gru = JSON.parse(disk['run-STARK-10.stats.json'] ?? '{}')
+  expect(gru.openMs).toBe(60_000)
+  expect(gru.busyMs).toBe(2000)
+})
+
+test("a --tickets run's epic takes its title from the run file, and alfred is never asked; a failed ask is not repeated", async ($, on) => {
+  const disk: Record<string, string> = {
+    'run-GRU-7.json': JSON.stringify({ epic: 'STARK-1', session: 'gru', tickets: ['STARK-1'], titles: { 'STARK-1': '[bug] demo: say the names' } }),
+  }
+  const seen = stage(on, disk, { session: 'gru', root: '/r/.claude/worktrees/GRU-7' })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/GRU-7', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  const pane = await $.ui.mount(PANE)
+  expect(await pane.find({ type: 'Text', text: /^Say the names$/ })).toBeDefined()
+  // No log: the start is when Gru's stats began, which this tab's first poll wrote.
+  expect(await pane.find({ type: 'Text', text: /^demo · 1 tickets · started \d\d:\d\d, 0m ago$/ })).toBeDefined()
+  expect(seen.runs.filter(argv => argv[0] === 'alfred')).toEqual([])
+
+  // An epic alfred does not know: one ask, and no title line.
+  disk['run-GRU-7.json'] = JSON.stringify({ epic: 'STARK-9', session: 'gru', tickets: ['STARK-1'] })
+  await clock.advance(1000)
+  await clock.advance(1000)
+  await clock.advance(1000)
+  expect(seen.runs.filter(argv => argv[0] === 'alfred')).toEqual([['alfred', 'task', 'show', 'STARK-9', '--json']])
+  expect(await pane.find({ type: 'Text', text: /^Say the names$/ })).toBeUndefined()
 })
 
 test('the pane draws the run: counts, a ticket worth a look, Up next, and a row opened to its detail', async ($, on) => {

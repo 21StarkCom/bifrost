@@ -3,7 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Cell, GitSignal, GruSettings, PaneTab, Row, Seg, TicketSettings, Tone } from '../types'
 import { beatFile, callEnded, callStarted, newBeat, seedBeat } from './beat'
-import { buildBoard, launchIdOf, parse, pickRun, runsOf, settingsName, tabIsLive } from './board'
+import { buildBoard, epicTitleOf, launchIdOf, parse, pickRun, runsOf, settingsName, tabIsLive } from './board'
 import { readGit } from './git'
 import { logName, runLogName } from './log'
 import { drawPane, paletteFor } from './pane'
@@ -12,6 +12,7 @@ import {
   addPrompt,
   addReview,
   addStats,
+  addTime,
   addUsage,
   newStats,
   noteGit,
@@ -78,6 +79,14 @@ let statsAnchor: { base: string; name: string } | null = null
 /** Each stats file this tab wrote, by the file it lives beside, so each goes once that file does. */
 const statsWritten = new Map<string, string>()
 let statsSeededFor = ''
+/** The last poll's time, for the session's open time, and whether the main loop is inside a turn now. */
+let lastTick = 0
+let isTurning = false
+/** Each epic's title as alfred gave it, and the epics already asked: one ask a session, a failure included. */
+const epicTitles: Record<string, string> = {}
+const epicsAsked = new Set<string>()
+/** A ticket id alfred knows: never a value that could read as a flag. */
+const EPIC_ID = /^[A-Z][A-Z0-9]*-\d+$/
 const gitCache = new Map<string, { at: number; signal: GitSignal | null; isReading: boolean }>()
 
 /**
@@ -170,6 +179,9 @@ export const register: Register = on => {
     }
     const tick = async () => {
       const now = await $.clock.now()
+      // The time since the last poll: open, and busy while the main loop is in a turn.
+      if (addTime(stats, lastTick === 0 ? 0 : now - lastTick, isTurning)) isStatsDirty = true
+      lastTick = now
       const listed = await $.fs.list(dir).catch(() => [])
       // A log file is JSON Lines (`.jsonl`); every other file is whole JSON.
       const jsons = listed.filter(f => f.kind === 'file' && (f.name.endsWith('.json') || f.name.endsWith('.jsonl')))
@@ -212,6 +224,18 @@ export const register: Register = on => {
       if (shown !== undefined && shown.session !== session && shown.launchId !== pick) {
         pick = shown.launchId
         await update($, pickAtom, () => shown.launchId)
+      }
+      // An epic the run file does not name: ask alfred once, in the background; a later poll draws the answer.
+      if (shown !== undefined && epicTitleOf(shown) === null && EPIC_ID.test(shown.epic) && !epicsAsked.has(shown.epic)) {
+        const epic = shown.epic
+        epicsAsked.add(epic)
+        void $.process
+          .run(['alfred', 'task', 'show', epic, '--json'], { timeoutMs: 30_000 })
+          .then(r => {
+            const name = r.exitCode === 0 ? (parse(r.stdout)?.item as Record<string, unknown> | undefined)?.name : undefined
+            if (typeof name === 'string' && name !== '') epicTitles[epic] = name
+          })
+          .catch(() => undefined)
       }
       const wanted = [
         ...new Set([...(run !== null ? run.tickets : own === null ? [] : [own]), ...(shown?.tickets ?? [])]),
@@ -312,7 +336,7 @@ export const register: Register = on => {
       }
       // No run to show (Gru deleted its run file at the end) clears the
       // pane, so it never keeps drawing a finished run as live.
-      const shownBoard = shown === undefined ? null : buildBoard(session, pick, now, files, mtimes, git)
+      const shownBoard = shown === undefined ? null : buildBoard(session, pick, now, files, mtimes, git, epicTitles)
       // Draw again when a file changed, or once a minute for the times.
       const boardKey =
         shownBoard === null ? 'null' : JSON.stringify([{ ...shownBoard, readAt: 0 }, Math.floor(now / 60_000)])
@@ -510,6 +534,18 @@ export const register: Register = on => {
         isDirty = true
       }
     }
+  })
+
+  // The main loop's turns, from start to end: the session's working time. A subagent's run is inside one.
+  on('turn.start', async ($, e, next) => {
+    if (e.agentId === undefined) isTurning = true
+
+    return next(e)
+  })
+  on('turn.complete', async ($, e, next) => {
+    if (e.agentId === undefined) isTurning = false
+
+    return next(e)
   })
 
   // Each model request, the main loop's and its subagents': its tokens, and

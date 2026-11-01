@@ -1,7 +1,7 @@
 import type { Board, BoardRow, BoardState, BoardTone, GitSignal, GruSettings, Row } from '../types'
 import { beatFields, RECENT } from './beat'
-import { buildLog, logName, runLogName } from './log'
-import { runStats } from './stats'
+import { buildLog, logName, logOf, runLogName } from './log'
+import { runStats, runStatsName, statsOf } from './stats'
 import { dur, isRunName, row, STAGES, STATION_LABELS, time } from './view'
 
 // What the Gru pane draws (pane.tsx), from the contract's files (../README.md):
@@ -100,6 +100,18 @@ export function runsOf(files: Record<string, string>, mtimes: ReadonlyMap<string
   return runs.sort((a, b) => b.active - a.active)
 }
 
+/** The epic's title from the run file: a `--tickets` run's epic is its first ticket, whose title `titles` holds. */
+export const epicTitleOf = (run: RunEntry): string | null =>
+  Object.hasOwn(run.titles, run.epic) ? (run.titles[run.epic] ?? null) : null
+
+/** When a run started: its log's oldest line (Gru writes one at launch), else when Gru's stats began, else null. */
+export function startOf(log: string | undefined, gruStats: string | undefined): number | null {
+  const lines = logOf(log)
+  if (lines.length > 0) return Math.min(...lines.map(l => l.at))
+
+  return statsOf(gruStats)?.since ?? null
+}
+
 /** The run a tab shows: the one `pick` names, else this session's own (Gru's tab), else the most recently active. */
 export function pickRun(runs: RunEntry[], session: string, pick: string): RunEntry | undefined {
   return runs.find(r => r.launchId === pick) ?? runs.find(r => r.session === session) ?? runs[0]
@@ -121,7 +133,8 @@ export function settingsOf(run: RunEntry, text: string | undefined): GruSettings
   }
 }
 
-const KIND_TAG = /^\[[^\]]+\]\s*/
+// An epic's `EPIC:` lead goes as a kind tag does.
+const KIND_TAG = /^(?:\[[^\]]+\]|EPIC:)\s*/i
 const REPO_LEAD = /^([\w.-]+):\s+/
 const SLICE = /\s*\((slice \d+ of \d+)\)\s*$/
 
@@ -315,10 +328,13 @@ export function buildBoard(
   files: Record<string, string>,
   mtimes: ReadonlyMap<string, number>,
   git: Record<string, GitSignal | null>,
+  /** Each epic's title as alfred gave it, for an epic the run file does not name. */
+  epicTitles: Readonly<Record<string, string>> = {},
 ): Board | null {
   const runs = runsOf(files, mtimes)
   const chosen = pickRun(runs, session, pick)
   if (chosen === undefined) return null
+  const rawTitle = epicTitleOf(chosen) ?? (Object.hasOwn(epicTitles, chosen.epic) ? epicTitles[chosen.epic] : undefined) ?? null
   const rows: BoardRow[] = chosen.tickets.map(id => {
     const text = files[`${id}.json`]
     const t = parse(text)
@@ -346,6 +362,8 @@ export function buildBoard(
   return {
     launchId: chosen.launchId,
     epic: chosen.epic,
+    title: rawTitle === null ? null : nameOf(rawTitle).name || null,
+    started: startOf(files[runLogName(chosen.launchId)], files[runStatsName(chosen.launchId)]),
     isOwn: chosen.session === session,
     repos: [...new Set(rows.flatMap(r => (r.repo === null ? [] : [r.repo])))],
     rows,
