@@ -553,6 +553,10 @@ test("the GitHub tab draws each ticket's PR, its runs and its newest commit, and
   // A name opens the PR's jobs and commits.
   await pane.press({ key: 'gh-STARK-1' })
   expect(await pane.find({ type: 'Text', text: /^ {2}✓ test 1m39s$/ })).toBeDefined()
+  // Each commit stays on one line of the 80-column pane, less its 4-cell indent.
+  const commits = await pane.findAll({ type: 'Text', text: /^[✓✕● ] \d\d:\d\d [0-9a-f]{7} / })
+  expect(commits).toHaveLength(3)
+  for (const c of commits) expect([...c.text].length).toBeLessThanOrEqual(76)
 
   // GitHub fails: the last answer stays, and the tab names the failure by its first line.
   seen.gh = { exitCode: 1, stdout: '', stderr: 'HTTP 502: Bad Gateway (https://api.github.com/graphql)\nmore' }

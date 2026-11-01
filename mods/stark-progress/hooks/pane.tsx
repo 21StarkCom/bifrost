@@ -837,7 +837,7 @@ function runsLine(ui: UI, label: string, runs: readonly GithubRun[], now: number
 }
 
 /** A PR's detail, opened: each run's jobs with their times, and the newest commits. */
-function prDetail(ui: UI, pr: GithubPr, now: number) {
+function prDetail(ui: UI, w: number, pr: GithubPr, now: number) {
   const { Box, Text, P } = ui
   const runs = [...pr.runs.map(r => ({ r, after: false })), ...pr.mergeRuns.map(r => ({ r, after: true }))]
 
@@ -861,14 +861,22 @@ function prDetail(ui: UI, pr: GithubPr, now: number) {
         </Box>
       ))}
       <Text bold>{pr.commitCount > pr.commits.length ? `Newest ${pr.commits.length} of ${pr.commitCount} commits` : 'Commits'}</Text>
-      {pr.commits.map((c, i) => (
-        <Text key={`c${i}`}>
-          {c.mark === null ? ' ' : markText(ui, c.mark, `cm${i}`)}
-          <Text color={P.hint} tabular>{` ${c.at === null ? '' : whenOf(c.at, now)} `}</Text>
-          <Text color={P.id}>{c.oid}</Text>
-          <Text color={P.text}>{` ${c.headline}`}</Text>
-        </Text>
-      ))}
+      {pr.commits.map((c, i) => {
+        const when = ` ${c.at === null ? '' : whenOf(c.at, now)} `
+        // One line each: the headline takes what the indent, the mark, the time and the id leave.
+        const room = w - 4 - 1 - when.length - c.oid.length - 1
+
+        return (
+          <Text key={`c${i}`}>
+            {c.mark === null ? ' ' : markText(ui, c.mark, `cm${i}`)}
+            <Text color={P.hint} tabular>
+              {when}
+            </Text>
+            <Text color={P.id}>{c.oid}</Text>
+            <Text color={P.text}>{` ${cut(c.headline, Math.max(room, 10))}`}</Text>
+          </Text>
+        )
+      })}
     </Box>
   )
 }
@@ -945,7 +953,7 @@ export function githubTab(ui: UI, w: number, gh: GithubView, now: number, view: 
                       : `${pr.commitCount} · last ${newest.at === null ? '' : `${whenOf(newest.at, now)} `}${newest.oid} ${cut(newest.headline, Math.max(w - GH_LABEL - 30, 10))}`}
                   </Text>
                 </Box>
-                {isOpen && prDetail(ui, pr, now)}
+                {isOpen && prDetail(ui, w, pr, now)}
               </Box>
             )
           })}
