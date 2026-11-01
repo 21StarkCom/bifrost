@@ -31,7 +31,7 @@ export function parse<T>(text: string | undefined): Partial<T> | null {
 }
 
 const str = (v: unknown): string | null => (typeof v === 'string' ? v : null)
-const time = (v: unknown): number | null => {
+export const time = (v: unknown): number | null => {
   const ms = typeof v === 'string' ? Date.parse(v) : Number.NaN
 
   return Number.isFinite(ms) ? ms : null
@@ -136,21 +136,25 @@ export function verdict(t: Ticket | null, b: Beat | null, milestones: number[], 
   if (t === null) return { word: 'waiting', text: 'no file yet', tone: 'dim' }
   if (t.stage === 'closed') return { word: 'done', text: 'done', tone: 'good' }
   if (t.stage === 'blocked') {
-    return { word: 'blocked', text: t.updated === null ? 'blocked' : `blocked ${dur(now - t.updated)}`, tone: 'bad' }
+    if (t.updated === null) return { word: 'blocked', text: 'blocked', tone: 'bad' }
+    const age = now - t.updated
+
+    return { word: 'blocked', text: `blocked ${dur(age)}`, tone: 'bad', age }
   }
   // A held worker waits on the operator in one background command: its quiet is no stall.
   if (t.hold !== null) return { word: 'held', text: `held · ${t.hold}`, tone: 'warn' }
   if (b?.lastActivity != null && now - b.lastActivity >= IDLE_MIN * MIN) {
     const tool = b.running === null ? '' : ` · in ${b.running.tool}`
+    const age = now - b.lastActivity
 
-    return { word: 'idle', text: `idle ${dur(now - b.lastActivity)}${tool}`, tone: 'warn' }
+    return { word: 'idle', text: `idle ${dur(age)}${tool}`, tone: 'warn', age }
   }
   if (milestones.length === 0) return { word: 'waiting', text: 'no time yet', tone: 'dim' }
   const age = now - Math.max(...milestones)
   if (age < SLOW_MIN * MIN) return { word: 'moving', text: 'moving', tone: 'good' }
-  if (age < STALLED_MIN * MIN) return { word: 'slow', text: `slow ${dur(age)}`, tone: 'warn' }
+  if (age < STALLED_MIN * MIN) return { word: 'slow', text: `slow ${dur(age)}`, tone: 'warn', age }
 
-  return { word: 'stalled', text: `stalled ${dur(age)}`, tone: 'bad' }
+  return { word: 'stalled', text: `stalled ${dur(age)}`, tone: 'bad', age }
 }
 
 /**

@@ -11,7 +11,21 @@ import { bar, STAGES, STATION_LABELS } from './view'
 // ticket pane (ticket-pane.tsx) draws with the parts this file exports.
 
 export type Palette = Record<
-  'text' | 'hint' | 'track' | 'blue' | 'green' | 'amber' | 'gray' | 'id' | 'pr' | 'review' | 'merged' | 'blocked' | 'chip' | 'chipText',
+  | 'text'
+  | 'hint'
+  | 'track'
+  | 'blue'
+  | 'green'
+  | 'amber'
+  | 'gray'
+  | 'id'
+  | 'starting'
+  | 'pr'
+  | 'review'
+  | 'merged'
+  | 'blocked'
+  | 'chip'
+  | 'chipText',
   string
 >
 
@@ -33,6 +47,7 @@ const TERMINAL: Palette = {
   amber: '#e9c46a',
   gray: '#a7adc2',
   id: '#c9b3f5',
+  starting: '#8ecae6',
   pr: '#a5b4fc',
   review: '#f4a6cd',
   merged: '#c5e384',
@@ -54,7 +69,9 @@ const THEMED: Palette = {
   amber: 'warning',
   gray: 'inactive',
   id: 'suggestion',
-  pr: 'permission',
+  // Neither is `suggestion` or `permission`, the id's color and one close to it: an id never reads as a state.
+  starting: 'ide',
+  pr: 'planMode',
   review: 'bashBorder',
   merged: 'merged',
   blocked: 'error',
@@ -73,7 +90,7 @@ const toneOf = (P: Palette, tone: BoardTone) => P[TONE[tone]]
  */
 const LOOK: Record<BoardState, { word: string; ink: keyof Palette; flag: string | null }> = {
   todo: { word: 'NOT STARTED', ink: 'gray', flag: null },
-  starting: { word: 'STARTING', ink: 'blue', flag: null },
+  starting: { word: 'STARTING', ink: 'starting', flag: null },
   pr: { word: 'PR OPEN', ink: 'pr', flag: null },
   review: { word: 'IN REVIEW', ink: 'review', flag: null },
   merged: { word: 'MERGED', ink: 'merged', flag: null },
@@ -153,7 +170,8 @@ const titleOf = (id: string, name: string, room: number) => {
  */
 function liveLabel(ui: UI, r: BoardRow, room: number, how: { bold: boolean; dim: boolean }, view: PaneView) {
   const { Box, Button, Text, P } = ui
-  const title = titleOf(r.id, r.name, room)
+  // A named ticket keeps at least `X…` of its name, however narrow; only one no file names says `details`.
+  const title = r.name === '' ? '' : cut(r.name, Math.max(room - `[${r.id}]`.length - 1, 2))
 
   return (
     <Box columnGap={1}>

@@ -2,7 +2,7 @@ import type { Board, BoardRow, BoardState, BoardTone, GitSignal, GruSettings, Ro
 import { beatFields, RECENT } from './beat'
 import { buildLog, logName, runLogName } from './log'
 import { runStats } from './stats'
-import { dur, isRunName, row, STAGES, STATION_LABELS } from './view'
+import { dur, isRunName, row, STAGES, STATION_LABELS, time } from './view'
 
 // What the Gru pane draws (pane.tsx), from the contract's files (../README.md):
 // one run, picked as register.tsx says, with a calm status per ticket. Pure:
@@ -152,13 +152,13 @@ export const clockOf = (ms: number) => {
 /** The state of a ticket that is moving, by its stage. */
 const STEP: Partial<Record<Row['stage'], BoardState>> = { ticket: 'starting', pr: 'pr', review: 'review', merged: 'merged' }
 
-/** The time after a verdict's word: `12m` of `blocked 12m`, or '' when it has none. */
-const timeOf = (text: string) => text.split(' ').slice(1).join(' ')
+/** The time a verdict names, as words: `12m`, or '' when it names none. */
+const ageOf = (v: Row['verdict']) => (v.age === undefined ? '' : dur(v.age))
 
 /**
  * The calm reading of a band row: its tone, its state, the words after the
  * state, and why it is worth a look. `beat` is its parsed heartbeat, which
- * tells a long call from no call.
+ * tells a long call from no call while its tab lives.
  */
 export function calm(
   r: Row,
@@ -172,14 +172,14 @@ export function calm(
   if (v.word === 'done') return { ...base, at: STAGES.length, tone: 'done', state: 'done', status: '', attention: null }
   if (v.word === 'blocked') {
     const at = r.track.findIndex(s => s.ch === '✕')
-    const time = timeOf(v.text)
+    const blocked = ageOf(v)
     return {
       ...base,
       at: at < 0 ? 0 : at / 2,
       tone: 'warn',
       state: 'blocked',
-      status: time,
-      attention: time === '' ? 'blocked' : `blocked for ${time}`,
+      status: blocked,
+      attention: blocked === '' ? 'blocked' : `blocked for ${blocked}`,
     }
   }
   if (v.word === 'held') {
@@ -188,19 +188,19 @@ export function calm(
     return { ...base, tone: 'warn', state: 'held', status, attention: `held by its settings: ${hold}` }
   }
   if (v.word === 'idle') {
-    const call = runningOf(beat)
+    // A call still marked running is a long call only while the tab lives: a session that died in a call never ends it.
+    const call = tabIsLive(beat, now) ? runningOf(beat) : null
     if (call !== null) {
       const long = dur(now - call.since)
       return { ...base, tone: 'idle', state: 'running', status: long, attention: `one ${call.tool} call has run for ${long}` }
     }
-    const last = beat === null ? null : beatFields(beat).lastActivity
-    const quiet = last === null ? '' : dur(now - last)
+    const quiet = ageOf(v)
     return { ...base, tone: 'idle', state: 'quiet', status: quiet, attention: `no tool call for ${quiet}` }
   }
   const failed = r.failed === null ? null : `${r.failed.replace(/^(\d+)\/(\d+) failed$/, '$1 of the last $2 calls failed')}`
   if (v.word === 'slow' || v.word === 'stalled') {
     // A slow ticket has an emoji; it is worth a look once the band calls it stalled.
-    const quiet = timeOf(v.text)
+    const quiet = ageOf(v)
     const attention = failed ?? (v.word === 'stalled' ? `no stage change or commit for ${quiet}` : null)
     return { ...base, tone: 'warn', state: 'slow', status: quiet, attention }
   }
@@ -211,9 +211,9 @@ export function calm(
 /** A heartbeat's oldest running call, or null. */
 function runningOf(beat: Record<string, unknown> | null): { tool: string; since: number } | null {
   const running = (beat?.running ?? null) as Record<string, unknown> | null
-  const since = typeof running?.since === 'string' ? Date.parse(running.since) : Number.NaN
+  const since = time(running?.since)
 
-  return typeof running?.tool === 'string' && Number.isFinite(since) ? { tool: running.tool, since } : null
+  return typeof running?.tool === 'string' && since !== null ? { tool: running.tool, since } : null
 }
 
 /** A cmux surface id: a UUID, so a value from a file never reads as a flag. */
@@ -226,10 +226,15 @@ const SURFACE = /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0
  */
 export function tabOf(beat: Record<string, unknown> | null, now: number): string | null {
   const surface = beat?.surface
-  const updated = typeof beat?.updated === 'string' ? Date.parse(beat.updated) : Number.NaN
-  if (typeof surface !== 'string' || !SURFACE.test(surface) || !Number.isFinite(updated)) return null
 
-  return now - updated < LIVE_MIN * MIN ? surface : null
+  return typeof surface === 'string' && SURFACE.test(surface) && tabIsLive(beat, now) ? surface : null
+}
+
+/** Whether a heartbeat says its worker's tab lives: it was written under LIVE_MIN ago. */
+export function tabIsLive(beat: Record<string, unknown> | null, now: number): boolean {
+  const updated = time(beat?.updated)
+
+  return updated !== null && now - updated < LIVE_MIN * MIN
 }
 
 /** One bar of the Overview's graph: the tickets at one step of the spine, and how many of them are worth a look. */
@@ -283,10 +288,9 @@ function detailOf(
 export function callsOf(beat: Record<string, unknown>, now: number): string[] {
   const out: string[] = []
   const { minutes, recent, lastActivity } = beatFields(beat)
-  const running = (beat.running ?? null) as Record<string, unknown> | null
-  const since = typeof running?.since === 'string' ? Date.parse(running.since) : Number.NaN
-  if (typeof running?.tool === 'string' && Number.isFinite(since)) {
-    out.push(`Running ${running.tool} for ${dur(now - since)}.`)
+  const call = runningOf(beat)
+  if (call !== null) {
+    out.push(`Running ${call.tool} for ${dur(now - call.since)}.`)
   } else if (lastActivity !== null) {
     out.push(`Last tool call ${dur(now - lastActivity)} ago.`)
   }

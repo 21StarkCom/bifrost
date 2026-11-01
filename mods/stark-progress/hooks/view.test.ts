@@ -44,9 +44,17 @@ test('the verdict follows the milestone age, and idle wins over it', () => {
   expect(verdict({ ...t, stage: 'blocked' }, null, [], NOW).text).toBe('blocked 10m')
   expect(verdict(t, null, [NOW - 44 * MIN], NOW).text).toBe('moving')
   expect(verdict(t, null, [NOW - 45 * MIN], NOW).text).toBe('slow 45m')
-  expect(verdict(t, null, [NOW - 100 * MIN, NOW - 95 * MIN], NOW)).toEqual({ word: 'stalled', text: 'stalled 1h35m', tone: 'bad' })
+  // A verdict with a time carries it as `age` too, so a pane never reads it back from the words.
+  expect(verdict(t, null, [NOW - 100 * MIN, NOW - 95 * MIN], NOW)).toEqual({
+    word: 'stalled',
+    text: 'stalled 1h35m',
+    tone: 'bad',
+    age: 95 * MIN,
+  })
   expect(verdict(t, b(14), [NOW - 100 * MIN], NOW).word).toBe('stalled')
-  expect(verdict(t, b(15), [NOW - 100 * MIN], NOW)).toEqual({ word: 'idle', text: 'idle 15m', tone: 'warn' })
+  expect(verdict(t, b(15), [NOW - 100 * MIN], NOW)).toEqual({ word: 'idle', text: 'idle 15m', tone: 'warn', age: 15 * MIN })
+  expect(verdict({ ...t, stage: 'blocked' }, null, [], NOW).age).toBe(10 * MIN)
+  expect(verdict({ ...t, stage: 'blocked', updated: null }, null, [], NOW).age).toBeUndefined()
   expect(verdict(t, b(22, { tool: 'Bash', since: NOW - 22 * MIN }), [NOW], NOW).text).toBe('idle 22m · in Bash')
 })
 

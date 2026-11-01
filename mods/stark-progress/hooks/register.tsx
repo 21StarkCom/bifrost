@@ -3,7 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Cell, GitSignal, GruSettings, PaneTab, Row, Seg, TicketSettings, Tone } from '../types'
 import { beatFile, callEnded, callStarted, newBeat, seedBeat } from './beat'
-import { buildBoard, launchIdOf, pickRun, runsOf, settingsName } from './board'
+import { buildBoard, launchIdOf, parse, pickRun, runsOf, settingsName, tabIsLive } from './board'
 import { readGit } from './git'
 import { logName, runLogName } from './log'
 import { drawPane, paletteFor } from './pane'
@@ -243,10 +243,13 @@ export const register: Register = on => {
           seedBeat(beat, files[name], session)
         }
         if (files[`${own}.json`] !== undefined) {
+          // A keep-alive never takes the heartbeat from another session whose tab lives (a second session in the worktree).
+          const onDisk = parse(files[name])
+          const isMine = onDisk === null || onDisk.session === session || !tabIsLive(onDisk, now)
           const text = JSON.stringify(beatFile(beat, own, session, now, surface))
           files[name] = text
           // A call's change at most every BEAT_MS; with no call, a keep-alive every ALIVE_MS (the first poll's at once).
-          if ((isDirty && now - lastFlush >= BEAT_MS) || now - lastFlush >= ALIVE_MS) {
+          if ((isDirty && now - lastFlush >= BEAT_MS) || (isMine && now - lastFlush >= ALIVE_MS)) {
             isDirty = false
             lastFlush = now
             await writeWhole($, `${dir}/${name}`, text).catch(() => undefined)

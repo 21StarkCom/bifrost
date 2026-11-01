@@ -148,6 +148,8 @@ export type Verdict = {
   word: 'done' | 'blocked' | 'held' | 'idle' | 'moving' | 'slow' | 'stalled' | 'waiting'
   text: string
   tone: Tone
+  /** The time the text names, in ms: blocked since the stage changed, idle since the last call, slow or stalled since the last milestone. */
+  age?: number
 }
 
 /** One piece of the stage track: done stages, the stages to come, or the current stage in its verdict's tone. */

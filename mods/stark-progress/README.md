@@ -212,8 +212,10 @@ left, the pane says `No Gru run yet`.
   `MERGED · <time>` and `DONE`. Five want a look, and only these draw bold
   with an emoji: `🚧 BLOCKED · <time>` (the stage is `blocked`), `✋ HELD ·
   <merge or release> · <time>`, `⏳ LONG RUNNING · <time>` (no call started or
-  ended for 15 min while one call runs, the time that call has run), `💤
-  QUIET · <time>` (no call started or ended for 15 min, and none runs) and
+  ended for 15 min while one call runs and the tab lives, the time that call
+  has run), `💤 QUIET · <time>` (no call started or ended for 15 min, and none
+  runs; a call left running by a session that died, whose heartbeat stopped
+  3 min ago or more, reads quiet too) and
   `🐢 SLOW · <time>` (no stage change or commit for 45 min; it joins the box
   of tickets worth a look at 90, where the band says `stalled`). A ticket
   with 5 of its last 10 calls failed keeps its step's state; the box says why.
@@ -318,19 +320,22 @@ words, are 3.5:1. They suit a dark theme. Each state's word has its own:
 | State | Terminal | Contrast | Elsewhere |
 |---|---|---|---|
 | `NOT STARTED` | `#a7adc2` gray | 6.8:1 | `inactive` |
-| `STARTING` | `#8ecae6` blue | 8.5:1 | `suggestion` |
-| `PR OPEN` | `#a5b4fc` periwinkle | 7.6:1 | `permission` |
+| `STARTING` | `#8ecae6` blue | 8.5:1 | `ide` |
+| `PR OPEN` | `#a5b4fc` periwinkle | 7.6:1 | `planMode` |
 | `IN REVIEW` | `#f4a6cd` pink | 8.1:1 | `bashBorder` |
 | `MERGED` | `#c5e384` lime | 10.6:1 | `merged` |
 | `DONE` | `#95d5b2` green | 9.0:1 | `success` |
 | `BLOCKED` | `#ff8f87` red | 6.9:1 | `error` |
 | `HELD`, `LONG RUNNING`, `QUIET`, `SLOW` | `#e9c46a` amber | 9.1:1 | `warning` |
 
-The id's lavender is none of them, so an id never reads as a state. On every
-other surface, the desktop app's Code tab included, each color is a theme key,
-so it follows the app's light or dark theme: on the desktop's light theme,
-each word measured 5.7:1 or more on the pane's white (the four state keys
-added in 0.13.0 are not measured there yet). A moving bar and track take the app's accent, which
+The id's color is none of them, so an id never reads as a state: lavender in
+the terminal, and elsewhere `suggestion`, which no state uses (nor
+`permission`, which is close to it in the app's own themes). On every other
+surface, the desktop app's Code tab included, each color is a theme key, so
+it follows the app's light or dark theme: on the desktop's light theme, each
+word measured 5.7:1 or more on the pane's white (the five state keys added in
+0.13.0, `ide`, `planMode`, `bashBorder`, `merged` and `error`, are not measured
+there yet). A moving bar and track take the app's accent, which
 is blue in the active window and gray, as all of the app's accent, in an
 inactive one. The desktop draws text in a face of mixed widths, so the bar
 graph, the station words, the tracks and the last hour draw in its fixed-width
@@ -536,7 +541,9 @@ whose worker is a Claude session with the mod installed:
 The mod writes it in a worker's own tab, from that session's tool calls
 (its subagents' included), at most once every 5 seconds after a call, and at
 least once every 60 seconds with no call (the first poll writes at once), so
-an `updated` under 3 minutes old says the tab is open. It writes only while the
+an `updated` under 3 minutes old says the tab is open. A keep-alive never takes
+the heartbeat from another session whose tab lives (a second session in the
+worktree); that session's own calls still write it, as before 0.13.0. It writes only while the
 ticket's file exists; once the file is gone the mod removes the heartbeat.
 `surface` is the tab's `CMUX_SURFACE_ID`, `null` outside cmux, and absent in a
 heartbeat before 0.13.0; the Gru pane passes it to `hermod focus` only when it

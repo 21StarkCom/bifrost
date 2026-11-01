@@ -177,14 +177,17 @@ test('a held ticket is worth a look, even while its worker is quiet', () => {
 })
 
 test('each step has its own state, and slow, a long call and no call each read apart', () => {
-  const beat = (lastMin: number, running: { tool: string; since: string } | null) =>
-    JSON.stringify({ lastActivity: iso(lastMin), running, minutes: [], recent: [] })
+  const beat = (lastMin: number, running: { tool: string; since: string } | null, updatedMin = 0) =>
+    JSON.stringify({ updated: iso(updatedMin), lastActivity: iso(lastMin), running, minutes: [], recent: [] })
   const files: Record<string, string> = {
     'run-STARK-10.json': JSON.stringify({
       epic: 'STARK-10',
       session: 'gru',
-      tickets: ['STARK-1', 'STARK-2', 'STARK-3', 'STARK-4', 'STARK-5', 'STARK-6'],
+      tickets: ['STARK-1', 'STARK-2', 'STARK-3', 'STARK-4', 'STARK-5', 'STARK-6', 'STARK-7'],
     }),
+    // Its session died in a call 25 min ago: the heartbeat stopped, so the call never ends. Quiet, not a long call.
+    'STARK-7.json': ticket('STARK-7', 'review', 30),
+    'STARK-7.beat.json': beat(25, { tool: 'Bash', since: iso(25) }, 25),
     'STARK-1.json': ticket('STARK-1', 'ticket', 30),
     'STARK-2.json': ticket('STARK-2', 'pr', 0),
     'STARK-3.json': ticket('STARK-3', 'merged', 5),
@@ -206,6 +209,7 @@ test('each step has its own state, and slow, a long call and no call each read a
   expect(by('STARK-4')).toMatchObject({ state: 'slow', status: '50m', tone: 'warn', attention: null })
   expect(by('STARK-5')).toMatchObject({ state: 'running', status: '25m', tone: 'idle', attention: 'one Bash call has run for 25m' })
   expect(by('STARK-6')).toMatchObject({ state: 'quiet', status: '25m', tone: 'idle', attention: 'no tool call for 25m' })
+  expect(by('STARK-7')).toMatchObject({ state: 'quiet', status: '25m', attention: 'no tool call for 25m' })
 })
 
 test("a ticket's tab is open while its heartbeat is under 3 minutes old and names a cmux surface", () => {

@@ -2,6 +2,7 @@ import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
 import { buildBoard } from './board'
+import { paletteFor } from './pane'
 
 const T0 = Date.parse('2026-10-29T12:00:00Z')
 const MIN = 60_000
@@ -338,6 +339,19 @@ test('Done tickets last lists the done tickets at the bottom, kept in the store 
   expect(await dividers(pane)).toEqual([])
 })
 
+test("no state's color is the id's, in the terminal or in an app's theme", () => {
+  const STATE_INKS = ['gray', 'starting', 'pr', 'review', 'merged', 'green', 'blocked', 'amber'] as const
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const P = paletteFor(surface)
+    const inks = STATE_INKS.map(k => P[k])
+    expect(inks).not.toContain(P.id)
+    // The app's `permission` is close to its `suggestion`, the id's color off the terminal.
+    if (surface !== 'terminal') expect(inks).not.toContain('permission')
+    // The six plain states each have their own color.
+    expect(new Set(inks.slice(0, 6)).size).toBe(6)
+  }
+})
+
 test('an empty group draws no line', async ($, on) => {
   const disk: Record<string, string> = {
     'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1', 'STARK-2'] }),
@@ -423,6 +437,28 @@ test("a worker's tab writes its cmux surface into its heartbeat, and a keep-aliv
   expect(beatMoves()).toBe(2)
   // 60 seconds after the first write, at the poll of T0 + 61 s.
   expect(JSON.parse(disk['STARK-1.beat.json'] ?? '{}').updated).toBe(new Date(T0 + 61_000).toISOString())
+})
+
+test("an idle second session in a worker's worktree never takes the heartbeat from the worker whose tab lives", async ($, on) => {
+  const OTHER = '11111111-2222-4333-8444-555555555555'
+  const workerBeat = (at: number) =>
+    JSON.stringify({ id: 'STARK-1', session: 'worker', updated: new Date(at).toISOString(), lastActivity: null, running: null, minutes: [], recent: [], surface: OTHER })
+  const disk: Record<string, string> = { 'STARK-1.json': ticket('STARK-1', 'pr'), 'STARK-1.beat.json': workerBeat(T0) }
+  const seen = stage(on, disk, { session: 'second', root: WORKTREE, env: { CMUX_SURFACE_ID: SURFACE } })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: WORKTREE, surface: 'terminal', isInteractive: true })
+  const beatMoves = () => seen.runs.filter(argv => argv[0] === 'mv' && argv[3] === `${DIR}/STARK-1.beat.json`).length
+  await clock.advance(1000)
+  await clock.advance(61_000)
+  // The worker's own keep-alive comes in time: the second session writes nothing.
+  disk['STARK-1.beat.json'] = workerBeat(T0 + 62_000)
+  await clock.advance(61_000)
+  expect(beatMoves()).toBe(0)
+  expect(JSON.parse(disk['STARK-1.beat.json'] ?? '{}').surface).toBe(OTHER)
+  // The worker's tab closed 3 minutes ago: the heartbeat is no one's, and this tab's keep-alive takes it.
+  await clock.advance(120_000)
+  expect(beatMoves()).toBe(1)
+  expect(JSON.parse(disk['STARK-1.beat.json'] ?? '{}')).toMatchObject({ session: 'second', surface: SURFACE })
 })
 
 test('a new session starts with the choice the store kept', async ($, on) => {
@@ -1206,7 +1242,7 @@ test('the ticket pane draws its ticket on the desktop surface', async ($, on) =>
   expect(await pane.find({ type: 'Text', text: 'Read the words file' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: 'PR OPEN · 10m' })).toBeDefined()
   // The desktop takes theme keys, so a state follows the app's light or dark theme.
-  expect(await inkOf(pane, /^PR OPEN$/)).toMatchObject({ color: 'permission' })
+  expect(await inkOf(pane, /^PR OPEN$/)).toMatchObject({ color: 'planMode' })
   expect(await pane.find({ type: 'Text', text: /draws in the terminal/ })).toBeUndefined()
   expect((await pane.find({ type: 'Text', text: 'STARK-1 · bragi' }))?.props.color).toBe('inactive')
   expect((await pane.find({ type: 'Text', text: /^ +ticket PR +review/ }))?.props.mono).toBe(true)
