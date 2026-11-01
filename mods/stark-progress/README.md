@@ -13,7 +13,8 @@ a worker that is busy for hours with no commit and no stage change reads
 `stalled`, not "20% done". Neither ever forecasts the time left. Both draw in
 the terminal and in the Claude desktop app's Code tab. The mod polls
 the state files below once a second, and git once every 30 seconds; it asks
-alfred for an epic's title until it has one.
+alfred for an epic's title until it has one, and GitHub once a minute while
+the Gru pane shows its GitHub tab.
 
 Install it on its own; the seven skill plugins do not need it:
 
@@ -26,7 +27,7 @@ Install it on its own; the seven skill plugins do not need it:
 Gru's tab, the Gru pane's Overview:
 
 ```
-Overview   Log   Stats   Settings
+Overview   Log   Stats   GitHub   Settings
 
 Gru · STARK-1200                                       ● this run
 Export the reading list
@@ -108,7 +109,7 @@ STARK-1202 ●━●━◉┄○┄○ review    36m  ▃▃◆▄◆▁─▂�
 Gru's tab, the Gru pane's Stats:
 
 ```
-Overview   Log   Stats   Settings
+Overview   Log   Stats   GitHub   Settings
 
 📊 Stats for STARK-1200
 Gru's own counts, and the whole run's: Gru's and each ticket's, added. The run started 11:02, 1h51m ago. Counted since 11:02.
@@ -157,7 +158,7 @@ One ticket has no stats: a Codex worker, a session without the mod, or no worker
 Gru's tab, the Gru pane's Log:
 
 ```
-Overview   Log   Stats   Settings
+Overview   Log   Stats   GitHub   Settings
 
 📜 What got done
 The big steps, newest first, each told in plain words by whoever did it.
@@ -170,6 +171,31 @@ The big steps, newest first, each told in plain words by whoever did it.
        A careful check found two unclear lines. I made them plain.
 11:02  Gru
        Started 4 jobs for the export, with 3 helpers at once.
+```
+
+Gru's tab, the Gru pane's GitHub tab:
+
+```
+Overview   Log   Stats   GitHub   Settings
+
+🐙 GitHub
+2 PRs: 1 merged · 0 open · 1 draft · 0 closed
+runs: 0 failing · 1 running
+Read from GitHub at 12:53. The tab asks again each minute while it is open.
+
+[STARK-1201] Add the export command
+  PR #446 MERGED · opened 12:02 · merged 12:17 · open 15m · +681 −120
+  Checks       ✓ ci #1278 1m43s  ✓ secret-scan #580 15s
+  After merge  ✓ ci #1279 1m40s  ✓ secret-scan #581 14s
+  Commits      3 · last 12:14 0966587 chore(changelog): stark-progress 0.1…
+[STARK-1202] Document the export flags
+  PR #447 DRAFT · opened 12:41 · open 12m · +275 −26
+  Checks       ● ci #1280 running 2m  ✓ secret-scan #582 11s
+  Commits      1 · last 12:40 5e09724 feat(STARK-1202): document the flags
+Select a name to see each job and the newest commits.
+
+No PR yet:
+  [STARK-1203] [STARK-1204]
 ```
 
 ## The Gru pane
@@ -308,6 +334,40 @@ all, the tab says where the counts come from. A hermod message reaches a
 Claude session through its own inbox, so it counts as from another session.
 The first prompt of a Gru or a worker, which valkyrie passes on the command
 line, arrives as typed, so `prompts from you` counts it too.
+
+**GitHub.** `g` opens it. For each ticket whose file names a PR (`pr`, a
+`https://github.com/<owner>/<repo>/pull/<n>` URL), in run order:
+
+- `PR #<n>`, its state in UPPERCASE and its own color (`OPEN` periwinkle,
+  `DRAFT` gray, `MERGED` lime, `CLOSED` red), when it opened and merged or
+  closed, how long it was open, and its size.
+- `Checks`: each GitHub Actions workflow run on its head commit, with its
+  mark, `#<run number>` and duration (`1m43s`, `running 2m`, or `queued`).
+  `After merge`: the runs on its merge commit, once it merged.
+- `Commits`: how many, then the newest one's time, short id and headline.
+  Select a name to open each run's jobs with their durations, and the newest
+  10 commits, each with its checks' mark.
+
+A mark is `✓` passed, `✕` failed (also timed out, a startup failure or an
+action required), `●` running, `○` queued or waiting, and `–` cancelled,
+skipped, neutral or stale: a different glyph each, so none rests on its color
+alone. A commit's mark is its status rollup's. Above the PRs: the counts of
+PRs by state, and of the head commits' runs that fail or run (a check suite
+of another app, with no workflow run, never counts; nor do the runs after a
+merge). Below them: the tickets GitHub has not answered for yet, and the
+tickets with no PR.
+
+The tab asks GitHub only while the Gru pane is placed and shows it: one
+`gh api graphql` call a repo for all of its PRs, with a 30 s timeout, in the
+background, once a minute, and at once when the tab opens (10 s after the
+last ask at the soonest). A closed pane, or another tab, asks nothing. Each
+repo keeps its last good answer; a failure keeps it and adds one line,
+`<owner>/<repo>: GitHub did not answer at <HH:MM>: <first line of the error>`.
+An answer with an error (a PR number GitHub does not know) keeps the PRs it
+holds and adds one line,
+`<owner>/<repo>: GitHub answered at <HH:MM> with an error: <first line of the error>`.
+The tab shows only the lines of this run's repos. `Read from GitHub at <HH:MM>` is the oldest answer the tab draws. The calls
+read only, as the `gh` login of the machine.
 
 **Settings.** Four rows for the run, each a value in a frame you select to change. A
 press on one writes all four to the run's settings file at once; Gru reads it
@@ -657,6 +717,9 @@ write: its counts are in memory after that.
   `alfred task show` refuses there. Gru's own tab is always in a checkout.
 - Stats from GitHub (a PR's own line count, its review threads), or a cost in
   dollars.
+- On the GitHub tab: commits that are not pushed, a branch with no PR, reviews
+  and review threads, a GitHub tab in the ticket pane, and any write to GitHub
+  (a re-run of a failed job, a merge, a comment).
 
 ## Develop
 

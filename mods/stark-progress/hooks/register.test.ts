@@ -2,6 +2,7 @@ import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
 import { buildBoard } from './board'
+import { ANSWER } from './github-fixture'
 import { paletteFor } from './pane'
 
 const T0 = Date.parse('2026-10-29T12:00:00Z')
@@ -79,6 +80,8 @@ function stage(
     hermod: { exitCode: 0, stderr: '' },
     /** What `alfred task show --json` answers: by default, no such ticket. */
     alfred: { exitCode: 1, stdout: '' },
+    /** What `gh api graphql` answers. */
+    gh: { exitCode: 1, stdout: '', stderr: 'gh: not set up in this test' },
   }
   const writes: Record<string, string> = {}
   mock.env(on, { HOME: '/h', ...env })
@@ -121,6 +124,7 @@ function stage(
     if (argv[0] === 'alfred') {
       return { value: { ...seen.alfred, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     }
+    if (argv[0] === 'gh') return { value: { ...seen.gh, isStdoutTruncated: false, isStderrTruncated: false } }
     const isMoved = argv[0] === 'mv' && !seen.isMvFailing
     if (isMoved) disk[nameOf(argv[3] ?? '')] = writes[argv[2] ?? ''] ?? ''
     return { value: { exitCode: isMoved ? 0 : 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
@@ -474,6 +478,94 @@ test('an empty group draws no line', async ($, on) => {
   expect(await dividers(pane)).toEqual(['── In progress · 1 ', '── Done · 1 '])
   // The line runs to the pane's edge: 80 columns.
   expect((await pane.find({ type: 'Text', text: /^── Done · 1 ─+$/ }))?.text).toHaveLength(80)
+})
+
+const GH_RUN: Record<string, string> = {
+  'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1', 'STARK-2', 'STARK-3'] }),
+  'STARK-1.json': ticket('STARK-1', 'closed', { pr: 'https://github.com/21StarkCom/bifrost/pull/446' }),
+  'STARK-2.json': ticket('STARK-2', 'review', { pr: 'https://github.com/21StarkCom/bifrost/pull/447' }),
+  'STARK-3.json': ticket('STARK-3', 'ticket'),
+}
+
+test('the GitHub tab asks GitHub only while the pane is placed and shows it, once a minute, one call a repo', async ($, on) => {
+  const seen = stage(on, { ...GH_RUN }, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  seen.gh = { exitCode: 0, stdout: JSON.stringify(ANSWER), stderr: '' }
+  const clock = mock.clock(on, { now: T0 })
+  const asks = () => seen.runs.filter(argv => argv[0] === 'gh')
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  const pane = await $.ui.mount(PANE)
+  // The Overview, placed: no ask.
+  seen.isPlaced = true
+  await clock.advance(1000)
+  expect(asks()).toEqual([])
+
+  // The GitHub tab, but the pane is not placed: no ask.
+  seen.isPlaced = false
+  await pane.press({ key: 'tab-github' })
+  await clock.advance(5000)
+  expect(asks()).toEqual([])
+
+  // Placed: one call for the repo's two PRs at once, then one a minute.
+  seen.isPlaced = true
+  await clock.advance(1000)
+  expect(asks()).toHaveLength(1)
+  const query = asks()[0]?.[4] ?? ''
+  expect(asks()[0]?.slice(0, 4)).toEqual(['gh', 'api', 'graphql', '-f'])
+  expect(query.match(/p\d+: pullRequest/g)).toEqual(['p446: pullRequest', 'p447: pullRequest'])
+  await clock.advance(30_000)
+  expect(asks()).toHaveLength(1)
+  await clock.advance(30_000)
+  expect(asks()).toHaveLength(2)
+
+  // Back to the Overview: no more asks.
+  await pane.press({ key: 'tab-overview' })
+  await clock.advance(120_000)
+  expect(asks()).toHaveLength(2)
+})
+
+test("the GitHub tab draws each ticket's PR, its runs and its newest commit, and keeps the last answer when GitHub fails", async ($, on) => {
+  const seen = stage(on, { ...GH_RUN }, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  seen.gh = { exitCode: 0, stdout: JSON.stringify(ANSWER), stderr: '' }
+  seen.isPlaced = true
+  // The fixture's time: #447's `ci` run started at 14:41:18 and still runs.
+  const NOW = Date.parse('2026-11-01T14:43:30Z')
+  const clock = mock.clock(on, { now: NOW })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  const pane = await $.ui.mount(PANE)
+  await pane.press({ key: 'tab-github' })
+  await clock.advance(1000)
+  await clock.advance(1000)
+
+  expect(await pane.find({ type: 'Text', text: '2 PRs: 1 merged · 0 open · 1 draft · 0 closed' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'runs: 0 failing · 1 running' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^PR #446 MERGED · opened \d\d:\d\d · merged \d\d:\d\d · open 15m · \+681 −120$/ })).toBeDefined()
+  expect(await inkOf(pane, /^MERGED$/)).toMatchObject({ color: '#c5e384' })
+  expect(await inkOf(pane, /^DRAFT$/)).toMatchObject({ color: '#a7adc2' })
+  expect(await pane.find({ type: 'Text', text: /^✓ ci #1278 1m43s$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^● ci #1280 running 2m$/ })).toBeDefined()
+  // The merged PR's runs on its merge commit; the draft has none.
+  expect(await pane.findAll({ type: 'Text', text: 'After merge' })).toHaveLength(1)
+  expect(await pane.find({ type: 'Text', text: /^✓ ci #1279 1m40s$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^3 · last \d\d:\d\d 0966587 chore\(changelog\)/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'No PR yet:' })).toBeDefined()
+  // A name opens the PR's jobs and commits.
+  await pane.press({ key: 'gh-STARK-1' })
+  expect(await pane.find({ type: 'Text', text: /^ {2}✓ test 1m39s$/ })).toBeDefined()
+  // Each commit stays on one line of the 80-column pane, less its 4-cell indent.
+  const commits = await pane.findAll({ type: 'Text', text: /^[✓✕● ] \d\d:\d\d [0-9a-f]{7} / })
+  expect(commits).toHaveLength(3)
+  for (const c of commits) expect([...c.text].length).toBeLessThanOrEqual(76)
+
+  // GitHub fails: the last answer stays, and the tab names the failure by its first line.
+  seen.gh = { exitCode: 1, stdout: '', stderr: 'HTTP 502: Bad Gateway (https://api.github.com/graphql)\nmore' }
+  await clock.advance(60_000)
+  await clock.advance(1000)
+  expect(await pane.find({ type: 'Text', text: /^PR #446 MERGED/ })).toBeDefined()
+  expect(
+    await pane.find({ type: 'Text', text: /^21StarkCom\/bifrost: GitHub did not answer at \d\d:\d\d: HTTP 502: Bad Gateway \(https:\/\/api\.github\.com\/graphql\)$/ }),
+  ).toBeDefined()
 })
 
 const SURFACE = '0A1B2C3D-4E5F-4A6B-8C7D-9E0F1A2B3C4D'
@@ -1608,7 +1700,7 @@ test('after a reload, a /gru-board tab keeps showing its run, drawn from the fil
   on('state.get', (_$, e, next) => {
     if (e.key !== 'board' || isSeeded) return next(e)
     isSeeded = true
-    return { value: { value: { shape: 'board-6', value: stale }, version: 1 } }
+    return { value: { value: { shape: 'board-7', value: stale }, version: 1 } }
   })
   const clock = mock.clock(on, { now: T0 })
   // No /gru-board in this load: the reload started the module over.
@@ -1634,4 +1726,32 @@ test('the Stats tab draws on the desktop surface too', async ($, on) => {
   const row = await pane.find({ type: 'Text', text: /^ {2}output +2$/ })
   // The columns line up in the desktop's fixed-width face.
   expect(row?.props.mono).toBe(true)
+})
+
+test("a PR number GitHub does not know keeps the repo's other PRs and names the error", async ($, on) => {
+  const seen = stage(on, { ...GH_RUN }, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  // `gh` exits 1 on a GraphQL error, yet prints the PRs it found.
+  const { p446 } = ANSWER.data.repository
+  seen.gh = {
+    exitCode: 1,
+    stdout: JSON.stringify({ data: { repository: { p446, p447: null } }, errors: [{ type: 'NOT_FOUND', path: ['repository', 'p447'] }] }),
+    stderr: 'gh: Could not resolve to a PullRequest with the number of 447.',
+  }
+  seen.isPlaced = true
+  const clock = mock.clock(on, { now: Date.parse('2026-11-01T14:43:30Z') })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  const pane = await $.ui.mount(PANE)
+  await pane.press({ key: 'tab-github' })
+  await clock.advance(1000)
+  await clock.advance(1000)
+
+  expect(await pane.find({ type: 'Text', text: /^PR #446 MERGED/ })).toBeDefined()
+  expect(
+    await pane.find({
+      type: 'Text',
+      text: /^21StarkCom\/bifrost: GitHub answered at \d\d:\d\d with an error: gh: Could not resolve to a PullRequest with the number of 447\.$/,
+    }),
+  ).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'Waiting for GitHub:' })).toBeDefined()
 })

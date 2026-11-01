@@ -3,8 +3,10 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Cell, GitSignal, GruSettings, PaneTab, Row, Seg, TicketSettings, Tone } from '../types'
 import { beatFile, callEnded, callStarted, newBeat, seedBeat } from './beat'
-import { buildBoard, launchIdOf, parse, pickRun, runsOf, settingsName, tabIsLive } from './board'
+import { buildBoard, clockOf, launchIdOf, parse, pickRun, runsOf, settingsName, tabIsLive } from './board'
 import { readGit } from './git'
+import { githubQuery, parseGithub, prRefOf, repoKey } from './github'
+import type { PrRef, RepoAnswer } from './github'
 import { logName, runLogName } from './log'
 import { drawPane, paletteFor } from './pane'
 import {
@@ -37,9 +39,10 @@ const PANE_TITLE = 'Gru'
 const TICKET_PANE = 'ticket-board'
 
 const view = atom({ plugin: 'stark-progress', key: 'view' } as const, null, { shape: 'view-2' })
-const board = atom({ plugin: 'stark-progress', key: 'board' } as const, null, { shape: 'board-6' })
+const board = atom({ plugin: 'stark-progress', key: 'board' } as const, null, { shape: 'board-7' })
 const tabAtom = atom({ plugin: 'stark-progress', key: 'tab' } as const, 'overview' as PaneTab)
 const focusAtom = atom({ plugin: 'stark-progress', key: 'focus' } as const, '')
+const ghFocusAtom = atom({ plugin: 'stark-progress', key: 'ghFocus' } as const, '')
 const pickAtom = atom({ plugin: 'stark-progress', key: 'pick' } as const, '')
 const doneLastAtom = atom({ plugin: 'stark-progress', key: 'doneLast' } as const, false)
 /** The `$.store` key that keeps the pane's doneLast choice across sessions. */
@@ -114,6 +117,50 @@ function gitFor($: EngineInterface, dir: string, now: number): GitSignal | null 
   }
 
   return gitCache.get(dir)?.signal ?? null
+}
+
+/** The GitHub tab asks each repo once a minute while it is shown, and at once when it opens (if 10 s have passed). */
+const GH_MS = 60_000
+const GH_OPEN_MS = 10_000
+const GH_TIMEOUT_MS = 30_000
+/** Each repo's last good answer, its last failure, and its last ask, by `owner/repo`. */
+const ghAnswers = new Map<string, RepoAnswer & { asked: number; isReading: boolean }>()
+/** Whether the last poll found the GitHub tab shown: a poll that finds it newly shown asks at once. */
+let wasGithubShown = false
+
+/**
+ * Ask GitHub, in the background, for each repo of `refs` whose answer is due:
+ * one `gh api graphql` call a repo, never two at once for one repo. A failure
+ * keeps the last good answer and names itself.
+ */
+function askGithub($: EngineInterface, refs: readonly PrRef[], now: number, isNewlyShown: boolean): void {
+  const byRepo = new Map<string, PrRef[]>()
+  for (const ref of refs) byRepo.set(repoKey(ref), [...(byRepo.get(repoKey(ref)) ?? []), ref])
+  for (const [key, prs] of byRepo) {
+    const was = ghAnswers.get(key)
+    const since = was === undefined ? Number.POSITIVE_INFINITY : now - was.asked
+    if (was?.isReading === true || since < (isNewlyShown ? GH_OPEN_MS : GH_MS)) continue
+    const kept = { at: was?.at ?? null, prs: was?.prs ?? new Map(), error: was?.error ?? null }
+    ghAnswers.set(key, { ...kept, asked: now, isReading: true })
+    const failed = (why: string) =>
+      ghAnswers.set(key, { ...kept, error: `${key}: GitHub did not answer at ${clockOf(now)}: ${why}`, asked: now, isReading: false })
+    const first = prs[0]
+    if (first === undefined) continue
+    const query = githubQuery(first.owner, first.repo, prs.map(p => p.number))
+    void $.process
+      .run(['gh', 'api', 'graphql', '-f', `query=${query}`], { timeoutMs: GH_TIMEOUT_MS })
+      .then(r => {
+        // `gh` exits 1 on any GraphQL error, a wrong PR number too, yet still prints the other PRs: keep them.
+        const answer = parseGithub(r.stdout)
+        const why = r.exitCode === 0 ? null : r.stderr.trim().split('\n')[0] || `gh exited ${r.exitCode}`
+        if (answer === null) failed(why ?? 'no answer')
+        else {
+          const error = why === null ? null : `${key}: GitHub answered at ${clockOf(now)} with an error: ${why}`
+          ghAnswers.set(key, { at: now, prs: answer, error, asked: now, isReading: false })
+        }
+      })
+      .catch((err: unknown) => failed(err instanceof Error ? err.message : String(err)))
+  }
 }
 
 /** Whole JSON, written to a `.tmp` beside it and renamed over it, as the contract asks. */
@@ -350,7 +397,20 @@ export const register: Register = on => {
       }
       // No run to show (Gru deleted its run file at the end) clears the
       // pane, so it never keeps drawing a finished run as live.
-      const shownBoard = shown === undefined ? null : buildBoard(session, pick, now, files, mtimes, git, epicTitles)
+      // The GitHub tab asks GitHub only while the Gru pane is placed and shows it: a closed pane asks nothing.
+      const isGithubShown =
+        shown !== undefined &&
+        (await read($, tabAtom)) === 'github' &&
+        (await $.ui.panes()).some(p => p.id === PANE && p.isPlaced)
+      if (isGithubShown) {
+        const refs = shown.tickets.flatMap(id => {
+          const ref = prRefOf(parse(files[`${id}.json`])?.pr)
+          return ref === null ? [] : [ref]
+        })
+        askGithub($, refs, now, !wasGithubShown)
+      }
+      wasGithubShown = isGithubShown
+      const shownBoard = shown === undefined ? null : buildBoard(session, pick, now, files, mtimes, git, epicTitles, ghAnswers)
       // Draw again when a file changed, or once a minute for the times.
       const boardKey =
         shownBoard === null ? 'null' : JSON.stringify([{ ...shownBoard, readAt: 0 }, Math.floor(now / 60_000)])
@@ -408,6 +468,8 @@ export const register: Register = on => {
       focus: await read($, focusAtom),
       setTab: tab => update($, tabAtom, () => tab),
       setFocus: id => update($, focusAtom, () => id),
+      ghFocus: await read($, ghFocusAtom),
+      setGhFocus: id => update($, ghFocusAtom, () => id),
       doneLast: await read($, doneLastAtom),
       // The pane's own choice, kept in the plugin's store, never in the run's settings file: Gru does not read it.
       // Presses apply one at a time, after the load, so the store ends on the value the pane shows.

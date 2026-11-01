@@ -262,6 +262,8 @@ export type Board = {
   log: LogView
   /** Gru's own counts and the whole run's. */
   stats: StatsView
+  /** Each ticket's PR, its Actions runs and its commits, from GitHub. */
+  github: GithubView
   readAt: number
 }
 
@@ -297,7 +299,63 @@ export type TicketBoard = {
   readAt: number
 }
 
-export type PaneTab = 'overview' | 'log' | 'stats' | 'settings'
+/** A pane's tabs; only the Gru pane has `github`. */
+export type PaneTab = 'overview' | 'log' | 'stats' | 'github' | 'settings'
+
+/** A run's, a job's or a commit's mark: `✓` passed, `✕` failed, `●` running, `○` queued, `–` cancelled, skipped or neutral. */
+export type Mark = '✓' | '✕' | '●' | '○' | '–'
+
+/** One job (check run) of a workflow run: its times in ms; `ended` null while it runs. */
+export type GithubJob = { name: string; mark: Mark; started: number | null; ended: number | null }
+
+/** One GitHub Actions workflow run on a commit. */
+export type GithubRun = {
+  name: string
+  number: number
+  url: string
+  mark: Mark
+  started: number
+  /** When it ended, or null while it runs or waits. */
+  ended: number | null
+  jobs: GithubJob[]
+}
+
+/** One commit of a PR, newest first; `mark` from its status rollup, null with no checks. */
+export type GithubCommit = { oid: string; headline: string; at: number | null; mark: Mark | null }
+
+/** A PR, as one `gh api graphql` answer gives it. */
+export type GithubPr = {
+  number: number
+  title: string
+  url: string
+  state: 'OPEN' | 'DRAFT' | 'MERGED' | 'CLOSED'
+  created: number
+  merged: number | null
+  closed: number | null
+  additions: number
+  deletions: number
+  /** All its commits; `commits` holds the newest 10. */
+  commitCount: number
+  commits: GithubCommit[]
+  /** The workflow runs on its head commit, and on its merge commit. */
+  runs: GithubRun[]
+  mergeRuns: GithubRun[]
+}
+
+/** What the Gru pane's GitHub tab draws. */
+export type GithubView = {
+  /** Each ticket with a PR GitHub answered for, in run order. */
+  prs: { id: string; name: string; repo: string; pr: GithubPr }[]
+  /** The tickets whose file names no PR. */
+  noPr: string[]
+  /** The tickets with a PR GitHub has not answered for yet. */
+  waiting: string[]
+  counts: { prs: number; merged: number; open: number; draft: number; closed: number; failing: number; running: number }
+  /** When the oldest answer drawn came, or null with none. */
+  readAt: number | null
+  /** One line for each repo whose last query failed. */
+  errors: string[]
+}
 
 declare module 'claude-code' {
   interface PluginState {
@@ -307,6 +365,8 @@ declare module 'claude-code' {
       tab: PaneTab
       /** The ticket whose row is open on the pane, or ''. */
       focus: string
+      /** The ticket whose PR is open on the GitHub tab, or ''. */
+      ghFocus: string
       /** The launch id the pane shows, or '' for this tab's own or the most active run. */
       pick: string
       /** The pane's own choice: done tickets listed last. `$.store` keeps it across sessions; Gru never reads it. */

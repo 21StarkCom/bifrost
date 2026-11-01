@@ -1,5 +1,7 @@
 import type { Board, BoardRow, BoardState, BoardTone, GitSignal, GruSettings, Row } from '../types'
 import { beatFields, RECENT } from './beat'
+import { buildGithub } from './github'
+import type { RepoAnswer } from './github'
 import { buildLog, logName, logOf, runLogName } from './log'
 import { runStats, runStatsName, statsOf } from './stats'
 import { dur, isRunName, row, STAGES, STATION_LABELS, time } from './view'
@@ -325,6 +327,8 @@ export function buildBoard(
   git: Record<string, GitSignal | null>,
   /** Each epic's title as alfred gave it, for an epic that is no ticket of its run. */
   epicTitles: ReadonlyMap<string, string> = new Map(),
+  /** Each repo's last GitHub answer, by `owner/repo`. */
+  github: ReadonlyMap<string, RepoAnswer> = new Map(),
 ): Board | null {
   const runs = runsOf(files, mtimes)
   const chosen = pickRun(runs, session, pick)
@@ -381,6 +385,10 @@ export function buildBoard(
       now,
     ),
     stats: runStats(files, chosen.launchId, chosen.tickets, git),
+    github: buildGithub(
+      rows.map(r => ({ id: r.id, name: r.name, pr: parse(files[`${r.id}.json`])?.pr })),
+      github,
+    ),
     readAt: now,
   }
 }
