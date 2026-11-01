@@ -114,6 +114,7 @@ test("a run starts at its log's oldest line, else when Gru's stats began, else n
 test("an epic's title drops its `EPIC:` lead too", () => {
   expect(nameOf('EPIC: goldfinger: agents list, open and use a menu bar icon').name).toBe('Agents list, open and use a menu bar icon')
   expect(nameOf('epic: demo (slice 1 of 2)')).toEqual({ name: 'Demo', repo: null, slice: 'slice 1 of 2' })
+  expect(nameOf('EPIC: [bug] demo: say the names')).toEqual({ name: 'Say the names', repo: 'demo', slice: null })
 })
 
 test('a name drops the repo lead and the slice tail', () => {

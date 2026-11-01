@@ -100,16 +100,11 @@ export function runsOf(files: Record<string, string>, mtimes: ReadonlyMap<string
   return runs.sort((a, b) => b.active - a.active)
 }
 
-/** The epic's title from the run file: a `--tickets` run's epic is its first ticket, whose title `titles` holds. */
-export const epicTitleOf = (run: RunEntry): string | null =>
-  Object.hasOwn(run.titles, run.epic) ? (run.titles[run.epic] ?? null) : null
-
 /** When a run started: its log's oldest line (Gru writes one at launch), else when Gru's stats began, else null. */
 export function startOf(log: string | undefined, gruStats: string | undefined): number | null {
-  const lines = logOf(log)
-  if (lines.length > 0) return Math.min(...lines.map(l => l.at))
+  const oldest = logOf(log).reduce<number | null>((min, l) => (min === null || l.at < min ? l.at : min), null)
 
-  return statsOf(gruStats)?.since ?? null
+  return oldest ?? statsOf(gruStats)?.since ?? null
 }
 
 /** The run a tab shows: the one `pick` names, else this session's own (Gru's tab), else the most recently active. */
@@ -133,8 +128,8 @@ export function settingsOf(run: RunEntry, text: string | undefined): GruSettings
   }
 }
 
-// An epic's `EPIC:` lead goes as a kind tag does.
-const KIND_TAG = /^(?:\[[^\]]+\]|EPIC:)\s*/i
+// An epic's `EPIC:` lead goes as a kind tag does, and so do both together, in either order.
+const KIND_TAG = /^(?:(?:\[[^\]]+\]|EPIC:)\s*)+/i
 const REPO_LEAD = /^([\w.-]+):\s+/
 const SLICE = /\s*\((slice \d+ of \d+)\)\s*$/
 
@@ -328,13 +323,12 @@ export function buildBoard(
   files: Record<string, string>,
   mtimes: ReadonlyMap<string, number>,
   git: Record<string, GitSignal | null>,
-  /** Each epic's title as alfred gave it, for an epic the run file does not name. */
-  epicTitles: Readonly<Record<string, string>> = {},
+  /** Each epic's title as alfred gave it, for an epic that is no ticket of its run. */
+  epicTitles: ReadonlyMap<string, string> = new Map(),
 ): Board | null {
   const runs = runsOf(files, mtimes)
   const chosen = pickRun(runs, session, pick)
   if (chosen === undefined) return null
-  const rawTitle = epicTitleOf(chosen) ?? (Object.hasOwn(epicTitles, chosen.epic) ? epicTitles[chosen.epic] : undefined) ?? null
   const rows: BoardRow[] = chosen.tickets.map(id => {
     const text = files[`${id}.json`]
     const t = parse(text)
@@ -358,11 +352,15 @@ export function buildBoard(
   })
   const done = chosen.tickets.filter(id => parse(files[`${id}.json`])?.stage === 'closed').length
   const notStarted = rows.filter(r => r.tone === 'none').length
+  // A `--tickets` run's epic is its first ticket: its name as its row has it. Else alfred's title, less its leads.
+  const epicRow = rows.find(r => r.id === chosen.epic)
+  const fromAlfred = epicTitles.get(chosen.epic)
+  const title = epicRow !== undefined ? epicRow.name : fromAlfred === undefined ? '' : nameOf(fromAlfred).name
 
   return {
     launchId: chosen.launchId,
     epic: chosen.epic,
-    title: rawTitle === null ? null : nameOf(rawTitle).name || null,
+    title: title === '' ? null : title,
     started: startOf(files[runLogName(chosen.launchId)], files[runStatsName(chosen.launchId)]),
     isOwn: chosen.session === session,
     repos: [...new Set(rows.flatMap(r => (r.repo === null ? [] : [r.repo])))],

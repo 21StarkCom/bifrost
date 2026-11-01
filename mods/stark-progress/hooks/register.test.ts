@@ -243,6 +243,33 @@ test("a --tickets run's epic takes its title from the run file, and alfred is ne
   await clock.advance(1000)
   expect(seen.runs.filter(argv => argv[0] === 'alfred')).toEqual([['alfred', 'task', 'show', 'STARK-9', '--json']])
   expect(await pane.find({ type: 'Text', text: /^Say the names$/ })).toBeUndefined()
+  // The Stats tab names no start that only repeats `Counted since`.
+  await pane.press({ key: 'tab-stats' })
+  expect(await pane.find({ type: 'Text', text: /The run started/ })).toBeUndefined()
+  // A failed ask is tried again 5 minutes later, and a title once found is kept.
+  seen.alfred = { exitCode: 0, stdout: JSON.stringify({ item: { name: 'Read aloud' } }) }
+  await clock.advance(5 * MIN)
+  await clock.advance(1000)
+  await clock.advance(10 * MIN)
+  expect(seen.runs.filter(argv => argv[0] === 'alfred')).toHaveLength(2)
+  await pane.press({ key: 'tab-overview' })
+  expect(await pane.find({ type: 'Text', text: /^Read aloud$/ })).toBeDefined()
+})
+
+test('a background subagent that runs after the main turn ended counts as working time', async ($, on) => {
+  const disk: Record<string, string> = { 'STARK-1.json': ticket('STARK-1', 'pr') }
+  stage(on, disk, { session: 'w', root: WORKTREE })
+  on('turn.start', (_$, e) => ({ turnId: e.turnId }))
+  on('turn.complete', () => ({ text: '' }))
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: WORKTREE, surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  await $.turn.start({ text: '', turnId: 'bg', agentId: 'a1' } as never)
+  for (let i = 0; i < 4; i++) await clock.advance(1000)
+  await $.turn.complete({ turnId: 'bg', agentId: 'a1', reason: 'answer', answer: '', durationMs: 4000, isAborted: false } as never)
+  // The minute that writes the file: the 4 s of the subagent's turn are working time.
+  await clock.advance(60_000)
+  expect(JSON.parse(disk['STARK-1.stats.json'] ?? '{}')).toMatchObject({ openMs: 60_000, busyMs: 4000 })
 })
 
 test('the pane draws the run: counts, a ticket worth a look, Up next, and a row opened to its detail', async ($, on) => {

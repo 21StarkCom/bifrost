@@ -27,17 +27,19 @@ const MIN = 60_000
 
 test("a session's time: each poll's gap counts open, and busy in a turn; a gap over 5 s counts 5 s", () => {
   const s = newStats()
-  expect(addTime(s, 1000, false)).toBe(false)
-  addTime(s, 1000, true)
+  expect(addTime(s, 1000, false, T0)).toBe(false)
+  addTime(s, 1000, true, T0)
   // The computer slept for an hour: 5 s, not an hour.
-  addTime(s, 3_600_000, true)
+  addTime(s, 3_600_000, true, T0)
   expect([s.openMs, s.busyMs]).toEqual([7000, 6000])
+  // The counts begin at the first poll, so a file time alone writes keeps one `since`.
+  expect(s.since).toBe(T0)
   // True only when a shown minute changes, so the file is worth writing.
   const t = newStats()
-  for (let i = 0; i < 59; i++) expect(addTime(t, 1000, false)).toBe(false)
-  expect(addTime(t, 1000, false)).toBe(true)
+  for (let i = 0; i < 59; i++) expect(addTime(t, 1000, false, T0)).toBe(false)
+  expect(addTime(t, 1000, false, T0)).toBe(true)
   // A clock that went back adds nothing.
-  addTime(t, -5000, true)
+  addTime(t, -5000, true, T0)
   expect([t.openMs, t.busyMs]).toEqual([60_000, 0])
 })
 

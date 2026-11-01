@@ -43,10 +43,12 @@ export const TIME_GAP_MS = 5000
 
 /**
  * The time since the last poll: it counts as open, and as busy while the main
- * loop is in a turn. A gap over TIME_GAP_MS counts as TIME_GAP_MS. True when
- * a shown minute changed, so the file is worth writing.
+ * loop or a subagent is in a turn. A gap over TIME_GAP_MS counts as TIME_GAP_MS. The
+ * counts begin at the first poll, so a file that time alone writes keeps its
+ * `since`. True when a shown minute changed, so the file is worth writing.
  */
-export function addTime(s: Stats, gap: number, isBusy: boolean): boolean {
+export function addTime(s: Stats, gap: number, isBusy: boolean, now: number): boolean {
+  begin(s, now)
   const ms = Math.min(Math.max(gap, 0), TIME_GAP_MS)
   const before = [Math.floor(s.openMs / 60_000), Math.floor(s.busyMs / 60_000)]
   s.openMs += ms

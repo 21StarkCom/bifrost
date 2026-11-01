@@ -795,7 +795,10 @@ export function drawPane(ui: UI, w: number, view: PaneView) {
             ? statsTab(ui, w, board.stats, board.readAt, {
                 title: `Stats for ${board.epic}`,
                 who: `Gru's own counts, and the whole run's: Gru's and each ticket's, added.${
-                  board.started === null ? '' : ` The run started ${startedWords(board.started, board.readAt)}.`
+                  // With no log, the start is when the counts began, which `Counted since` already says.
+                  board.started === null || board.started === board.stats.since
+                    ? ''
+                    : ` The run started ${startedWords(board.started, board.readAt)}.`
                 }`,
                 empty: "No stats yet. The mod counts in Gru's tab and in each worker's tab, once each has the mod.",
               })

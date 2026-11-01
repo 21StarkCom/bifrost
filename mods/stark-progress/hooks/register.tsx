@@ -3,7 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Cell, GitSignal, GruSettings, PaneTab, Row, Seg, TicketSettings, Tone } from '../types'
 import { beatFile, callEnded, callStarted, newBeat, seedBeat } from './beat'
-import { buildBoard, epicTitleOf, launchIdOf, parse, pickRun, runsOf, settingsName, tabIsLive } from './board'
+import { buildBoard, launchIdOf, parse, pickRun, runsOf, settingsName, tabIsLive } from './board'
 import { readGit } from './git'
 import { logName, runLogName } from './log'
 import { drawPane, paletteFor } from './pane'
@@ -79,12 +79,18 @@ let statsAnchor: { base: string; name: string } | null = null
 /** Each stats file this tab wrote, by the file it lives beside, so each goes once that file does. */
 const statsWritten = new Map<string, string>()
 let statsSeededFor = ''
-/** The last poll's time, for the session's open time, and whether the main loop is inside a turn now. */
+/**
+ * The last poll's time, for the session's open time; whether the main loop is
+ * inside a turn now; and the subagents' turns running now, by turn id, which
+ * count as working too (a background agent can run after the main turn ends).
+ */
 let lastTick = 0
 let isTurning = false
-/** Each epic's title as alfred gave it, and the epics already asked: one ask a session, a failure included. */
-const epicTitles: Record<string, string> = {}
-const epicsAsked = new Set<string>()
+const agentTurns = new Set<string>()
+/** Each epic's title as alfred gave it, and when each epic was last asked: a failed ask is tried again after ASK_AGAIN_MS. */
+const epicTitles = new Map<string, string>()
+const epicsAsked = new Map<string, number>()
+const ASK_AGAIN_MS = 5 * 60_000
 /** A ticket id alfred knows: never a value that could read as a flag. */
 const EPIC_ID = /^[A-Z][A-Z0-9]*-\d+$/
 const gitCache = new Map<string, { at: number; signal: GitSignal | null; isReading: boolean }>()
@@ -180,7 +186,7 @@ export const register: Register = on => {
     const tick = async () => {
       const now = await $.clock.now()
       // The time since the last poll: open, and busy while the main loop is in a turn.
-      if (addTime(stats, lastTick === 0 ? 0 : now - lastTick, isTurning)) isStatsDirty = true
+      if (addTime(stats, lastTick === 0 ? 0 : now - lastTick, isTurning || agentTurns.size > 0, now)) isStatsDirty = true
       lastTick = now
       const listed = await $.fs.list(dir).catch(() => [])
       // A log file is JSON Lines (`.jsonl`); every other file is whole JSON.
@@ -225,15 +231,23 @@ export const register: Register = on => {
         pick = shown.launchId
         await update($, pickAtom, () => shown.launchId)
       }
-      // An epic the run file does not name: ask alfred once, in the background; a later poll draws the answer.
-      if (shown !== undefined && epicTitleOf(shown) === null && EPIC_ID.test(shown.epic) && !epicsAsked.has(shown.epic)) {
+      // An epic that is no ticket of its run (whose own file or run-file title names it): ask alfred, in the
+      // background, and a later poll draws the answer. One answer is kept; a failed ask is tried again later.
+      const asked = shown === undefined ? undefined : epicsAsked.get(shown.epic)
+      if (
+        shown !== undefined &&
+        !shown.tickets.includes(shown.epic) &&
+        EPIC_ID.test(shown.epic) &&
+        !epicTitles.has(shown.epic) &&
+        (asked === undefined || now - asked >= ASK_AGAIN_MS)
+      ) {
         const epic = shown.epic
-        epicsAsked.add(epic)
+        epicsAsked.set(epic, now)
         void $.process
           .run(['alfred', 'task', 'show', epic, '--json'], { timeoutMs: 30_000 })
           .then(r => {
             const name = r.exitCode === 0 ? (parse(r.stdout)?.item as Record<string, unknown> | undefined)?.name : undefined
-            if (typeof name === 'string' && name !== '') epicTitles[epic] = name
+            if (typeof name === 'string' && name !== '') epicTitles.set(epic, name)
           })
           .catch(() => undefined)
       }
@@ -536,14 +550,16 @@ export const register: Register = on => {
     }
   })
 
-  // The main loop's turns, from start to end: the session's working time. A subagent's run is inside one.
+  // The session's working time: while the main loop or a subagent is inside a turn, counted once however many run.
   on('turn.start', async ($, e, next) => {
     if (e.agentId === undefined) isTurning = true
+    else agentTurns.add(e.turnId)
 
     return next(e)
   })
   on('turn.complete', async ($, e, next) => {
     if (e.agentId === undefined) isTurning = false
+    else agentTurns.delete(e.turnId)
 
     return next(e)
   })

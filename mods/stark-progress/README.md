@@ -13,7 +13,7 @@ a worker that is busy for hours with no commit and no stage change reads
 `stalled`, not "20% done". Neither ever forecasts the time left. Both draw in
 the terminal and in the Claude desktop app's Code tab. The mod polls
 the state files below once a second, and git once every 30 seconds; it asks
-alfred for an epic's title once each time it loads.
+alfred for an epic's title until it has one.
 
 Install it on its own; the seven skill plugins do not need it:
 
@@ -195,12 +195,13 @@ left, the pane says `No Gru run yet`.
 - The epic; its title on its own line; then the repos (each from a title's
   `<repo>: ` lead), the ticket count, and when the run started:
   `started 11:02, 1h51m ago`, or `started Sat 31 Oct 11:02, 26h05m ago` on an
-  earlier day. The title loses its `EPIC:`, `[tag]` and `<repo>: ` leads. It
-  is the run file's `titles` entry for the epic (a `--tickets` run's epic is
-  its first ticket), else `alfred task show <epic> --json`'s `item.name`, run
-  in the session's working folder once each time the mod loads, in the
-  background, with a 30 s timeout; a failed ask shows no title and is not
-  repeated until the mod loads again. The start is the oldest
+  earlier day. The title loses its `EPIC:`, `[tag]` and `<repo>: ` leads, in
+  either order. A `--tickets` run's epic is its first ticket, so its title is
+  that ticket's name as its row has it. Any other epic's title is
+  `alfred task show <epic> --json`'s `item.name`, run in the session's working
+  folder, in the background, with a 30 s timeout; the mod keeps the answer
+  until it loads again, and a failed ask shows no title and is tried again
+  5 minutes later. The start is the oldest
   line of the run's log (Gru writes one at launch), else when Gru's stats
   began; with neither, the line names no start.
 - The counts `<n> of <m> done · <k> in progress · <j> not started`. Done
@@ -289,7 +290,7 @@ session, and the tab says when the earliest began. The rows:
 
 | Group | Rows | From |
 |---|---|---|
-| Time | session time, working time | each poll: the time since the last one counts as open, and as working while the main loop is inside a turn (`turn.start` to `turn.complete` with no `agentId`); a gap over 5 s counts as 5 s, so a sleep of the computer adds almost nothing. The whole run adds each session's: three workers busy for one hour add three hours |
+| Time | session time, working time | each poll: the time since the last one counts as open, and as working while the main loop or a subagent is inside a turn (`turn.start` to `turn.complete`; a background subagent that runs after the main turn ended counts too, and overlapping turns count once); a gap over 5 s counts as 5 s, so a sleep of the computer adds almost nothing. The whole run adds each session's: three workers busy for one hour add three hours |
 | Tokens | input, output, cache read, cache write, model requests | each model request of the main loop and its subagents (`turn.step`'s usage) |
 | Work | lines added and removed, commits | each ticket's git signal while its worktree is there, else the last one its stats file kept |
 | Work | PRs opened and merged | the ticket files: a `pr` URL is a PR opened, and one at `merged` or `closed` a PR merged |
@@ -597,8 +598,9 @@ ticket or run keeps the total, and `session` names the last writer. `since`
 is when the counts began; `model` and `effort` are the main loop's at its
 last request (`null` before one); `git` is a worker's last git signal for its
 worktree, kept after the worktree goes, and `null` in a run's file. `openMs`
-is how long the session was open and `busyMs` how long its main loop was in
-a turn, in ms, as the Stats tab's `Time` rows count them; time alone writes
+is how long the session was open and `busyMs` how long its main loop or a
+subagent was in a turn, in ms, as the Stats tab's `Time` rows count them;
+`since` is the session's first poll at the latest; time alone writes
 the file only when one of them reaches a new minute. A file written before
 0.14.0 has neither, and reads as no time. A field of the wrong type reads as
 zero or absent. A `*.stats.json` file is never a run file.

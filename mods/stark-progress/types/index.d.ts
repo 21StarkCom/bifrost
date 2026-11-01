@@ -116,7 +116,7 @@ export type StatsFile = {
   git: { added: number; removed: number; commits: number } | null
   /** How long the session was open, in ms: the time between polls, a gap of more than 5 s counted as 5 s. */
   openMs: number
-  /** How long the main loop was inside a turn, in ms, counted the same way. */
+  /** How long the main loop or a subagent was inside a turn, in ms, counted the same way. */
   busyMs: number
 }
 
