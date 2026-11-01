@@ -1,7 +1,22 @@
 import type { Elements } from 'claude-code'
 
-import type { Board, BoardRow, BoardState, BoardTone, Cell, GruSettings, LogView, PaneTab, StatsView } from '../types'
+import type {
+  Board,
+  BoardRow,
+  BoardState,
+  BoardTone,
+  Cell,
+  GithubPr,
+  GithubRun,
+  GithubView,
+  GruSettings,
+  LogView,
+  Mark,
+  PaneTab,
+  StatsView,
+} from '../types'
 import { clockOf, MAX_WORKERS, stepCounts } from './board'
+import { secs } from './github'
 import { dayOf } from './log'
 import { counted, grouped, short } from './stats'
 import { bar, dur, STAGES, STATION_LABELS } from './view'
@@ -129,6 +144,9 @@ export type PaneView = {
   pick: (launchId: string) => unknown
   /** Brings the open tab of a ticket's worker to the front. */
   openTab: (id: string) => unknown
+  /** The ticket whose PR is open on the GitHub tab, or ''. */
+  ghFocus: string
+  setGhFocus: (id: string) => unknown
   /** A change made from the settings as they are when it is written, so two quick presses both count. */
   set: (change: (s: GruSettings) => Partial<GruSettings>) => unknown
 }
@@ -509,14 +527,16 @@ export const settingRow = (ui: UI, w: number, label: string, control: ReturnType
 }
 
 /** The pane's four tabs, each with its hotkey. */
-export function tabBar(ui: UI, tab: PaneTab, setTab: (tab: PaneTab) => unknown) {
+export function tabBar(ui: UI, tab: PaneTab, setTab: (tab: PaneTab) => unknown, hasGithub = false) {
   const { Box, Button, Text, P } = ui
-  const tabs = [
+  // Only the Gru pane has a GitHub tab, between Stats and Settings.
+  const tabs: (readonly [PaneTab, string, string])[] = [
     ['overview', 'o', 'Overview'],
     ['log', 'l', 'Log'],
     ['stats', 't', 'Stats'],
+    ...(hasGithub ? [['github', 'g', 'GitHub'] as const] : []),
     ['settings', 's', 'Settings'],
-  ] as const
+  ]
 
   return (
     <Box columnGap={3}>
@@ -766,6 +786,197 @@ function settings(ui: UI, w: number, board: Board, view: PaneView) {
   )
 }
 
+// The GitHub tab: each ticket's PR, its Actions runs and its commits. The model is github.ts's.
+
+const MARK_INK: Record<Mark, keyof Palette> = { '✓': 'green', '✕': 'blocked', '●': 'blue', '○': 'gray', '–': 'hint' }
+const PR_INK: Record<GithubPr['state'], keyof Palette> = { OPEN: 'pr', DRAFT: 'gray', MERGED: 'merged', CLOSED: 'blocked' }
+const GH_LABEL = 'After merge  '.length
+
+/** A time on the tab: `14:02`, or `Sat 31 Oct 14:02` on an earlier day. */
+const whenOf = (ms: number, now: number) => sinceOf(ms, now)
+
+/** A run's duration: `1m43s` once it ended, `running 2m` while it runs, `queued` before it starts. */
+function runTime(r: { mark: Mark; started: number | null; ended: number | null }, now: number): string {
+  if (r.ended !== null && r.started !== null) return secs(r.ended - r.started)
+  if (r.mark === '○' || r.started === null) return 'queued'
+
+  return `running ${dur(now - r.started)}`
+}
+
+/** A mark in its color: a different glyph for each state, so none rests on its color alone. */
+function markText(ui: UI, mark: Mark, key: string) {
+  const { Text, P } = ui
+
+  return (
+    <Text key={key} color={P[MARK_INK[mark]]}>
+      {mark}
+    </Text>
+  )
+}
+
+/** One labeled line of a PR: `Checks       ✓ ci #1278 1m43s  ✓ secret-scan #580 15s`. */
+function runsLine(ui: UI, label: string, runs: readonly GithubRun[], now: number, key: string) {
+  const { Box, Text, P } = ui
+
+  return (
+    <Box key={key} paddingLeft={2}>
+      <Box flexShrink={0} width={GH_LABEL}>
+        <Text color={P.hint}>{label}</Text>
+      </Box>
+      <Box flexWrap="wrap" columnGap={2}>
+        {runs.map((r, i) => (
+          <Text key={`${key}${i}`}>
+            {markText(ui, r.mark, `${key}m${i}`)}
+            <Text color={P.text}>{` ${r.name} #${r.number} `}</Text>
+            <Text color={P.hint}>{runTime(r, now)}</Text>
+          </Text>
+        ))}
+      </Box>
+    </Box>
+  )
+}
+
+/** A PR's detail, opened: each run's jobs with their times, and the newest commits. */
+function prDetail(ui: UI, pr: GithubPr, now: number) {
+  const { Box, Text, P } = ui
+  const runs = [...pr.runs.map(r => ({ r, after: false })), ...pr.mergeRuns.map(r => ({ r, after: true }))]
+
+  return (
+    <Box flexDirection="column" paddingLeft={4} marginBottom={1}>
+      {runs.map(({ r, after }, i) => (
+        <Box key={`run${i}`} flexDirection="column">
+          <Text>
+            {markText(ui, r.mark, `rm${i}`)}
+            <Text>{` ${r.name} #${r.number}${after ? ', after merge' : ''} `}</Text>
+            <Text color={P.hint}>{runTime(r, now)}</Text>
+          </Text>
+          {r.jobs.map((j, k) => (
+            <Text key={`job${i}-${k}`}>
+              {'  '}
+              {markText(ui, j.mark, `jm${i}-${k}`)}
+              <Text color={P.text}>{` ${j.name} `}</Text>
+              <Text color={P.hint}>{runTime(j, now)}</Text>
+            </Text>
+          ))}
+        </Box>
+      ))}
+      <Text bold>{pr.commitCount > pr.commits.length ? `Newest ${pr.commits.length} of ${pr.commitCount} commits` : 'Commits'}</Text>
+      {pr.commits.map((c, i) => (
+        <Text key={`c${i}`}>
+          {c.mark === null ? ' ' : markText(ui, c.mark, `cm${i}`)}
+          <Text color={P.hint} tabular>{` ${c.at === null ? '' : whenOf(c.at, now)} `}</Text>
+          <Text color={P.id}>{c.oid}</Text>
+          <Text color={P.text}>{` ${c.headline}`}</Text>
+        </Text>
+      ))}
+    </Box>
+  )
+}
+
+/** The GitHub tab: the counts, then each ticket's PR in run order, then the tickets with no PR. */
+export function githubTab(ui: UI, w: number, gh: GithubView, now: number, view: Pick<PaneView, 'ghFocus' | 'setGhFocus'>) {
+  const { Box, Button, Text, P } = ui
+  const c = gh.counts
+
+  return (
+    <Box flexDirection="column" gap={1}>
+      <Box flexDirection="column">
+        <Text bold>🐙 GitHub</Text>
+        {c.prs === 0 ? (
+          <Text color={P.text}>
+            {gh.waiting.length > 0 ? 'Asking GitHub for the PRs.' : 'No ticket of this run has a PR yet.'}
+          </Text>
+        ) : (
+          <Text color={P.text}>
+            {`${c.prs === 1 ? '1 PR' : `${c.prs} PRs`}: ${c.merged} merged · ${c.open} open · ${c.draft} draft · ${c.closed} closed`}
+          </Text>
+        )}
+        {c.prs > 0 && (
+          <Text>
+            <Text color={c.failing > 0 ? P.blocked : P.text}>{`runs: ${c.failing} failing`}</Text>
+            <Text color={P.text}>{` · ${c.running} running`}</Text>
+          </Text>
+        )}
+        {gh.readAt !== null && (
+          <Text color={P.hint}>{`Read from GitHub at ${clockOf(gh.readAt)}. The tab asks again each minute while it is open.`}</Text>
+        )}
+        {gh.errors.map((e, i) => (
+          <Text key={`e${i}`} color={P.amber}>
+            {e}
+          </Text>
+        ))}
+      </Box>
+
+      {gh.prs.length > 0 && (
+        <Box flexDirection="column">
+          {gh.prs.map(({ id, name, pr }) => {
+            const isOpen = view.ghFocus === id
+            const end = pr.merged ?? pr.closed
+            const times = [
+              `opened ${whenOf(pr.created, now)}`,
+              ...(pr.merged !== null ? [`merged ${whenOf(pr.merged, now)}`] : pr.closed !== null ? [`closed ${whenOf(pr.closed, now)}`] : []),
+              `open ${dur((end ?? now) - pr.created)}`,
+            ]
+            const newest = pr.commits[0]
+
+            return (
+              <Box key={`gh${id}`} flexDirection="column">
+                <Button key={`gh-${id}`} plain onPress={() => view.setGhFocus(isOpen ? '' : id)}>
+                  {ticketLabel(ui, id, name, w - 1, { bold: isOpen })}
+                </Button>
+                <Box paddingLeft={2}>
+                  <Text>
+                    <Text>{`PR #${pr.number} `}</Text>
+                    <Text bold color={P[PR_INK[pr.state]]}>
+                      {pr.state}
+                    </Text>
+                    <Text color={P.text}>{` · ${times.join(' · ')} · +${grouped(pr.additions)} −${grouped(pr.deletions)}`}</Text>
+                  </Text>
+                </Box>
+                {runsLine(ui, 'Checks', pr.runs, now, `rk${id}`)}
+                {pr.mergeRuns.length > 0 && runsLine(ui, 'After merge', pr.mergeRuns, now, `ra${id}`)}
+                <Box paddingLeft={2}>
+                  <Box flexShrink={0} width={GH_LABEL}>
+                    <Text color={P.hint}>Commits</Text>
+                  </Box>
+                  <Text color={P.text}>
+                    {newest === undefined
+                      ? String(pr.commitCount)
+                      : `${pr.commitCount} · last ${newest.at === null ? '' : `${whenOf(newest.at, now)} `}${newest.oid} ${cut(newest.headline, Math.max(w - GH_LABEL - 30, 10))}`}
+                  </Text>
+                </Box>
+                {isOpen && prDetail(ui, pr, now)}
+              </Box>
+            )
+          })}
+          {view.ghFocus === '' && <Text color={P.hint}>Select a name to see each job and the newest commits.</Text>}
+        </Box>
+      )}
+
+      {gh.waiting.length > 0 && (
+        <Box flexDirection="column">
+          <Text color={P.hint}>Waiting for GitHub:</Text>
+          <Box flexWrap="wrap" columnGap={1} paddingLeft={2}>
+            {gh.waiting.map(id => (
+              <Box key={`w${id}`}>{ticketLabel(ui, id, '', w)}</Box>
+            ))}
+          </Box>
+        </Box>
+      )}
+      {gh.noPr.length > 0 && (
+        <Box flexDirection="column">
+          <Text color={P.hint}>No PR yet:</Text>
+          <Box flexWrap="wrap" columnGap={1} paddingLeft={2}>
+            {gh.noPr.map(id => (
+              <Box key={`n${id}`}>{ticketLabel(ui, id, '', w)}</Box>
+            ))}
+          </Box>
+        </Box>
+      )}
+    </Box>
+  )
+}
+
 export function drawPane(ui: UI, w: number, view: PaneView) {
   const { Box, Text, P } = ui
   const board = view.board
@@ -780,10 +991,12 @@ export function drawPane(ui: UI, w: number, view: PaneView) {
 
   return (
     <Box flexDirection="column" gap={1}>
-      {tabBar(ui, view.tab, view.setTab)}
+      {tabBar(ui, view.tab, view.setTab, true)}
       {view.tab === 'settings'
         ? settings(ui, w, board, view)
-        : view.tab === 'log'
+        : view.tab === 'github'
+          ? githubTab(ui, w, board.github, board.readAt, view)
+          : view.tab === 'log'
           ? logTab(
               ui,
               w,
