@@ -380,6 +380,10 @@ declare module 'claude-code' {
       ghFocus: string
       /** The launch id the pane shows, or '' for this tab's own or the most active run. */
       pick: string
+      /** True once this tab ran /gru-board: only then does it show, with no `r` press, a run that is not its own. */
+      wanted: boolean
+      /** The epic of this tab's own run, once it had one, else '': Gru's tab names that run's end. */
+      ownEpic: string
       /** The pane's own choice: done tickets listed last. `$.store` keeps it across sessions; Gru never reads it. */
       doneLast: boolean
       /** The ticket pane's model, in a worker's own tab. */

@@ -218,15 +218,21 @@ any session, at any width. While the pane is not placed, Gru's tab keeps one
 line above the prompt: `Gru · <epic> · <n> of <m> done · /gru-board opens the
 board`. Gru's tab draws no band rows.
 
-**Which run.** Gru's tab shows its own run. Another session shows the run
-whose run file, ticket files, heartbeats or logs changed last; a run file changes
-only at launch, so its own time says little. It then stays on that run until
-you press `r` or the run ends, even when another run gets busier, so a Settings
-press always writes to the run on screen (a press that finds the board moved
-writes nothing and says so). A run is active when one of its files changed in
-the last hour. The pane names the other active runs, and `r` shows the next one
-by launch id, in Gru's tab too, so each run is reached. When no run file is
-left, the pane says `No Gru run yet`.
+**Which run.** Gru's tab shows its own run. A session that ran `/gru-board`
+shows the run whose run file, ticket files, heartbeats or logs changed last; a
+run file changes only at launch, so its own time says little. It then stays on
+that run until you press `r` or the run ends, even when another run gets busier,
+so a Settings press always writes to the run on screen (a press that finds the
+board moved writes nothing and says so). The session's state keeps the
+`/gru-board` ask, so a reload of the mod keeps it too. A run is active when one
+of its files changed in the last hour. The pane names the other active runs, and
+`r` shows the next one by launch id, in Gru's tab too, so each run is reached.
+An `r` press in Gru's tab is a look, not a `/gru-board` ask: once Gru deletes
+its run file at the end, the tab shows no run and says `The run <epic> ended`,
+never the busiest other run; `/gru-board` there shows one. A poll that lists
+Gru's run file but cannot read it leaves the pane and the band as they are. A
+tab that never had a run of its own says `No Gru run yet` when no run file is
+left.
 
 **Overview.** From the top:
 
@@ -693,7 +699,8 @@ zero or absent. A `*.stats.json` file is never a run file.
 - A session that a run file names as its `session` is Gru's tab, even though
   it stands in a worktree named for its launch id (the epic's own `STARK-n`,
   or `GRU-n`): it shows that run in the Gru pane, and writes the run's stats
-  file.
+  file. Once Gru deletes the run file, the tab names that run's end and shows
+  no other run until `/gru-board`.
 - Any other session whose project root (where it started, or the worktree it
   moved to; a shell `cd` does not move it) is a folder named `STARK-n`, a
   worker's worktree, shows that ticket in the ticket pane once its file

@@ -134,6 +134,8 @@ export function stateText(ui: UI, state: BoardState, status: string) {
 
 export type PaneView = {
   board: Board | null
+  /** The epic of this tab's own run, once it had one, else '': with no board, that run ended. */
+  ended: string
   tab: PaneTab
   focus: string
   setTab: (tab: PaneTab) => unknown
@@ -1055,10 +1057,18 @@ export function drawPane(ui: UI, w: number, view: PaneView) {
   const { Box, Text, P } = ui
   const board = view.board
   if (board === null) {
-    return (
+    // Gru's tab whose run file Gru deleted at the end: it names its own run, never another one.
+    return view.ended === '' ? (
       <Box flexDirection="column" gap={1}>
         <Text bold>No Gru run yet</Text>
         <Text color={P.text}>The board shows a run once its file is in ~/.cache/stark-progress.</Text>
+      </Box>
+    ) : (
+      <Box flexDirection="column" gap={1}>
+        <Text bold>{`The run ${view.ended} ended`}</Text>
+        <Text color={P.text}>
+          Gru removed its run file at the end. /gru-board shows another run when one has a file in ~/.cache/stark-progress.
+        </Text>
       </Box>
     )
   }

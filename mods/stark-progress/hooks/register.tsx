@@ -44,6 +44,10 @@ const tabAtom = atom({ plugin: 'stark-progress', key: 'tab' } as const, 'overvie
 const focusAtom = atom({ plugin: 'stark-progress', key: 'focus' } as const, '')
 const ghFocusAtom = atom({ plugin: 'stark-progress', key: 'ghFocus' } as const, '')
 const pickAtom = atom({ plugin: 'stark-progress', key: 'pick' } as const, '')
+/** True once this tab ran /gru-board: only such a tab shows a run with no `r` press that is not its own. */
+const wantedAtom = atom({ plugin: 'stark-progress', key: 'wanted' } as const, false)
+/** The epic of this tab's own run, once found: Gru's tab names it after Gru deletes the run file. */
+const ownEpicAtom = atom({ plugin: 'stark-progress', key: 'ownEpic' } as const, '')
 const doneLastAtom = atom({ plugin: 'stark-progress', key: 'doneLast' } as const, false)
 /** The `$.store` key that keeps the pane's doneLast choice across sessions. */
 const DONE_LAST = 'doneLast'
@@ -52,7 +56,10 @@ const ticketTabAtom = atom({ plugin: 'stark-progress', key: 'ticketTab' } as con
 
 // The pane's run: Gru's tab shows its own; a session that asked for the pane
 // with /gru-board shows the most recently active run, or the one `r` picked.
+// Gru's tab never counts as asking: once its run file is gone, it shows no run.
 let isBoardWanted = false
+/** The name of this tab's own run file, once found: a poll that lists it but could not read it is no run's end. */
+let ownRunFile = ''
 let isPaneOpened = false
 // A worker's own tab: its ticket, and whether the ticket pane opened by itself yet.
 let ownTicket: string | null = null
@@ -265,12 +272,19 @@ export const register: Register = on => {
       const own = run === null ? ticketOf(root) : null
       isWorker = own !== null
       ownTicket = own
-      // A reload starts the module's own variables over: a board in the
-      // session's state says this tab asked for it with /gru-board.
-      if (!isBoardWanted && (await read($, board)) !== null) isBoardWanted = true
+      // A reload starts the module's own variables over: the session's state
+      // says this tab asked with /gru-board. Gru's own board never does.
+      if (!isBoardWanted && (await read($, wantedAtom))) isBoardWanted = true
+      if (run !== null) {
+        ownRunFile = run.name
+        if (run.epic !== (await read($, ownEpicAtom))) await update($, ownEpicAtom, () => run.epic)
+      }
+      // Gru's run file, listed but not read (a read that failed), is not the run's end:
+      // this poll leaves the pane and the band as they are, and picks no other run.
+      const isOwnUnread = run === null && ownRunFile !== '' && names.has(ownRunFile) && files[ownRunFile] === undefined
       // The pane's run, when this tab shows the pane: its tickets and its settings file.
       let pick = await read($, pickAtom)
-      const runs = run !== null || isBoardWanted ? runsOf(files, mtimes) : []
+      const runs = (run !== null || isBoardWanted) && !isOwnUnread ? runsOf(files, mtimes) : []
       const shown = pickRun(runs, session, pick)
       // Outside Gru's own run, the pane stays on the run it chose until `r` or
       // that run's end: which run is most active changes as other runs' files do.
@@ -414,7 +428,7 @@ export const register: Register = on => {
       // Draw again when a file changed, or once a minute for the times.
       const boardKey =
         shownBoard === null ? 'null' : JSON.stringify([{ ...shownBoard, readAt: 0 }, Math.floor(now / 60_000)])
-      if (boardKey !== lastBoard) {
+      if (boardKey !== lastBoard && !isOwnUnread) {
         lastBoard = boardKey
         await update($, board, () => shownBoard)
       }
@@ -434,7 +448,7 @@ export const register: Register = on => {
 
       const fresh = buildView(root, session, now, files, git)
       const key = JSON.stringify(fresh)
-      if (key === last) return
+      if (key === last || isOwnUnread) return
       last = key
       await update($, view, () => fresh)
     }
@@ -451,6 +465,7 @@ export const register: Register = on => {
 
   on('command.run', { command: 'gru-board' }, async $ => {
     isBoardWanted = true
+    await update($, wantedAtom, () => true)
     await pollNow()
     const opened = await $.ui.open({ id: PANE, title: PANE_TITLE, focus: true, closeOnEscape: true })
 
@@ -464,6 +479,7 @@ export const register: Register = on => {
 
     return drawPane(ui, Math.max(e.props.bodyColumns, 40), {
       board: shown,
+      ended: await read($, ownEpicAtom),
       tab: await read($, tabAtom),
       focus: await read($, focusAtom),
       setTab: tab => update($, tabAtom, () => tab),
