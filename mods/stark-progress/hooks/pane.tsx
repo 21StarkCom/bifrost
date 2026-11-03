@@ -1066,7 +1066,9 @@ export function drawPane(ui: UI, w: number, view: PaneView) {
     ) : (
       <Box flexDirection="column" gap={1}>
         <Text bold>{`The run ${view.ended} ended`}</Text>
-        <Text color={P.text}>Gru removed its run file at the end. Type /gru-board to see another run.</Text>
+        <Text color={P.text}>
+          Gru removed its run file at the end. /gru-board shows another run when one has a file in ~/.cache/stark-progress.
+        </Text>
       </Box>
     )
   }

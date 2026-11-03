@@ -229,8 +229,10 @@ of its files changed in the last hour. The pane names the other active runs, and
 `r` shows the next one by launch id, in Gru's tab too, so each run is reached.
 An `r` press in Gru's tab is a look, not a `/gru-board` ask: once Gru deletes
 its run file at the end, the tab shows no run and says `The run <epic> ended`,
-never the busiest other run; `/gru-board` there shows one. A tab that never had
-a run of its own says `No Gru run yet` when no run file is left.
+never the busiest other run; `/gru-board` there shows one. A poll that lists
+Gru's run file but cannot read it leaves the pane and the band as they are. A
+tab that never had a run of its own says `No Gru run yet` when no run file is
+left.
 
 **Overview.** From the top:
 

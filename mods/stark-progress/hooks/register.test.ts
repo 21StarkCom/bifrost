@@ -76,6 +76,8 @@ function stage(
     toasts: [] as string[],
     isPlaced: false,
     isMvFailing: false,
+    /** Files that stay listed but whose read fails, as a read of a file mid-swap can. */
+    failReads: new Set<string>(),
     /** What `hermod focus` answers. */
     hermod: { exitCode: 0, stderr: '' },
     /** What `alfred task show --json` answers: by default, no such ticket. */
@@ -107,6 +109,7 @@ function stage(
   }))
   on('fs.read', (_$, e) => {
     seen.reads.push(e.path)
+    if (seen.failReads.has(nameOf(e.path))) throw new Error(`EIO ${e.path}`)
     const text = disk[nameOf(e.path)]
     if (text === undefined) throw new Error(`ENOENT ${e.path}`)
     return { value: text }
@@ -990,6 +993,43 @@ test("Gru's tab never moves to a busier run once its own run file is gone; /gru-
   await $.command.run(command('gru-board'))
   const asked = await $.ui.mount(PANE)
   expect(await asked.find({ type: 'Text', text: 'Gru · STARK-20' })).toBeDefined()
+})
+
+test("a poll that cannot read Gru's own run file keeps Gru's board: no end, and no other run", async ($, on) => {
+  const disk: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1'] }),
+    'run-STARK-20.json': JSON.stringify({ epic: 'STARK-20', session: 'other', tickets: ['STARK-21'] }),
+    'STARK-1.json': ticket('STARK-1', 'pr'),
+    'STARK-21.json': ticket('STARK-21', 'pr'),
+  }
+  const mtimes: Record<string, number> = { 'STARK-1.json': T0 - 30 * MIN, 'STARK-21.json': T0 }
+  const seen = stage(on, disk, { session: 'gru', root: '/r/.claude/worktrees/STARK-10', mtimes })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  await clock.advance(1000)
+
+  // The run file stays listed, but its read fails for one poll.
+  seen.failReads.add('run-STARK-10.json')
+  await clock.advance(1000)
+  const missed = await $.ui.mount(PANE)
+  expect(await missed.find({ type: 'Text', text: 'Gru · STARK-10' })).toBeDefined()
+  expect(await missed.find({ type: 'Text', text: /ended/ })).toBeUndefined()
+  await missed.unmount()
+  const band = await $.ui.mount(BAND)
+  expect(await band.find({ type: 'Text', text: /^Gru · STARK-10 · / })).toBeDefined()
+  await band.unmount()
+
+  // In a Gru tab that also ran /gru-board, a missed read picks no other run to stay on.
+  seen.failReads.clear()
+  await $.command.run(command('gru-board'))
+  seen.failReads.add('run-STARK-10.json')
+  await clock.advance(1000)
+  seen.failReads.clear()
+  await clock.advance(1000)
+  const back = await $.ui.mount(PANE)
+  expect(await back.find({ type: 'Text', text: 'Gru · STARK-10' })).toBeDefined()
+  expect(await back.find({ type: 'Text', text: /Gru · STARK-20/ })).toBeUndefined()
 })
 
 test('/gru-board in another session shows the most recently active run, and r shows the next', async ($, on) => {
