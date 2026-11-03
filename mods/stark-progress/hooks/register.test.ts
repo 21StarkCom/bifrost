@@ -936,12 +936,60 @@ test("the pane clears once Gru's run file is gone, and the band names this tab's
   await band.unmount()
   await pane.unmount()
 
-  // Step 6 deletes the run files: the pane no longer draws a finished run as live.
+  // Step 6 deletes Gru's own run files, and the other run goes on: an `r` press
+  // was a look, not an ask, so the pane names its own run's end and shows no other.
   delete disk['run-STARK-10.json']
-  delete disk['run-STARK-20.json']
+  await clock.advance(1000)
   await clock.advance(1000)
   const after = await $.ui.mount(PANE)
-  expect(await after.find({ type: 'Text', text: 'No Gru run yet' })).toBeDefined()
+  expect(await after.find({ type: 'Text', text: 'The run STARK-10 ended' })).toBeDefined()
+  expect(await after.find({ type: 'Text', text: /STARK-20|STARK-21/ })).toBeUndefined()
+  await after.unmount()
+
+  // With no run file left at all, the tab still names its own run's end.
+  delete disk['run-STARK-20.json']
+  await clock.advance(1000)
+  const none = await $.ui.mount(PANE)
+  expect(await none.find({ type: 'Text', text: 'The run STARK-10 ended' })).toBeDefined()
+})
+
+test("Gru's tab never moves to a busier run once its own run file is gone; /gru-board then shows one", async ($, on) => {
+  const disk: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1'] }),
+    'run-STARK-20.json': JSON.stringify({ epic: 'STARK-20', session: 'other', tickets: ['STARK-21'] }),
+    'STARK-1.json': ticket('STARK-1', 'closed'),
+    'STARK-21.json': ticket('STARK-21', 'pr'),
+  }
+  // The other run is the busier one the whole time.
+  const mtimes: Record<string, number> = {
+    'run-STARK-10.json': T0 - 86_400_000,
+    'run-STARK-20.json': T0 - 86_400_000,
+    'STARK-1.json': T0 - 30 * MIN,
+    'STARK-21.json': T0,
+  }
+  stage(on, disk, { session: 'gru', root: '/r/.claude/worktrees/STARK-10', mtimes })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  await clock.advance(1000)
+  const pane = await $.ui.mount(PANE)
+  expect(await pane.find({ type: 'Text', text: 'Gru · STARK-10' })).toBeDefined()
+  await pane.unmount()
+
+  delete disk['run-STARK-10.json']
+  for (let i = 0; i < 5; i++) {
+    mtimes['STARK-21.json'] = T0 + (i + 3) * 1000
+    await clock.advance(1000)
+  }
+  const after = await $.ui.mount(PANE)
+  expect(await after.find({ type: 'Text', text: 'The run STARK-10 ended' })).toBeDefined()
+  expect(await after.find({ type: 'Text', text: /STARK-20|STARK-21/ })).toBeUndefined()
+  await after.unmount()
+
+  // The operator asks: now the tab shows the other run.
+  await $.command.run(command('gru-board'))
+  const asked = await $.ui.mount(PANE)
+  expect(await asked.find({ type: 'Text', text: 'Gru · STARK-20' })).toBeDefined()
 })
 
 test('/gru-board in another session shows the most recently active run, and r shows the next', async ($, on) => {
@@ -961,13 +1009,21 @@ test('/gru-board in another session shows the most recently active run, and r sh
     'run-STARK-30.json': T0 - 2 * 86_400_000,
   }
   const seen = stage(on, disk, { session: 'me', root: '/r', mtimes })
+  // The ask goes into the session's state, so a reload of the mod keeps it.
+  const wanted: unknown[] = []
+  on('state.set', (_$, e, next) => {
+    if (e.key === 'wanted') wanted.push(e.value)
+    return next(e)
+  })
   const clock = mock.clock(on, { now: T0 })
   await $.session.start({ cwd: '/r', surface: 'terminal', isInteractive: true })
   await clock.advance(1000)
   // Not Gru's tab: the pane waits until it is asked for.
   expect(seen.opens).toEqual([])
+  expect(wanted).toEqual([])
 
   await $.command.run(command('gru-board'))
+  expect(wanted).toEqual([true])
   expect(seen.opens).toEqual(['gru-board'])
   const pane = await $.ui.mount(PANE)
   expect(await pane.find({ type: 'Text', text: 'Gru · STARK-20' })).toBeDefined()
@@ -1798,10 +1854,16 @@ test('after a reload, a /gru-board tab keeps showing its run, drawn from the fil
     'STARK-1.stats.json': statsText('w1', { requests: 9, tokens: { input: 4321, output: 0, cacheRead: 0, cacheWrite: 0 } }),
   }
   stage(on, disk, { session: 'other', root: '/r' })
-  let isSeeded = false
+  // The session's state as the load before the reload left it: its /gru-board ask and the board it drew.
+  const seeded = new Set<string>()
   on('state.get', (_$, e, next) => {
-    if (e.key !== 'board' || isSeeded) return next(e)
-    isSeeded = true
+    if (seeded.has(e.key)) return next(e)
+    if (e.key === 'wanted') {
+      seeded.add(e.key)
+      return { value: { value: true, version: 1 } }
+    }
+    if (e.key !== 'board') return next(e)
+    seeded.add(e.key)
     return { value: { value: { shape: 'board-7', value: stale }, version: 1 } }
   })
   const clock = mock.clock(on, { now: T0 })
