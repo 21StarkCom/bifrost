@@ -13,6 +13,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=453 runId=453 sha=279a9212 -->
+- `/goldfinger` skill: teach that a `menu` item disabled in the background of a non-frontmost app falls back to activating the app, as a rejected press does (stark-ops 0.40.11).
 <!-- idun:pr-merge pr=452 runId=452 sha=4776f738 -->
 - Teach goldfinger's focus fallback and `--background` in the `/goldfinger` skill: no focus by default, front taken only when needed, named in `fallback` (stark-ops 0.40.10).
 <!-- idun:pr-merge pr=451 runId=451 sha=d2acc4ad -->
