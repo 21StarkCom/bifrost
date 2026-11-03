@@ -21,6 +21,11 @@ leaves its app frontmost until `voiceover stop`, and `voiceover stop`, which mak
 frontmost again, and only `hover` moves the mouse pointer, for its hold alone. From 0.18.0 on,
 the one window a background verb may raise is the user's own, back in front of the target app's
 (the counter, below), and it stays key.
+From 0.19.0 on, no focus is still the default, and goldfinger takes the focus only when a verb's
+task is impossible without it, for that verb alone: the focus fallback (see The focus fallback)
+puts a window on another desktop, a hidden app's window or a minimized window on screen for the
+verb and back after, or brings the app to the front for the verb and then gives the front back
+to the app before. The result's `fallback` key names it. `--background` forbids it.
 `click --right` activates nothing, but the menu it shows sits over every app and can bring
 the clicked window in front of the user's; from 0.18.0 on, the verb that closes the menu puts
 the user's window back on top (see The loop). From 0.18.0 on, `set-value` on a native pop-up
@@ -154,7 +159,9 @@ part. The daemon then refuses a verb on such an app with `denied`, before it sen
 
 1. **Find the window.** `goldfinger apps --json` lists running apps (`pid`, `bundle_id`, `name`,
    `active`, `hidden`). `goldfinger windows [--pid <pid>] --json` lists windows front to back
-   (`window_id`, `pid`, `title`, `frame`, `on_screen`). `goldfinger launch <bundle_id>
+   (`window_id`, `pid`, `title`, `frame`, `on_screen`, and from 0.19.0 on `space`: the 1-based
+   index of the window's Space, a macOS desktop, on its display, in Mission Control's order, or
+   `null` for a window on every Space, on none, or on one no display lists). `goldfinger launch <bundle_id>
    [--new-instance] --json` opens an app without activating it and returns its `pid`.
    - **Find a menu bar icon** (from 0.18.0 on): `goldfinger status-items [--pid <pid>] --json`
      lists the menu bar icons of each running Dock or accessory (menu bar only) app, or of the
@@ -234,25 +241,31 @@ part. The daemon then refuses a verb on such an app with `denied`, before it sen
      of the app, and `goldfinger unhide <pid> --json` shows them again at their place in the
      stack, not in front, both without activating any app: `{pid, hidden, warnings}`, `hidden` read
      back from the app. An app already in that state is `ok`, nothing sent. `hide` of the
-     frontmost app is `background_unavailable`, since it would move the user's focus. A hidden
-     app's windows read `on_screen: false`.
+     frontmost app is `background_unavailable`, nothing sent, since it would move the user's
+     focus: below 0.19.0, and from 0.19.0 on with `hide <pid> --background`. From 0.19.0 on,
+     without `--background`, it hides that app (`"fallback": "front_app"`) once the user's keys
+     and mouse are still (the input gate, see The focus fallback): macOS gives the front and the
+     keyboard to the next app, and nothing gives them back, since the hide is the focus change
+     itself. A hidden app's windows read `on_screen: false`.
    - **A hidden app's window** (from 0.13.0 on; below it, every verb answers one `not_found`).
      The app's tree still holds the window and answers, so these reach it, the app staying
      hidden and inactive: `observe` without `--screenshot`, `--ocr` or `--detect`, an action's
      `--observe`, and an element target's `click` (its press), `type` (its insert), `set-value`
      (but on a native pop-up button, from 0.18.0 on), `perform` and `reveal`. A target from a
-     snapshot taken before the hide still resolves, as the window has not closed. Every verb that
-     needs the window on screen is `background_unavailable`, nothing sent, its message naming
-     `unhide <pid>`: `observe
+     snapshot taken before the hide still resolves, as the window has not closed. These verbs
+     need the window on screen: `observe
      --screenshot`, `--ocr` or `--detect`, `screenshot`, `capture`, a pixel or text target,
      `click --right` and `--double`, an element click's mouse fallback, `type`'s key fallback and
      `type` into Chromium web content, `keys`, `scroll`, `hover`, `drag`, `glide`, `perform …
      show-menu --foreground`, from 0.18.0 on `set-value` on a native pop-up button, whose menu
      only a window on screen shows, `window-frame`, `window-state`, `find`, `text` and
-     `safari-tabs`.
+     `safari-tabs`. Below 0.19.0, and from 0.19.0 on with `--background`, each is
+     `background_unavailable`, nothing sent, its message naming `unhide <pid>`: `unhide` the app
+     before you act on its windows any other way. From 0.19.0 on, without `--background`, the
+     focus fallback unhides the app for the verb and hides it again after
+     (`"fallback": "hidden"`, see The focus fallback), but where its rules keep the refusal.
      An action's `--observe-ocr` there gives `observe_failed`, as the window shows no pixels. A
      hidden app's minimized window, or its window on another Space, is still `not_found`.
-     `unhide` the app before you act on its windows any other way.
 2. **Observe it.** `goldfinger observe <window_id> --json` returns a `snapshot` id and a `tree`.
    Each node has `role`, `frame` and `depth`, maybe `title` and `value`, and an `index` when it
    can be acted on. From 0.11.0 on, an indexed node also lists what `perform` (below) takes:
@@ -609,7 +622,10 @@ part. The daemon then refuses a verb on such an app with `denied`, before it sen
      and `fn`; keys are `return`, `tab`, `space`, `delete`, `escape`, `up`, `down`, `left`,
      `right`, `home`, `end`, `pageup`, `pagedown`, `f1`–`f12`, `a`–`z` and `0`–`9`, nothing else
      (no `enter`, no `esc`). A `cmd` combo is refused with `background_unavailable`: click the
-     control it would reach instead, or use `menu`. A dead key composes with the next combo, as
+     control it would reach instead, or use `menu`. From 0.19.0 on, without `--background`, a
+     `cmd` combo, and keys at an element target in a window that is not its app's key window,
+     run with the app in front (`"fallback": "not_key"`, see The focus fallback); keys at a
+     pixel target stay refused there. A dead key composes with the next combo, as
      typing them would: `option+e e` gives `é` under a U.S. or ABC input source, and before a
      combo that types no text of its own (`return`, `ctrl+a`) the accent is typed alone first. A
      dead key that is the last combo is sent as its own press, which the app may compose with the
@@ -674,9 +690,14 @@ part. The daemon then refuses a verb on such an app with `denied`, before it sen
        `--foreground` (its message names `click --right`; to pick a native pop-up button's item,
        use `set-value`, from 0.18.0 on) and any action on a window's green title-bar button;
        `press` and `pick` are `usage` (use `click`), `scroll-to-visible` is `usage` (use `reveal`), and so is any other
-       name. `--foreground` on any other action, or with `--custom`, is `usage`.
-     - **`show-menu --foreground`** (from 0.13.0 on): `goldfinger perform <target> show-menu
-       --foreground --json` is a foreground verb (see Menus, drag and restore). It activates the
+       name. `--foreground` on any other action, or with `--custom`, is `usage`. From 0.19.0 on,
+       without `--background`, the focus fallback runs `raise` and `zoom-window` with the app in
+       front, `show-menu` by its foreground route, and a `perform` on the green title-bar button
+       as `window-state full-screen`, each `"fallback": "needs_front"`; that button's `show-menu`
+       stays refused (see The focus fallback).
+     - **`show-menu` in front** (from 0.13.0 on): `goldfinger perform <target> show-menu --json`
+       (below 0.19.0 with `--foreground`, which it needs there) is a foreground verb (see Menus,
+       drag and restore). It activates the
        element's app, sends its show-menu action once, and returns `menu_window_id` as
        `click --right` does, which `observe` reads and whose items `click` presses (see The menu
        `--right` opens), also when the app gave no answer within 5 s but opened the menu. An app's
@@ -798,7 +819,10 @@ ending all sessions; run it only as the errors say.
   where the hit test names the web area), an element in another window or in none, or a press
   the app rejects, the click is `background_unavailable`, no mouse event sent: target the element
   instead. Below 0.13.0, every such click is `background_unavailable`, nothing sent. `type` and
-  `keys` at a pixel there follow their own rules (The loop).
+  `keys` at a pixel there follow their own rules (The loop). From 0.19.0 on, without
+  `--background`, a single left click, or keys, there that no press carries runs with the app in
+  front and its window raised (`"fallback": "web_click"`, see The focus fallback); a press the
+  app rejected stays refused, as the app may have acted on it.
   `--double` lands too, but as a double click (two clicks and a `dblclick`), never a stand-in for
   a single one: it toggles a checkbox twice.
 - **Out of view: `reveal`** (from 0.9.0 on). No action scrolls to its target on its own, so a
@@ -975,31 +999,37 @@ These take no target and no `--observe`; the clipboard verbs need no grant and r
   request within 2 points, or when an app holds the window at a size of its own (its size steps,
   a minimum or a maximum): with the position matched and the size held, `frame` has the app's
   size, and `warnings` holds `frame_adjusted`. From 0.11.0 on, a minimized window is
-  `action_failed`, nothing written: restore it first.
+  `action_failed`, nothing written: restore it first. From 0.19.0 on, without `--background`,
+  the focus fallback restores it for the write and minimizes it again after
+  (`"fallback": "minimized"`, see The focus fallback).
 - `goldfinger window-state <window_id> minimize --json` (from 0.11.0 on) minimizes the window to
   the Dock in the background, and returns `{window_id, pid, state, changed, warnings}`, `state`
   read back as `minimized` or `normal`. The window keeps its `window_id`, and `windows` lists it
-  `on_screen: false`. `restore` brings it back, but only with `--foreground` (see the foreground
-  verbs), and `minimize --foreground` is `usage`. A window already in the asked state is `ok`
+  `on_screen: false`. `restore` brings it back as a foreground verb (see the foreground verbs):
+  below 0.19.0 only with `--foreground`, and `minimize --foreground` is `usage`. A window already in the asked state is `ok`
   with `changed: false`, nothing written. One that cannot be minimized is `action_failed`, as is
-  a write that does not read back within 2 s; a window on another Space is `not_found`, and from
+  a write that does not read back within 2 s; a window on another Space is reached by the focus
+  fallback from 0.19.0 on, and is `not_found` below it or with `--background`; from
   0.13.0 on a hidden app's window is `background_unavailable`, nothing written (`unhide` the app
-  first); a `timeout` may still land, so check with `windows`. Zoom is not a state it sets: to
+  first; from 0.19.0 on, only with `--background`, see A hidden app's window, in The loop); a
+  `timeout` may still land, so check with `windows`. Zoom is not a state it sets: to
   fill the screen without full screen, give `window-frame` the display's visible frame.
-- **Full screen** (from 0.13.0 on): `goldfinger window-state <window_id> full-screen
-  --foreground --json` puts the window into native full screen, as a foreground verb (see the
+- **Full screen** (from 0.13.0 on): `goldfinger window-state <window_id> full-screen --json`
+  (below 0.19.0 with `--foreground`) puts the window into native full screen, as a foreground verb (see the
   foreground verbs), and `state` reads back `full-screen`. macOS moves the window to a
   full-screen Space of its own and activates its app, so goldfinger restores the app before
   only once macOS has switched to that Space, which brings back the Space that showed before.
-  Without `--foreground` it is `background_unavailable`. A window that cannot go full screen (one
+  Without `--foreground` it is `background_unavailable` below 0.19.0, and from 0.19.0 on with
+  `--background`. A window that cannot go full screen (one
   that cannot be resized, a panel, a window with a sheet open, one its app keeps out, or a
   minimized one) is `action_failed`, nothing activated. `windows` lists a full-screen window
-  whose Space does not show as `on_screen: false`, at its display's frame. `restore
-  --foreground` takes it out of full screen in the background, activating nothing (no
+  whose Space does not show as `on_screen: false`, at its display's frame. `restore` (below
+  0.19.0 with `--foreground`) takes it out of full screen in the background, activating nothing (no
   `activated` or `restored`), and `minimize` of it is `action_failed`, nothing written. A
   window the daemon did not make full screen, or made so before it restarted, is `not_found`
   while its Space does not show: the message names the app's Exit Full Screen menu item, as
-  `goldfinger menu <pid> "View>Exit Full Screen" --foreground` in most apps.
+  `goldfinger menu <pid> "View>Exit Full Screen"` in most apps (below 0.19.0 with
+  `--foreground`).
 - `goldfinger clipboard-read [--all] --json` returns the plain text as `{"text": "…"}`, or `{}`
   when the clipboard holds no plain text or an empty string; text beside other content is
   returned. It holds no 1 s guard, but may put the platform's paste alert in front of the user,
@@ -1036,27 +1066,141 @@ These take no target and no `--observe`; the clipboard verbs need no grant and r
     back (below 0.10.0, plain text alone): no PDF and no app's own types. Write only when the task
     needs it.
 
+## The focus fallback: when goldfinger takes the front
+
+From 0.19.0 on, goldfinger takes the focus only when a verb's task is impossible without it, and
+only for that verb's span. Below 0.19.0, each case here is a refusal, as under `--background`
+(below).
+
+- **The background try comes first.** Each verb runs in the background first, as everywhere
+  above. Only a refusal named below falls back: goldfinger puts the window on screen or the app
+  in front, runs the request again, and puts back what it changed, even when the verb failed.
+  Only the commands that take `--background` fall back, and each `batch` step does as its verb
+  does.
+- **The result names it.** A fallback adds `"fallback": "<reason>"`: `other_space`, `hidden`,
+  `minimized`, `needs_front`, `not_key`, `web_click` or `front_app`. One that activated an app
+  adds `activated` and `restored`, as a foreground verb does (see Menus, drag and restore). An
+  error's message ends with what was switched, shown or activated, and whether it was put back.
+- **The input gate.** Before a fallback switches a Space, activates an app (a minimized
+  window's restore included) or hides the frontmost app, goldfinger waits for the keyboard and mouse to be still for 0.5 s, up to 3 s,
+  so the user's next keystroke does not land in an app that is not theirs. Without that quiet it
+  fails `timeout`, retryable, with nothing switched or sent. So does a request whose 20 s limit
+  leaves less time than the fallback can take at its bounds. A `hidden` fallback takes no focus,
+  so it runs no gate.
+- **A window on another desktop** (`"fallback": "other_space"`), a macOS Space that does not
+  show. The try reaches some of it: an element target there takes its press, insert or value
+  write through its snapshot, and `screenshot` and `capture` of the window work, all with no
+  switch. Mouse and key events go to the window as to any background window; whether an app
+  takes them there is not measured. What needs the window's accessibility window, as `observe`,
+  `find`, `text`, `window-frame` and `window-state` do, is refused in the try, since the app's
+  accessibility windows (`AXWindows`) leave out every window on a Space that does not show. Then
+  goldfinger:
+  1. fails `background_unavailable`, with nothing sent, when Mission Control's "Move left a space"
+     or "Move right a space" shortcut is off, or set to a key other than Control-← and Control-→:
+     its message names System Settings > Keyboard > Keyboard Shortcuts > Mission Control. The
+     setting is the user's: tell them.
+  2. waits for the input gate;
+  3. posts Control-→ or Control-← once for each Space between, each read back within 2 s
+     (about 0.6 s each); one that does not read back is `action_failed`, with nothing of the verb
+     sent;
+  4. runs the verb on that Space, whose front app macOS has made frontmost;
+  5. switches back by as many keys the other way, then makes the app frontmost before frontmost
+     again, even when the verb failed.
+
+  The result adds `"space": {"from": <index>, "to": <index>}`, the 1-based indexes of the two
+  Spaces on the window's display, as `windows`' `space` gives them, with `activated` and
+  `restored`. A switch back that does not read back adds `space_restore_failed` to `warnings`,
+  and a restore that does not, `restore_failed`. The verb is still `ok`: it landed.
+- **A hidden app's window** (`"fallback": "hidden"`). A verb that needs it on screen (see A
+  hidden app's window, in The loop) runs again with the app unhidden, which activates nothing,
+  once the window shows, and the app is hidden again after. A request whose limit leaves less
+  than the 3 s the unhide, the wait and the hide can take fails `timeout`, retryable, nothing
+  sent. An app that does not hide again adds `hide_restore_failed`. What reaches the window by
+  element still runs in the try, the app staying hidden.
+- **A minimized window** (`"fallback": "minimized"`). The try reaches it as a hidden app's
+  window: `observe` walks it, and an element target takes its press or insert, the window staying
+  in the Dock. A verb that needs it on screen, as a screenshot, `window-frame` or a pixel target,
+  runs again once `window-state restore`'s foreground route has restored it, after the input
+  gate, and the window is minimized again after, in the background. The result adds the
+  restore's `activated` and `restored`, and a window that does not minimize again adds
+  `minimize_restore_failed`. A window the restore finds shown already stays shown.
+- An unhide or a restore that fails is put back too: its error's message ends with whether the
+  app is hidden, or the window minimized, again.
+- **A verb that needs its app frontmost** (`"fallback": "needs_front"`): `drag`,
+  `window-state restore` and `full-screen`, `perform … show-menu`, and a `menu` press the app
+  rejected in the background run again by their foreground route (see Menus, drag and restore),
+  after the input gate. A `click` or `perform` on a window's green title-bar button enters full
+  screen, so it runs as `window-state full-screen`, and its result has no `observe`: the window
+  is then on a Space of its own, so observe it again. A right click on that button, or its
+  `show-menu`, whose menu tiles the window, stays refused.
+- **A verb that needs the key window of the frontmost app** (`"fallback": "not_key"`,
+  `"web_click"` or `"needs_front"`): `keys` at an element target in a window that is not its
+  app's key window, and a `cmd` combo, which macOS hands only to the active app (`not_key`); a
+  single left click, or keys, into web content outside the Chromium family that no press carries
+  (`web_click`); and `perform` of `raise` or `zoom-window` (`needs_front`). Each runs again after
+  the input gate with its app activated and read back frontmost and the window raised, which
+  makes it key; then the app before is restored. What went before the refusal is never sent
+  twice, so these stay refusals: `keys` at a pixel target, whose focusing click went first;
+  `type`'s key fallback, whose insert went first; a press into web content the app rejected,
+  which the app may still have acted on; and a window off screen, hidden, minimized or on another
+  Space, which an activation would show with no put-back. An app whose own refusal stands with it
+  in front, as a menu's disabled item, returns that refusal.
+- **`hide` of the frontmost app** (`"fallback": "front_app"`): after the input gate it hides the
+  app, macOS gives the front and the keyboard to the next app, and nothing gives them back, since
+  the hide is the focus change itself.
+- **Still out of reach:** a window on a Space that does not show on another display, a hidden
+  app's window on another Space, and a window on no Space. A put-back the app policy refuses for
+  the app (`unhide`, or a `window-state` restore) leaves the try's refusal (see App policy).
+- **`--background`** (MCP `background: true`) keeps the try alone: no fallback runs, and each case
+  above fails as below 0.19.0: `not_found` for a window on another desktop that its app's
+  `AXWindows` leaves out, `background_unavailable` for the others. `observe`, `find`, `text`,
+  `ocr`, `find-text`, `screenshot`, `capture`, `click`, `hover`, `type`, `keys`, `scroll`,
+  `set-value`, `reveal`, `perform`, `window-frame`, `window-state`, `menu`, `drag`, `hide` and
+  `batch` (for each step) take it. Any other command takes no `--background` (`usage`), and
+  `--background` with `--foreground` is `usage`. Pass it when the user must keep the screen as it is, as when they ask that
+  goldfinger never take the front: then a refusal is the answer, and you tell the user what the
+  task needs.
+- **The log.** Each fallback is a `fallback` line in the unified log, at notice, naming the verb,
+  the reason and `done=ok` or the error code, and each put-back the app policy refused one with
+  `done=denied`, at info. Nothing typed or read is logged:
+  `/usr/bin/log show --info --last 10m --predicate 'subsystem == "com.21stark.goldfinger"' | grep fallback`.
+
 ## Menus, drag and restore: the foreground verbs
 
 `menu`, `drag` and, from 0.11.0 on, `window-state restore`, and from 0.13.0 on
 `window-state full-screen` (see Window frames, window state and the clipboard) and
-`perform … show-menu` (see The loop), run only with `--foreground`, else
-they fail `background_unavailable`. With it, goldfinger activates the target's app for the action
+`perform … show-menu` (see The loop), run in the foreground with `--foreground`. Below 0.19.0
+they run only with it, else they fail `background_unavailable`. From 0.19.0 on they run in the
+foreground without it too, by the focus fallback (`"fallback": "needs_front"`, see The focus
+fallback), unless `--background`: with `--background` and without `--foreground` they fail
+`background_unavailable`, before anything is resolved, activated or sent, and `menu` runs its
+background press alone. So from 0.19.0 on, leave `--foreground` off: goldfinger then waits for the
+input gate before it takes the front, and `menu` tries its press in the background first.
+`--foreground` still asks for the foreground route at once, and `--foreground --background` is
+`usage`. No other verb takes `--foreground` (`usage`).
+In the foreground, goldfinger activates the target's app for the action
 alone, which may raise its window, then restores the app frontmost before, even when the action
 failed; `show-menu` restores it only once its menu closes. The user sees a brief switch and loses focus that long: use these only where no
 background verb reaches. `menu` and `window-state` take no `--observe`, and `drag` takes it from
 0.11.0 on. A foreground verb run while a `show-menu` holds the front restores the app before
 that `show-menu`, which closes its menu.
 
-- `goldfinger menu <pid> "<menu_path>" --foreground --json` presses an item in the menu bar of
+- `goldfinger menu <pid> "<menu_path>" --json` presses an item in the menu bar of
   app `pid`. The menu path is titles from the menu bar down, joined by `>` and quoted, or the shell
   takes `>` as a redirect: `"File>Export…"`, `"Edit>Find>Find…"`. Each segment matches one title
   exactly, case and spaces included (a title's `…` is usually one character, not three dots),
   and the first match is taken; an empty path or segment is `usage`. Only the last item is
   pressed, without opening the menus above it. `menu` names no window: find the app's with
   `windows --pid`, and observe the effect.
-- `goldfinger drag <from> <to> --foreground --json` presses the left button at `from`, drags in
-  a straight line to `to` and releases there, its events sent to the app as `click`'s are, so the
+  - **Background first** (from 0.19.0 on). Without `--foreground`, `menu` presses the item in the
+    background first, inside the 1 s guard, with no app activated; such a result has no
+    `activated`, `restored` or `fallback`. Only a press the app rejects (`action_failed`) runs
+    again with the app activated. Every other error stands: a walk that fails, a disabled item and
+    an item that opens a menu fail the same in front, and a `timeout` at the press may have
+    landed. With `--background` the background press alone runs. Below 0.19.0, pass
+    `--foreground`: there the press runs only with the app activated.
+- `goldfinger drag <from> <to> --json` (below 0.19.0 with `--foreground`) presses the left button
+  at `from`, drags in a straight line to `to` and releases there, its events sent to the app as `click`'s are, so the
   mouse pointer stays where it is. `from` and `to` are targets in one window, aimed as `click`
   aims: an element at its visible centre, a pixel at its point. A control that tracks a press in
   its own loop may ignore the drags while the verb succeeds: check with `observe`, and set a
@@ -1066,30 +1210,34 @@ that `show-menu`, which closes its menu.
   SwiftUI's drags still drop. Check the drop with `--observe`. From 0.15.0 on, a `from` in
   LibreOffice is `background_unavailable`, even with `--foreground`, before anything is activated:
   the app places each mouse event at the mouse pointer, active or not.
+  No background route is known for a drag, so from 0.19.0 on, without `--foreground`, it always
+  takes the front by the focus fallback (`"fallback": "needs_front"`), after the input gate, and
+  with `--background` it is `background_unavailable`, nothing activated or sent.
 - **The drag's window comes to the front** (from 0.16.0 on). Before the press, `drag` raises the
   window its targets are in, then the app's window over it at `from`, on every macOS. A drop lands
   on whichever window is in front at the point, so before 0.16.0 a drop into one of the app's
   windows that sat behind another app's window dropped nothing. After the restore those windows
   stay in front of the windows they were behind. A window the app does not list, or a raise it
   refuses, still drags.
-- `goldfinger drag <from> <to> [--via <target>]... [--observe] --foreground --json` (from 0.11.0
-  on) drags along a path: one `--via` per point it passes through, in order, 1 to 64, each a
+- `goldfinger drag <from> <to> [--via <target>]... [--observe] --json` (from 0.11.0 on; below
+  0.19.0 with `--foreground`) drags along a path: one `--via` per point it passes through, in order, 1 to 64, each a
   target in `from`'s window, resolved and aimed as `to` is before anything is activated. Each
   segment is cut into steps of 10 pt at most, with an event at every via, at about 400 pt a
   second. A via in another window, or a path past 400 events (about 4,000 pt), is
   `invalid_target`, nothing activated or sent. `--observe` observes the window once the release
   is taken and the app before is back, so the drop's effect reads back in the same call:
   `goldfinger drag k7.12:3 k7.12@880,210 --via k7.12@500,400 --via k7.12@700,120 --observe
-  --foreground --json`.
-- `goldfinger window-state <window_id> restore --foreground --json` (from 0.11.0 on) restores a
-  minimized window: macOS brings a restored window in front of the front app's, so its app is
+  --json`.
+- `goldfinger window-state <window_id> restore --json` (from 0.11.0 on; below 0.19.0 with
+  `--foreground`) restores a minimized window: macOS brings a restored window in front of the front app's, so its app is
   activated for the restore, and the app before is put back in front. A window that is not
   minimized is `ok` with `changed: false` and activates nothing, so no `activated` or `restored`.
 - **Result:** `{"warnings": [], "activated": {…}, "restored": {…}}`: the apps brought to the
   front and put back, as `pid`, `bundle_id` and `name`, both omitted when the target's app was
   already frontmost, and `restored` alone omitted when no app was frontmost before or with
   `restore_failed`. After activation was asked for, an error's message ends saying which app was
-  activated and whether the one before was restored.
+  activated and whether the one before was restored. From 0.19.0 on, a run the focus fallback
+  made adds `"fallback": "needs_front"`.
 
 ## Hover: the mouse pointer, held and put back
 
@@ -1142,8 +1290,10 @@ or `set-value`, or from 0.13.0 on `perform`, with its arguments as snake_case JS
 `observe`, cuts that step's observe, and a later `step<k>:<index>` names an element of the cut
 snapshot; `goldfinger batch` prints no cut line, so read each entry's `observe` for its
 `truncated`. A step runs in the background, so one whose args carry
-`foreground` is `usage` from 0.13.0 on, and a `perform` step's `show-menu` is refused as alone
-without `--foreground`. A step with `"observe": true` lets a later one
+`foreground` is `usage` from 0.13.0 on, and a `perform` step's `show-menu` goes as it does alone
+without `--foreground`. From 0.19.0 on, each step falls back as its verb does alone (see The
+focus fallback), and `goldfinger batch --background --json` (socket arg `background`) keeps
+every step in the background. A step with `"observe": true` lets a later one
 target `step<k>:<index>`, an element of step `k`'s observe, `k` counted from 0; its index is the
 one that element has in the UI step `k` leaves, known from an earlier observe of that state:
 
@@ -1400,7 +1550,7 @@ required, an integer; `region` an object; `scale` a number), `hide` the 35th and
 36th (`pid` required, an integer), `open` the 37th (`items` required, an array of at least one
 path or URL; `bundle_id`, the CLI's `--app`, a string a call may leave out; `new_instance` a
 boolean), `window-state` the 38th (`window_id` required, an integer; `state` required,
-`minimize` or `restore`; `foreground` a boolean, `true` for `restore`) and `perform` the 39th
+`minimize` or `restore`; `foreground` a boolean, `true` for `restore` below 0.19.0) and `perform` the 39th
 (`target` required, a string; exactly one of `action`, one of the six short names, and
 `custom`, a label string; `observe` a boolean): 39 in all. From 0.11.0 on,
 `drag` takes `via`, an array of at least one target, and `observe`. From 0.13.0 on, `text` is the
@@ -1437,7 +1587,10 @@ and `show-menu` as `perform`'s `action`, the last two with `foreground: true`. `
 args (`window_id`, `max_nodes`, `new_instance`); `window-frame`'s `frame` is
 `{"x", "y", "width", "height"}`, and so are `observe`'s `ocr_region` and the `region` of `ocr` and `find-text`, `observe`'s `ocr` and `detect` booleans,
 `batch`'s `steps` the array its stdin takes, `menu`'s path is
-`menu_path`, `menu`, `drag` and `window-state` with `restore` need `foreground: true`, and `session-cursor` takes only `cursor`, a boolean.
+`menu_path`, `menu`, `drag` and `window-state` with `restore` need `foreground: true` below 0.19.0, and `session-cursor` takes only `cursor`, a boolean.
+From 0.19.0 on, those three, `window-state`'s `full-screen` and `perform`'s `show-menu` take the
+front without `foreground: true`, by the focus fallback, and each tool whose verb takes
+`--background` takes `background`, a boolean, the socket arg (see The focus fallback).
 From 0.10.0 on, `clipboard-read` takes `all`, a boolean, and `clipboard-write` takes `text`,
 `rtf` and `html` strings, `image`, a PNG file's path (the CLI's `--image`), and `files`, an array
 of at least one path; no `clipboard-write` parameter is required, but the call needs one. A result is what
@@ -1499,7 +1652,10 @@ For `effect_unverified`, the press was sent and nothing read what it did: observ
 |---|---|
 | `app_self_activated` | An app activated itself during the action, and the app that was in front was put back. |
 | `observe_failed` | Its `--observe` failed: run `observe` yourself. A later batch step that references it fails `stale_snapshot`. |
-| `restore_failed` | A `--foreground` `menu`, `drag`, `window-state restore`, or from 0.13.0 on `window-state full-screen` or `perform … show-menu`, acted, but the app frontmost before had quit or did not come back to the front within 1 s, so there is no `restored`. The target's app may still be in front and no verb brings the user's app back: tell the user. From 0.9.1 on, the hold's reads and the 5 s watch after it can still put the user's app back a moment later, so read `apps`' `active` again first. |
+| `space_restore_failed` | From 0.19.0 on: the focus fallback switched to the window's Space for the verb, and the Space that showed before did not show again after the switch back (see The focus fallback). The user's screen may still show the other desktop: tell the user. |
+| `hide_restore_failed` | From 0.19.0 on: the focus fallback unhid the window's app for the verb, and the app did not hide again. Its windows may still show: tell the user, or `hide` the app. |
+| `minimize_restore_failed` | From 0.19.0 on: the focus fallback restored a minimized window for the verb, and it did not minimize again. The window may still show: tell the user, or minimize it with `window-state`. |
+| `restore_failed` | A foreground `menu`, `drag`, `window-state restore`, or from 0.13.0 on `window-state full-screen` or `perform … show-menu`, or from 0.19.0 on a focus fallback that activated an app, acted, but the app frontmost before had quit or did not come back to the front within 1 s, so there is no `restored`. The target's app may still be in front and no verb brings the user's app back: tell the user. From 0.9.1 on, the hold's reads and the 5 s watch after it can still put the user's app back a moment later, so read `apps`' `active` again first. |
 | `record_failed` | Its line could not be written, so replaying the recording skips that step. An action on a `find` target always gets it, as its match has no tree path to replay; from 0.12.0 on so does one on a menu snapshot's target, the menu gone by replay; and from 0.14.0 on so does one on a pixel or text target on a window the PNG showed over its window, a sheet or a popover gone by replay. |
 | `hover_interrupted` | Someone moved the mouse pointer off `hover`'s point during its hold, or held a button at its end, so it was left where it was: what ran inside the hold may have run without the hover, and its `observe` may not show what the hover reveals. Observe before another hover. |
 | `frame_adjusted` | `window-frame` put the window at the position asked for, but its app holds it at another size (its size steps, a minimum or a maximum), so `frame` has that size, not the one asked for: work with the size in `frame`. A replayed `window-frame` adds it to replay's `warnings` the same way. |
@@ -1511,13 +1667,13 @@ For `effect_unverified`, the press was sent and nothing read what it did: observ
 | Code | Do this |
 |---|---|
 | `permission_missing` | A grant is missing, which the message names (`observe --detect` needs Screen Recording, as `--screenshot` and `--ocr` do, and so does an action on a text target; `ocr` and `find-text` need none; from 0.13.0 on, so does an action with `--observe-ocr`): ask the operator to run `goldfinger setup`, and do not retry. The Safari reads (from 0.13.0 on; see Page text and Safari's tabs) need more, which the message names: `text --via apple-events` and `safari-tabs` the Automation grant for Safari (the operator runs `goldfinger setup --safari`, or turns it on in the Automation pane when refused), `text --via apple-events` also Safari's "Allow JavaScript from Apple Events" setting, and `--via extension` goldfinger's Safari extension turned on and allowed on the page's site. Each is the operator's: never change a Safari setting yourself. |
-| `not_found` | The pid, window or bundle id (`launch`) is gone, or the window has no accessibility tree (another desktop; for `window-frame`, no accessibility counterpart) or closed while `window-frame` moved it: list apps or windows again. A message ending `the screen is locked, …` (`observe`, `replay`): the Mac is locked, which only the operator can undo: tell them, and wait for the unlock (see Targets and staleness). A `replay` stopped there had already run its steps before `k`, and running the file again repeats them. From 0.14.0 on, a `replay` step or a replayed `hover --click` whose observe the walk's time cut, its message naming the cut: the app answered too slowly for a whole walk (see Recording and replay). `record-stop` on a live session that is not recording. `replay`: a missing file, or a step's app, window or element not found, a replayed `hover`'s pressed element included. From 0.9.1 on, a `replay` step or a replayed `hover --click` whose element's role and title more than one element with an index has, its message naming the count and saying the descriptor is ambiguous, with nothing sent: record a target whose role and title are unique, or act on that step by hand (see Recording and replay). `hover --click`: the observe in its hold found no window or tree, and nothing was clicked. `menu`: no menu bar, an item gone while the menus were walked, or a segment matching no item: fix the path from the titles the message lists. `find`: the window holds no web area, as a native one (Finder, a SwiftUI app) does, since AppKit offers no search, or its web engine offers no search: use `observe` (with `--max-nodes`), or act through the app's own UI. From 0.11.0 on: `open`, a file no app opens by default, an `--app` no installed app has, an item no app claims, or a file gone since the client's check (nothing opened); `hide`, `unhide`, a pid `apps` does not list; `window-state`, a window on another Space; `perform --custom`, a label no custom action has, or two share ("ambiguous"), nothing sent: read the labels in `custom_actions` again. From 0.12.0 on: `observe` of a window at the pop-up menu level that no `click --right` (or, from 0.13.0 on, `show-menu`) (or, from 0.19.0 on, `status-item`) reported, or whose menu neither lookup finds: open the menu with `click --right`. From 0.13.0 on: a hidden app's minimized window, or its window on another Space; `window-state restore` of a full-screen window the daemon did not make so, while its Space does not show (the message names the app's Exit Full Screen menu item); `text`, a window with no web area or an element with no text; `text --via apple-events` and `safari-tabs`, a Safari that quit or a window it has no id for; `--via extension`, a window the extension does not find (a private one) or a tab with no web page it may read (the Start Page); `setup --safari`, Safari does not run (ask the operator to open it); a `batch` text reference whose text no entry of its step's read holds, or two do ("ambiguous"), nothing sent: act on the entry's own `target` instead. From 0.18.0 on: `set-value` on a native pop-up button whose menu has no item with that title, nothing picked, the message listing the titled items: use one of those titles. The verb closes the menu before it replies; when the message says the menu still showed or may still show, tell the user (see `set-value`, in The loop). From 0.19.0 on: `status-item`, a pid no running app has, an app with no menu bar icons, no icon at `<index>` (list the icons again with `status-items`), or an icon or item gone while it was read; with `--item`, an icon that lists no menu, or a segment of the path that matches no item, nothing pressed: fix the path from the titles the message lists. |
+| `not_found` | The pid, window or bundle id (`launch`) is gone, or the window has no accessibility tree (another desktop, from 0.19.0 on only with `--background` or out of the focus fallback's reach; for `window-frame`, no accessibility counterpart) or closed while `window-frame` moved it: list apps or windows again. A message ending `the screen is locked, …` (`observe`, `replay`): the Mac is locked, which only the operator can undo: tell them, and wait for the unlock (see Targets and staleness). A `replay` stopped there had already run its steps before `k`, and running the file again repeats them. From 0.14.0 on, a `replay` step or a replayed `hover --click` whose observe the walk's time cut, its message naming the cut: the app answered too slowly for a whole walk (see Recording and replay). `record-stop` on a live session that is not recording. `replay`: a missing file, or a step's app, window or element not found, a replayed `hover`'s pressed element included. From 0.9.1 on, a `replay` step or a replayed `hover --click` whose element's role and title more than one element with an index has, its message naming the count and saying the descriptor is ambiguous, with nothing sent: record a target whose role and title are unique, or act on that step by hand (see Recording and replay). `hover --click`: the observe in its hold found no window or tree, and nothing was clicked. `menu`: no menu bar, an item gone while the menus were walked, or a segment matching no item: fix the path from the titles the message lists. `find`: the window holds no web area, as a native one (Finder, a SwiftUI app) does, since AppKit offers no search, or its web engine offers no search: use `observe` (with `--max-nodes`), or act through the app's own UI. From 0.11.0 on: `open`, a file no app opens by default, an `--app` no installed app has, an item no app claims, or a file gone since the client's check (nothing opened); `hide`, `unhide`, a pid `apps` does not list; `window-state`, a window on another Space (from 0.19.0 on, with `--background`); `perform --custom`, a label no custom action has, or two share ("ambiguous"), nothing sent: read the labels in `custom_actions` again. From 0.12.0 on: `observe` of a window at the pop-up menu level that no `click --right` (or, from 0.13.0 on, `show-menu`) (or, from 0.19.0 on, `status-item`) reported, or whose menu neither lookup finds: open the menu with `click --right`. From 0.13.0 on: a hidden app's minimized window, or its window on another Space; `window-state restore` of a full-screen window the daemon did not make so, while its Space does not show (the message names the app's Exit Full Screen menu item); `text`, a window with no web area or an element with no text; `text --via apple-events` and `safari-tabs`, a Safari that quit or a window it has no id for; `--via extension`, a window the extension does not find (a private one) or a tab with no web page it may read (the Start Page); `setup --safari`, Safari does not run (ask the operator to open it); a `batch` text reference whose text no entry of its step's read holds, or two do ("ambiguous"), nothing sent: act on the entry's own `target` instead. From 0.18.0 on: `set-value` on a native pop-up button whose menu has no item with that title, nothing picked, the message listing the titled items: use one of those titles. The verb closes the menu before it replies; when the message says the menu still showed or may still show, tell the user (see `set-value`, in The loop). From 0.19.0 on: `status-item`, a pid no running app has, an app with no menu bar icons, no icon at `<index>` (list the icons again with `status-items`), or an icon or item gone while it was read; with `--item`, an icon that lists no menu, or a segment of the path that matches no item, nothing pressed: fix the path from the titles the message lists. |
 | `stale_snapshot` | Observe again, then act on the new snapshot. A web element its parent no longer holds counts as gone. A text target's text no longer shows at its point (a scroll, or the text changed), and nothing was sent; for `ocr` and `find-text`, the daemon no longer holds the snapshot. In a Chromium-family app (from 0.11.0 on), a pixel or text target whose page moved inside its window, as Chrome's debugger bar moves it, and nothing was sent: take a new `capture` or `observe --screenshot` and read the point off it, never the old target again (see Chrome). From 0.14.0 on, a pixel or text target on a window its PNG showed over its window (a sheet or a popover) once that window closed, moved or resized: observe again. |
 | `invalid_target` | Fix the target: a malformed id, an index past the snapshot, a pixel target without a screenshot or outside it, a text target past the snapshot's text, a pixel or text target for `set-value`, `reveal`, `perform` or, from 0.13.0 on, `text`, a window not Safari's for `text --via apple-events`, `--via extension`, `observe --via extension` or `safari-tabs` (from 0.13.0 on), an element target on a `capture`'s snapshot, an `ocr` or `find-text` of a snapshot with no screenshot or of a `capture`'s, a `step<k>:` target outside a `batch`, a `drag` whose `to` or a `via` is in another window than its `from`, or whose path needs more than 400 events, or a `hover --click` index past the observe taken in its hold. |
-| `background_unavailable` | Nothing was activated or sent. A `cmd` combo (a menu shortcut reaches only the active app): click the control, or press its menu-bar command with `menu … --foreground`. `menu`, `drag`, `window-state restore`, or from 0.13.0 on `window-state full-screen` or `perform … show-menu`, without `--foreground`: add it, which switches the user's front app for the action. From 0.11.0 on: `hide` of the frontmost app, which would move the user's focus (hide another app, or leave it); a `click` on a window's green title-bar button, which would enter full screen (frame the window with `window-frame`, or from 0.13.0 on use `window-state <window_id> full-screen --foreground`); a `perform` of `raise` or `zoom-window`, or of any action on that button (a context menu opens with `click --right`). From 0.13.0 on, a verb that needs a hidden app's window on screen, its message naming `unhide <pid>` (see A hidden app's window, in The loop): `unhide` the app, or use a verb that reaches it hidden. A mouse event this platform cannot aim into a background window: use an element target, another route, or ask the user; for a `drag` refused even with `--foreground`, no flag or target lifts it. A single left click into background web content outside Chromium, WebKit's or Firefox's (see Targets and staleness), a `hover --click` press's mouse fallback included: from 0.13.0 on only when no element at the point offers a press (a `<canvas>`), the element is in another window or none, or the app rejected the press; target the element. Also a `keys` pixel target in such content (nothing sent), and a `type` pixel target there whose press left its element unfocused (the press was sent, no text). From 0.15.0 on, in LibreOffice, which places each mouse event at the mouse pointer (see `click`, LibreOffice, in The loop): a `click` with `--double`, `--right` at a pixel, a rejected press's mouse fallback, or a point whose element reads disabled; a pixel target of `click`, `type` or `keys` where no element takes a press or the focus; every `scroll`; and a `drag` whose `from` is there, even with `--foreground`: target an element, or reach the cell with `click` or `keys`. |
+| `background_unavailable` | Nothing was activated or sent. From 0.19.0 on, each case below that the focus fallback lifts comes only with `--background` (see The focus fallback): keep the flag while the user must keep the screen as it is, else drop it. From 0.19.0 on, also a focus fallback whose Mission Control shortcuts ("Move left a space" and "Move right a space") are off or set to keys other than Control-← and Control-→: the setting is the user's, so tell them. A `cmd` combo (a menu shortcut reaches only the active app): click the control, or press its menu-bar command with `menu` (below 0.19.0 with `--foreground`). `menu`, `drag`, `window-state restore`, or from 0.13.0 on `window-state full-screen` or `perform … show-menu`, without `--foreground`, below 0.19.0: add it, which switches the user's front app for the action. From 0.11.0 on: `hide` of the frontmost app, which would move the user's focus (hide another app, or leave it); a `click` on a window's green title-bar button, which would enter full screen (frame the window with `window-frame`, or from 0.13.0 on use `window-state <window_id> full-screen`, below 0.19.0 with `--foreground`); a `perform` of `raise` or `zoom-window`, or of any action on that button (a context menu opens with `click --right`). From 0.13.0 on, a verb that needs a hidden app's window on screen, its message naming `unhide <pid>` (see A hidden app's window, in The loop): `unhide` the app, or use a verb that reaches it hidden. A mouse event this platform cannot aim into a background window: use an element target, another route, or ask the user; for a `drag` refused even with `--foreground`, no flag or target lifts it. A single left click into background web content outside Chromium, WebKit's or Firefox's (see Targets and staleness), a `hover --click` press's mouse fallback included: from 0.13.0 on only when no element at the point offers a press (a `<canvas>`), the element is in another window or none, or the app rejected the press; target the element. Also a `keys` pixel target in such content (nothing sent), and a `type` pixel target there whose press left its element unfocused (the press was sent, no text). From 0.15.0 on, in LibreOffice, which places each mouse event at the mouse pointer (see `click`, LibreOffice, in The loop): a `click` with `--double`, `--right` at a pixel, a rejected press's mouse fallback, or a point whose element reads disabled; a pixel target of `click`, `type` or `keys` where no element takes a press or the focus; every `scroll`; and a `drag` whose `from` is there, even with `--foreground`: target an element, or reach the cell with `click` or `keys`. |
 | `action_failed` | The app rejected the action or value: observe the state before another try. An element that needed mouse events has no visible part in its window, or none its app's hit test names it at (nothing sent; see The loop): `reveal` it (web content, from 0.9.0 on; see Targets and staleness), then act on it; a native element has no such action, so `scroll` its scroll view, observe again and act on the new snapshot. `reveal`: the element offers no scroll-to-visible action, as no native element does, or the app rejected it; nothing scrolled. `type`: a WebKit field given no text (a date or time field, an element that is not editable, a field holding text whose count did not move), or a native secure field that holds text, is not being edited, or whose caret did not reach the text's end; no keys were sent. `perform` (from 0.11.0 on): the element does not list the action (nothing sent; the message names what it offers), or the app answered an error, and the action may have run: observe first. `window-state` (from 0.11.0 on): the window cannot be minimized (nothing written), the app rejected the write, the state did not read back within 2 s, or, for `restore` and `full-screen`, the app did not come frontmost (nothing written); from 0.13.0 on, a `minimize` of a full-screen window (nothing written: `restore --foreground` takes it out first), or a `full-screen` of a window that cannot go full screen, as one that cannot be resized, a panel, a window with a sheet open or a minimized one (nothing activated). `open` (from 0.11.0 on): LaunchServices refused the open, its codes in the message. `hide`, `unhide` (from 0.11.0 on): the app's hidden state did not change within 1 s. `window-frame`: the window is minimized (from 0.11.0 on; nothing written: `window-state <window_id> restore --foreground` first), not movable or resizable (nothing written), a write was rejected (part may have landed), or no read-back matched: the platform held its position off the request (a title bar kept below the menu bar), or its frame kept changing, the message naming both frames: run `windows`. `clipboard-read`, `clipboard-write`: clipboard access is denied (nothing written), or the user refused the read at the paste alert while the clipboard held a type the read asked for: ask the operator to allow the setting the message names. A write refused after the clipboard was cleared left it empty, and says so. `clipboard-read --all` (from 0.10.0 on): the clipboard's image reads as neither a PNG nor a TIFF, and no file was written. `menu`, `drag`: the app did not come frontmost within 1 s (nothing sent; the app before was put back if the focus moved). `menu`: nothing pressed, as the path ends at an item that opens a menu, like a menu bar title (end it at a command inside), or at a disabled one (it needs a state the app is not in, say a selection: observe, change it, press again). `record-start`: the session is already recording (that recording goes on: `record-stop` first), its files or video would not start, or another session's recording has video. `hover`: refused before the pointer moved, as another window, or none, is at the point, the hit test went unanswered, or a button is held; or the platform would not move the pointer, the message saying where it was left (see Hover); or its `--click` press failed as `click`'s does. `glide`: the element has no visible part or position, and the cursor did not move. `text --via apple-events` and `safari-tabs` (from 0.13.0 on): Safari answered with no page text, or with another error, named with its number; for `safari-tabs`, the tabs changed between its reads: call again. `text --via extension`: Safari could not say whether the extension is on, or the extension gave another error. `setup --safari`: the grant's first read was `unknown`, so nothing was raised. `observe --ocr`, `ocr`, `find-text` and a text target's check (nothing sent): Vision failed, or a recognition abandoned at its 5 min ceiling still runs, which `goldfinger stop` clears: tell the operator before stopping the daemon every agent shares; for `ocr` and `find-text`, also the snapshot's native capture could not be read. `observe --detect` (no snapshot, nothing partial): the build ships no detection model ("this build has no detection model", refused before the walk), Core ML failed, or a detection abandoned at its 120 s ceiling still runs, which `goldfinger stop` clears: tell the operator first, as for `--ocr`. `set-value` on a native pop-up button (from 0.18.0 on): a disabled button (nothing sent); a disabled item, a menu with no items within 1 s or a rejected item press (nothing picked); or a read-back that still differs after the press. The verb closes the menu before it replies; when the message says the menu still showed or may still show, tell the user (see `set-value`, in The loop). `status-item` (from 0.19.0 on): with `--item`, a disabled item, or one that opens a submenu, which a press would only show (nothing pressed: end the path at a command inside it); or the app rejected a press, the message naming the `AXError`. |
-| `usage` | Malformed arguments (exit 2): fix the call; `goldfinger --help` lists the verbs. From 0.17.0 on, over MCP, every `usage` a tool call returns ends with that tool's arguments in place of the CLI's ``; run `goldfinger --help` ``, whichever check refused it (the schema's, the parser's, a CLI input reader's such as `open`'s item checks, or the daemon's): the required ones first, each marked `(required)`, as in `the find tool takes no argument "query"; the find tool takes: window_id (required), role, text, limit`, and a tool with none ends `; the policy tool takes no arguments`. Fix the call with those names, not the CLI's flags; `code`, `retryable` and the text before that end stay the CLI's. The CLI's own message keeps its help, and so does a `batch` entry's `error`. Also a refused `batch` (a step's own bad args fail only that step, after the ones before it ran), a `replay` file that is not a trajectory its version replays (format 1 included: record it again), a command that requires `--session` run without it (see Sessions), `find` with neither `--role` nor `--text` or a `--limit` outside 1–2,000, an `ocr` or `find-text` with a missing or malformed snapshot id or `--region`, a `find-text` whose text is empty once trimmed, a `clipboard-write` with no type or an empty one, an `--image` that is not a PNG or passes 32 MiB, a `--file` where nothing is (the message names it), a `capture` region outside the window (the message gives its size), a scale outside 0.25–4 or a PNG past 4,096 px, an `open` item the client's checks refuse (see The loop; nothing sent), a `perform` with neither or both of an action and `--custom`, or of `press`, `pick`, `scroll-to-visible` or any name outside the six (the message names `click`, `reveal` or the six), `window-state minimize --foreground`, and from 0.13.0 on `--ocr-language` without `--ocr` or with a code Vision does not read (the message names each), `--observe-ocr` without `--observe`, `--foreground` on a `perform` of any action but `show-menu` or with `--custom`, a `batch` step whose args carry `foreground`, a `batch` text reference to a step without both `observe` and `observe_ocr`, or with an empty text, and `text` with both or neither of a window id and a target, a target with `--via apple-events` or `--via extension`, or a `--limit` outside 1–100,000; and, when `goldfinger --version` is below 0.9.0, a call written as this skill writes it: tell the user the task needs goldfinger 0.9.0. |
-| `timeout` | Reads (`status`, `apps`, `windows`, from 0.18.0 on `status-items`, `observe`, `screenshot`, `capture`, `clipboard-read`, `session-list`), `session-cursor`, `glide`, `reveal`, `hide` and `unhide` may be retried; a `clipboard-read --all` that passed its limit after writing its PNG leaves that file in `$TMPDIR` with no path in the reply. `observe --ocr` after a minute when it follows a first use (see The loop), or read a large window in parts with `--ocr-region`. `observe --detect` at once: a detection that passed its time (under 8 s and what is left of the verb's 20 s), one from an earlier request still running, or too little of the limit left; a slow first load runs on to finish, so the next call is warm. `find` may be retried too: a search past the 20 s limit keeps no snapshot. So may `text` and `safari-tabs` (from 0.13.0 on). From 0.13.0 on, the first read in each other `--ocr-language` compiles its model (about 14 s for `ar-SA`): observe again a minute later. So may `ocr` and `find-text`, and any action whose text target's check timed out, which sent nothing (see Targets and staleness). So may any verb that waited its whole 20 s limit behind other requests (from 0.14.0 on; the message says `<verb> waited 20 s behind other requests and did not run`, and `retryable` is true): it never ran, so nothing landed. From 0.14.0 on, a verb that captures the screen (`observe --screenshot`, `--ocr` or `--detect`, `screenshot`, `capture`, a text target's check) is `timeout`, retryable, when ScreenCaptureKit gave no image within 5 s, or at once, naming it, when an earlier capture, or the Screen Recording check of `status` or `record-start --video`, still runs: retry. One in flight past a minute says that `goldfinger stop` clears it: tell the operator before stopping the daemon every agent shares. So is an `observe` whose walk had under 0.5 s left or whose time cut the window's own reads, keeping no snapshot (see The loop, The walk's time). Anything else may have landed and is not retryable: observe before repeating an action, list apps before a `launch` (it may still open), list windows before an `open` again (it may still open the items), observe before a `perform` again, check a `window-frame` or a `window-state` with `windows`, a `clipboard-write` with `clipboard-read` and a `session-start` with `session-list`. A `batch` timeout has no entries: observe before repeating any step. A `menu` timeout says whether it came while the menus were walked (nothing pressed) or at the press; after the press, observe the app's windows first. From 0.13.0 on, a `click --right` or `perform … show-menu --foreground` whose app gave no answer within 5 s but opened one new menu is no `timeout`: it succeeds with `menu_window_id`, after about 6 s. From 0.18.0 on, a `set-value` on a native pop-up button that is `timeout` pressed no item, and the verb closed its menu before it replied, unless the message says the menu still showed or may still show (see `set-value`, in The loop): observe before you set it again. From 0.19.0 on, a `status-item` that is `timeout` is not retryable: the app gave a read no answer within 5 s, before anything was pressed, or, with `--item`, gave the item's press none, and that press may have landed: check the app's state before you press again. |
+| `usage` | Malformed arguments (exit 2): fix the call; `goldfinger --help` lists the verbs. From 0.17.0 on, over MCP, every `usage` a tool call returns ends with that tool's arguments in place of the CLI's ``; run `goldfinger --help` ``, whichever check refused it (the schema's, the parser's, a CLI input reader's such as `open`'s item checks, or the daemon's): the required ones first, each marked `(required)`, as in `the find tool takes no argument "query"; the find tool takes: window_id (required), role, text, limit`, and a tool with none ends `; the policy tool takes no arguments`. Fix the call with those names, not the CLI's flags; `code`, `retryable` and the text before that end stay the CLI's. The CLI's own message keeps its help, and so does a `batch` entry's `error`. From 0.19.0 on, also `--background` with `--foreground`, or on a command that takes no `--background` (see The focus fallback): drop one. Also a refused `batch` (a step's own bad args fail only that step, after the ones before it ran), a `replay` file that is not a trajectory its version replays (format 1 included: record it again), a command that requires `--session` run without it (see Sessions), `find` with neither `--role` nor `--text` or a `--limit` outside 1–2,000, an `ocr` or `find-text` with a missing or malformed snapshot id or `--region`, a `find-text` whose text is empty once trimmed, a `clipboard-write` with no type or an empty one, an `--image` that is not a PNG or passes 32 MiB, a `--file` where nothing is (the message names it), a `capture` region outside the window (the message gives its size), a scale outside 0.25–4 or a PNG past 4,096 px, an `open` item the client's checks refuse (see The loop; nothing sent), a `perform` with neither or both of an action and `--custom`, or of `press`, `pick`, `scroll-to-visible` or any name outside the six (the message names `click`, `reveal` or the six), `window-state minimize --foreground`, and from 0.13.0 on `--ocr-language` without `--ocr` or with a code Vision does not read (the message names each), `--observe-ocr` without `--observe`, `--foreground` on a `perform` of any action but `show-menu` or with `--custom`, a `batch` step whose args carry `foreground`, a `batch` text reference to a step without both `observe` and `observe_ocr`, or with an empty text, and `text` with both or neither of a window id and a target, a target with `--via apple-events` or `--via extension`, or a `--limit` outside 1–100,000; and, when `goldfinger --version` is below 0.9.0, a call written as this skill writes it: tell the user the task needs goldfinger 0.9.0. |
+| `timeout` | Reads (`status`, `apps`, `windows`, from 0.18.0 on `status-items`, `observe`, `screenshot`, `capture`, `clipboard-read`, `session-list`), `session-cursor`, `glide`, `reveal`, `hide` and `unhide` may be retried; a `clipboard-read --all` that passed its limit after writing its PNG leaves that file in `$TMPDIR` with no path in the reply. `observe --ocr` after a minute when it follows a first use (see The loop), or read a large window in parts with `--ocr-region`. `observe --detect` at once: a detection that passed its time (under 8 s and what is left of the verb's 20 s), one from an earlier request still running, or too little of the limit left; a slow first load runs on to finish, so the next call is warm. `find` may be retried too: a search past the 20 s limit keeps no snapshot. So may `text` and `safari-tabs` (from 0.13.0 on). From 0.13.0 on, the first read in each other `--ocr-language` compiles its model (about 14 s for `ar-SA`): observe again a minute later. So may `ocr` and `find-text`, and any action whose text target's check timed out, which sent nothing (see Targets and staleness). So may any verb that waited its whole 20 s limit behind other requests (from 0.14.0 on; the message says `<verb> waited 20 s behind other requests and did not run`, and `retryable` is true): it never ran, so nothing landed. So may a focus fallback (from 0.19.0 on) whose keyboard and mouse were not still for 0.5 s within 3 s, or whose verb's limit left too little time for the fallback: it switched nothing and sent nothing (see The focus fallback). Retry once the user's keys and mouse go still. From 0.14.0 on, a verb that captures the screen (`observe --screenshot`, `--ocr` or `--detect`, `screenshot`, `capture`, a text target's check) is `timeout`, retryable, when ScreenCaptureKit gave no image within 5 s, or at once, naming it, when an earlier capture, or the Screen Recording check of `status` or `record-start --video`, still runs: retry. One in flight past a minute says that `goldfinger stop` clears it: tell the operator before stopping the daemon every agent shares. So is an `observe` whose walk had under 0.5 s left or whose time cut the window's own reads, keeping no snapshot (see The loop, The walk's time). Anything else may have landed and is not retryable: observe before repeating an action, list apps before a `launch` (it may still open), list windows before an `open` again (it may still open the items), observe before a `perform` again, check a `window-frame` or a `window-state` with `windows`, a `clipboard-write` with `clipboard-read` and a `session-start` with `session-list`. A `batch` timeout has no entries: observe before repeating any step. A `menu` timeout says whether it came while the menus were walked (nothing pressed) or at the press; after the press, observe the app's windows first. From 0.13.0 on, a `click --right` or `perform … show-menu --foreground` whose app gave no answer within 5 s but opened one new menu is no `timeout`: it succeeds with `menu_window_id`, after about 6 s. From 0.18.0 on, a `set-value` on a native pop-up button that is `timeout` pressed no item, and the verb closed its menu before it replied, unless the message says the menu still showed or may still show (see `set-value`, in The loop): observe before you set it again. From 0.19.0 on, a `status-item` that is `timeout` is not retryable: the app gave a read no answer within 5 s, before anything was pressed, or, with `--item`, gave the item's press none, and that press may have landed: check the app's state before you press again. |
 | `daemon_unavailable` | Retry when `retryable` is true (a `reveal` stays retryable once sent, as repeating it sets the same state). When the message says the action may have landed, check it as for `timeout` first: a `batch` may have run steps, a `record-start` started a recording. When it comes back on retry, run `goldfinger doctor --json` (see Diagnose). |
 | `version_mismatch` | Two goldfinger versions met. Use the newer `goldfinger`. `goldfinger stop` and a retry also clears it, but stops the daemon other agents share. |
 | `session_limit` | All six session colors are held, so `session-start` started nothing. End a session of yours, or wait for one to idle out, then retry. |
