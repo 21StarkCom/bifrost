@@ -132,7 +132,8 @@ part. The daemon then refuses a verb on such an app with `denied`, before it sen
   on a Paste item, or a `drag` of text, can still change the app. The built-in default list is
   empty, so with no file every app is `full`, as before 0.16.0.
 - **The app a verb acts on** is its target's: a snapshot target's pid, a `window_id`'s owner, a
-  `pid`, or the `bundle_id` that `launch`, `open` and, from 0.20.0 on, `web-launch` name. `voiceover do`, `voiceover type`,
+  `pid`, or the `bundle_id` that `launch`, `open` and, from 0.20.0 on, `web-launch` name.
+  `voiceover do`, `voiceover type`,
   `voiceover press` and `voiceover speech` act on the frontmost app at the check. Verbs that name
   no app have no tier: `status`, `setup`,
   `stop`, `watch`, `apps`, `windows` and, from 0.18.0 on, `status-items` without `--pid`,
@@ -379,8 +380,8 @@ part. The daemon then refuses a verb on such an app with `denied`, before it sen
      strip of the window is clear of its cover: move the window with `window-frame`, which
      activates and raises nothing. On Obsidian 1.15.0, a window 100% covered gave 13 nodes, none of
      them web nodes; 95% covered, it gave 542, and once the check added a 1,500-item list to the
-     page, `--a11y` gave `a11y` keys on all 1,993 web nodes of the first 2,000. Whether a tree built in view stays once the
-     window is wholly covered again is not measured. From 0.20.0 on, `web-dom` and `web-script`
+     page, `--a11y` gave `a11y` keys on all 1,993 web nodes of the first 2,000. Whether a tree
+     built in view stays once the window is wholly covered again is not measured. From 0.20.0 on, `web-dom` and `web-script`
      read an Electron app's page with its window wholly covered (see Web apps).
    - **Windows over it** (from 0.14.0 on). The PNG of `--screenshot`, `--ocr` and `--detect`
      draws in the app's own windows that are over the window, as the screen shows them, at most
@@ -1122,7 +1123,8 @@ goldfinger repo.
     script on a plain value, not on the promise, which `web-script` would wait for:
 
     ```js
-    // start.js: starts the audit and returns at once
+    // start.js: starts the audit and returns at once.
+    // runAudit() stands for the engine's own call, loaded by an earlier web-script.
     window.__audit = { done: false };
     runAudit().then(r => { window.__audit = { done: true, result: r }; },
                     e => { window.__audit = { done: true, error: String(e) }; });
