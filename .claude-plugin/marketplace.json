@@ -60,8 +60,8 @@
     {
       "name": "stark-design",
       "source": "./",
-      "description": "Design-token architecture — build, name, theme, and govern a design-token system the way the field's canonical sources converge on it. Covers the three-tier model (primitive/semantic/component), naming grammar, OKLCH color scales, DTCG authoring, Style Dictionary pipelines, dark-mode/multi-brand/density theming, CSS-variable distribution, WCAG contrast gates, and token semver/deprecation.",
-      "version": "0.1.37",
+      "description": "Design-token architecture — build, name, theme, and govern a design-token system the way the field's canonical sources converge on it. Covers the three-tier model (primitive/semantic/component), naming grammar, OKLCH color scales, DTCG authoring, Style Dictionary pipelines, dark-mode/multi-brand/density theming, CSS-variable distribution, WCAG contrast gates, and token semver/deprecation. Also the floorplan C4 design loop: propose a model change, check it, render it, show it in the studio, ask on the canvas with Huginn annotate, and accept it.",
+      "version": "0.1.38",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -72,10 +72,13 @@
         "design-system",
         "theming",
         "dark-mode",
-        "accessibility"
+        "accessibility",
+        "c4",
+        "architecture"
       ],
       "skills": [
-        "./skill/stark-design-tokens"
+        "./skill/stark-design-tokens",
+        "./skill/c4-design"
       ],
       "strict": true
     },

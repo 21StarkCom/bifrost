@@ -14,7 +14,7 @@ It absorbed the stark-skills repo, which is archived.
 
 **The name.** Bifröst (Bilröst in Grímnismál) is the burning, three-coloured rainbow bridge that joins Midgard, the world of humans, to Asgard. Heimdall guards it from Himinbjörg, the gods ride over it daily to hold court at the Well of Urðr, and it is fated to shatter at Ragnarök when the sons of Muspell ride across (Gylfaginning). Its skills /gru, /minion and /agnes come from Despicable Me (2010): Gru the supervillain, his yellow Minions, and Agnes, the youngest of the girls he adopts.
 
-The rainbow bridge is how the gods reach the world, and bifrost is how the operator's craft reaches every agent. One public source tree holds thirty skills and the tools they call, served straight from the tree as a seven-plugin Claude Code marketplace, with no build step. Cross the bridge and you meet a crew out of Despicable Me. `/gru` takes an epic and drives it with one Minion per ticket. `/minion` owns a single ticket through the whole spine. `/agnes`, named for the youngest girl Gru adopts and never one of his Minions, carries a ticket alone with no Gru at all. Their board is [alfred](https://github.com/21StarkCom/alfred), their horses are [hermod](https://github.com/21StarkCom/hermod)'s tabs, valkyrie launches them and their PRs pass through njord, both from [idun](https://github.com/21StarkCom/idun), and [frigg](https://github.com/21StarkCom/frigg) tells them where each repo lives. Beyond them wait a spec-to-code pipeline, a jury of Claude, Codex and Gemini, and a review poster that never posts the same review twice. When code must die, `/stark-bury` carries it down to [nastrond](https://github.com/21StarkCom/nastrond). The quest stepped onto the bridge. Gru called a Minion, and Hermod saddled up.
+The rainbow bridge is how the gods reach the world, and bifrost is how the operator's craft reaches every agent. One public source tree holds thirty-one skills and the tools they call, served straight from the tree as a seven-plugin Claude Code marketplace, with no build step. Cross the bridge and you meet a crew out of Despicable Me. `/gru` takes an epic and drives it with one Minion per ticket. `/minion` owns a single ticket through the whole spine. `/agnes`, named for the youngest girl Gru adopts and never one of his Minions, carries a ticket alone with no Gru at all. Their board is [alfred](https://github.com/21StarkCom/alfred), their horses are [hermod](https://github.com/21StarkCom/hermod)'s tabs, valkyrie launches them and their PRs pass through njord, both from [idun](https://github.com/21StarkCom/idun), and [frigg](https://github.com/21StarkCom/frigg) tells them where each repo lives. Beyond them wait a spec-to-code pipeline, a jury of Claude, Codex and Gemini, and a review poster that never posts the same review twice. When code must die, `/stark-bury` carries it down to [nastrond](https://github.com/21StarkCom/nastrond). The quest stepped onto the bridge. Gru called a Minion, and Hermod saddled up.
 
 **Supporting cast.** Every crossing passes a sentry: [.github](https://github.com/21StarkCom/.github), the org's public front door and home of this saga, hosts the one reusable gitleaks workflow that more than forty fleet repos pin by SHA, scanning only the commits a change brings.
 
@@ -78,7 +78,7 @@ Codex reads the same skills from a clone: idavoll links them in at session start
 
 ## Skills
 
-30 skills in seven plugins. Each skill's `SKILL.md` is its own documentation.
+31 skills in seven plugins. Each skill's `SKILL.md` is its own documentation.
 
 ### stark-plan: spec and ticket authoring
 
@@ -147,11 +147,12 @@ stark-ops also ships one hook, a PostToolUse `tools/fact_routing_hook.ts` that r
 | [`/stark-story-judge`](skill/stark-story-judge/SKILL.md) | Cold judges, one per vendor, grade a post on an anchored rubric. Judges only; never edits. |
 | [`/stark-jury`](skill/stark-jury/SKILL.md) | Runs one of the four post skills across Claude, Codex and Gemini and reconciles the results. |
 
-### stark-design: design systems
+### stark-design: design systems and architecture
 
 | Skill | What it does |
 |---|---|
 | [`/stark-design-tokens`](skill/stark-design-tokens/SKILL.md) | Builds, names, themes and governs design tokens: the three-tier model, OKLCH scales, DTCG, Style Dictionary, contrast gates. |
+| [`/c4-design`](skill/c4-design/SKILL.md) | Runs the floorplan design loop on a product's C4 model: propose a change, check and render it, show it in the studio, ask on the canvas with Huginn, accept it. |
 
 ## Architecture
 
@@ -174,7 +175,7 @@ Immutable assets (tools, prompts, config) resolve through `tools/asset_root_lib.
 
 ```
 bifrost/
-├── skill/                        ← one dir per skill (30 × SKILL.md)
+├── skill/                        ← one dir per skill (31 × SKILL.md)
 ├── tools/                        ← TypeScript dispatchers, agent CLIs, meta-tooling, tests
 ├── global/                       ← config.json, config-reference.md, prompts/{iac-review,refactor-planner}/
 ├── standards/                    ← shared worker protocols, doc templates, workflow guidance
