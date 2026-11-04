@@ -37,9 +37,10 @@ run `floorplan build`, and commit; skip the loop.
 3. **Pass an absolute `dir`** to each `floorplan` MCP tool. The server resolves a relative path against its own
    start folder, not yours.
 4. **Find Huginn.** `list_huginns` (MCP server `sleipnir`) names each installation. Pick one that is `online`, not
-   `stale`, and whose features list `annotate`. The loop needs the grants `open`, `click`, `screenshot`, `find`
-   and `annotate`; a missing grant is refused with its name. A grant is a local CLI step:
-   `slp huginn allow <id> annotate`. Each mutation also takes `confirm:true`.
+   `stale`, and whose features list `annotate`. The loop needs the grants `open`, `click`, `screenshot`,
+   `focus`, `annotate` and `close`; a missing grant is refused with its name. A grant is a local CLI step:
+   `slp huginn allow <id> annotate`. Each mutation also takes `confirm:true`, and every `annotate` op is a
+   mutation, `answers` and `clear` included.
 
 ## The loop
 
@@ -124,8 +125,10 @@ diff rfc-payments 'Split payments out of the API' {
    3. The view shows **Changes**: adds in green, removes in red, changes in orange. **As-is** and **To-be** are
       the buttons beside it.
 4. Take a `screenshot` of the tab, and look at it to check that the proposal shows.
-5. Send the operator the URL, the view and the proposal's title. They open the URL in their own browser and select
-   the proposal in the same menu.
+5. Run `focus` on the tab. It brings the tab and its window to the front, so the operator sees the proposal. The
+   boxes of step 4 show only in this tab, not in another copy of the URL.
+6. Send the operator the URL, the view, the proposal's title, and the Chrome profile of the tab (the `label` that
+   `list_huginns` gives).
 
 The studio updates the diagram in place on each file save, with no page reload. It saves a layout that the
 operator changes (a moved box) into `.likec4/`. The operator may also edit the `.c4` text, so read the proposal
@@ -145,17 +148,19 @@ sleipnir, section **Annotate**.
      why, question}`: `tag` is your own pick, `confidence` is `high`, `medium` or `low`, `why` is your reason,
      and `question` is what the operator decides.
    - The `locator` of an element is `{testId:"rf__node-<element id>"}`, such as `rf__node-shop.payments`: each
-     box of the diagram carries its element's id that way.
+     box of the diagram carries its element's id that way. To ask about a relationship, box its source element,
+     and name the relationship in the `question`.
    - `guide:true` walks the operator through the items one at a time, with the card of the current item open.
      `block:true` stops a press on a box from also selecting the element under it.
 2. Read the result. An element in `missing` has no box: fix its `locator`, and run `show` again. The boxes do not
    show in Huginn's own `screenshot`, so do not look for them there.
 3. Tell the operator in the chat that the questions are on the page, and that **Send to Odin** sends the answers.
-4. Run `annotate` with `op:"answers"` and `timeoutMs:120000`. It waits for Send. At the timeout it answers
-   `sent:false` with the answers so far; run it again. Each answer is `{id, verdict, tag?, note?}`. `verdict` is
-   `correct` (the operator agrees with your pick), `wrong`, `retag` (with the `tag` they chose) or `null`.
+4. Run `annotate` with `op:"answers"`, `confirm:true` and `timeoutMs:120000`. It waits for Send. At the
+   timeout it answers `sent:false` with the answers so far; run it again. Each answer is
+   `{id, verdict, tag?, note?}`. `verdict` is `correct` (the operator agrees with your pick), `wrong`, `retag`
+   (with the `tag` they chose) or `null`.
 5. Change the proposal by the answers and their notes, and run step 2 again.
-6. Run `annotate` with `op:"clear"` when no question is open.
+6. Run `annotate` with `op:"clear"` and `confirm:true` when no question is open.
 
 A navigation or a reload of the tab removes the boxes and the answers, and `answers` then fails. Show the items
 again. A file save does not remove them. A new `show` replaces the boxes of the last one.
@@ -172,8 +177,9 @@ Accept only on the operator's word in the chat ("accept"). An answer on the canv
      delete the file, and run `build`.
 2. Run `check` with `maxWarnings:0`. It must pass, R8 included.
 3. Stop the studio with `studio_stop` and its `pid`. Close the Huginn tab (`close`).
-4. Ship the change as a normal PR of the product repo, by that repo's own rules: the `model/` change and every
-   file under `generated/` in one commit. Put the To-be PNG in the PR body: the built
+4. Ship the change as a normal PR of the product repo, by that repo's own rules. Commit the `model/` change
+   and every file the build wrote (`generated/`, the view block of `README.md`, `kit/spec.c4`), and `.likec4/`
+   when the operator moved a box. Put the To-be PNG in the PR body: the built
    `generated/png/<view>.png`, as an image link to that file at the PR's head commit
    (`https://github.com/<owner>/<repo>/blob/<sha>/<path>?raw=true`). Name the proposal's title and the
    operator's answers in the body.
