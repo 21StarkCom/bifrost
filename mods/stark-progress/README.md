@@ -444,8 +444,11 @@ word measured 5.7:1 or more on the pane's white (the five state keys added in
 there yet). A moving bar and track take the app's accent, which
 is blue in the active window and gray, as all of the app's accent, in an
 inactive one. The desktop draws text in a face of mixed widths, so the bar
-graph, the station words, the tracks and the last hour draw in its fixed-width
-face, and a Log tab's times in digits of one width; the terminal ignores both.
+graph, the station words, the tracks, the group lines and the last hour draw
+in its fixed-width face, and a Log tab's times in digits of one width; the
+terminal ignores both. The desktop also draws each tab's hotkey in a chip, so
+a row of tabs too wide for the pane wraps onto a second row, in the terminal
+too.
 
 ## The ticket pane
 

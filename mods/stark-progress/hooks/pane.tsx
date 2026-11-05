@@ -217,6 +217,9 @@ function liveLabel(ui: UI, r: BoardRow, room: number, how: { bold: boolean; dim:
 /**
  * A line over a group of a list: its name and count, then a rule to the pane's
  * edge. `spaced` adds an empty row above and below it, for a list with no gap.
+ * The rule is counted in cells, so the line draws in the face of one width: in
+ * the desktop's proportional face a `─` is wider than a cell, and the line
+ * wrapped. `truncate` keeps it on one row should a surface round its cells down.
  */
 function divider(ui: UI, w: number, name: string, count: number, spaced = false) {
   const { Box, Text, P } = ui
@@ -225,7 +228,7 @@ function divider(ui: UI, w: number, name: string, count: number, spaced = false)
 
   return (
     <Box key={`g${name}`} marginY={spaced ? 1 : 0}>
-      <Text>
+      <Text mono wrap="truncate">
         <Text color={P.track}>{'──'}</Text>
         <Text bold>{` ${name}`}</Text>
         <Text color={P.hint}>{` · ${count} `}</Text>
@@ -547,8 +550,9 @@ export function tabBar(ui: UI, tab: PaneTab, setTab: (tab: PaneTab) => unknown, 
     ['settings', 's', 'Settings'],
   ]
 
+  // A tab that does not fit goes to a second row: the desktop draws each hotkey in a chip, and Settings was past the edge.
   return (
-    <Box columnGap={3}>
+    <Box columnGap={3} flexWrap="wrap">
       {tabs.map(([id, hotkey, label]) => (
         <Button key={`tab-${id}`} plain hotkey={hotkey} onPress={() => setTab(id)}>
           {tab === id ? (
