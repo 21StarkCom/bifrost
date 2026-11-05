@@ -499,6 +499,19 @@ test('an empty group draws no line', async ($, on) => {
   expect((await pane.find({ type: 'Text', text: /^── Done · 1 ─+$/ }))?.text).toHaveLength(80)
 })
 
+test("on the desktop, a group line draws in the face of one width, so its rule fits the cells it was counted in", async ($, on) => {
+  stage(on, { ...DONE_LAST_RUN }, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  mock.store(on, { doneLast: true })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'desktop', isInteractive: true })
+  await clock.advance(1000)
+  const pane = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const lines = await pane.findAll({ type: 'Text', text: /^── .+ · \d+ ─+$/ })
+  expect(lines.map(t => t.text.replace(/─+$/, ''))).toEqual(['── In progress · 1 ', '── To do · 1 ', '── Done · 2 '])
+  // A proportional face draws `─` wider than a cell, and the line wrapped onto two or three rows.
+  for (const line of lines) expect(line.props).toMatchObject({ mono: true, wrap: 'truncate' })
+})
+
 test('each group line has an empty row above and below it, and an open last row of a group adds no second one', async ($, on) => {
   stage(on, { ...DONE_LAST_RUN }, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
   mock.store(on, { doneLast: true })
@@ -537,6 +550,8 @@ test('with Done tickets last on, the GitHub tab groups the PRs: open and draft, 
 
   // #447 is a draft, so STARK-2 comes first; no PR is closed, so no Closed line.
   expect(await dividers(pane)).toEqual(['── Open · 1 ', '── Merged · 1 '])
+  // The GitHub tab's lines draw in the face of one width too, as the Overview's do.
+  for (const line of await pane.findAll({ type: 'Text', text: /^── .+ · \d+ ─+$/ })) expect(line.props).toMatchObject({ mono: true, wrap: 'truncate' })
   const cards = (await pane.findAll({ type: 'Button' })).map(b => b.key ?? '').filter(k => k.startsWith('gh-'))
   expect(cards).toEqual(['gh-STARK-2', 'gh-STARK-1'])
   // The lines and the PRs share one list with an empty row between each two.
@@ -1621,6 +1636,8 @@ test('the Gru pane draws on the desktop surface too, and a press there writes th
   expect((await pane.find({ type: 'Text', text: /^Read the words file$/ }))?.props.color).toBeUndefined()
   // The station words line up over the track only in a face of one width.
   expect((await pane.find({ type: 'Text', text: /^ +ticket PR +review/ }))?.props.mono).toBe(true)
+  // The tab row wraps when its tabs do not fit: a desktop pane of about 478 points hid Settings past its edge.
+  expect(parentOf(await pane.drawn(), 'tab-settings')?.props).toMatchObject({ flexWrap: 'wrap' })
   await pane.press({ key: 'tab-settings' })
   // A setting's value draws in a frame: a Button that is not plain.
   expect((await pane.find({ type: 'Button', key: 'set-decide' }))?.props.plain).toBeUndefined()
@@ -1643,6 +1660,8 @@ test('the ticket pane draws its ticket on the desktop surface', async ($, on) =>
   expect(await pane.find({ type: 'Text', text: /draws in the terminal/ })).toBeUndefined()
   expect((await pane.find({ type: 'Text', text: 'STARK-1 · bragi' }))?.props.color).toBe('inactive')
   expect((await pane.find({ type: 'Text', text: /^ +ticket PR +review/ }))?.props.mono).toBe(true)
+  // The tab row wraps when its tabs do not fit: a desktop pane of about 478 points hid Settings past its edge.
+  expect(parentOf(await pane.drawn(), 'tab-settings')?.props).toMatchObject({ flexWrap: 'wrap' })
 })
 
 /** The four counts a model request reports, and the model that answered. */
