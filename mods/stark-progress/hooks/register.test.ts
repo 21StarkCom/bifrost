@@ -70,6 +70,8 @@ function stage(
   { session, root, mtimes = {}, env = {} }: { session: string; root: string; mtimes?: Record<string, number>; env?: Record<string, string> },
 ) {
   const seen = {
+    /** The session's project root: a test moves the session to another worktree by setting it. */
+    root,
     reads: [] as string[],
     runs: [] as string[][],
     opens: [] as string[],
@@ -89,7 +91,7 @@ function stage(
   mock.env(on, { HOME: '/h', ...env })
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('command.register', (_$, e) => ({ value: { command: e.name } }))
-  on('session.root', () => ({ value: root }))
+  on('session.root', () => ({ value: seen.root }))
   on('session.id', () => ({ value: session }))
   on('ui.open', (_$, e) => {
     seen.opens.push(e.id)
@@ -1301,8 +1303,12 @@ test('the ticket pane draws the whole ticket: name, epic, track, activity and th
   await clock.advance(1000)
 
   const pane = await $.ui.mount(TICKET_PANE)
-  expect(await pane.find({ type: 'Text', text: 'Read the words file' })).toBeDefined()
-  expect(await pane.find({ type: 'Text', text: 'STARK-1 · bragi · slice 2 of 3' })).toBeDefined()
+  // Named as the Gru pane names a ticket: the id in its own color, then the name, all bold.
+  expect((await pane.find({ type: 'Text', text: /^\[STARK-1\] Read the words file$/ }))?.props.bold).toBe(true)
+  expect((await pane.find({ type: 'Text', text: /^\[STARK-1\]$/ }))?.props.color).toBe('#c9b3f5')
+  // No log line, and the stats this tab's first poll began: the start is that poll.
+  expect(await pane.find({ type: 'Text', text: /^bragi · slice 2 of 3 · started \d\d:\d\d, 0m ago$/ })).toBeDefined()
+  // An epic alfred does not know keeps its id alone.
   expect(await pane.find({ type: 'Text', text: 'Part of STARK-10' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: 'PR OPEN · 10m' })).toBeDefined()
   expect(await inkOf(pane, /^PR OPEN$/)).toMatchObject({ color: '#a5b4fc', bold: false })
@@ -1323,6 +1329,118 @@ test('the ticket pane draws the whole ticket: name, epic, track, activity and th
   expect(await pane.find({ type: 'Text', text: 'Settings for STARK-1' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: 'by what the PR changes' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: /left|ETA|~\d|\p{Extended_Pictographic}/u })).toBeUndefined()
+})
+
+test("the ticket pane names its epic's title from alfred and starts at its log's first line, on the Overview and in Stats", async ($, on) => {
+  const iso = (minutesAgo: number) => new Date(T0 - minutesAgo * MIN).toISOString()
+  const disk: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1', 'STARK-2'] }),
+    'STARK-1.json': ticket('STARK-1', 'pr', { title: 'bragi: read the words file' }),
+    // The worker's first step 2h10m ago: the ticket's start. A later step does not move it.
+    'STARK-1.log.jsonl': `${JSON.stringify({ at: iso(130), text: 'Read the ticket.' })}\n${JSON.stringify({ at: iso(5), text: 'Opened the PR.' })}\n`,
+  }
+  const seen = stage(on, disk, { session: 'w', root: WORKTREE })
+  seen.alfred = { exitCode: 0, stdout: JSON.stringify({ item: { kind: 'epic', name: 'EPIC: bragi: read the words file aloud' } }) }
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: WORKTREE, surface: 'terminal', isInteractive: true })
+  // The first poll asks alfred in the background; a later poll draws the answer.
+  await clock.advance(1000)
+  await clock.advance(1000)
+  await clock.advance(1000)
+
+  const pane = await $.ui.mount(TICKET_PANE)
+  // alfred's title, less its `EPIC:` and `repo: ` leads, named as the Gru pane names a ticket.
+  expect(await pane.find({ type: 'Text', text: /^Part of \[STARK-10\] Read the words file aloud$/ })).toBeDefined()
+  expect((await pane.find({ type: 'Text', text: /^\[STARK-10\]$/ }))?.props.color).toBe('#c9b3f5')
+  expect(await pane.find({ type: 'Text', text: /^bragi · started \d\d:\d\d, 2h10m ago$/ })).toBeDefined()
+  // One ask, kept for the later polls.
+  expect(seen.runs.filter(argv => argv[0] === 'alfred')).toEqual([['alfred', 'task', 'show', 'STARK-10', '--json']])
+
+  await pane.press({ key: 'tab-stats' })
+  expect(await pane.find({ type: 'Text', text: /The ticket started \d\d:\d\d, 2h10m ago\. Counted since \d\d:\d\d\.$/ })).toBeDefined()
+})
+
+test('the ticket pane says its ticket ended once its file is gone', async ($, on) => {
+  const disk: Record<string, string> = { 'STARK-1.json': ticket('STARK-1', 'merged') }
+  stage(on, disk, { session: 'w', root: WORKTREE })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: WORKTREE, surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+
+  // Agnes removes her ticket's file at stand-down.
+  delete disk['STARK-1.json']
+  await clock.advance(1000)
+  const pane = await $.ui.mount(TICKET_PANE)
+  expect(await pane.find({ type: 'Text', text: 'The ticket STARK-1 ended' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'Its file is gone from ~/.cache/stark-progress.' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'No ticket file yet' })).toBeUndefined()
+})
+
+test("after a reload, the ticket pane still names its ticket's end, which the session's state keeps", async ($, on) => {
+  // A reload starts the module over, with its ticket's file already gone.
+  stage(on, {}, { session: 'w', root: WORKTREE })
+  // The session's state as the load before the reload left it: the ticket this tab found.
+  // It answers until the mod writes the key, as a store does.
+  let isKept = true
+  on('state.get', (_$, e, next) => (e.key === 'ownTicket' && isKept ? { value: { value: 'STARK-1', version: 1 } } : next(e)))
+  on('state.set', (_$, e, next) => {
+    if (e.key === 'ownTicket') isKept = false
+    return next(e)
+  })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: WORKTREE, surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  await clock.advance(1000)
+  const pane = await $.ui.mount(TICKET_PANE)
+  expect(await pane.find({ type: 'Text', text: 'The ticket STARK-1 ended' })).toBeDefined()
+})
+
+test("a tab whose ticket file never was, or that moved to another ticket's worktree, says no file yet", async ($, on) => {
+  const disk: Record<string, string> = { 'STARK-1.json': ticket('STARK-1', 'merged') }
+  const seen = stage(on, disk, { session: 'w', root: '/r/.claude/worktrees/STARK-2' })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: seen.root, surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  const never = await $.ui.mount({ ...TICKET_PANE, props: { ...TICKET_PANE.props, title: 'STARK-2' } })
+  expect(await never.find({ type: 'Text', text: 'No ticket file yet' })).toBeDefined()
+  await never.unmount()
+
+  // The session moves to STARK-1's worktree and finds its file, then back to STARK-2's.
+  seen.root = WORKTREE
+  await clock.advance(1000)
+  seen.root = '/r/.claude/worktrees/STARK-2'
+  await clock.advance(1000)
+  const moved = await $.ui.mount({ ...TICKET_PANE, props: { ...TICKET_PANE.props, title: 'STARK-2' } })
+  expect(await moved.find({ type: 'Text', text: 'No ticket file yet' })).toBeDefined()
+  expect(await moved.find({ type: 'Text', text: /ended/ })).toBeUndefined()
+})
+
+test("a poll that lists the ticket file but cannot read it keeps the ticket pane, the band and the heartbeat", async ($, on) => {
+  const disk: Record<string, string> = { 'STARK-1.json': ticket('STARK-1', 'pr', { title: 'bragi: read the words file' }) }
+  const seen = stage(on, disk, { session: 'w', root: WORKTREE })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: WORKTREE, surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  // The first poll's keep-alive wrote the heartbeat.
+  expect(disk['STARK-1.beat.json']).toBeDefined()
+
+  seen.failReads.add('STARK-1.json')
+  await clock.advance(1000)
+  await clock.advance(1000)
+  expect(seen.runs).not.toContainEqual(['rm', '-f', `${DIR}/STARK-1.beat.json`])
+  const pane = await $.ui.mount(TICKET_PANE)
+  expect(await pane.find({ type: 'Text', text: /^\[STARK-1\] Read the words file$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /ended|No ticket file yet/ })).toBeUndefined()
+  await pane.unmount()
+  const band = await $.ui.mount(BAND)
+  expect(await band.find({ type: 'Text', text: /^STARK-1 / })).toBeDefined()
+  await band.unmount()
+
+  // Once the read works again, the file's end is the ticket's end.
+  seen.failReads.clear()
+  delete disk['STARK-1.json']
+  await clock.advance(1000)
+  expect(seen.runs).toContainEqual(['rm', '-f', `${DIR}/STARK-1.beat.json`])
 })
 
 test("a ticket settings press writes the ticket's settings file whole, and quick presses all count", async ($, on) => {
@@ -1636,12 +1754,13 @@ test('the ticket pane draws its ticket on the desktop surface', async ($, on) =>
   await clock.advance(1000)
 
   const pane = await $.ui.mount({ ...TICKET_PANE, surface: 'desktop' })
-  expect(await pane.find({ type: 'Text', text: 'Read the words file' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^\[STARK-1\] Read the words file$/ })).toBeDefined()
+  expect((await pane.find({ type: 'Text', text: /^\[STARK-1\]$/ }))?.props.color).toBe('suggestion')
   expect(await pane.find({ type: 'Text', text: 'PR OPEN · 10m' })).toBeDefined()
   // The desktop takes theme keys, so a state follows the app's light or dark theme.
   expect(await inkOf(pane, /^PR OPEN$/)).toMatchObject({ color: 'planMode' })
   expect(await pane.find({ type: 'Text', text: /draws in the terminal/ })).toBeUndefined()
-  expect((await pane.find({ type: 'Text', text: 'STARK-1 · bragi' }))?.props.color).toBe('inactive')
+  expect((await pane.find({ type: 'Text', text: /^bragi · started / }))?.props.color).toBe('inactive')
   expect((await pane.find({ type: 'Text', text: /^ +ticket PR +review/ }))?.props.mono).toBe(true)
 })
 

@@ -109,6 +109,20 @@ export function startOf(log: string | undefined, gruStats: string | undefined): 
   return oldest ?? statsOf(gruStats)?.since ?? null
 }
 
+/**
+ * A run's epic's title, less its leads, or null. An epic that is a ticket of
+ * its run (a `--tickets` run's first ticket) takes its row's name: its file's
+ * title, else the one Gru wrote at launch. Any other takes alfred's.
+ */
+export function epicTitleOf(run: RunEntry, files: Record<string, string>, epicTitles: ReadonlyMap<string, string>): string | null {
+  const title = run.tickets.includes(run.epic)
+    ? (str(parse(files[`${run.epic}.json`])?.title) ?? (Object.hasOwn(run.titles, run.epic) ? run.titles[run.epic] : undefined))
+    : epicTitles.get(run.epic)
+  const name = title === undefined ? '' : nameOf(title).name
+
+  return name === '' ? null : name
+}
+
 /** The run a tab shows: the one `pick` names, else this session's own (Gru's tab), else the most recently active. */
 export function pickRun(runs: RunEntry[], session: string, pick: string): RunEntry | undefined {
   return runs.find(r => r.launchId === pick) ?? runs.find(r => r.session === session) ?? runs[0]
@@ -356,15 +370,11 @@ export function buildBoard(
   })
   const done = chosen.tickets.filter(id => parse(files[`${id}.json`])?.stage === 'closed').length
   const notStarted = rows.filter(r => r.tone === 'none').length
-  // A `--tickets` run's epic is its first ticket: its name as its row has it. Else alfred's title, less its leads.
-  const epicRow = rows.find(r => r.id === chosen.epic)
-  const fromAlfred = epicTitles.get(chosen.epic)
-  const title = epicRow !== undefined ? epicRow.name : fromAlfred === undefined ? '' : nameOf(fromAlfred).name
 
   return {
     launchId: chosen.launchId,
     epic: chosen.epic,
-    title: title === '' ? null : title,
+    title: epicTitleOf(chosen, files, epicTitles),
     started: startOf(files[runLogName(chosen.launchId)], files[runStatsName(chosen.launchId)]),
     isOwn: chosen.session === session,
     repos: [...new Set(rows.flatMap(r => (r.repo === null ? [] : [r.repo])))],

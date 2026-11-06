@@ -270,12 +270,16 @@ export type Board = {
 /** What the ticket pane draws: a worker's own ticket, read as the Gru pane reads it, and its settings. */
 export type TicketBoard = {
   id: string
-  /** The title without its `[tag]`, `repo: ` lead and `(slice n of m)` tail. */
+  /** The title without its `[tag]`, `repo: ` lead and `(slice n of m)` tail; '' when the file has no title. */
   name: string
   repo: string | null
   slice: string | null
   /** The epic of a Gru run that lists the ticket, or null. */
   epic: string | null
+  /** That epic's title, less its leads, or null while none is known. */
+  epicTitle: string | null
+  /** When the ticket started: its log's oldest line, else when its stats began; null with neither. */
+  started: number | null
   /** The station it is at: 5 past the last. */
   at: number
   tone: BoardTone
@@ -389,6 +393,8 @@ declare module 'claude-code' {
       /** The ticket pane's model, in a worker's own tab. */
       ticket: Shaped<TicketBoard | null>
       ticketTab: PaneTab
+      /** The ticket whose file this worker's tab found, once found, else '': its pane names that ticket's end. */
+      ownTicket: string
     }
   }
 }

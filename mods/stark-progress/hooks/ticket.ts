@@ -1,8 +1,9 @@
 import type { GitSignal, Stage, TicketBoard, TicketSettings } from '../types'
 import { beatFields } from './beat'
-import { calm, callsOf, nameOf, parse, runsOf } from './board'
+import { calm, callsOf, epicTitleOf, nameOf, parse, runsOf, startOf } from './board'
+import type { RunEntry } from './board'
 import { buildLog, logName } from './log'
-import { ticketStats } from './stats'
+import { statsName, ticketStats } from './stats'
 import { holdOf, row } from './view'
 
 // What the ticket pane draws (ticket-pane.tsx), from the contract's files
@@ -36,6 +37,16 @@ const NEXT: Record<Stage, string | null> = {
   closed: null,
 }
 
+/**
+ * The epic run that lists `id`, or undefined. Only an epic's run (launched
+ * under the epic's own id) names a parent. A `--tickets` run (launched as
+ * `GRU-n`) writes its first ticket as `epic`, which is no parent of the
+ * others; and no ticket is part of itself.
+ */
+export function epicRunOf(id: string, files: Record<string, string>, mtimes: ReadonlyMap<string, number>): RunEntry | undefined {
+  return runsOf(files, mtimes).find(run => run.tickets.includes(id) && run.epic === run.launchId && run.epic !== id)
+}
+
 /** The ticket pane for `id`, or null while the ticket has no file. */
 export function buildTicket(
   id: string,
@@ -43,6 +54,8 @@ export function buildTicket(
   files: Record<string, string>,
   mtimes: ReadonlyMap<string, number>,
   git: GitSignal | null,
+  /** Each epic's title as alfred gave it, for an epic that is no ticket of its run. */
+  epicTitles: ReadonlyMap<string, string> = new Map(),
 ): TicketBoard | null {
   const text = files[`${id}.json`]
   if (text === undefined) return null
@@ -53,11 +66,9 @@ export function buildTicket(
   const reading = calm(r, true, beat, now)
   // The verdict reads a hold only while the ticket is neither closed nor blocked.
   const hold = r.verdict.word === 'held' ? holdOf(t?.hold) : null
-  const words = nameOf(typeof t?.title === 'string' && t.title !== '' ? t.title : id)
-  // Only an epic's run (launched under the epic's own id) names a parent. A
-  // `--tickets` run (launched as `GRU-n`) writes its first ticket as `epic`,
-  // which is no parent of the others; and no ticket is part of itself.
-  const run = runsOf(files, mtimes).find(run => run.tickets.includes(id) && run.epic === run.launchId && run.epic !== id)
+  // A ticket with no title shows its id alone, as the Gru pane's row does.
+  const words = typeof t?.title === 'string' && t.title !== '' ? nameOf(t.title) : null
+  const run = epicRunOf(id, files, mtimes)
   // A heartbeat with no call yet (a worker tab's own, before its first call) says so.
   const activity = beat === null || lastActivity === null ? ['No tool call yet.'] : callsOf(beat, now)
   if (git !== null && r.diff !== null) {
@@ -67,10 +78,13 @@ export function buildTicket(
 
   return {
     ...reading,
-    name: words.name || id,
-    repo: words.repo,
-    slice: words.slice,
+    name: words?.name ?? '',
+    repo: words?.repo ?? null,
+    slice: words?.slice ?? null,
     epic: run?.epic ?? null,
+    epicTitle: run === undefined ? null : epicTitleOf(run, files, epicTitles),
+    // Its worker's first log line, else when its stats began, as a run's start is.
+    started: startOf(files[logName(id)], files[statsName(id)]),
     hold,
     attention: hold === null ? reading.attention : `Held by your settings: ${hold}`,
     activity,

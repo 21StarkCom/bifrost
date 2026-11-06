@@ -75,9 +75,9 @@ A Minion's or Agnes's tab, the ticket pane's Overview, with its merge held:
 ```
 Overview   Log   Stats   Settings
 
-Document the export flags
-STARK-1202 · bragi
-Part of STARK-1200
+[STARK-1202] Document the export flags
+bragi · started 12:21, 32m ago
+Part of [STARK-1200] Export the reading list
 
 🚇 Where it is
   ticket PR     review merge  done
@@ -459,10 +459,17 @@ header and per status, and none in Settings.
 
 **Overview.** All of it at once, since the pane holds one ticket:
 
-- The name (the title without its `[tag]`, `<repo>: ` lead and
-  `(slice n of m)` tail), then the id, the repo and the slice, and
-  `Part of <epic>` when an epic's run file lists the ticket (a `--tickets`
-  run, launched as `GRU-n`, has no epic to name).
+- `[STARK-n] <name>`, bold, as the Gru pane names a ticket: the id in its
+  own color, then the name (the title without its `[tag]`, `<repo>: ` lead
+  and `(slice n of m)` tail). A ticket file with no title shows the id alone.
+- Under it, the repo, the slice and `started <when>, <elapsed> ago`, each
+  only when it exists. The start is the oldest line of the ticket's log, else
+  when its stats began, as a run's start is.
+- `Part of [<epic>] <epic title>` when an epic's run file lists the ticket
+  (a `--tickets` run, launched as `GRU-n`, has no epic to name). The title
+  comes as the Gru pane's does: from alfred, asked once in the background, or
+  from the run file when the epic is a ticket of its run. With no title yet,
+  `Part of <epic>`.
 - `🚇 Where it is`: the five stations and the state, as the Gru pane draws
   them. A held ticket reads `✋ HELD · <merge or release> · <time>`.
 - A box when the ticket is worth a look: the band calls it `blocked`, `idle`
@@ -486,7 +493,17 @@ worker's.
 the ticket's worker sessions, from its stats file, its lines and commits from
 git, and its PR from the ticket file. Under it, the most used tools, the
 session's model and effort, and the requests and output tokens per model. A
-relaunch on the same ticket adds to the counts the file holds.
+relaunch on the same ticket adds to the counts the file holds. The line under
+the title adds `The ticket started <when>.`, unless the start is only when the
+counts began, which `Counted since` already says.
+
+**The end.** Once the ticket's file is gone (Agnes removes it at stand-down),
+the pane says `The ticket <STARK-n> ended`. The session's state keeps the
+ticket the tab found, so a reload of the mod says the same. A tab whose ticket
+never had a file, or that moved to another ticket's worktree, says
+`No ticket file yet`. A poll that lists the ticket's file but cannot read it
+is not the end: it leaves the pane, the band row and the heartbeat as they
+are.
 
 **Settings.** Three rows, each a value in a frame you select to change. A press writes
 all three to the ticket's settings file at once, one press at a time, each
