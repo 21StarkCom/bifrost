@@ -115,12 +115,15 @@ export function startOf(log: string | undefined, gruStats: string | undefined): 
  * title, else the one Gru wrote at launch. Any other takes alfred's.
  */
 export function epicTitleOf(run: RunEntry, files: Record<string, string>, epicTitles: ReadonlyMap<string, string>): string | null {
-  const title = run.tickets.includes(run.epic)
-    ? (str(parse(files[`${run.epic}.json`])?.title) ?? (Object.hasOwn(run.titles, run.epic) ? run.titles[run.epic] : undefined))
-    : epicTitles.get(run.epic)
+  const title = run.tickets.includes(run.epic) ? titleIn(run, run.epic, parse(files[`${run.epic}.json`])) : epicTitles.get(run.epic)
   const name = title === undefined ? '' : nameOf(title).name
 
   return name === '' ? null : name
+}
+
+/** A ticket of `run`'s title: its own file's, else the one Gru wrote at launch, else undefined. */
+function titleIn(run: RunEntry, id: string, file: Record<string, unknown> | null): string | undefined {
+  return str(file?.title) ?? (Object.hasOwn(run.titles, id) ? run.titles[id] : undefined)
 }
 
 /** The run a tab shows: the one `pick` names, else this session's own (Gru's tab), else the most recently active. */
@@ -353,7 +356,7 @@ export function buildBoard(
     const beat = parse(files[`${id}.beat.json`])
     const r = row(id, files, git[id] ?? null, now)
     // The worker's title, else the one Gru wrote at launch; the pane shows the id beside it, so none is no name.
-    const title = str(t?.title) ?? (Object.hasOwn(chosen.titles, id) ? chosen.titles[id] : undefined) ?? null
+    const title = titleIn(chosen, id, t) ?? null
     const words = title === null ? null : nameOf(title)
     const updated = typeof t?.updated === 'string' ? Date.parse(t.updated) : Number.NaN
     const hasFile = text !== undefined

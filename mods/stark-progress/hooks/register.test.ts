@@ -1360,6 +1360,28 @@ test("the ticket pane names its epic's title from alfred and starts at its log's
   expect(await pane.find({ type: 'Text', text: /The ticket started \d\d:\d\d, 2h10m ago\. Counted since \d\d:\d\d\.$/ })).toBeDefined()
 })
 
+test("the ticket pane names an epic that is a ticket of its own run by the epic's file, as the Gru pane does", async ($, on) => {
+  const disk: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({
+      epic: 'STARK-10',
+      session: 'gru',
+      tickets: ['STARK-10', 'STARK-1'],
+      titles: { 'STARK-10': 'Speak the hints' },
+    }),
+    'STARK-10.json': ticket('STARK-10', 'review', { title: 'bragi: speak the hints aloud' }),
+    'STARK-1.json': ticket('STARK-1', 'pr', { title: 'bragi: read the words file' }),
+  }
+  const seen = stage(on, disk, { session: 'w', root: WORKTREE })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: WORKTREE, surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+
+  const pane = await $.ui.mount(TICKET_PANE)
+  expect(await pane.find({ type: 'Text', text: /^Part of \[STARK-10\] Speak the hints aloud$/ })).toBeDefined()
+  // The epic's title is its file's: alfred is not asked.
+  expect(seen.runs.filter(argv => argv[0] === 'alfred')).toEqual([])
+})
+
 test('the ticket pane says its ticket ended once its file is gone', async ($, on) => {
   const disk: Record<string, string> = { 'STARK-1.json': ticket('STARK-1', 'merged') }
   stage(on, disk, { session: 'w', root: WORKTREE })

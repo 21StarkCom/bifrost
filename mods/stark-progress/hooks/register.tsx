@@ -66,6 +66,8 @@ let isPaneOpened = false
 // A worker's own tab: its ticket, and whether the ticket pane opened by itself yet.
 let ownTicket: string | null = null
 let isTicketPaneOpened = false
+/** The ownTicket atom's value as this load of the mod last wrote or read it, or null before the first poll. */
+let ownTicketFound: string | null = null
 let stateDir = ''
 let pollNow: () => Promise<void> = async () => {}
 
@@ -331,6 +333,8 @@ export const register: Register = on => {
         ...wanted.flatMap(id => [`${id}.json`, `${id}.beat.json`, logName(id), statsName(id)]),
         ...(shown === undefined ? [] : [settingsName(shown.launchId), runLogName(shown.launchId), runStatsName(shown.launchId)]),
         ...(own === null ? [] : [ticketSettingsName(own)]),
+        // An epic that is a ticket of its own run takes its title from its own file, as the Gru pane's does.
+        ...(epicRun !== undefined && epicRun.tickets.includes(epicRun.epic) ? [`${epicRun.epic}.json`] : []),
         ...(statsAnchor === null ? [] : [statsAnchor.name]),
       ])
       // This tab's own stats file is read once, for the seed: its counts are in memory after that.
@@ -341,10 +345,12 @@ export const register: Register = on => {
       const isTicketUnread = own !== null && names.has(`${own}.json`) && files[`${own}.json`] === undefined
       // The ticket this tab found keeps its end on the pane, but only while the tab stays in that ticket's
       // worktree: a session that moved to another one names no ticket's end until it finds that ticket's file.
-      const found = await read($, ownTicketAtom)
+      // The session's state is read once per load of the mod (a reload keeps it there), then kept in memory.
+      const found = ownTicketFound ?? (await read($, ownTicketAtom))
       const isFound = own !== null && files[`${own}.json`] !== undefined
       const nowFound = isFound ? own : own === found ? found : ''
       if (nowFound !== found) await update($, ownTicketAtom, () => nowFound)
+      ownTicketFound = nowFound
 
       // A worker's own tab writes its heartbeat while its ticket's file
       // exists, draws its own row from memory, and removes the heartbeat
