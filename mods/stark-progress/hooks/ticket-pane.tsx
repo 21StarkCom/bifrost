@@ -1,6 +1,20 @@
 import type { Hold, PaneTab, TicketBoard, TicketSettings } from '../types'
 import { clockOf } from './board'
-import { choice, cut, hour, line, logTab, segFor, settingRow, stateText, stationHeader, statsTab, tabBar, toggle } from './pane'
+import {
+  choice,
+  hour,
+  line,
+  logTab,
+  segFor,
+  settingRow,
+  startedWords,
+  stateText,
+  stationHeader,
+  statsTab,
+  tabBar,
+  ticketLabel,
+  toggle,
+} from './pane'
 import type { UI } from './pane'
 
 // The ticket pane, in a Minion's or Agnes's own tab: one ticket, all of it at
@@ -9,6 +23,8 @@ import type { UI } from './pane'
 
 export type TicketPaneView = {
   ticket: TicketBoard | null
+  /** This tab's ticket, once its file was found, else '': with no ticket, that ticket ended. */
+  ended: string
   tab: PaneTab
   setTab: (tab: PaneTab) => unknown
   /** A change made from the settings as they are when it is written, so two quick presses both count. */
@@ -24,14 +40,24 @@ const CLEARS: Record<Hold, string> = {
 function overview(ui: UI, w: number, t: TicketBoard) {
   const { Box, Text, P } = ui
   const seg = segFor(w)
-  const about = [t.id, t.repo, t.slice].filter((words): words is string => words !== null).join(' · ')
+  const started = t.started === null ? null : `started ${startedWords(t.started, t.readAt)}`
+  const about = [t.repo, t.slice, started].filter((words): words is string => words !== null).join(' · ')
+  const part = 'Part of '
 
   return (
     <Box flexDirection="column" gap={1}>
       <Box flexDirection="column">
-        <Text bold>{cut(t.name, w)}</Text>
-        <Text color={P.text}>{about}</Text>
-        {t.epic !== null && <Text color={P.text}>{`Part of ${t.epic}`}</Text>}
+        {ticketLabel(ui, t.id, t.name, w, { bold: true })}
+        {about !== '' && <Text color={P.text}>{about}</Text>}
+        {t.epic !== null &&
+          (t.epicTitle === null ? (
+            <Text color={P.text}>{`${part}${t.epic}`}</Text>
+          ) : (
+            <Text color={P.text}>
+              {part}
+              {ticketLabel(ui, t.epic, t.epicTitle, w - part.length)}
+            </Text>
+          ))}
       </Box>
 
       <Box flexDirection="column">
@@ -127,10 +153,16 @@ export function drawTicketPane(ui: UI, w: number, view: TicketPaneView) {
   const { Box, Text, P } = ui
   const t = view.ticket
   if (t === null) {
-    return (
+    // A ticket whose file this tab found, and whose worker removed it at the end (Agnes, at stand-down).
+    return view.ended === '' ? (
       <Box flexDirection="column" gap={1}>
         <Text bold>No ticket file yet</Text>
         <Text color={P.text}>The pane shows this tab's ticket once its file is in ~/.cache/stark-progress.</Text>
+      </Box>
+    ) : (
+      <Box flexDirection="column" gap={1}>
+        <Text bold>{`The ticket ${view.ended} ended`}</Text>
+        <Text color={P.text}>Its file is gone from ~/.cache/stark-progress.</Text>
       </Box>
     )
   }
@@ -151,7 +183,10 @@ export function drawTicketPane(ui: UI, w: number, view: TicketPaneView) {
           : view.tab === 'stats'
             ? statsTab(ui, w, t.stats, t.readAt, {
                 title: `Stats for ${t.id}`,
-                who: "The counts of this ticket's worker sessions.",
+                who: `The counts of this ticket's worker sessions.${
+                  // With no log, the start is when the counts began, which `Counted since` already says.
+                  t.started === null || t.started === t.stats.since ? '' : ` The ticket started ${startedWords(t.started, t.readAt)}.`
+                }`,
                 empty: "No stats file yet. This tab writes one within a few seconds, if the worker's session has the mod.",
               })
             : overview(ui, w, t)}

@@ -99,3 +99,39 @@ test('the next step follows the stage, and a hold waits for your OK', () => {
   const fresh = buildTicket('STARK-1', T0, { 'STARK-1.json': ticket('ticket'), 'STARK-1.beat.json': quiet }, new Map(), null)
   expect(fresh?.activity).toEqual(['No tool call yet.'])
 })
+
+test("a ticket's start is its log's oldest line, else when its stats began, and its epic's title is alfred's or its row's", () => {
+  const log = `${JSON.stringify({ at: iso(30), text: 'Opened the PR.' })}\n${JSON.stringify({ at: iso(90), text: 'Read the ticket.' })}\n`
+  const stats = JSON.stringify({ session: 'w', since: iso(60), updated: iso(1) })
+  const files: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'g', tickets: ['STARK-1'] }),
+    'STARK-1.json': ticket('pr'),
+    'STARK-1.stats.json': stats,
+  }
+  const titles = new Map([['STARK-10', 'EPIC: bragi: read the words file aloud']])
+  expect(buildTicket('STARK-1', T0, files, new Map(), null, titles)).toMatchObject({
+    epic: 'STARK-10',
+    epicTitle: 'Read the words file aloud',
+    started: T0 - 60 * MIN,
+  })
+  // The log's oldest line wins over the stats, in whatever order the lines are.
+  expect(buildTicket('STARK-1', T0, { ...files, 'STARK-1.log.jsonl': log }, new Map(), null, titles)?.started).toBe(T0 - 90 * MIN)
+  // No title known yet: the epic's id alone.
+  expect(buildTicket('STARK-1', T0, files, new Map(), null)?.epicTitle).toBe(null)
+  // An epic that is a ticket of its own run takes its row's name, and never alfred's.
+  const listed = {
+    ...files,
+    'run-STARK-10.json': JSON.stringify({
+      epic: 'STARK-10',
+      session: 'g',
+      tickets: ['STARK-10', 'STARK-1'],
+      titles: { 'STARK-10': '[epic] Speak the hints' },
+    }),
+  }
+  expect(buildTicket('STARK-1', T0, listed, new Map(), null, titles)?.epicTitle).toBe('Speak the hints')
+})
+
+test('a ticket with no title, no log and no stats has no name and no start: the pane shows its id alone', () => {
+  const t = buildTicket('STARK-1', T0, { 'STARK-1.json': JSON.stringify({ id: 'STARK-1', stage: 'ticket' }) }, new Map(), null)
+  expect(t).toMatchObject({ name: '', repo: null, slice: null, epic: null, epicTitle: null, started: null })
+})

@@ -24,7 +24,7 @@ import {
   statsName,
   statsOf,
 } from './stats'
-import { buildTicket, ticketSettingsName, ticketSettingsOf } from './ticket'
+import { buildTicket, epicRunOf, ticketSettingsName, ticketSettingsOf } from './ticket'
 import { drawTicketPane } from './ticket-pane'
 import { buildView, isRunName, ownRun, ticketOf, worktreeOf } from './view'
 
@@ -51,8 +51,10 @@ const ownEpicAtom = atom({ plugin: 'stark-progress', key: 'ownEpic' } as const, 
 const doneLastAtom = atom({ plugin: 'stark-progress', key: 'doneLast' } as const, false)
 /** The `$.store` key that keeps the pane's doneLast choice across sessions. */
 const DONE_LAST = 'doneLast'
-const ticketAtom = atom({ plugin: 'stark-progress', key: 'ticket' } as const, null, { shape: 'ticket-6' })
+const ticketAtom = atom({ plugin: 'stark-progress', key: 'ticket' } as const, null, { shape: 'ticket-7' })
 const ticketTabAtom = atom({ plugin: 'stark-progress', key: 'ticketTab' } as const, 'overview' as PaneTab)
+/** The ticket whose file this worker's tab found, once found: its pane names the ticket's end after the file goes. */
+const ownTicketAtom = atom({ plugin: 'stark-progress', key: 'ownTicket' } as const, '')
 
 // The pane's run: Gru's tab shows its own; a session that asked for the pane
 // with /gru-board shows the most recently active run, or the one `r` picked.
@@ -64,6 +66,8 @@ let isPaneOpened = false
 // A worker's own tab: its ticket, and whether the ticket pane opened by itself yet.
 let ownTicket: string | null = null
 let isTicketPaneOpened = false
+/** The ownTicket atom's value as this load of the mod last wrote or read it, or null before the first poll. */
+let ownTicketFound: string | null = null
 let stateDir = ''
 let pollNow: () => Promise<void> = async () => {}
 
@@ -103,6 +107,25 @@ const epicsAsked = new Map<string, number>()
 const ASK_AGAIN_MS = 5 * 60_000
 /** A ticket id alfred knows: never a value that could read as a flag. */
 const EPIC_ID = /^[A-Z][A-Z0-9]*-\d+$/
+
+/**
+ * Asks alfred for an epic's title in the background, and a later poll draws
+ * the answer: for an epic that is no ticket of its run (whose own file or
+ * run-file title names it). One answer is kept; a failed ask is tried again later.
+ */
+function askEpicTitle($: EngineInterface, epic: string, now: number) {
+  const asked = epicsAsked.get(epic)
+  if (!EPIC_ID.test(epic) || epicTitles.has(epic) || (asked !== undefined && now - asked < ASK_AGAIN_MS)) return
+  epicsAsked.set(epic, now)
+  void $.process
+    .run(['alfred', 'task', 'show', epic, '--json'], { timeoutMs: 30_000 })
+    .then(r => {
+      const name = r.exitCode === 0 ? (parse(r.stdout)?.item as Record<string, unknown> | undefined)?.name : undefined
+      if (typeof name === 'string' && name !== '') epicTitles.set(epic, name)
+    })
+    .catch(() => undefined)
+}
+
 const gitCache = new Map<string, { at: number; signal: GitSignal | null; isReading: boolean }>()
 
 /**
@@ -292,26 +315,10 @@ export const register: Register = on => {
         pick = shown.launchId
         await update($, pickAtom, () => shown.launchId)
       }
-      // An epic that is no ticket of its run (whose own file or run-file title names it): ask alfred, in the
-      // background, and a later poll draws the answer. One answer is kept; a failed ask is tried again later.
-      const asked = shown === undefined ? undefined : epicsAsked.get(shown.epic)
-      if (
-        shown !== undefined &&
-        !shown.tickets.includes(shown.epic) &&
-        EPIC_ID.test(shown.epic) &&
-        !epicTitles.has(shown.epic) &&
-        (asked === undefined || now - asked >= ASK_AGAIN_MS)
-      ) {
-        const epic = shown.epic
-        epicsAsked.set(epic, now)
-        void $.process
-          .run(['alfred', 'task', 'show', epic, '--json'], { timeoutMs: 30_000 })
-          .then(r => {
-            const name = r.exitCode === 0 ? (parse(r.stdout)?.item as Record<string, unknown> | undefined)?.name : undefined
-            if (typeof name === 'string' && name !== '') epicTitles.set(epic, name)
-          })
-          .catch(() => undefined)
-      }
+      // The epic of the pane's run, and of a worker's epic run, when it is no ticket of its run.
+      if (shown !== undefined && !shown.tickets.includes(shown.epic)) askEpicTitle($, shown.epic, now)
+      const epicRun = own === null ? undefined : epicRunOf(own, files, mtimes)
+      if (epicRun !== undefined && !epicRun.tickets.includes(epicRun.epic)) askEpicTitle($, epicRun.epic, now)
       const wanted = [
         ...new Set([...(run !== null ? run.tickets : own === null ? [] : [own]), ...(shown?.tickets ?? [])]),
       ]
@@ -326,11 +333,24 @@ export const register: Register = on => {
         ...wanted.flatMap(id => [`${id}.json`, `${id}.beat.json`, logName(id), statsName(id)]),
         ...(shown === undefined ? [] : [settingsName(shown.launchId), runLogName(shown.launchId), runStatsName(shown.launchId)]),
         ...(own === null ? [] : [ticketSettingsName(own)]),
+        // An epic that is a ticket of its own run takes its title from its own file, as the Gru pane's does.
+        ...(epicRun !== undefined && epicRun.tickets.includes(epicRun.epic) ? [`${epicRun.epic}.json`] : []),
         ...(statsAnchor === null ? [] : [statsAnchor.name]),
       ])
       // This tab's own stats file is read once, for the seed: its counts are in memory after that.
       reads.delete(statsSeededFor)
       await Promise.all([...reads].map(load))
+      // A worker's ticket file, listed but not read (a read that failed), is not the ticket's end:
+      // this poll leaves the ticket pane, the band and the heartbeat as they are.
+      const isTicketUnread = own !== null && names.has(`${own}.json`) && files[`${own}.json`] === undefined
+      // The ticket this tab found keeps its end on the pane, but only while the tab stays in that ticket's
+      // worktree: a session that moved to another one names no ticket's end until it finds that ticket's file.
+      // The session's state is read once per load of the mod (a reload keeps it there), then kept in memory.
+      const found = ownTicketFound ?? (await read($, ownTicketAtom))
+      const isFound = own !== null && files[`${own}.json`] !== undefined
+      const nowFound = isFound ? own : own === found ? found : ''
+      if (nowFound !== found) await update($, ownTicketAtom, () => nowFound)
+      ownTicketFound = nowFound
 
       // A worker's own tab writes its heartbeat while its ticket's file
       // exists, draws its own row from memory, and removes the heartbeat
@@ -353,7 +373,7 @@ export const register: Register = on => {
             lastFlush = now
             await writeWhole($, `${dir}/${name}`, text).catch(() => undefined)
           }
-        } else if (names.has(name)) {
+        } else if (names.has(name) && !isTicketUnread) {
           await $.process.run(['rm', '-f', `${dir}/${name}`]).catch(() => undefined)
         }
       }
@@ -438,17 +458,17 @@ export const register: Register = on => {
         isTicketPaneOpened = true
         void $.ui.open({ id: TICKET_PANE, title: own }).catch(() => undefined)
       }
-      const shownTicket = own === null ? null : buildTicket(own, now, files, mtimes, git[own] ?? null)
+      const shownTicket = own === null ? null : buildTicket(own, now, files, mtimes, git[own] ?? null, epicTitles)
       const ticketKey =
         shownTicket === null ? 'null' : JSON.stringify([{ ...shownTicket, readAt: 0 }, Math.floor(now / 60_000)])
-      if (ticketKey !== lastTicket) {
+      if (ticketKey !== lastTicket && !isTicketUnread) {
         lastTicket = ticketKey
         await update($, ticketAtom, () => shownTicket)
       }
 
       const fresh = buildView(root, session, now, files, git)
       const key = JSON.stringify(fresh)
-      if (key === last || isOwnUnread) return
+      if (key === last || isOwnUnread || isTicketUnread) return
       last = key
       await update($, view, () => fresh)
     }
@@ -566,6 +586,7 @@ export const register: Register = on => {
 
     return drawTicketPane(ui, Math.max(e.props.bodyColumns, 40), {
       ticket: shown,
+      ended: await read($, ownTicketAtom),
       tab: await read($, ticketTabAtom),
       setTab: tab => update($, ticketTabAtom, () => tab),
       // The whole settings, written as one file, as the contract asks; the worker reads it at three
