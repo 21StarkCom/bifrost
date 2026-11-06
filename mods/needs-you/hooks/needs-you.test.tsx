@@ -71,10 +71,12 @@ type Drawing = {
   find: (q: { type?: string; key?: string; text?: RegExp | string }) => Promise<Found | undefined>
 }
 
-// The band's rows: the Buttons keyed `row-<n>`.
+// The band's rows: the Buttons keyed `row-<row id>`, in the band's order.
 const rows = async (ui: Drawing) => (await ui.findAll({ type: 'Button' })).filter(b => b.key?.startsWith('row-') === true)
+// The key of row `i`'s chip Button.
+const rowKey = async (ui: Drawing, i: number) => (await rows(ui))[i]?.key ?? `no row ${i}`
 // A row's chip, the text of its Button.
-const chipOf = async (ui: Drawing, i: number) => (await ui.find({ key: `row-${i}` }))?.text ?? ''
+const chipOf = async (ui: Drawing, i: number) => (await rows(ui))[i]?.text ?? ''
 // The key of the field under row `i`.
 const field = async (ui: Drawing, i: number) => (await ui.findAll({ type: 'Input' }))[i]?.key ?? `no field ${i}`
 // The whole text of the band, its rows' questions included.
@@ -119,15 +121,15 @@ test('a press moves a row to yes, then no, then no answer', async ($, on) => {
   await $.turn.complete(end(ANSWER))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
 
-  await ui.press({ key: 'row-0' })
+  await ui.press({ key: await rowKey(ui, 0) })
   expect(await chipOf(ui, 0)).toMatch(/^✓ your pick/)
-  await ui.press({ key: 'row-0' })
+  await ui.press({ key: await rowKey(ui, 0) })
   expect(await chipOf(ui, 0)).toMatch(/^✗ no /)
-  await ui.press({ key: 'row-0' })
+  await ui.press({ key: await rowKey(ui, 0) })
   expect(await chipOf(ui, 0)).toMatch(/^○ /)
 
-  await ui.press({ key: 'row-1' })
-  await ui.press({ key: 'row-1' })
+  await ui.press({ key: await rowKey(ui, 1) })
+  await ui.press({ key: await rowKey(ui, 1) })
   expect(await chipOf(ui, 1)).toMatch(/^✗ no go/)
   await ui.unmount()
 })
@@ -142,7 +144,7 @@ test('Take all picks answers only a Yours row with a pick, and Send keeps the op
   expect(await chipOf(ui, 1)).toMatch(/^○ /)
   expect(await chipOf(ui, 2)).toMatch(/^○ /)
   expect(await chipOf(ui, 3)).toMatch(/^○ /)
-  await ui.press({ key: 'row-1' })
+  await ui.press({ key: await rowKey(ui, 1) })
   expect(await ui.find({ type: 'Text', text: /2 of 4 answered/ })).toBeDefined()
   await ui.press({ key: 'send' })
 
@@ -169,8 +171,8 @@ test("words in a row's field answer it and reach Claude with the row's side", as
   await $.turn.complete(end(ANSWER))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
 
-  await ui.press({ key: 'row-1' })
-  await ui.press({ key: 'row-1' })
+  await ui.press({ key: await rowKey(ui, 1) })
+  await ui.press({ key: await rowKey(ui, 1) })
   await ui.input({ key: await field(ui, 1), text: 'wait for the plan review first', kind: 'change' })
   await ui.input({ key: await field(ui, 2), text: 'I am away until 18:00.\nAsk me again then.' })
   expect(await chipOf(ui, 2)).toMatch(/^✎ words/)
@@ -223,7 +225,7 @@ test('typing changes neither the key nor the value of a field, and blank words a
   const key = await field(ui, 0)
 
   await ui.input({ key, text: 'only Vertex for now', kind: 'change' })
-  await ui.press({ key: 'row-3' })
+  await ui.press({ key: await rowKey(ui, 3) })
   expect((await ui.findAll({ type: 'Input' }))[0]).toMatchObject({ key, props: { value: '' } })
   expect(await ui.find({ type: 'Text', text: /2 of 4 answered/ })).toBeDefined()
   await ui.input({ key: await field(ui, 0), text: '   ', kind: 'change' })
@@ -232,15 +234,114 @@ test('typing changes neither the key nor the value of a field, and blank words a
   await ui.unmount()
 })
 
-test('a field stays with its own row when a row above it leaves', async ($, on) => {
+test('a field and a chip stay with their own row when a row above it leaves', async ($, on) => {
   engine(on)
   await $.turn.complete(end(ANSWER))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   const second = await field(ui, 1)
+  const secondChip = await rowKey(ui, 1)
 
   await ui.input({ key: await field(ui, 0), text: 'only Vertex', kind: 'change' })
   await ui.press({ key: 'send' })
   expect(await field(ui, 0)).toBe(second)
+  expect(await rowKey(ui, 0)).toBe(secondChip)
+  await ui.unmount()
+})
+
+// A turn that ends while the answers wait has not read them: a line it asks
+// again is not open, so it does not join the band.
+test('a line asked again while its answer waits stays out, and a dropped message brings back one row', async ($, on) => {
+  // The engine holds the message until a later turn has ended, then drops it.
+  let release: (drop: string) => void = () => undefined
+  let toasted: () => void = () => undefined
+  const toast = new Promise<void>(resolve => (toasted = resolve))
+  on('turn.complete', (_, e) => ({ text: e.answer }))
+  on('prompt.submit', () => new Promise(resolve => (release = drop => resolve({ drop }))))
+  // The mod puts the rows back, then says so in a toast.
+  on('ui.toast', () => {
+    toasted()
+
+    return { value: undefined }
+  })
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+
+    return <Text>engine</Text>
+  })
+  const line = 'Needs you (GO: merge): merge the PR?'
+  await $.turn.complete(end(line))
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  await ui.press({ key: await rowKey(ui, 0) })
+  await ui.press({ key: 'send' })
+  await $.turn.complete({ ...end(line), turnId: 'later' })
+  expect(await rows(ui)).toHaveLength(0)
+  release('test drop')
+  await toast
+
+  expect(await rows(ui)).toHaveLength(1)
+  expect(await chipOf(ui, 0)).toMatch(/^✓ go/)
+  await ui.unmount()
+})
+
+test('once the answers went, a line asked again joins the band as open', async ($, on) => {
+  let deliver: () => void = () => undefined
+  let entered: () => void = () => undefined
+  const turnStarted = new Promise<void>(resolve => (entered = resolve))
+  on('turn.complete', (_, e) => ({ text: e.answer }))
+  on('prompt.submit', (_, e) =>
+    new Promise(resolve => {
+      deliver = () => {
+        resolve({ text: e.text })
+        entered()
+      }
+    }),
+  )
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+
+    return <Text>engine</Text>
+  })
+  const line = 'Needs you (GO: merge): merge the PR?'
+  await $.turn.complete(end(line))
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  await ui.press({ key: await rowKey(ui, 0) })
+  await ui.press({ key: 'send' })
+  deliver()
+  await turnStarted
+  // The mod hears of the delivery a few hops after the engine: let it settle.
+  for (let i = 0; i < 5; i++) await rows(ui)
+  await $.turn.complete({ ...end(line), turnId: 'after' })
+
+  expect(await rows(ui)).toHaveLength(1)
+  expect(await chipOf(ui, 0)).toMatch(/^○/)
+  await ui.unmount()
+})
+
+test('a row id is never held twice, even when one turn ends twice', async ($, on) => {
+  engine(on)
+  const once = (answer: string) => $.turn.complete({ ...end(answer), turnId: 'same' })
+  await once('Needs you (GO: a): run a?\nNeeds you (GO: b): run b?')
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  await ui.press({ key: await rowKey(ui, 0) })
+  await ui.press({ key: 'send' })
+  await once('Needs you (GO: c): run c?')
+
+  const keys = (await ui.findAll({ type: 'Input' })).map(f => f.key)
+  expect(keys).toHaveLength(2)
+  expect(new Set(keys).size).toBe(2)
+  await ui.press({ key: await rowKey(ui, 1) })
+  expect(await chipOf(ui, 0)).toMatch(/^○/)
+  expect(await chipOf(ui, 1)).toMatch(/^✓ go/)
+  await ui.unmount()
+})
+
+test('a field counts a wide character as two cells', async ($, on) => {
+  engine(on)
+  await $.turn.complete(end('Needs you (Yours: name): which name?'))
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  // 60 wide characters take 120 cells: two rows in a field under 120 cells.
+  await ui.input({ key: await field(ui, 0), text: '名'.repeat(60) })
+  expect((await ui.findAll({ type: 'Input' }))[0]?.props.rows).toBe(2)
   await ui.unmount()
 })
 
@@ -257,8 +358,8 @@ test('Take all picks keeps an answer or words the person gave', async ($, on) =>
   )
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
 
-  await ui.press({ key: 'row-0' })
-  await ui.press({ key: 'row-0' })
+  await ui.press({ key: await rowKey(ui, 0) })
+  await ui.press({ key: await rowKey(ui, 0) })
   await ui.input({ key: await field(ui, 1), text: 'loki', kind: 'change' })
   await ui.press({ key: 'all' })
   expect(await chipOf(ui, 0)).toMatch(/^✗ no /)
@@ -281,7 +382,7 @@ test('a pick ends at its first sentence stop', async ($, on) => {
   const { sent } = engine(on)
   await $.turn.complete(end('Needs you (Yours: name): odin or thor? I recommend odin. Thor is slower.'))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  await ui.press({ key: 'row-0' })
+  await ui.press({ key: await rowKey(ui, 0) })
   await ui.press({ key: 'send' })
   expect(sent[0]).toMatch(/— your pick: odin\.$/)
   await ui.unmount()
@@ -303,7 +404,7 @@ test('Clear removes every row', async ($, on) => {
   const { sent } = engine(on)
   await $.turn.complete(end(ANSWER))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  await ui.press({ key: 'row-0' })
+  await ui.press({ key: await rowKey(ui, 0) })
   await ui.press({ key: 'clear' })
 
   expect(await rows(ui)).toHaveLength(0)
@@ -315,8 +416,8 @@ test("the person's prompt carries the answers above their words, and the open ro
   engine(on)
   await $.turn.complete(end(ANSWER))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  await ui.press({ key: 'row-3' })
-  await ui.press({ key: 'row-3' })
+  await ui.press({ key: await rowKey(ui, 3) })
+  await ui.press({ key: await rowKey(ui, 3) })
 
   const entered = await $.prompt.submit(composer('Use two regions, not one.'))
   expect(entered.text).toBe(
@@ -351,7 +452,7 @@ test('a slash command and a task notification leave the answers alone', async ($
   engine(on)
   await $.turn.complete(end(ANSWER))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  await ui.press({ key: 'row-0' })
+  await ui.press({ key: await rowKey(ui, 0) })
 
   const command = await $.prompt.submit({ ...composer('/compact'), command: { name: 'compact', args: '' } })
   expect(command.text).toBe('/compact')
@@ -365,7 +466,7 @@ test('a turn end with no Needs you lines keeps the band and its answers', async 
   engine(on)
   await $.turn.complete(end(ANSWER))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  await ui.press({ key: 'row-0' })
+  await ui.press({ key: await rowKey(ui, 0) })
 
   await $.turn.complete(end('Partial work.', { reason: 'aborted' }))
   await $.turn.complete(end('Noted: the task finished.'))
@@ -378,8 +479,8 @@ test("a later turn's new lines join the open rows, and a line asked again keeps 
   engine(on)
   await $.turn.complete(end(ANSWER))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  await ui.press({ key: 'row-1' })
-  await ui.press({ key: 'row-1' })
+  await ui.press({ key: await rowKey(ui, 1) })
+  await ui.press({ key: await rowKey(ui, 1) })
   await ui.input({ key: await field(ui, 2), text: 'after lunch', kind: 'change' })
 
   await $.turn.complete(
@@ -415,7 +516,7 @@ test('only the closing run counts, and an unknown tag ends it', async ($, on) =>
   )
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   expect(await rows(ui)).toHaveLength(1)
-  await ui.press({ key: 'row-0' })
+  await ui.press({ key: await rowKey(ui, 0) })
   expect(await chipOf(ui, 0)).toMatch(/^✓ your pick/)
   await ui.unmount()
 })

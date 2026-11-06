@@ -30,6 +30,9 @@ run. `tools/ask_guard_metric.test.ts` holds the mod's tag list and its
   `only Vertex`.
 - New lines join the band after the open rows. A line asked again, with the
   same tag and question, keeps its one row and what the operator gave it.
+- A line asked again while its answer waits for the turn to end does not
+  join the band: that turn has not read the answer. If the message does not
+  go, its rows come back, one row for each line.
 - A turn that ends with no such lines leaves the band as it is: a task
   notification's turn or a command's turn does not answer the lines. So do an
   interrupt, a refusal, an error, and a subagent's turn.
@@ -117,6 +120,10 @@ One session value, `asks`: the open rows, oldest first. Each row holds its
 line, its side (`yes`, `no` or `null`), its words, and its field's drawn
 value and key count. It carries the shape tag `asks-2`; change the tag when
 the shape of the value changes. The mod writes nothing to disk.
+
+The answered rows of a message that waits for the turn to end are held in a
+module variable until the message goes or is dropped; a reload empties it.
+Each row's id is one that no other row holds, so two rows never share a key.
 
 A field keeps the operator's own text while its `value` prop stays the
 same, so typing never changes the prop: a redraw between two fast keys would

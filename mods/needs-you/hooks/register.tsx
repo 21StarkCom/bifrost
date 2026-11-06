@@ -79,7 +79,19 @@ const hasPick = (ask: Ask) => ask.kind === 'Yours' && ask.pick !== undefined
 const hasWords = (row: Row) => row.words.trim() !== ''
 const isAnswered = (row: Row) => row.answer !== null || hasWords(row)
 const sameAsk = (a: Ask, b: Ask) => a.tag === b.tag && a.question === b.question
-const width = (s: string) => Array.from(s).length
+// Code points a terminal draws two cells wide: East Asian wide letters and the emoji blocks.
+const WIDE: readonly (readonly [number, number])[] = [
+  [0x1100, 0x115f], [0x2e80, 0x303e], [0x3041, 0x33ff], [0x3400, 0x4dbf], [0x4e00, 0x9fff],
+  [0xa000, 0xa4cf], [0xac00, 0xd7a3], [0xf900, 0xfaff], [0xfe30, 0xfe4f], [0xff00, 0xff60],
+  [0xffe0, 0xffe6], [0x1f300, 0x1f64f], [0x1f900, 0x1f9ff], [0x20000, 0x3fffd],
+]
+// The cells a text takes on a terminal, by code point, so an emoji is never split.
+const width = (s: string) =>
+  Array.from(s).reduce((sum, ch) => {
+    const point = ch.codePointAt(0) ?? 0
+
+    return sum + (WIDE.some(([from, to]) => point >= from && point <= to) ? 2 : 1)
+  }, 0)
 
 // The chip names the side the row is on. A pick shows in the question, whole,
 // so the chip says only "your pick" and never cuts it.
@@ -97,23 +109,48 @@ const redrawn = (row: Row, words: string): Row => ({ ...row, words, field: { val
 
 const nextAnswer = (a: Answer | null): Answer | null => (a === null ? 'yes' : a === 'yes' ? 'no' : null)
 
+// Answered rows whose message waits for the running turn to end. A turn that
+// ends in that time has not read the answers, so a line it asks again is not
+// open: it does not join the band. Module state: a reload starts it empty.
+let waiting: readonly Row[] = []
+
+// An id no row in `taken` holds, so two rows never share a key.
+function freshId(taken: readonly Row[], turnId: string): string {
+  let n = 0
+  while (taken.some(row => row.id === `${turnId}:${n}`)) n += 1
+
+  return `${turnId}:${n}`
+}
+
 // New lines join the band after the open rows; a line asked again keeps its one row.
-export function merge(now: readonly Row[], items: readonly Ask[], turnId: string): Row[] {
+export function merge(now: readonly Row[], items: readonly Ask[], turnId: string, sent: readonly Row[] = []): Row[] {
   const out = [...now]
   for (const ask of items) {
-    if (out.some(row => sameAsk(row.ask, ask))) continue
-    out.push({ id: `${turnId}:${out.length}`, ask, answer: null, words: '', field: { value: '', rev: 0 } })
+    if ([...out, ...sent].some(row => sameAsk(row.ask, ask))) continue
+    const id = freshId([...out, ...sent], turnId)
+    out.push({ id, ask, answer: null, words: '', field: { value: '', rev: 0 } })
   }
 
   return out
 }
 
+// Holds `sent` in `waiting` until `delivered` settles, whichever way it goes.
+async function whileWaiting<T>(sent: readonly Row[], delivered: Promise<T>): Promise<T> {
+  waiting = [...waiting, ...sent]
+  try {
+    return await delivered
+  } finally {
+    waiting = waiting.filter(row => !sent.includes(row))
+  }
+}
+
 const without = (now: readonly Row[], gone: readonly Row[]) => now.filter(row => !gone.some(g => g.id === row.id))
 
 // A message that did not go puts its rows back in front, with what they held.
+// A line a later turn asked again while the message waited keeps one row: the sent one.
 const putBack = (now: readonly Row[], sent: readonly Row[]) => [
   ...sent.map(row => redrawn(row, row.words)),
-  ...without(now, sent),
+  ...without(now, sent).filter(row => !sent.some(s => sameAsk(s.ask, row.ask))),
 ]
 
 function said(row: Row): string {
@@ -158,7 +195,7 @@ async function send($: EngineInterface): Promise<void> {
   // A plugin's prompt runs once the session is idle, and the submit resolves
   // only when its turn starts: awaiting it here would run the press past its
   // time budget.
-  void $.prompt.submit({ text: messageFor(rows), asUser: true }).then(async submitted => {
+  void whileWaiting(sent, $.prompt.submit({ text: messageFor(rows), asUser: true })).then(async submitted => {
     if (submitted.drop === undefined) return
     await update($, rowsAtom, now => putBack(now, sent))
     $.ui.toast(`Not sent: ${submitted.drop}`)
@@ -171,7 +208,7 @@ export const register: Register = on => {
     // notification's or a command's turn does not answer the lines.
     if (e.agentId === undefined && e.reason === 'answer') {
       const items = parseAsks(e.answer)
-      if (items.length > 0) await update($, rowsAtom, now => merge(now, items, e.turnId))
+      if (items.length > 0) await update($, rowsAtom, now => merge(now, items, e.turnId, waiting))
     }
 
     return next(e)
@@ -186,7 +223,7 @@ export const register: Register = on => {
     const sent = rows.filter(isAnswered)
     if (sent.length === 0) return next(e)
     await update($, rowsAtom, now => without(now, sent))
-    const entered = await next({ ...e, text: `${messageFor(rows)}\n\n${e.text}` })
+    const entered = await whileWaiting(sent, next({ ...e, text: `${messageFor(rows)}\n\n${e.text}` }))
     if (entered.drop !== undefined) await update($, rowsAtom, now => putBack(now, sent))
 
     return entered
@@ -235,10 +272,12 @@ export const register: Register = on => {
           const lead = i < 9 ? '' : '   '
 
           return (
-            <Box key={`line-${i}`} flexDirection="row" columnGap={2}>
+            <Box key={`line-${row.id}`} flexDirection="row" columnGap={2}>
               <Box flexShrink={0}>
                 <Button
-                  key={`row-${i}`}
+                  // By id, as the field: the focus ring finds a Button again by its key,
+                  // so a key by place would move the ring to another row when one leaves.
+                  key={`row-${row.id}`}
                   plain
                   {...(i < 9 ? { hotkey: String(i + 1) } : {})}
                   onPress={() => change(row.id, r => ({ ...r, answer: nextAnswer(r.answer) }))}
@@ -265,7 +304,10 @@ export const register: Register = on => {
                   onSubmit={value =>
                     change(row.id, r => redrawn(r, value))
                       .then(async () => {
-                        const after = (await read($, rowsAtom)).find(r => r.id === rows[i + 1]?.id)
+                        // The row after this one as the band holds it now, not as it was drawn.
+                        const now = await read($, rowsAtom)
+                        const at = now.findIndex(r => r.id === row.id)
+                        const after = at === -1 ? undefined : now[at + 1]
                         await $.ui.focus({ requestId: band, key: after === undefined ? 'send' : fieldKey(after) })
                       })
                       .catch(() => undefined)
