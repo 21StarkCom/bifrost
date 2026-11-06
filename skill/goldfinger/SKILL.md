@@ -1040,8 +1040,8 @@ call unmeasured waits on its probe P6.
 goldfinger, in Chrome or any other browser: a site's permission prompt, the debugger bar's
 Cancel, an extension's install or site-access prompt (turning Quiet reads on raises one), a
 certificate or Safe Browsing warning, a password or passkey prompt. The daemon cannot tell that UI
-from the UI an agent aims at, so the rule is yours: leave it to the operator. Change no browser
-setting with goldfinger either.
+from the UI an agent aims at, so the rule is yours: leave it to the operator. A browser setting
+that a task needs, such as the page zoom, is yours to change: change it back when the task ends.
 
 ## Web apps: an Electron app's page through its DevTools pipe
 
