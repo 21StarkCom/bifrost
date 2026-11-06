@@ -14,19 +14,28 @@ export type Ask = {
 // The operator's answer to one line: the yes side or the no side.
 export type Answer = 'yes' | 'no'
 
-// The lines one turn ended on, and the answers so far.
-export type Asks = {
-  turnId: string
-  items: Ask[]
-  // One per item; null is no answer yet.
-  answers: (Answer | null)[]
+// One open line and what the operator gave it so far.
+export type Row = {
+  // The row's name for the session. Its field's key is built on it, so a
+  // field never moves to another row when a row above it leaves.
+  id: string
+  ask: Ask
+  // null is no side picked yet.
+  answer: Answer | null
+  // The operator's own words for the line, as typed; '' is none.
+  words: string
+  // The field's `value` and a count in its key. Both change only when the mod
+  // draws the field again on purpose: after Enter, which empties a field, and
+  // for a row a message put back. A field keeps the person's own text while
+  // its value stays the same, so a fast key never meets an older value.
+  field: { value: string; rev: number }
 }
 
 declare module 'claude-code' {
   interface PluginState {
     'needs-you': {
-      // null until a main-loop turn ends on Needs you lines.
-      asks: Shaped<Asks | null>
+      // The open lines, oldest first; empty until a main-loop turn ends on Needs you lines.
+      asks: Shaped<Row[]>
     }
   }
 }
