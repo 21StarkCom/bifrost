@@ -248,6 +248,22 @@
         "questions",
         "mod"
       ]
+    },
+    {
+      "name": "interview",
+      "source": "./mods/interview",
+      "description": "Claude asks you questions in a pane beside the chat and keeps working: pick an option or write your own words, and each answer reaches Claude in its running turn, or as your next message once the turn has ended.",
+      "version": "0.1.0",
+      "author": {
+        "name": "21 Stark AI",
+        "email": "engineering@21stark.com"
+      },
+      "category": "productivity",
+      "tags": [
+        "questions",
+        "interview",
+        "mod"
+      ]
     }
   ]
 }
