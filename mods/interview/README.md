@@ -28,7 +28,7 @@ A call gives at least one question or one id to withdraw. Each question:
 
 | Field | Type | Required | What it is |
 |---|---|---|---|
-| `id` | string | yes | A short id the operator sees, such as `Q1`. Unique in the session. |
+| `id` | string | yes | A short id the operator sees, such as `Q1`: 1 to 16 letters, digits, `_` or `-`. Unique in the session. |
 | `question` | string | yes | The question, in one sentence. |
 | `detail` | string | no | Markdown: the context and why the answer matters. |
 | `options` | array of 0 to 9 options | no | Each option has a `label` and an optional one-line `detail`. Labels are unique in the question. |
@@ -36,9 +36,9 @@ A call gives at least one question or one id to withdraw. Each question:
 | `recommended` | string | no | The label of the option Claude recommends, marked `★ my pick`. |
 
 - A new id joins after the questions already asked. A call never replaces the open questions.
-- An id of an open question replaces that question in its place.
+- An id of an open question replaces that question in its place. The operator's draft keeps its words, and its picks by option label.
 - An id of an answered or withdrawn question refuses the call: `the id Q1 was used for a question that is answered; use a new id`.
-- A withdrawn id that is answered or unknown stays as it is, and the result names it.
+- A withdrawn id that is not open (answered, withdrawn or unknown) stays as it is, and the result names it.
 
 A call that breaks a rule is refused with `The questions were not asked: <reason>.`
 
@@ -51,7 +51,8 @@ an unasked pane waits, and the tool tells Claude to tell the operator to type
 a question is open.
 
 - **Header:** the count of open and answered questions, and whether Claude is working or idle.
-- **A question:** its id, `<k> of <m> open`, the question and its detail. Then the options and the field `Your words`, which the mobile surface does not show.
+- **A question:** its id, `<k> of <m> open`, the question and its detail. Then the options and the field `Your words`, which the mobile surface does not show. On mobile, a question with no options tells the operator to answer it in the terminal or the desktop app.
+- **After a send:** the pane shows the next open question in asked order.
 - **Keys on a question:** `1`-`9` pick, `s` sends the answer, `n` next open question, `b` back, `l` all questions. Enter in the field sends the answer too.
 - **A pick:** a single-choice question keeps one pick. A `multiSelect` question toggles each option.
 - **All questions:** one row per question: `○` open, `●` sent and waiting, `✓` Claude has it, `–` withdrawn. Press an open row to answer it, or `a` for the first open question.
@@ -70,7 +71,8 @@ two routes never carry the same answer.
 3. **While Claude is idle:** an answer the operator sends goes at once, as in route 2.
 4. **When the operator types a prompt:** the waiting answers go above the prompt's words.
 
-After an interrupt, a refusal or an error, the waiting answers stay. The next
+After an interrupt, a refusal or an error, the waiting answers stay. A route
+that fails or is refused puts its answers back as waiting. The next
 answer the operator sends, or the next prompt they type, carries them.
 
 Every route carries the same text:
@@ -78,14 +80,23 @@ Every route carries the same text:
 ```
 <interview-answers>
 My answers to your interview questions (<n> new; still open: Q2, Q3):
-- Q1 Which database?: Postgres; my words: "the managed one".
+- Q1 (your question "Which database?"): "Postgres"; my words: "the managed one".
 </interview-answers>
 ```
+
+Claude wrote each question and option label, and this text goes as the
+operator's words. So the mod keeps each echoed question and label on one
+quoted line: line breaks become spaces, `<` and `>` become `‹` and `›`, a
+double quote becomes `'`, and the text is cut to 120 characters for a
+question and 60 for a label. An injected `</interview-answers>` and the lines
+after it cannot pass as the operator's words. The operator's own words go as
+they typed them.
 
 ## The state the pane keeps
 
 The host keeps four values for the session. They survive a reload of the
-mod's code, and the mod writes nothing to disk.
+mod's code, and the mod writes nothing to disk. A `/clear` empties them, since
+the new conversation never asked those questions.
 
 | Key | Value |
 |---|---|

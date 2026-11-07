@@ -8,6 +8,11 @@ const TITLE = 'Interview'
 const TOOL = 'mcp__interview__ask'
 const MAX_OPTIONS = 9
 const MAX_QUESTIONS = 20
+// An id is echoed bare in the answer message, so it holds no space, quote or bracket.
+const ID_PATTERN = /^[A-Za-z0-9_-]{1,16}$/
+// How much of a question or an option label the answer message echoes.
+const ECHO_QUESTION = 120
+const ECHO_LABEL = 60
 
 // Change a tag when the shape of its value changes: it declines what an
 // earlier version stored, which outlives a reload.
@@ -27,8 +32,20 @@ async function clockText($: EngineInterface): Promise<string> {
   return new Date(await $.clock.now()).toISOString().slice(11, 16) + ' UTC'
 }
 
+// Claude wrote the questions and the option labels, and the answer message goes
+// as the operator's words. So a text echoed from Claude stays one quoted line:
+// no line break, angle bracket or double quote of its own (a fake
+// `</interview-answers>` and new lines after it cannot pass), cut to `max`.
+export function quoted(text: string, max: number): string {
+  const flat = text.replace(/\s+/g, ' ').trim().replace(/</g, '‹').replace(/>/g, '›').replace(/"/g, "'")
+  const cut = Array.from(flat)
+
+  return `"${cut.length > max ? `${cut.slice(0, max - 1).join('')}…` : flat}"`
+}
+
 export function answerText(q: Question): string {
-  const picks = (q.answer?.picks ?? []).flatMap(i => (q.options[i] === undefined ? [] : [q.options[i].label]))
+  const picks = (q.answer?.picks ?? []).flatMap(i => (q.options[i] === undefined ? [] : [quoted(q.options[i].label, ECHO_LABEL)]))
+  // The operator's own words go as they typed them.
   const words = q.answer?.words.trim() ?? ''
   const parts = [picks.join(' + '), words === '' ? '' : `my words: "${words}"`].filter(Boolean)
 
@@ -42,7 +59,7 @@ export function messageFor(sent: readonly Question[], all: readonly Question[]):
   const lines = [
     '<interview-answers>',
     `My answers to your interview questions (${sent.length} new; ${open.length === 0 ? 'none open' : `still open: ${open.join(', ')}`}):`,
-    ...sent.map(q => `- ${q.id} ${q.question}: ${answerText(q)}.`),
+    ...sent.map(q => `- ${q.id} (your question ${quoted(q.question, ECHO_QUESTION)}): ${answerText(q)}.`),
     '</interview-answers>',
   ]
 
@@ -57,6 +74,8 @@ function refreshStatus($: EngineInterface, all: readonly Question[]): void {
 // Marks every waiting answer as on its way by `route`, in one write, so two
 // routes never carry the same answer. Returns the answers it marked.
 async function claim($: EngineInterface, route: Route): Promise<{ sent: Question[]; all: Question[] }> {
+  // Every main-loop tool result and every typed prompt asks: most find nothing.
+  if (!(await read($, questionsAtom)).some(isWaiting)) return { sent: [], all: [] }
   const at = await clockText($)
   let sent: Question[] = []
   let all: Question[] = []
@@ -90,11 +109,15 @@ async function flush($: EngineInterface): Promise<void> {
   if (sent.length === 0) return
   // The submit resolves only when its turn starts: awaiting it here would run
   // a press past its time budget.
-  void $.prompt.submit({ text: messageFor(sent, all), asUser: true }).then(async submitted => {
-    if (submitted.drop === undefined) return
+  const putBack = async (why: string) => {
     await unclaim($, sent)
-    $.ui.toast(`Interview: the answers were not sent: ${submitted.drop}`)
-  })
+    $.ui.toast(`Interview: the answers were not sent: ${why}`)
+  }
+  void $.prompt
+    .submit({ text: messageFor(sent, all), asUser: true })
+    .then(submitted => (submitted.drop === undefined ? undefined : putBack(submitted.drop)))
+    .catch((error: unknown) => putBack(error instanceof Error ? error.message : String(error)))
+    .catch(() => undefined)
 }
 
 // The open question after (by 1) or before (by -1) `id`, in asked order, or ''.
@@ -115,13 +138,21 @@ async function send($: EngineInterface, id: string): Promise<void> {
   }
   const at = await clockText($)
   let all: Question[] = []
+  let next = ''
+  let wasOpen = false
   await update($, questionsAtom, now => {
+    wasOpen = now.some(q => q.id === id && isOpen(q))
+    // The next open question in asked order, read while `id` is still open.
+    next = stepOpen(now, id, 1)
     all = now.map(q => (q.id === id && isOpen(q) ? { ...q, state: 'answered' as const, answer: { ...draft, at } } : q))
 
-    return all
+    return wasOpen ? all : now
   })
+  if (!wasOpen) {
+    $.ui.toast(`${id} is no longer open.`)
+    return
+  }
   await update($, draftsAtom, now => Object.fromEntries(Object.entries(now).filter(([k]) => k !== id)))
-  const next = stepOpen(all, id, 1)
   await update($, cursorAtom, () => (next === id ? '' : next))
   refreshStatus($, all)
   if (await read($, workingAtom)) {
@@ -151,6 +182,7 @@ export function parseAsk(input: Record<string, unknown>, known: readonly Questio
     if (raw === null || typeof raw !== 'object') return 'each question must be an object'
     if (!text(raw.id) || !text(raw.question)) return 'each question needs an id and a question'
     const id = raw.id.trim()
+    if (!ID_PATTERN.test(id)) return `the id ${JSON.stringify(id.slice(0, 20))} must be 1 to 16 letters, digits, _ or -`
     if (add.some(q => q.id === id)) return `the id ${id} appears twice`
     const old = known.find(q => q.id === id)
     if (old !== undefined && !isOpen(old)) return `the id ${id} was used for a question that is ${old.state}; use a new id`
@@ -182,17 +214,26 @@ export function parseAsk(input: Record<string, unknown>, known: readonly Questio
 }
 
 // A question asked again under an open id takes that question's place; a new
-// id joins at the end.
+// id joins at the end. One answered since the call was checked keeps its answer.
 function merge(now: readonly Question[], add: readonly Question[], withdraw: readonly string[]): Question[] {
   const out = now.map(q => {
     const again = add.find(a => a.id === q.id)
-    if (again !== undefined) return again
+    if (again !== undefined && isOpen(q)) return again
     if (withdraw.includes(q.id) && isOpen(q)) return { ...q, state: 'withdrawn' as const }
 
     return q
   })
 
   return [...out, ...add.filter(a => !now.some(q => q.id === a.id))]
+}
+
+// A draft of a question asked again keeps its words, and its picks by label:
+// the new options may come in another order, or fewer.
+function redraft(draft: Draft, was: Question, again: Question): Draft {
+  const labels = draft.picks.flatMap(i => (was.options[i] === undefined ? [] : [was.options[i].label]))
+  const picks = again.options.flatMap((o, i) => (labels.includes(o.label) ? [i] : []))
+
+  return { ...draft, picks: again.multiSelect ? picks : picks.slice(0, 1) }
 }
 
 const OPTION_SCHEMA = {
@@ -213,7 +254,11 @@ const ASK_SCHEMA = {
       items: {
         type: 'object',
         properties: {
-          id: { type: 'string', description: 'A short id the person sees, such as Q1. Unique in the session.' },
+          id: {
+            type: 'string',
+            pattern: ID_PATTERN.source,
+            description: 'A short id the person sees, such as Q1: 1 to 16 letters, digits, _ or -. Unique in the session.',
+          },
           question: { type: 'string', description: 'The question, in one sentence.' },
           detail: { type: 'string', description: 'Markdown: the context and why the answer matters. Keep it short.' },
           options: { type: 'array', maxItems: MAX_OPTIONS, items: OPTION_SCHEMA },
@@ -267,14 +312,30 @@ export const register: Register = on => {
   on('tool.call', { tool: TOOL }, async ($, e) => {
     const parsed = parseAsk(e as unknown as Record<string, unknown>, await read($, questionsAtom))
     if (typeof parsed === 'string') return { deny: `The questions were not asked: ${parsed}.` }
+    let before: Question[] = []
     let all: Question[] = []
     await update($, questionsAtom, now => {
+      before = now
       all = merge(now, parsed.add, parsed.withdraw)
 
       return all
     })
-    if (parsed.withdraw.length > 0) {
-      await update($, draftsAtom, now => Object.fromEntries(Object.entries(now).filter(([k]) => !parsed.withdraw.includes(k))))
+    const withdrew = parsed.withdraw.filter(
+      id => before.some(q => q.id === id && isOpen(q)) && all.some(q => q.id === id && q.state === 'withdrawn'),
+    )
+    const askedAgain = parsed.add.filter(a => before.some(q => q.id === a.id && isOpen(q)))
+    if (withdrew.length > 0 || askedAgain.length > 0) {
+      await update($, draftsAtom, now =>
+        Object.fromEntries(
+          Object.entries(now).flatMap(([k, d]): [string, Draft][] => {
+            if (withdrew.includes(k)) return []
+            const again = askedAgain.find(a => a.id === k)
+            const was = before.find(q => q.id === k)
+
+            return [[k, again === undefined || was === undefined ? d : redraft(d, was, again)]]
+          }),
+        ),
+      )
     }
     const cursor = await read($, cursorAtom)
     if (!all.some(q => q.id === cursor && isOpen(q))) {
@@ -282,11 +343,11 @@ export const register: Register = on => {
     }
     refreshStatus($, all)
     const open = all.filter(isOpen).length
-    const notOpen = parsed.withdraw.filter(id => !all.some(q => q.id === id && q.state === 'withdrawn'))
+    const notOpen = parsed.withdraw.filter(id => !withdrew.includes(id))
     const lines = [
       parsed.add.length > 0 ? `Asked ${parsed.add.map(q => q.id).join(', ')} in the Interview pane.` : '',
-      parsed.withdraw.length > notOpen.length ? `Withdrew ${parsed.withdraw.filter(id => !notOpen.includes(id)).join(', ')}.` : '',
-      notOpen.length > 0 ? `Not withdrawn (answered already or unknown): ${notOpen.join(', ')}.` : '',
+      withdrew.length > 0 ? `Withdrew ${withdrew.join(', ')}.` : '',
+      notOpen.length > 0 ? `Not withdrawn (not open, or asked again in this call): ${notOpen.join(', ')}.` : '',
       `${open} ${open === 1 ? 'question is' : 'questions are'} open.`,
     ]
     if (open > 0) {
@@ -345,11 +406,30 @@ export const register: Register = on => {
     if (!isPerson || e.command !== undefined || e.isMeta) return next(e)
     const { sent, all } = await claim($, 'prompt')
     if (sent.length === 0) return next(e)
-    const entered = await next({ ...e, text: `${messageFor(sent, all)}\n\n${e.text}` })
-    if (entered.drop !== undefined) await unclaim($, sent)
+    try {
+      const entered = await next({ ...e, text: `${messageFor(sent, all)}\n\n${e.text}` })
+      if (entered.drop !== undefined) await unclaim($, sent)
 
-    return entered
+      return entered
+    } catch (error) {
+      await unclaim($, sent)
+      throw error
+    }
     // A failure here never holds the person's prompt: it goes as typed.
+  }).catch(($, e, next) => next(e))
+
+  // A /clear starts a conversation that never asked these questions: an answer
+  // to one would reach a Claude that cannot place it.
+  on('session.end', async ($, e, next) => {
+    if (e.reason === 'clear') {
+      await update($, questionsAtom, () => [])
+      await update($, draftsAtom, () => ({}))
+      await update($, cursorAtom, () => '')
+      await update($, workingAtom, () => false)
+      refreshStatus($, [])
+    }
+
+    return next(e)
   }).catch(($, e, next) => next(e))
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
@@ -477,6 +557,12 @@ export const register: Register = on => {
             await send($, q.id)
           }}
         />
+      )
+    } else if (q.options.length === 0) {
+      field = (
+        <Text dimColor wrap="wrap">
+          This question needs your own words: answer it in the terminal or the desktop app.
+        </Text>
       )
     }
 
