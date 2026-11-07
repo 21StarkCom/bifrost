@@ -88,7 +88,8 @@ Fallback: none (Tier 1).
   - The type is the playbook's clause type (`MEMORY NOTE` included), `SIZE`
     for a size budget, `LOAD` for a load audit item, or `CONFLICT`.
   - The path is the repo name and the path in the repo: `tyr/CLAUDE.md`. A
-    memory path starts at `~/.claude/projects/`.
+    memory path starts at `~/.claude/projects/`. Write the full path in each
+    header, never a bare `:n`.
   - The line is the first line of the clause, or a range (`130-272`) for a
     long clause.
 - **Clause:** the clause in double quotes. For a clause over two lines, write
