@@ -77,3 +77,8 @@ TOOLS="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/code-review}/tools"
 # load scope, globs, size budgets, dead references
 node --no-warnings "$TOOLS/rules_audit.ts" --repo .
 ```
+
+## 4. Review it
+
+- To flag each clause of an agent file GREEN, YELLOW or RED, read the [playbook](references/playbook.md).
+- To check that a defined term (GO, gate, worker …) keeps its one meaning, read the [glossary](references/glossary.md).
