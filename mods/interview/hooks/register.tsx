@@ -28,8 +28,13 @@ const isOpen = (q: Question) => q.state === 'open'
 const isWaiting = (q: Question) => q.state === 'answered' && q.read === undefined
 const hasAnswer = (d: Draft) => d.picks.length > 0 || d.words.trim() !== ''
 
+// The operator's local time, `HH:MM`, in the zone the mod's environment reads.
+export function localTime(ms: number): string {
+  return new Date(ms).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
 async function clockText($: EngineInterface): Promise<string> {
-  return new Date(await $.clock.now()).toISOString().slice(11, 16) + ' UTC'
+  return localTime(await $.clock.now())
 }
 
 // Claude wrote the questions and the option labels, and the answer message goes
@@ -130,37 +135,50 @@ function stepOpen(all: readonly Question[], id: string, by: 1 | -1): string {
   return open[(at + by + open.length) % open.length]?.id ?? ''
 }
 
-async function send($: EngineInterface, id: string): Promise<void> {
-  const draft = (await read($, draftsAtom))[id] ?? EMPTY
-  if (!hasAnswer(draft)) {
+// The open question after `id` in asked order, or '' (the list of all
+// questions) after the last one, so the list and its Send come at the end.
+export function nextOpen(all: readonly Question[], id: string): string {
+  const open = all.filter(isOpen)
+  const at = open.findIndex(q => q.id === id)
+
+  return open[at + 1]?.id ?? ''
+}
+
+// The open questions the operator has answered (a pick or words) and not sent.
+const ready = (all: readonly Question[], drafts: Readonly<Record<string, Draft>>) =>
+  all.filter(q => isOpen(q) && hasAnswer(drafts[q.id] ?? EMPTY))
+
+// Sends every open question the operator has answered, in one write and one
+// message; a question they skipped stays open for a later send.
+async function sendAnswered($: EngineInterface): Promise<void> {
+  const drafts = await read($, draftsAtom)
+  const at = await clockText($)
+  let all: Question[] = []
+  let sent: string[] = []
+  await update($, questionsAtom, now => {
+    sent = ready(now, drafts).map(q => q.id)
+    all = now.map(q =>
+      sent.includes(q.id) ? { ...q, state: 'answered' as const, answer: { ...(drafts[q.id] ?? EMPTY), at } } : q,
+    )
+
+    return sent.length === 0 ? now : all
+  })
+  if (sent.length === 0) {
     $.ui.toast('Pick an option or write your words first.')
     return
   }
-  const at = await clockText($)
-  let all: Question[] = []
-  let next = ''
-  let wasOpen = false
-  await update($, questionsAtom, now => {
-    wasOpen = now.some(q => q.id === id && isOpen(q))
-    // The next open question in asked order, read while `id` is still open.
-    next = stepOpen(now, id, 1)
-    all = now.map(q => (q.id === id && isOpen(q) ? { ...q, state: 'answered' as const, answer: { ...draft, at } } : q))
-
-    return wasOpen ? all : now
-  })
-  if (!wasOpen) {
-    $.ui.toast(`${id} is no longer open.`)
-    return
-  }
-  await update($, draftsAtom, now => Object.fromEntries(Object.entries(now).filter(([k]) => k !== id)))
-  await update($, cursorAtom, () => (next === id ? '' : next))
+  await update($, draftsAtom, now => Object.fromEntries(Object.entries(now).filter(([k]) => !sent.includes(k))))
+  // A sent question leaves the screen for the first open one, or the list.
+  const cursor = await read($, cursorAtom)
+  if (!all.some(q => q.id === cursor && isOpen(q))) await update($, cursorAtom, () => stepOpen(all, '', 1))
   refreshStatus($, all)
+  const what = sent.length === 1 ? sent[0] : `${sent.length} answers (${sent.join(', ')})`
   if (await read($, workingAtom)) {
-    $.ui.toast(`Sent ${id}. Claude reads it at its next tool call.`)
+    $.ui.toast(`Sent ${what}. Claude reads them at its next tool call.`)
     return
   }
   await flush($)
-  $.ui.toast(`Sent ${id}. Claude starts on it now.`)
+  $.ui.toast(`Sent ${what}. Claude starts on them now.`)
 }
 
 type Parsed = { add: Question[]; withdraw: string[] }
@@ -285,7 +303,107 @@ const TOOL_DESCRIPTION =
   'the answer, and act on each answer when it arrives. A later call adds questions; it never replaces the ' +
   'open ones. Withdraw a question you no longer need with `withdraw`.'
 
-export const register: Register = on => {
+// Adds and withdraws the questions of one checked call, opens the pane, and
+// returns the lines the call's result reads.
+async function applyAsk($: EngineInterface, parsed: Parsed): Promise<string[]> {
+  let before: Question[] = []
+  let all: Question[] = []
+  await update($, questionsAtom, now => {
+    before = now
+    all = merge(now, parsed.add, parsed.withdraw)
+
+    return all
+  })
+  const withdrew = parsed.withdraw.filter(
+    id => before.some(q => q.id === id && isOpen(q)) && all.some(q => q.id === id && q.state === 'withdrawn'),
+  )
+  const askedAgain = parsed.add.filter(a => before.some(q => q.id === a.id && isOpen(q)))
+  if (withdrew.length > 0 || askedAgain.length > 0) {
+    await update($, draftsAtom, now =>
+      Object.fromEntries(
+        Object.entries(now).flatMap(([k, d]): [string, Draft][] => {
+          if (withdrew.includes(k)) return []
+          const again = askedAgain.find(a => a.id === k)
+          const was = before.find(q => q.id === k)
+
+          return [[k, again === undefined || was === undefined ? d : redraft(d, was, again)]]
+        }),
+      ),
+    )
+  }
+  const cursor = await read($, cursorAtom)
+  if (!all.some(q => q.id === cursor && isOpen(q))) {
+    await update($, cursorAtom, () => parsed.add[0]?.id ?? stepOpen(all, '', 1))
+  }
+  refreshStatus($, all)
+  const open = all.filter(isOpen).length
+  const notOpen = parsed.withdraw.filter(id => !withdrew.includes(id))
+  const lines = [
+    parsed.add.length > 0 ? `Asked ${parsed.add.map(q => q.id).join(', ')} in the Interview pane.` : '',
+    withdrew.length > 0 ? `Withdrew ${withdrew.join(', ')}.` : '',
+    notOpen.length > 0 ? `Not withdrawn (not open, or asked again in this call): ${notOpen.join(', ')}.` : '',
+    `${open} ${open === 1 ? 'question is' : 'questions are'} open.`,
+  ]
+  if (open > 0) {
+    // The questions are in the pane already: a failed open must not undo the
+    // call, or AskUserQuestion's fallback would ask them in the form as well.
+    const opened = await $.ui
+      .open({ id: PANE, title: TITLE })
+      .catch((error: unknown) => ({ isPlaced: false, reason: error instanceof Error ? error.message : String(error) }))
+    lines.push(
+      'Keep working on what does not depend on the answers. Each answer reaches you as a message from the person ' +
+        'in an <interview-answers> block, during this turn or after it. Do not ask these questions again in your reply.',
+    )
+    if (!opened.isPlaced) lines.push(`The pane waits (${opened.reason}): tell the person to type /interview.`)
+  }
+
+  return lines.filter(Boolean)
+}
+
+// AskUserQuestion's questions as `ask` questions, each under the next free id
+// `A<n>`, or null when the pane cannot show one of them: a `number` question,
+// or an option with a `preview` the operator should compare in the form.
+export function fromAskUserQuestion(
+  input: Record<string, unknown>,
+  known: readonly Question[],
+): Record<string, unknown>[] | null {
+  if (!Array.isArray(input.questions) || input.questions.length === 0) return null
+  const taken = new Set(known.map(q => q.id))
+  let n = 1
+  const out: Record<string, unknown>[] = []
+  for (const raw of input.questions as Record<string, unknown>[]) {
+    if (raw === null || typeof raw !== 'object' || typeof raw.question !== 'string' || raw.kind === 'number') return null
+    const hasPreview =
+      Array.isArray(raw.options) &&
+      (raw.options as Record<string, unknown>[]).some(o => typeof o?.preview === 'string' && o.preview.trim() !== '')
+    if (hasPreview) return null
+    while (taken.has(`A${n}`)) n += 1
+    const id = `A${n}`
+    taken.add(id)
+    const options =
+      raw.kind === 'text' || !Array.isArray(raw.options)
+        ? []
+        : (raw.options as Record<string, unknown>[]).map(o => ({ label: o?.label, detail: o?.description }))
+    const detail = [
+      typeof raw.header === 'string' && raw.header.trim() !== '' ? `**${raw.header.trim()}**` : '',
+      typeof raw.description === 'string' ? raw.description.trim() : '',
+    ]
+      .filter(Boolean)
+      .join(' · ')
+    out.push({
+      id,
+      question: raw.question,
+      options,
+      multiSelect: raw.multiSelect === true,
+      // The form shows `header` as a chip: the pane shows it in bold before the description.
+      ...(detail === '' ? {} : { detail }),
+    })
+  }
+
+  return out
+}
+
+export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'interview',
@@ -312,55 +430,35 @@ export const register: Register = on => {
   on('tool.call', { tool: TOOL }, async ($, e) => {
     const parsed = parseAsk(e as unknown as Record<string, unknown>, await read($, questionsAtom))
     if (typeof parsed === 'string') return { deny: `The questions were not asked: ${parsed}.` }
-    let before: Question[] = []
-    let all: Question[] = []
-    await update($, questionsAtom, now => {
-      before = now
-      all = merge(now, parsed.add, parsed.withdraw)
 
-      return all
-    })
-    const withdrew = parsed.withdraw.filter(
-      id => before.some(q => q.id === id && isOpen(q)) && all.some(q => q.id === id && q.state === 'withdrawn'),
-    )
-    const askedAgain = parsed.add.filter(a => before.some(q => q.id === a.id && isOpen(q)))
-    if (withdrew.length > 0 || askedAgain.length > 0) {
-      await update($, draftsAtom, now =>
-        Object.fromEntries(
-          Object.entries(now).flatMap(([k, d]): [string, Draft][] => {
-            if (withdrew.includes(k)) return []
-            const again = askedAgain.find(a => a.id === k)
-            const was = before.find(q => q.id === k)
-
-            return [[k, again === undefined || was === undefined ? d : redraft(d, was, again)]]
-          }),
-        ),
-      )
-    }
-    const cursor = await read($, cursorAtom)
-    if (!all.some(q => q.id === cursor && isOpen(q))) {
-      await update($, cursorAtom, () => parsed.add[0]?.id ?? stepOpen(all, '', 1))
-    }
-    refreshStatus($, all)
-    const open = all.filter(isOpen).length
-    const notOpen = parsed.withdraw.filter(id => !withdrew.includes(id))
-    const lines = [
-      parsed.add.length > 0 ? `Asked ${parsed.add.map(q => q.id).join(', ')} in the Interview pane.` : '',
-      withdrew.length > 0 ? `Withdrew ${withdrew.join(', ')}.` : '',
-      notOpen.length > 0 ? `Not withdrawn (not open, or asked again in this call): ${notOpen.join(', ')}.` : '',
-      `${open} ${open === 1 ? 'question is' : 'questions are'} open.`,
-    ]
-    if (open > 0) {
-      const opened = await $.ui.open({ id: PANE, title: TITLE })
-      lines.push(
-        'Keep working on what does not depend on the answers. Each answer reaches you as a message from the person ' +
-          'in an <interview-answers> block, during this turn or after it. Do not ask these questions again in your reply.',
-      )
-      if (!opened.isPlaced) lines.push(`The pane waits (${opened.reason}): tell the person to type /interview.`)
-    }
-
-    return { result: lines.filter(Boolean).join(' ') }
+    return { result: (await applyAsk($, parsed)).join(' ') }
   }).catch(() => ({ deny: 'interview: the questions could not be asked.' }))
+
+  // With the `askUserQuestion` setting on, Claude's own AskUserQuestion goes to
+  // the pane and returns at once with no answers, so Claude keeps working. A
+  // call the pane cannot show (a `number` question, an option preview) gets the
+  // engine's form, and so does a subagent's: its answers would reach only the
+  // main loop.
+  if (options.askUserQuestion === true) {
+    on('tool.call', { tool: 'AskUserQuestion' }, async ($, e, next) => {
+      if (e.agentId !== undefined) return next(e)
+      const known = await read($, questionsAtom)
+      const asked = fromAskUserQuestion(e as unknown as Record<string, unknown>, known)
+      const parsed = asked === null ? 'not shown in the pane' : parseAsk({ questions: asked }, known)
+      if (typeof parsed === 'string') return next(e)
+      const lines = await applyAsk($, parsed)
+
+      return {
+        result: { questions: e.questions, answers: {} },
+        context: [
+          `The person has not answered yet: the interview mod sent these questions to its pane as ${parsed.add
+            .map(q => q.id)
+            .join(', ')}. ${lines.join(' ')}`,
+        ],
+      }
+      // A failure here leaves the call to the engine's own form.
+    }).catch(($, e, next) => next(e))
+  }
 
   on('turn.start', async ($, e, next) => {
     if (e.agentId === undefined) await update($, workingAtom, () => true)
@@ -439,6 +537,9 @@ export const register: Register = on => {
     const keysHint = 'Click the pane, or press ctrl+x tab, to use the keys.'
     const openCount = all.filter(isOpen).length
     const answered = all.filter(q => q.state === 'answered').length
+    const drafts = await read($, draftsAtom)
+    const readyCount = ready(all, drafts).length
+    const sendLabel = readyCount === 0 ? 'Send answers' : `Send ${readyCount} ${readyCount === 1 ? 'answer' : 'answers'}`
 
     const header = (
       <Box flexDirection="column">
@@ -447,7 +548,7 @@ export const register: Register = on => {
             Interview
           </Text>
           <Text dimColor>
-            {openCount} open · {answered} answered
+            {openCount} open · {answered} answered{readyCount > 0 ? ` · ${readyCount} ready to send` : ''}
           </Text>
         </Box>
         <Text dimColor wrap="wrap">
@@ -483,10 +584,13 @@ export const register: Register = on => {
               All questions
             </Text>
             {all.map(one => {
-              const mark = one.state === 'open' ? '○' : one.state === 'withdrawn' ? '–' : one.read ? '✓' : '●'
-              const color = one.state === 'open' ? 'inactive' : one.state === 'withdrawn' ? 'subtle' : 'success'
-              const note =
-                one.state === 'open'
+              const draft = drafts[one.id] ?? EMPTY
+              const isReady = isOpen(one) && hasAnswer(draft)
+              const mark = isReady ? '◐' : one.state === 'open' ? '○' : one.state === 'withdrawn' ? '–' : one.read ? '✓' : '●'
+              const color = isReady ? 'warning' : one.state === 'open' ? 'inactive' : one.state === 'withdrawn' ? 'subtle' : 'success'
+              const note = isReady
+                ? `${answerText({ ...one, answer: { ...draft, at: '' } })} · not sent yet`
+                : one.state === 'open'
                   ? 'open'
                   : one.state === 'withdrawn'
                     ? 'withdrawn by Claude'
@@ -509,17 +613,29 @@ export const register: Register = on => {
             {openCount > 0 && <Text dimColor>Press an open question to answer it.</Text>}
           </Box>
           <Box flexWrap="wrap" columnGap={1}>
+            {readyCount > 0 && <Button key="send" hotkey="s" variant="primary" label={sendLabel} onPress={() => sendAnswered($)} />}
             {openCount > 0 && (
-              <Button key="answer" hotkey="a" variant="primary" label="Answer the open ones" onPress={() => go(stepOpen(all, '', 1))} />
+              <Button
+                key="answer"
+                hotkey="a"
+                {...(readyCount > 0 ? {} : { variant: 'primary' as const })}
+                label="Answer the open ones"
+                onPress={() => go(stepOpen(all, '', 1))}
+              />
             )}
             <Button key="close" role="dismiss" label="Close" onPress={() => $.ui.close({ id: PANE })} />
           </Box>
-          <Text dimColor>{e.props.isFocused ? (openCount > 0 ? 'a answer · Esc closes' : 'Esc closes') : keysHint}</Text>
+          <Text dimColor>
+            {e.props.isFocused
+              ? [readyCount > 0 ? 's send the answered ones' : '', openCount > 0 ? 'a answer' : '', 'Esc closes'].filter(Boolean).join(' · ')
+              : keysHint}
+          </Text>
         </Box>
       )
     }
 
-    const draft = (await read($, draftsAtom))[q.id] ?? EMPTY
+    const draft = drafts[q.id] ?? EMPTY
+    const forward = hasAnswer(draft) ? 'next' : 'skip'
     const openList = all.filter(isOpen)
     const place = openList.findIndex(one => one.id === q.id) + 1
     const pick = (i: number) =>
@@ -537,7 +653,7 @@ export const register: Register = on => {
       update($, draftsAtom, now => ({ ...now, [q.id]: { ...(now[q.id] ?? EMPTY), words } }))
     const digits = q.options.length === 0 ? '' : `1-${q.options.length} pick · `
     const hint = e.props.isFocused
-      ? `${digits}Tab: your words · s send · n next · b back · l all questions · Esc closes`
+      ? `${digits}Tab: your words · n ${forward} · b back · s send the answered ones · l all questions · Esc closes`
       : keysHint
 
     let field = null
@@ -550,11 +666,11 @@ export const register: Register = on => {
           placeholder={q.options.length === 0 ? 'your answer' : 'optional: a condition, a change, or your own answer'}
           value={draft.words}
           rows={2}
-          submitLabel="send"
+          submitLabel="next"
           onInput={value => void setWords(value)}
           onSubmit={async value => {
             await setWords(value)
-            await send($, q.id)
+            await go(nextOpen(all, q.id))
           }}
         />
       )
@@ -615,9 +731,15 @@ export const register: Register = on => {
         )}
         {field}
         <Box flexWrap="wrap" columnGap={1}>
-          <Button key="send" hotkey="s" variant="primary" label="Send answer" onPress={() => send($, q.id)} />
+          <Button
+            key="next"
+            hotkey="n"
+            variant="primary"
+            label={forward === 'next' ? 'Next ▶' : 'Skip ▶'}
+            onPress={() => go(nextOpen(all, q.id))}
+          />
           <Button key="back" hotkey="b" label="◀ Back" onPress={() => go(stepOpen(all, q.id, -1))} />
-          <Button key="next" hotkey="n" label="Next ▶" onPress={() => go(stepOpen(all, q.id, 1))} />
+          <Button key="send" hotkey="s" label={sendLabel} onPress={() => sendAnswered($)} />
           <Button key="all" hotkey="l" label="All questions" onPress={() => go('')} />
         </Box>
         <Text dimColor>{hint}</Text>
