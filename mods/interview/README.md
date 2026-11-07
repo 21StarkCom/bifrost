@@ -52,13 +52,28 @@ a question is open.
 
 - **Header:** the count of open and answered questions, and whether Claude is working or idle.
 - **A question:** its id, `<k> of <m> open`, the question and its detail. Then the options and the field `Your words`, which the mobile surface does not show. On mobile, a question with no options tells the operator to answer it in the terminal or the desktop app.
-- **After a send:** the pane shows the next open question in asked order.
-- **Keys on a question:** `1`-`9` pick, `s` sends the answer, `n` next open question, `b` back, `l` all questions. Enter in the field sends the answer too.
+- **Answer, skip, then send:** a pick or words answer the question on screen, and nothing goes to Claude yet. `n` moves to the next open question: its button reads **Skip ▶** while the question has no answer and **Next ▶** once it has one. After the last open question comes the list of all questions.
+- **Send:** **Send N answers** (`s`) sends every open question with an answer, in one message. A skipped question stays open for a later send, and the pane moves to it.
+- **Keys on a question:** `1`-`9` pick, `n` skip or next, `b` back, `s` send the answered ones, `l` all questions. Enter in the field keeps the words and moves on.
 - **A pick:** a single-choice question keeps one pick. A `multiSelect` question toggles each option.
-- **All questions:** one row per question: `○` open, `●` sent and waiting, `✓` Claude has it, `–` withdrawn. Press an open row to answer it, or `a` for the first open question.
+- **All questions:** one row per question: `○` open, `◐` answered and not sent, `●` sent and waiting, `✓` Claude has it, `–` withdrawn. Press an open row to answer it, `s` to send the answered ones, or `a` for the first open question. The header counts the answers ready to send.
+- **Times:** each answer shows when Claude got it, as `HH:MM` in the operator's local time zone.
 
 A key works only while the pane has the focus: click the pane, or press
 `ctrl+x tab`.
+
+## The `askUserQuestion` setting
+
+Off by default. Turn it on in `/config` (the row `Send AskUserQuestion to the
+Interview pane`), or in settings under `pluginConfigs.interview.options`.
+
+With it on, Claude's own `AskUserQuestion` calls go to the pane and return at
+once, so Claude keeps working:
+
+- Each question gets the next free id `A1`, `A2`, …, and its options keep their labels and descriptions.
+- The call returns an empty `answers` result. A note beside it tells Claude the questions went to the pane, under which ids.
+- The answers then reach Claude by the routes below, as answers to `ask` do.
+- A question the pane cannot show (a `number` question, in a build whose form takes `kind`) goes to Claude Code's own form, and so does the whole call.
 
 ## How an answer reaches Claude
 
@@ -68,7 +83,7 @@ two routes never carry the same answer.
 
 1. **During a turn:** the next tool-result row of the main loop carries the waiting answers. The mod adds them as a text block beside the row's `tool_result` block, through a `session.append` hook on the door `tool-result`. Claude reads them at its next step, as words the operator wrote, not as the tool's output. A subagent's tool results carry nothing.
 2. **When a turn ends with the reason `answer`:** the mod sends the waiting answers as the operator's own message (`$.prompt.submit` with `asUser`), which starts a turn.
-3. **While Claude is idle:** an answer the operator sends goes at once, as in route 2.
+3. **While Claude is idle:** the answers the operator sends go at once, as in route 2.
 4. **When the operator types a prompt:** the waiting answers go above the prompt's words.
 
 After an interrupt, a refusal or an error, the waiting answers stay. A route
@@ -113,7 +128,6 @@ old value as absent, not as a value of the wrong shape.
 
 - Questions and answers kept on disk, past the end of a session.
 - A change to an answer after it was sent.
-- Taking over Claude's own `AskUserQuestion` tool.
 - A tool that waits for an answer.
 
 ## Develop

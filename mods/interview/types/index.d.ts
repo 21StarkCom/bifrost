@@ -8,7 +8,7 @@ export type Option = {
 export type Answer = {
   picks: number[]
   words: string
-  // When the operator sent it, `HH:MM UTC`.
+  // When the operator sent it, `HH:MM` in their local time.
   at: string
 }
 

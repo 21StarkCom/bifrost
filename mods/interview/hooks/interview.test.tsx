@@ -34,13 +34,17 @@ const ASK = {
 
 const SURFACES = ['terminal', 'desktop'] as const
 
+const NOW = Date.UTC(2026, 10, 7, 9, 30)
+// The pane shows the local time, in the zone the test runs in.
+const LOCAL = new Date(NOW).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })
+
 // Nothing sits beneath the plugin: these hooks stand for the engine. `sent`
 // collects each prompt that reaches the bottom, `status` each status line.
 function engine(on: On): { sent: string[]; toasts: string[]; status: (string | undefined)[] } {
   const sent: string[] = []
   const toasts: string[] = []
   const status: (string | undefined)[] = []
-  mock.clock(on, { now: Date.UTC(2026, 10, 7, 9, 30) })
+  mock.clock(on, { now: NOW })
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('turn.start', (_, e) => ({ turnId: e.turnId }))
   on('turn.complete', (_, e) => ({ text: e.answer }))
@@ -138,7 +142,7 @@ for (const surface of SURFACES) {
     expect(sent.length).toBe(0)
 
     await ui.press({ key: 'all' })
-    expect((await ui.find({ type: 'Text', text: /"us" \+ "asia" · Claude has it \(09:30 UTC\)/ }))).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: `"us" + "asia" · Claude has it (${LOCAL})` })).toBeDefined()
     await ui.unmount()
   })
 
@@ -166,8 +170,9 @@ for (const surface of SURFACES) {
     const ui = await $.ui.mount({ ...PANE, surface })
     // Back from the first open question goes round to the last one, Q3.
     await ui.press({ key: 'back' })
-    // Enter in the field sends the words.
+    // Enter in the field keeps the words; Send sends them.
     await ui.input({ key: 'words-Q3', text: 'scout' })
+    await ui.press({ key: 'send' })
     await $.turn.complete(end('aborted'))
     expect(sent.length).toBe(0)
 
@@ -204,16 +209,37 @@ for (const surface of SURFACES) {
   })
 }
 
-test('sending an answer moves on to the next open question, not the first', async ($, on) => {
-  engine(on)
-  await $.tool.call(ASK)
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  await ui.press({ key: 'next' })
-  await ui.press({ key: 'opt-Q2-0' })
-  await ui.press({ key: 'send' })
-  expect(await ui.find({ type: 'Text', text: /What do we call it\?/ })).toBeDefined()
-  await ui.unmount()
-})
+for (const surface of SURFACES) {
+  test(`Skip leaves a question open, and Send sends only the answered ones, on ${surface}`, async ($, on) => {
+    const { sent } = engine(on)
+    await $.tool.call(ASK)
+    const ui = await $.ui.mount({ ...PANE, surface })
+    // An unanswered question offers Skip; an answered one offers Next.
+    expect((await ui.find({ key: 'next' }))?.props.label).toBe('Skip ▶')
+    await ui.press({ key: 'opt-Q1-0' })
+    expect((await ui.find({ key: 'next' }))?.props.label).toBe('Next ▶')
+    expect((await ui.find({ key: 'send' }))?.props.label).toBe('Send 1 answer')
+    await ui.press({ key: 'next' })
+    // Q2 skipped.
+    await ui.press({ key: 'next' })
+    await ui.input({ key: 'words-Q3', text: 'scout' })
+    // Enter in the field keeps the words and goes on: after the last open question, the list.
+    expect(await ui.find({ type: 'Text', text: /All questions/ })).toBeDefined()
+    expect(sent.length).toBe(0)
+    expect(await ui.find({ type: 'Text', text: '"Postgres" · not sent yet' })).toBeDefined()
+    expect((await ui.find({ key: 'send' }))?.props.label).toBe('Send 2 answers')
+
+    await ui.press({ key: 'send' })
+    expect(sent.length).toBe(1)
+    const lines = (sent[0] ?? '').split('\n')
+    expect(lines[1]).toBe('My answers to your interview questions (2 new; still open: Q2):')
+    expect(lines[2]).toBe('- Q1 (your question "Which database?"): "Postgres".')
+    expect(lines[3]).toBe('- Q3 (your question "What do we call it?"): my words: "scout".')
+    // The skipped question is the one left on screen.
+    expect(await ui.find({ type: 'Text', text: /Which regions\?/ })).toBeDefined()
+    await ui.unmount()
+  })
+}
 
 test('a question asked again keeps the draft picks by label', async ($, on) => {
   const { sent } = engine(on)
@@ -329,9 +355,90 @@ test('a long question is cut in the answer message', async ($, on) => {
   await $.tool.call({ tool: TOOL, questions: [{ id: 'Q1', question: 'x'.repeat(300) }] })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   await ui.input({ key: 'words-Q1', text: 'fine' })
+  await ui.press({ key: 'send' })
   await ui.unmount()
 
   expect(sent[0]).toContain(`- Q1 (your question "${'x'.repeat(119)}…"): my words: "fine".`)
+})
+
+const AUQ = {
+  tool: 'AskUserQuestion' as const,
+  questions: [
+    {
+      question: 'Which color?',
+      header: 'Color',
+      options: [{ label: 'red', description: 'the warm one' }, { label: 'blue', description: 'the calm one' }],
+      multiSelect: false,
+    },
+    {
+      question: 'Which sizes?',
+      header: 'Size',
+      options: [
+        { label: 'small', description: 'fits a phone' },
+        { label: 'large', description: 'fits a desk' },
+      ],
+      multiSelect: true,
+    },
+  ],
+}
+
+for (const surface of SURFACES) {
+  test(
+    `with the setting on, AskUserQuestion goes to the pane and returns at once, on ${surface}`,
+    { options: { askUserQuestion: true } },
+    async ($, on) => {
+      const { sent } = engine(on)
+      const ran = (await $.tool.call(AUQ)) as { result?: { answers?: unknown }; context?: readonly string[] }
+      expect(ran.result?.answers).toEqual({})
+      expect(ran.context?.[0]).toMatch(/has not answered yet: the interview mod sent these questions to its pane as A1, A2\./)
+
+      const ui = await $.ui.mount({ ...PANE, surface })
+      expect(await ui.find({ type: 'Text', text: /Which color\?/ })).toBeDefined()
+      expect((await ui.find({ key: 'opt-A1-1' }))?.text).toMatch(/○ blue/)
+      await ui.press({ key: 'opt-A1-1' })
+      await ui.press({ key: 'send' })
+      expect(sent[0]).toContain('- A1 (your question "Which color?"): "blue".')
+      expect(sent[0]).toContain('still open: A2')
+      await ui.unmount()
+    },
+  )
+}
+
+test('a second AskUserQuestion takes the next free ids', { options: { askUserQuestion: true } }, async ($, on) => {
+  engine(on)
+  await $.tool.call(AUQ)
+  const ran = (await $.tool.call(AUQ)) as { context?: readonly string[] }
+  expect(ran.context?.[0]).toMatch(/as A3, A4\./)
+})
+
+test('a number question keeps the engine form', { options: { askUserQuestion: true } }, async ($, on) => {
+  engine(on)
+  let reached = 0
+  on('tool.call', { tool: 'AskUserQuestion' }, () => {
+    reached += 1
+
+    return { result: { questions: [], answers: { 'How many?': '3' } } }
+  })
+  // This build's AskUserQuestion takes no `kind`; a build whose form takes one sends it as here.
+  const counted = {
+    tool: 'AskUserQuestion',
+    questions: [{ question: 'How many?', header: 'Count', kind: 'number', min: 1, max: 9, options: [], multiSelect: false }],
+  }
+  await $.tool.call(counted as unknown as typeof AUQ)
+  expect(reached).toBe(1)
+})
+
+test('with the setting off, AskUserQuestion goes to the engine', async ($, on) => {
+  const { status } = engine(on)
+  let reached = 0
+  on('tool.call', { tool: 'AskUserQuestion' }, () => {
+    reached += 1
+
+    return { result: { questions: [], answers: { 'Which color?': 'red' } } }
+  })
+  await $.tool.call(AUQ)
+  expect(reached).toBe(1)
+  expect(status.length).toBe(0)
 })
 
 test('with no questions, the pane says so', async ($, on) => {
