@@ -395,6 +395,8 @@ declare module 'claude-code' {
       ticketTab: PaneTab
       /** The ticket whose file this worker's tab found, once found, else '': its pane names that ticket's end. */
       ownTicket: string
+      /** True once the person closed the ticket pane by hand in this session: no prompt or poll opens it again; /ticket-board does. */
+      ticketClosed: boolean
     }
   }
 }

@@ -26,7 +26,7 @@ import {
 } from './stats'
 import { buildTicket, epicRunOf, ticketSettingsName, ticketSettingsOf } from './ticket'
 import { drawTicketPane } from './ticket-pane'
-import { buildView, isRunName, ownRun, ticketOf, worktreeOf } from './view'
+import { buildView, isRunName, ownRun, startsWorker, ticketOf, worktreeOf } from './view'
 
 // The state contract is in ../README.md.
 const POLL_MS = 1000
@@ -55,6 +55,8 @@ const ticketAtom = atom({ plugin: 'stark-progress', key: 'ticket' } as const, nu
 const ticketTabAtom = atom({ plugin: 'stark-progress', key: 'ticketTab' } as const, 'overview' as PaneTab)
 /** The ticket whose file this worker's tab found, once found: its pane names the ticket's end after the file goes. */
 const ownTicketAtom = atom({ plugin: 'stark-progress', key: 'ownTicket' } as const, '')
+/** True once the person closed the ticket pane by hand in this session: only /ticket-board opens it again. */
+const ticketClosedAtom = atom({ plugin: 'stark-progress', key: 'ticketClosed' } as const, false)
 
 // The pane's run: Gru's tab shows its own; a session that asked for the pane
 // with /gru-board shows the most recently active run, or the one `r` picked.
@@ -66,6 +68,8 @@ let isPaneOpened = false
 // A worker's own tab: its ticket, and whether the ticket pane opened by itself yet.
 let ownTicket: string | null = null
 let isTicketPaneOpened = false
+/** True while the last poll found this worker tab's own ticket file. */
+let isOwnFileFound = false
 /** The ownTicket atom's value as this load of the mod last wrote or read it, or null before the first poll. */
 let ownTicketFound: string | null = null
 let stateDir = ''
@@ -348,6 +352,7 @@ export const register: Register = on => {
       // The session's state is read once per load of the mod (a reload keeps it there), then kept in memory.
       const found = ownTicketFound ?? (await read($, ownTicketAtom))
       const isFound = own !== null && files[`${own}.json`] !== undefined
+      isOwnFileFound = isFound
       const nowFound = isFound ? own : own === found ? found : ''
       if (nowFound !== found) await update($, ownTicketAtom, () => nowFound)
       ownTicketFound = nowFound
@@ -453,10 +458,12 @@ export const register: Register = on => {
         await update($, board, () => shownBoard)
       }
 
-      // A worker's tab opens the ticket pane once, the first time its ticket's file is found.
+      // A worker's tab opens the ticket pane once, the first time its ticket's file is found, unless the
+      // person closed it. The engine counts this open as the mod's own: it waits below 144 columns.
+      // The close is read once, not each second while it holds.
       if (own !== null && files[`${own}.json`] !== undefined && !isTicketPaneOpened) {
         isTicketPaneOpened = true
-        void $.ui.open({ id: TICKET_PANE, title: own }).catch(() => undefined)
+        if (!(await read($, ticketClosedAtom))) void $.ui.open({ id: TICKET_PANE, title: own }).catch(() => undefined)
       }
       const shownTicket = own === null ? null : buildTicket(own, now, files, mtimes, git[own] ?? null, epicTitles)
       const ticketKey =
@@ -574,6 +581,7 @@ export const register: Register = on => {
     if (ownTicket === null) {
       return { text: "This tab has no ticket: /ticket-board opens in a Minion's or Agnes's tab, whose worktree is named for its ticket." }
     }
+    await update($, ticketClosedAtom, () => false)
     const opened = await $.ui.open({ id: TICKET_PANE, title: ownTicket, focus: true, closeOnEscape: true })
 
     return { text: opened.isPlaced ? `The ticket pane for ${ownTicket} is open.` : `The ticket pane waits: ${opened.reason}.` }
@@ -675,13 +683,40 @@ export const register: Register = on => {
     return response
   })
 
-  // Each prompt that entered, by where it came from: the operator, another
-  // session, or neither.
+  // The person's own close of the ticket pane holds for the session, once the
+  // pane is gone: a hook beneath that keeps it open leaves no close.
+  on('ui.close', async ($, e, next) => {
+    const closed = await next(e)
+    if (e.id === TICKET_PANE && e.origin.kind === 'person' && !(await $.ui.panes()).some(p => p.id === TICKET_PANE)) {
+      await update($, ticketClosedAtom, () => true)
+    }
+
+    return closed
+  })
+
   on('prompt.submit', async ($, e, next) => {
+    // A worker's tab opens its ticket pane here, once the prompt entered: the
+    // engine places an open from this hook at any width when the person entered
+    // the prompt, and a launch's first prompt counts. The poll's own open waits
+    // below 144 columns. The prompt that starts the worker opens the pane before
+    // the ticket's file exists; a later prompt opens it once the poll found that file.
+    // Gru's tab, whose worktree is named for its epic, is no worker's tab, whatever its prompt.
+    const own = ownRunFile === '' ? ticketOf(await $.session.root()) : null
+    const isWorkerTab = own !== null && (startsWorker(e.text, e.command) || (own === ownTicket && isOwnFileFound))
+
+    // Each prompt that entered, by where it came from: the operator, another
+    // session, or neither. A dropped prompt starts no worker and opens no pane.
     const entered = await next(e)
-    if (entered.drop === undefined) {
-      addPrompt(stats, e.origin.kind, e.isMeta === true, await $.clock.now())
-      isStatsDirty = true
+    if (entered.drop !== undefined) return entered
+    addPrompt(stats, e.origin.kind, e.isMeta === true, await $.clock.now())
+    isStatsDirty = true
+
+    if (isWorkerTab && !(await read($, ticketClosedAtom))) {
+      const isPlaced = (await $.ui.panes()).some(p => p.id === TICKET_PANE && p.isPlaced)
+      if (!isPlaced) {
+        isTicketPaneOpened = true
+        await $.ui.open({ id: TICKET_PANE, title: own }).catch(() => undefined)
+      }
     }
 
     return entered

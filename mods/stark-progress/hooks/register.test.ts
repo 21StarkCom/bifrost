@@ -1,5 +1,6 @@
 import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
+import type { Engine } from 'claude-code/testing'
 
 import { buildBoard } from './board'
 import { ANSWER } from './github-fixture'
@@ -1554,6 +1555,133 @@ test("/ticket-board in Gru's tab opens nothing: its worktree is named for the ep
   const result = await $.command.run(command('ticket-board'))
   expect(result.text).toMatch(/^This tab has no ticket/)
   expect(seen.opens).toEqual(['gru-board'])
+})
+
+/** A prompt the person entered, as the engine raises it: a slash command's `command` with it. */
+const typed = (text: string, cmd?: { name: string; args: string }) => ({
+  text,
+  wait: false,
+  origin: { kind: 'composer' as const },
+  ...(cmd === undefined ? {} : { command: cmd }),
+})
+
+/** A session over `disk` whose prompts the engine enters as sent, and whose opens the test sees in order. */
+function promptStage(on: On, disk: Record<string, string>, root: string, session = 'w') {
+  const seen = stage(on, disk, { session, root })
+  // Stands for the engine beneath the mod: each prompt enters as sent.
+  on('prompt.submit', (_$, e) => ({ text: e.text }))
+
+  return seen
+}
+
+/** A worker's tab: a session in its ticket's worktree, polled once. */
+async function workerTab($: Engine, on: On, disk: Record<string, string>) {
+  const seen = promptStage(on, disk, WORKTREE)
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: WORKTREE, surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+
+  return { seen, clock }
+}
+
+const MINION_LAUNCH = typed('/stark-ops:minion STARK-1 — leader peer claude:abc', {
+  name: 'stark-ops:minion',
+  args: 'STARK-1 — leader peer claude:abc',
+})
+
+test("a Minion's launch prompt opens the ticket pane from the prompt's hook, before its ticket's file exists", async ($, on) => {
+  const { seen } = await workerTab($, on, {})
+  // No ticket file yet: the poll opens nothing.
+  expect(seen.opens).toEqual([])
+  await $.prompt.submit(MINION_LAUNCH)
+  expect(seen.opens).toEqual(['ticket-board'])
+  // The pane draws its wait for the file.
+  const pane = await $.ui.mount(TICKET_PANE)
+  expect(await pane.find({ type: 'Text', text: 'No ticket file yet' })).toBeDefined()
+})
+
+test('a launch prompt that a hook beneath drops opens no ticket pane', async ($, on) => {
+  const seen = stage(on, {}, { session: 'w', root: WORKTREE })
+  on('prompt.submit', () => ({ drop: 'refused by a guard' }))
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: WORKTREE, surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  await $.prompt.submit(MINION_LAUNCH)
+  expect(seen.opens).toEqual([])
+})
+
+test("Agnes's launch prompt, a /goal, opens the ticket pane from the prompt's hook", async ($, on) => {
+  const { seen } = await workerTab($, on, {})
+  await $.prompt.submit(typed('/goal /agnes STARK-1', { name: 'goal', args: '/agnes STARK-1' }))
+  expect(seen.opens).toEqual(['ticket-board'])
+})
+
+test('a later prompt opens the ticket pane once the poll found the ticket file, and only while the pane is not placed', async ($, on) => {
+  const disk: Record<string, string> = {}
+  const { seen, clock } = await workerTab($, on, disk)
+  // A plain prompt in a worktree named for a ticket, with no ticket file: no worker yet.
+  await $.prompt.submit(typed('what is this repo?'))
+  expect(seen.opens).toEqual([])
+
+  disk['STARK-1.json'] = ticket('STARK-1', 'pr')
+  await clock.advance(1000)
+  // The poll's own open, which waits as on a narrow terminal; then the prompt's.
+  expect(seen.opens).toEqual(['ticket-board'])
+  await $.prompt.submit(typed('status?'))
+  expect(seen.opens).toEqual(['ticket-board', 'ticket-board'])
+
+  // A placed pane is left as it is.
+  seen.isPlaced = true
+  await $.prompt.submit(typed('go on'))
+  await $.prompt.submit(MINION_LAUNCH)
+  expect(seen.opens).toEqual(['ticket-board', 'ticket-board'])
+})
+
+test("the person's close, kept in the session's state, holds against the prompts and the poll, until /ticket-board", async ($, on) => {
+  // The session's state says the person closed the ticket pane (the mod's `ui.close` hook writes it;
+  // a test cannot raise a close), as after a reload too. It answers until the mod writes the key.
+  let isClosed = true
+  on('state.get', (_$, e, next) => (e.key === 'ticketClosed' && isClosed ? { value: { value: true, version: 1 } } : next(e)))
+  on('state.set', (_$, e, next) => {
+    if (e.key === 'ticketClosed') isClosed = false
+    return next(e)
+  })
+  const { seen, clock } = await workerTab($, on, { 'STARK-1.json': ticket('STARK-1', 'pr') })
+  await clock.advance(1000)
+  await $.prompt.submit(typed('go on'))
+  await $.prompt.submit(MINION_LAUNCH)
+  expect(seen.opens).toEqual([])
+
+  // /ticket-board clears the close and opens the pane; a later prompt may open it again.
+  await $.command.run(command('ticket-board'))
+  expect(isClosed).toBe(false)
+  await $.prompt.submit(typed('go on'))
+  expect(seen.opens).toEqual(['ticket-board', 'ticket-board'])
+})
+
+test("a prompt opens no ticket pane in Gru's tab, whose worktree is named for the epic", async ($, on) => {
+  const disk: Record<string, string> = {
+    'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1'] }),
+    'STARK-10.json': ticket('STARK-10', 'pr'),
+  }
+  const seen = promptStage(on, disk, '/r/.claude/worktrees/STARK-10', 'gru')
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  await $.prompt.submit(typed('/gru start STARK-10', { name: 'gru', args: 'start STARK-10' }))
+  await $.prompt.submit(typed('go on'))
+  await $.prompt.submit(MINION_LAUNCH)
+  expect(seen.opens).toEqual(['gru-board'])
+})
+
+test('a prompt opens no ticket pane in a worktree not named for a ticket, a launch prompt too', async ($, on) => {
+  const seen = promptStage(on, { 'STARK-1.json': ticket('STARK-1', 'pr') }, '/r/.claude/worktrees/mods', 'me')
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/mods', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  await $.prompt.submit(MINION_LAUNCH)
+  await $.prompt.submit(typed('go on'))
+  expect(seen.opens).toEqual([])
 })
 
 /** A log file's text: one `{at, text}` a line, `minutesAgo` before T0. */

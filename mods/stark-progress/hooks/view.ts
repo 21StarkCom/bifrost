@@ -75,6 +75,23 @@ export function ticketOf(path: string): string | null {
   return TICKET_ID.test(base) ? base : null
 }
 
+/** The worker skills whose launch prompt opens the ticket pane. */
+const WORKER_SKILLS = new Set(['minion', 'agnes'])
+
+/**
+ * True for a prompt that starts a worker: `/minion` or `/agnes`, with a plugin
+ * prefix (`/stark-ops:minion`) or without, or either one as the first word of
+ * a `/goal` (valkyrie starts Agnes with `/goal /agnes STARK-n`). The engine's
+ * `command`, when it names one, else the prompt's own text.
+ */
+export function startsWorker(text: string, command?: { readonly name: string; readonly args: string }): boolean {
+  const line = command === undefined ? text.trim() : `/${command.name.replace(/^\//, '')} ${command.args}`.trim()
+  const [first = '', second = ''] = line.split(/\s+/)
+  const isWorker = (word: string) => word.startsWith('/') && WORKER_SKILLS.has(word.slice(1).split(':').pop() ?? '')
+
+  return isWorker(first) || (first === '/goal' && isWorker(second))
+}
+
 /** The folder named `id` that `path` is or is inside, or null. */
 function folderOf(id: string, path: string): string | null {
   const parts = path.replace(/[\\/]+$/, '').split(/[\\/]/)

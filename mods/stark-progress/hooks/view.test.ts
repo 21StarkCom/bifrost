@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { bar, buildView, dur, row, timeline, track, verdict, worktreeOf } from './view'
+import { bar, buildView, dur, row, startsWorker, timeline, track, verdict, worktreeOf } from './view'
 
 const NOW = Date.parse('2026-10-29T12:00:00Z')
 const MIN = 60_000
@@ -167,4 +167,21 @@ test('a malformed file draws nothing, and fields of the wrong type read as absen
   expect(v?.heading).toBe('Gru ·  · 0/1 closed')
   expect(v?.rows.map(r => [r.id, r.title, r.stage, r.verdict.text])).toEqual([['STARK-1', '', 'ticket', 'no time yet']])
   expect(chars(v?.rows[0]?.cells ?? [])).toBe('·'.repeat(12))
+})
+
+test("a worker's launch prompt starts the minion or agnes skill, with a prefix, without one, or inside /goal", () => {
+  // valkyrie's two launch prompts, as the engine's command names them and as text.
+  expect(startsWorker('', { name: 'stark-ops:minion', args: 'STARK-1 — leader peer claude:abc' })).toBe(true)
+  expect(startsWorker('', { name: 'goal', args: '/agnes STARK-1' })).toBe(true)
+  expect(startsWorker('/stark-ops:minion STARK-1')).toBe(true)
+  expect(startsWorker('/goal /stark-ops:agnes STARK-1 skip the release')).toBe(true)
+  expect(startsWorker('  /minion --help')).toBe(true)
+  // Any other prompt or command, a goal of another kind, and the words alone are none.
+  expect(startsWorker('', { name: 'gru', args: 'start STARK-10' })).toBe(false)
+  expect(startsWorker('', { name: 'goal', args: 'finish STARK-1 with /agnes' })).toBe(false)
+  expect(startsWorker('', { name: 'ticket-board', args: '' })).toBe(false)
+  expect(startsWorker('run the minion skill')).toBe(false)
+  expect(startsWorker('minion STARK-1')).toBe(false)
+  expect(startsWorker('/minions')).toBe(false)
+  expect(startsWorker('')).toBe(false)
 })

@@ -449,11 +449,28 @@ face, and a Log tab's times in digits of one width; the terminal ignores both.
 
 ## The ticket pane
 
-The pane opens by itself in a Minion's or Agnes's own tab, once, when the
-poll first finds the tab's ticket file, and from 144 columns (110 once you
-opened it). `/ticket-board` opens it in that tab at any width; in any other
-tab it says the tab has no ticket. While the pane is not placed, the tab keeps
-its one band row above the prompt. It draws with the Gru pane's parts, palette
+The pane opens by itself in a Minion's or Agnes's own tab, at any width.
+
+- **At the launch.** The prompt that starts the worker opens it, before the
+  ticket's file exists: `/minion` or `/agnes`, with a plugin prefix
+  (`/stark-ops:minion`) or not, or either one as the first word of a `/goal`
+  (valkyrie starts Agnes with `/goal /agnes STARK-n`). Until the file comes,
+  the pane says `No ticket file yet`.
+- **Why a prompt.** The engine places a pane opened from the hook of a prompt
+  the person entered at any width, and a launch's first prompt counts. A pane
+  the mod opens on its own (the poll's) waits undrawn below 144 columns (110
+  once you opened it), until you open it or widen the terminal.
+- **Later.** A later prompt in that tab opens the pane again while it is not
+  placed, once the poll found the ticket's file. When no prompt opened it
+  yet, the poll opens it once, when it first finds that file. A prompt that a
+  hook drops opens nothing.
+- **Your close holds.** Once you close the pane by hand, no prompt or poll in
+  that session opens it again. `/ticket-board` opens it in that tab at any
+  width, and clears your close; in any other tab it says the tab has no
+  ticket.
+
+While the pane is not placed, the tab keeps its one band row above the
+prompt. It draws with the Gru pane's parts, palette
 and rules: counts and elapsed times only, one emoji at most per section
 header and per status, and none in Settings.
 
