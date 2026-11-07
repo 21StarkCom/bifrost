@@ -350,7 +350,7 @@ test("plugin hooks are declared inline on stark-ops alone and run tools from thi
   assert.deepEqual(
     withHooks.map((p) => p.name),
     ["stark-ops"],
-    `${MARKETPLACE_REL}: only stark-ops ships hooks (the fact-routing hook, next to /stark-memory).`,
+    `${MARKETPLACE_REL}: only stark-ops ships hooks (the fact-routing hook, next to /stark-memory, and the agent-doc gate).`,
   );
   const hooks = withHooks[0].hooks;
   assert.ok(
@@ -377,10 +377,18 @@ test("plugin hooks are declared inline on stark-ops alone and run tools from thi
     `${MARKETPLACE_REL}: stark-ops must wire tools/fact_routing_hook.ts on PostToolUse as two command hooks, ` +
       `gated to auto-memory files by \`if\`, one for Write and one for Edit.`,
   );
+  // The agent-doc gate: the `if` gate starts node only for a `njord pr-merge`,
+  // never for every Bash call.
+  assert.deepEqual(
+    groups.PreToolUse?.map((g) => [g.matcher, g.hooks?.map((h) => [h.type, h.if, h.command])]),
+    [["Bash", [["command", "Bash(njord pr-merge *)", 'node "${CLAUDE_PLUGIN_ROOT}/tools/rules_gate_hook.ts"']]]],
+    `${MARKETPLACE_REL}: stark-ops must wire tools/rules_gate_hook.ts on PreToolUse as one Bash command hook, ` +
+      `gated to \`njord pr-merge\` by \`if\`.`,
+  );
   assert.deepEqual(
     Object.keys(groups).sort(),
-    ["PostToolUse"],
-    `${MARKETPLACE_REL}: stark-ops ships hooks on PostToolUse only.`,
+    ["PostToolUse", "PreToolUse"],
+    `${MARKETPLACE_REL}: stark-ops ships hooks on PreToolUse and PostToolUse only.`,
   );
   for (const [event, list] of Object.entries(groups)) {
     assert.ok(Array.isArray(list), `${MARKETPLACE_REL}: stark-ops \`hooks.${event}\` must be an array of matcher groups.`);
