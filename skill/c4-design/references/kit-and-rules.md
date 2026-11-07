@@ -18,8 +18,9 @@ Do not edit that copy: the next build writes it again, and rule R8 fails on a ch
 | `queue`          | 2         | queue   | inside a `softwareSystem`               |
 | `component`      | 3         | box     | inside one of the five container kinds  |
 
-The five container kinds are `container`, `webApp`, `mobileApp`, `database` and `queue`. The colours are the
-classic C4 palette, set by the kit; a model sets no colour.
+The five container kinds are `container`, `webApp`, `mobileApp`, `database` and `queue`. The kit sets the
+colours: the C4 roles of the draupnir house theme, a blue scale with the theme's neutral for an external system,
+not the classic C4 palette. A model sets no colour.
 
 ## Deployment node kinds
 
@@ -45,12 +46,14 @@ names no project goes in the project of its own folder, or of the nearest parent
 - `async`: a dotted line, for a message, an event or a queue.
 - `sync`: a solid line, for a call that waits for its answer.
 
-Write a kind as `a -[async]-> b 'publishes orders'`. A relationship with no kind is a plain line.
+Write a kind as `a -[async]-> b 'publishes orders'`. A relationship with no kind gets a dashed line, which the key
+does not explain. Give each relationship a kind.
 
 ## Rules of `floorplan check`
 
-`floorplan check` first reports LikeC4's own errors and warnings as rule `LIKEC4`. A proposal with an entry that
-does not hold (a `remove` of an element that is not in the model, an `add` of one that is) is a `LIKEC4` error.
+`floorplan check` first reports the language's own errors and warnings as rule `FLOORPLAN`. A proposal with an
+entry that does not hold (a `remove` of an element that is not in the model, an `add` of one that is) is a
+`FLOORPLAN` error.
 
 | Rule | What it checks                                                                                 | Level   |
 | ---- | ---------------------------------------------------------------------------------------------- | ------- |
@@ -66,11 +69,11 @@ does not hold (a `remove` of an element that is not in the model, an `add` of on
 
 - An error makes the check fail (exit 1, `ok: false`). A warning fails it only past `--max-warnings` (MCP
   `maxWarnings`). Aim for no warnings in a proposal: a warning is a gap the operator will ask about.
-- R8 compares SHA-256 hashes and renders nothing again. Its inputs are `likec4.config.json` and the files under
-  `kit/`, `model/` and `.likec4/`. Its outputs are the files under `generated/`, less `manifest.json`.
+- R8 compares SHA-256 hashes and renders nothing again. Its inputs are `floorplan.config.json` and the files under
+  `kit/`, `model/` and `.floorplan/`. Its outputs are the files under `generated/`, less `manifest.json`.
 - `proposals/` and `README.md` are not inputs of R8. So a proposal edit needs no build, and R8 stays green while a
   proposal is open.
-- A layout that the operator saves in the studio (a moved box) goes into `.likec4/`, an input. R8 then fails until
+- A layout that the operator saves in the studio (a moved box) goes into `.floorplan/`, an input. R8 then fails until
   the next build. `floorplan accept` builds, so the loop's end clears it.
 - R8 also fails when `kit/spec.c4` is not the kit of the CLI that runs the check. After a floorplan upgrade that
   changes the kit, run `floorplan build` again.
