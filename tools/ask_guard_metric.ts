@@ -23,7 +23,6 @@
  * Wednesday, the same days as the baseline week; its output goes to
  * `<stateRoot>/ask-guard/weekly.log`.
  */
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -31,7 +30,7 @@ import { fileURLToPath } from "node:url";
 import { precheckCli } from "./cli_args_lib.ts";
 import { isMainModule } from "./main_module_lib.ts";
 import { stateRoot } from "./asset_root_lib.ts";
-import { installWeeklyJob, uninstallJob, weeklyPlist } from "./launchd_lib.ts";
+import { heimdallSend, installWeeklyJob, uninstallJob, weeklyPlist } from "./launchd_lib.ts";
 
 export const USAGE = `usage: ask_guard_metric.ts [--week YYYY-MM-DD] [--json] [--notify]
        ask_guard_metric.ts --install-schedule | --uninstall-schedule
@@ -469,10 +468,9 @@ export function notifyBody(r: Result): string {
 }
 
 function notify(r: Result): number {
-  const body = notifyBody(r);
-  const s = spawnSync("heimdall", ["send", "--body", body, "--", title(r)], { encoding: "utf8" });
-  if (s.status !== 0) {
-    process.stderr.write(`heimdall send failed (${s.error?.message ?? `exit ${s.status}`}): ${(s.stderr ?? "").trim()}\n`);
+  const failed = heimdallSend(title(r), notifyBody(r));
+  if (failed) {
+    process.stderr.write(`${failed}\n`);
     return 1;
   }
   process.stdout.write(`notified: ${title(r)}\n`);

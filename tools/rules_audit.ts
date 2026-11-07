@@ -26,7 +26,7 @@ import { fileURLToPath } from "node:url";
 
 import { stateRoot } from "./asset_root_lib.ts";
 import { precheckCli } from "./cli_args_lib.ts";
-import { installWeeklyJob, uninstallJob, weeklyPlist } from "./launchd_lib.ts";
+import { heimdallSend, installWeeklyJob, uninstallJob, weeklyPlist } from "./launchd_lib.ts";
 import { isMainModule } from "./main_module_lib.ts";
 import {
   agentKind, auditRules, formatText, formatTriage, instructionKind, notifySummary, triage,
@@ -43,7 +43,7 @@ export function sweepPlist(tool: string, log: string, envPath: string): string {
   return weeklyPlist({ ...SWEEP, tool, log, envPath });
 }
 
-const USAGE =`usage: rules_audit.ts [--repo <path>] [--json] [--always <rule,…>]
+const USAGE = `usage: rules_audit.ts [--repo <path>] [--json] [--always <rule,…>]
                       [--file-budget <bytes>] [--always-budget <bytes>]
        rules_audit.ts --playbook [--repo <path>] [--fleet] [--memory]
                       [--files <path,…>] [--json] [--notify]
@@ -75,7 +75,8 @@ GREEN or YELLOW, 3 for RED. The inputs combine; with none, the current repo.
   --memory                every ~/.claude/projects/*/memory/ folder
   --files <path,…>        these agent files only
   --notify                also send a summary with heimdall send: the RED
-                          files first, then the files over budget
+                          files first, then the files over budget; a triage
+                          that fails sends its error
 
 The weekly sweep:
 
@@ -380,8 +381,7 @@ function playbookMain(flags: Map<string, string | true>): number {
       }
     }
   } catch (e) {
-    process.stderr.write(`rules_audit: ${(e as Error).message}\n`);
-    return e instanceof UsageError ? 2 : 1;
+    return playbookFailed(flags, e, e instanceof UsageError ? 2 : 1);
   }
   let report;
   try {
@@ -393,21 +393,32 @@ function playbookMain(flags: Map<string, string | true>): number {
     }
     report = triage({ groups: [...c.groups.values()], rootRules });
   } catch (e) {
-    process.stderr.write(`rules_audit: ${(e as Error).message}\n`);
-    return 1;
+    return playbookFailed(flags, e, 1);
   }
   process.stdout.write(flags.has("json") ? `${JSON.stringify(report, null, 2)}\n` : `${formatTriage(report)}\n`);
   if (flags.has("notify")) {
     const { title, body } = notifySummary(report);
-    const s = spawnSync("heimdall", ["send", "--body", body, "--", title], { encoding: "utf8", timeout: 60_000 });
-    if (s.status !== 0) {
-      process.stderr.write(`rules_audit: heimdall send failed (${s.error?.message ?? `exit ${s.status}`}): ${(s.stderr ?? "").trim()}\n`);
-      return 1;
-    }
+    if (!send(title, body)) return 1;
     // stdout stays the report alone with --json.
     (flags.has("json") ? process.stderr : process.stdout).write(`notified: ${title}\n`);
   }
   return report.totals.RED ? 3 : 0;
+}
+
+/** Send one push; false, with the reason on stderr, when it did not go. */
+function send(title: string, body: string): boolean {
+  const failed = heimdallSend(title, body);
+  if (failed) process.stderr.write(`rules_audit: ${failed}\n`);
+  return !failed;
+}
+
+/** With `--notify`, a triage that fails still sends a push, so that an
+ *  unattended sweep does not fail in silence. */
+function playbookFailed(flags: Map<string, string | true>, e: unknown, code: number): number {
+  const message = (e as Error).message;
+  process.stderr.write(`rules_audit: ${message}\n`);
+  if (flags.has("notify")) send("Agent-doc sweep failed", message);
+  return code;
 }
 
 function installSchedule(): number {

@@ -1,8 +1,8 @@
 /**
  * launchd_lib — the weekly launchd job that a tool loads with
  * `--install-schedule` and removes with `--uninstall-schedule`: the plist, the
- * PATH the job runs with, and the `launchctl` calls. `ask_guard_metric.ts` and
- * `rules_audit.ts` use it.
+ * PATH the job runs with, the `launchctl` calls, and the heimdall push the job
+ * sends. `ask_guard_metric.ts` and `rules_audit.ts` use it.
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -93,12 +93,16 @@ function domain(): string {
   return `gui/${process.getuid?.() ?? os.userInfo().uid}`;
 }
 
+/** launchd is macOS only: false, with the reason on stderr, elsewhere. */
+function onMacOS(flag: string): boolean {
+  if (process.platform === "darwin") return true;
+  process.stderr.write(`${flag} needs macOS launchd\n`);
+  return false;
+}
+
 /** Write the job's plist and load it, in place of a job of the same label. */
 export function installWeeklyJob(job: WeeklyJob): number {
-  if (process.platform !== "darwin") {
-    process.stderr.write("--install-schedule needs macOS launchd\n");
-    return 1;
-  }
+  if (!onMacOS("--install-schedule")) return 1;
   fs.mkdirSync(path.dirname(job.log), { recursive: true });
   const file = plistPath(job.label);
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -108,7 +112,13 @@ export function installWeeklyJob(job: WeeklyJob): number {
   const envPath = [...new Set([...found, "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"])].join(":");
   fs.writeFileSync(file, weeklyPlist({ ...job, tool: stableToolPath(job.toolName, job.fallback), envPath }));
   launchctl(["bootout", `${domain()}/${job.label}`]);
-  const boot = launchctl(["bootstrap", domain(), file]);
+  let boot = launchctl(["bootstrap", domain(), file]);
+  // bootout can return before launchd lets go of the label, and a bootstrap
+  // then fails with error 5: try again after a short wait.
+  for (let i = 0; !boot.ok && i < 3; i++) {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500);
+    boot = launchctl(["bootstrap", domain(), file]);
+  }
   if (!boot.ok) {
     process.stderr.write(`launchctl bootstrap ${domain()} ${file} failed: ${boot.out}\n`);
     return 1;
@@ -119,8 +129,15 @@ export function installWeeklyJob(job: WeeklyJob): number {
 
 /** Unload the job and remove its plist. */
 export function uninstallJob(label: string): number {
+  if (!onMacOS("--uninstall-schedule")) return 1;
   const out = launchctl(["bootout", `${domain()}/${label}`]);
   fs.rmSync(plistPath(label), { force: true });
   process.stdout.write(`${out.ok ? "unloaded" : "not loaded:"} ${domain()}/${label}\nremoved ${plistPath(label)}\n`);
   return 0;
+}
+
+/** Send one push with `heimdall send`: undefined when it went, else why it did not. */
+export function heimdallSend(title: string, body: string): string | undefined {
+  const s = spawnSync("heimdall", ["send", "--body", body, "--", title], { encoding: "utf8", timeout: 60_000 });
+  return s.status === 0 ? undefined : `heimdall send failed (${s.error?.message ?? `exit ${s.status}`}): ${(s.stderr ?? "").trim()}`;
 }

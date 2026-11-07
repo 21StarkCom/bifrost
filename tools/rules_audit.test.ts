@@ -280,24 +280,30 @@ test("--playbook --notify: one heimdall send with the summary; the exit stays th
   const red = repo({ "CLAUDE.md": "# Rules\n\n- This is the operator's call.\n" });
   const ok = fakeBin();
   const bad = fakeBin({ heimdall: 4 });
+  // A bare home: no root rules of the machine change the triage.
+  const bare = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "rules-audit-home-")));
   const title = "Agent-doc sweep: RED 1 · YELLOW 0 · GREEN 0";
   try {
-    const r = run(["--playbook", "--notify"], red, ok.env());
+    const r = run(["--playbook", "--notify"], red, ok.env({ HOME: bare }));
     assert.equal(r.status, 3, r.stderr);
     assert.match(r.stdout, /^RED {5}CLAUDE\.md /m);
     assert.ok(r.stdout.endsWith(`notified: ${title}\n`), r.stdout);
     assert.deepEqual(ok.calls(), [["heimdall", "send", "--body", "1 agent file.\nRED files (1):\n- CLAUDE.md: 1 RED (GATE 1)", "--", title]]);
     // With --json, stdout stays the JSON report alone.
-    const json = run(["--playbook", "--notify", "--json"], red, ok.env());
+    const json = run(["--playbook", "--notify", "--json"], red, ok.env({ HOME: bare }));
     assert.equal(json.status, 3, json.stderr);
     assert.deepEqual(JSON.parse(json.stdout).totals, { GREEN: 0, YELLOW: 0, RED: 1 });
     assert.match(json.stderr, /^notified: /m);
     assert.equal(ok.calls().length, 2);
-    const failed = run(["--playbook", "--notify"], red, bad.env());
+    // A triage that fails still sends a push, so the weekly job does not fail in silence.
+    const broken = run(["--playbook", "--fleet", "--notify"], red, ok.env({ HOME: bare }));
+    assert.equal(broken.status, 2, broken.stderr);
+    assert.deepEqual(ok.calls().at(-1), ["heimdall", "send", "--body", `no fleet folder at ${path.join(bare, "Code", "21Stark")}`, "--", "Agent-doc sweep failed"]);
+    const failed = run(["--playbook", "--notify"], red, bad.env({ HOME: bare }));
     assert.equal(failed.status, 1);
     assert.match(failed.stderr, /heimdall send failed \(exit 4\)/);
   } finally {
-    for (const d of [red, ok.dir, bad.dir]) fs.rmSync(d, { recursive: true, force: true });
+    for (const d of [red, ok.dir, bad.dir, bare]) fs.rmSync(d, { recursive: true, force: true });
   }
 });
 
