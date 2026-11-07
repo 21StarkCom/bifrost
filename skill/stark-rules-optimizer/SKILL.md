@@ -1,8 +1,11 @@
 ---
 name: stark-rules-optimizer
 description: >-
-  Audit one repo's agent instruction files (.claude/rules, CLAUDE.md, AGENTS.md) against how Claude Code and Codex actually load them, and report what to cut, scope, fix or merge: rules that load every session, dead or over-broad paths: globs, size budgets, dead references, duplication, contradictions, ticket-history bloat. Read-only by default; --apply fixes through the repo's own PR spine. Use for rules audit, optimize CLAUDE.md, trim agent rules, rules load every session.
-argument-hint: "[--repo <path>] [--apply] [--always <rule,…>] [--file-budget <bytes>] [--always-budget <bytes>]"
+  Review one repo's agent files (CLAUDE.md, AGENTS.md, rules, SKILL.md) or the
+  auto-memory notes clause by clause against the agent-doc playbook: flag each
+  clause GREEN, YELLOW or RED and write its redline. Read-only by default;
+  --apply fixes them. Use to review, audit or trim agent files.
+argument-hint: "[--repo <path>] [--files <path,…>] [--memory] [--apply] [--always <rule,…>] [--file-budget <bytes>] [--always-budget <bytes>]"
 disable-model-invocation: true
 ---
 
@@ -14,35 +17,40 @@ usage, and arguments, then stop — do not run any phase.
 
 # stark-rules-optimizer
 
-A repo's instruction files decide what every agent session starts with, and
-nothing measures them. A rule with no `paths:` header loads into every Claude
-Code session; a glob that matches nothing never loads its rule; an AGENTS.md
-chain past 32 KiB is silently cut by Codex; a file that names a deleted path
-sends the agent looking for it. This skill measures all of that for one repo,
-then judges what code cannot, and reports each defect with `file:line`,
-evidence and a proposed fix.
+Review agent files the way a legal team reviews a contract. The
+[playbook](../stark-agent-docs/references/playbook.md) holds the standard
+position for each kind of clause. This skill reads each file clause by clause,
+gives each clause a GREEN, YELLOW or RED flag, and writes the exact redline for
+each YELLOW and RED clause. An agent file is a CLAUDE.md, an AGENTS.md, a
+`.claude/rules/*.md`, a SKILL.md, a `MEMORY.md` or a memory note.
 
-The deterministic half is `tools/rules_audit.ts` (load scope, globs, sizes,
-dead links, imports and paths). The judgement half — identifiers, commands and
-flags, duplication, contradictions, the repo's own policies, narrative bloat,
-gates — is yours, in Phase 2, and it starts from the tool's `candidates[]`.
+Two runs of `tools/rules_audit.ts` measure first, with no model:
+
+- **The triage** (`--playbook`) flags each file by size, gate, growth and
+  history phrases, copies and dead pointers.
+- **The load audit** (no flag) finds what Claude Code and Codex load, and
+  when: load scope, globs, sizes and dead references.
+
+The review starts from both outputs and judges what code cannot.
 
 ## Arguments
 
 | Arg | Default | Description |
 |-----|---------|-------------|
 | `--repo <path>` | cwd | The target repo (any path inside it). One repo per run. |
-| `--apply` | off | After the report, fix the findings on a branch of the target repo and carry them to a reviewed **draft** PR through that repo's spine. Never merges, never commits to `main`. |
-| `--always <rule,…>` | read from the repo | Rules the repo means to load every session, when its CLAUDE.md / AGENTS.md does not say so in words the tool can read ("always-loaded `x.md`"). |
-| `--file-budget <bytes>` | 16384 | Advisory per-file budget (injected bytes). |
-| `--always-budget <bytes>` | 32768 | Advisory total for everything loaded at session start. |
+| `--files <path,…>` | every agent file | Review only these agent files of the target. |
+| `--memory` | off | Review the auto-memory notes in each `~/.claude/projects/*/memory/`, not a repo. It takes no `--repo`. |
+| `--apply` | off | Fix the findings. For a repo: on a branch, through a reviewed **draft** PR in that repo. With `--memory`: in place, after a backup. Never merges, never commits to `main`. |
+| `--always <rule,…>` | read from the repo | For the load audit: the rules the repo means to load at each start-up, when its CLAUDE.md or AGENTS.md does not say so in words the tool can read ("always-loaded `x.md`"). |
+| `--file-budget <bytes>` | 16384 | The load audit's advisory budget for each file. |
+| `--always-budget <bytes>` | 32768 | The load audit's advisory budget for all files that load at start-up. |
 
 **Raw input:** `$ARGUMENTS`
 
 ## Constants
 
-Shell state does not persist between blocks; define these in every block that
-uses them. macOS has no `timeout(1)` — never wrap the tool in one.
+Shell state does not persist between blocks. Define these in each block that
+uses them. macOS has no `timeout(1)`: never wrap the tool in one.
 
 ```bash
 TOOLS="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/code-review}/tools"
@@ -53,7 +61,7 @@ audit() { node --no-warnings "$TOOLS/rules_audit.ts" "$@"; }
 
 ## Phase 1: Measure
 
-Put the `--repo` value (default `.`) in place of `<repo>`:
+For a repo, put the `--repo` value (default `.`) in place of `<repo>`:
 
 ```bash
 TOOLS="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/code-review}/tools"
@@ -61,123 +69,126 @@ audit() { node --no-warnings "$TOOLS/rules_audit.ts" "$@"; }
 REPO=$(git -C "<repo>" rev-parse --show-toplevel)
 OUT="${STARK_STATE_ROOT:-$HOME/.claude/code-review}/history/rules-audit/$(basename "$REPO")/$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p "$OUT"
-audit --repo "$REPO" --json > "$OUT/audit.json"   # pass --always / budgets through
-audit --repo "$REPO"                               # the readable summary: the same flags again
+audit --playbook --repo "$REPO" --json > "$OUT/triage.json"; echo "triage exit $?"
+audit --repo "$REPO" --json > "$OUT/audit.json"   # pass --always and the budgets through
 ```
 
-Exit 2 is a usage error (not a repo, a bad budget, an `--always` name that is
-no rule); fix the argument, don't work around it.
+For `--memory`, run the triage alone:
 
-`audit.json` holds `loadModel`, `budgets`, `declaredAlways`, `files[]` (each
-instruction file's injected size, Claude load — `always` / `on-demand` /
-`never` — whether Codex reads it, its `paths:` globs with match counts, and
-whether git ignores it), `totals`, `findings[]` and `candidates[]`.
-
-`findings[]` is already `ReportFindings`-shaped (`file`, `line`, `category`,
-`severity`, `short_summary`, `summary`, `failure_scenario`, `fix`, `verdict`).
-They are measured, not guessed; carry them into the report verbatim. A
-`PLAUSIBLE` verdict marks one that depends on runtime state the tree does not
-show (Claude's AGENTS.md mode, an empty override, the size-warning threshold).
-
-**Check the load model.** The tool emulates the loaders it was measured
-against (`loadModel`). If `claude --version` reports a different Claude Code
-version, say so at the top of the report: glob and frontmatter behaviour may
-have moved.
-
-## Phase 2: Judge
-
-Work the candidates and the checks code cannot run. Every finding you add
-carries `file:line`, the evidence (the command you ran and what it printed, or
-the line you compared against) and a proposed fix. **Verify before you
-promote**: a candidate you did not check is dropped, with a one-line reason in
-the summary — never promoted on suspicion.
-
-1. **Staleness beyond paths.**
-   - `identifier` candidates (env vars, symbols absent from the repo's own
-     files): grep the dependency that should define them — for Go,
-     `go list -m -f '{{.Dir}}' <module>` finds the module source; for Node,
-     `node_modules/<pkg>`. Promote only what no source defines.
-   - Commands, flags and exit codes a rule states: where the repo declares a
-     binary as its catalog (frigg: "the binary is the catalog"), run that
-     binary's help for each command named — `<bin> <cmd> -h`, or
-     `go run ./cmd/<bin> <cmd> -h` from the repo — and compare. Help only;
-     never run a verb that acts.
-   - `path` and `bare-file` candidates: decide whether the reference names
-     another repo, a runtime artifact, an example, or something dead.
-   - A file dense with checkable claims can get one zero-context pass under
-     [stark-fresh-eyes' contract](../stark-fresh-eyes/SKILL.md): one
-     read-only subagent, a different method, findings dispositioned once.
-2. **Duplication and contradiction.** `duplicate` candidates list places that
-   load into the same session. Keep one statement, in the narrowest file every
-   reader of it loads, and propose deleting the rest. For contradictions, read
-   the co-loading pairs — root CLAUDE.md against each rule, each rule against
-   the rules it shares globs with, CLAUDE.md against AGENTS.md — and report
-   statements that cannot both hold. A nested AGENTS.md overriding its root
-   inside its own subtree is Codex's precedence working, not a conflict.
-3. **The repo's own policies.** Read the root CLAUDE.md and AGENTS.md for
-   rules about instruction files ("verb and flag lists live only in `-h`";
-   "AGENTS.md and CLAUDE.md must agree"; "no incident narratives or ticket
-   history"). Check every instruction file against each and cite the policy's
-   `file:line` as evidence. Where the repo declares the two files mirrors,
-   report where they diverge rather than where they repeat each other.
-4. **Narrative bloat.** `narrative` candidates are paragraphs dense with ticket
-   ids, dates and live-verify words. Promote one when the repo bans such
-   content or the file loads every session; the fix condenses it to the rule
-   that remains true today and leaves the history to the ticket or PR.
-5. **Gates.** `gate` candidates are sentences whose words give a step or a
-   choice to the operator ("needs a GO", "the operator's call", "ask each
-   run"; the tool's `GATE_PHRASES`). The root rules make the request the GO,
-   so the agent takes such a step unless it is on their "These still need a
-   GO" list. Promote a candidate that gives the operator any other step; the
-   fix rewrites it so the agent takes the step. Drop one that only names the
-   words, records history, or keeps a step on that list.
-
-Promoted findings use `category` `staleness`, `duplication`, `contradiction`,
-`policy`, `narrative-bloat` or `gate`; `verdict` `CONFIRMED` when a command or
-a quoted line proves it, `PLAUSIBLE` when it is judgement; `severity` `high` for
-a contradiction or anything in an always-loaded file that misleads, `medium`
-otherwise, `low` for cosmetic.
-
-## Phase 3: Report
-
-Write `$OUT/findings.json`: `{ "level": "rules-audit", "repo", "loadModel",
-"findings": [...] }` — the tool's findings verbatim plus the ones you promoted,
-most severe first. It is `ReportFindings`-shaped, so
-`tools/findings_review_post.ts --findings "$OUT/findings.json"` can post it on
-a PR; the posted review carries each finding's `fix`, but infers its severity
-from `verdict` (`CONFIRMED` posts as high), so a finding's own `severity` lives
-only in this file and the printed report. Then print:
-
-```
-/stark-rules-optimizer — {repo}   load model {loadModel}{, claude now X.Y.Z if different}
-
-Always loaded: {bytes} (~{tokens} tokens) of {budget}; declared always-loaded: {rules or none}
-Findings: {n} (high {h}, medium {m}, low {l}) — {k} from the tool, {p} promoted in review
-Candidates: {n} checked, {p} promoted, {d} dropped ({reasons, grouped})
-
-{severity} {category} {file}:{line} — {short_summary}
-    evidence: …
-    fix: …
-
-Report: {OUT}/findings.json
+```bash
+TOOLS="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/code-review}/tools"
+audit() { node --no-warnings "$TOOLS/rules_audit.ts" "$@"; }
+OUT="${STARK_STATE_ROOT:-$HOME/.claude/code-review}/history/rules-audit/memory/$(date -u +%Y%m%dT%H%M%SZ)"
+mkdir -p "$OUT"
+audit --playbook --memory --json > "$OUT/triage.json"; echo "triage exit $?"
 ```
 
-**Without `--apply`, stop here.** Nothing in the target repo was touched.
+- Triage exit 0 or 3 is a result: exit 3 means a file is RED. Exit 2 is a
+  usage error (not a repo, a bad budget, an `--always` name that is no rule).
+  Fix the argument. Do not work around it.
+- With `--files`, the triage still runs on the whole target, so copies and the
+  start-up load set stay exact. Review only the named files.
+- `triage.json` has `files[]`: each file's `path`, `kind`, `chars`, `budget`,
+  `flag` and `clauses[]` (`flag`, `type`, `line`, `text`, `detail`).
+- `audit.json` has `loadModel`, `files[]` (each file's `claude` load:
+  `always`, `on-demand` or `never`; its Codex load; its `paths:` globs with
+  match counts), `findings[]` and `candidates[]`.
 
-## Phase 4: Apply (only with `--apply`)
+**Check the load model.** The load audit emulates the loaders in its
+`loadModel`. When `claude --version` prints another Claude Code version, say so
+at the top of the report: glob and frontmatter behaviour may have moved.
 
-`--apply` is the operator's go to edit on a branch and open a draft PR — not
-to merge. The target repo's own agent instructions file governs everything
-below; where it and this list disagree, it wins.
+## Phase 2: Read the standard
 
-1. **Choose the fix set.** Apply the mechanical fixes: add or narrow a quoted
-   `paths:` list, rename a foreign key to `paths`, anchor or delete a dead
-   glob, fix an import's punctuation, delete or repoint a dead reference,
-   remove a duplicate. Write every new glob from the code the rule is about
-   (the packages it names), never from its title. Content rewrites — splitting
-   a large rule, condensing narrative — are applied only when the new text
-   drops no fact that is still true; otherwise they go in the PR body as
-   proposals. Never invent a fact to replace a dead reference.
+Read these files whole before the first clause:
+
+1. The [playbook](../stark-agent-docs/references/playbook.md), the
+   [glossary](../stark-agent-docs/references/glossary.md) and
+   [the review method](references/review.md).
+2. The files above the target in the playbook's order of precedence:
+   `~/Code/CLAUDE.md`; `~/Code/21Stark/CLAUDE.md` for a repo under it; and
+   the repo's root CLAUDE.md and AGENTS.md.
+3. For each file, its siblings in the same load set:
+   - A file whose `claude` load is `always`: the other files that load at
+     start-up.
+   - A package CLAUDE.md: the CLAUDE.md of each package folder above it,
+     which has the same level of precedence, and each rule whose `paths:`
+     globs match its folder.
+   - A rule: the files it shares globs with.
+   - A SKILL.md: the `references/` files it links.
+   - A memory note: the `MEMORY.md` of its folder and the notes it links.
+4. For a memory note, the repo of its folder is the target repo of step 2.
+   Claude Code names the folder after the session's path, with each `/` and
+   `.` written as `-`. Find the repo with `ls -d` on the candidate paths under
+   `~/Code`.
+
+## Phase 3: Review
+
+Review each agent file of the run clause by clause, by
+[the review method](references/review.md).
+
+- **Batches.** A run of 8 files or fewer, under 100k chars in all, needs no
+  subagent. Otherwise, split the files by folder into batches under 100k
+  chars, so a file and its siblings share a batch. Give each batch to one
+  read-only subagent (the Agent tool on Claude), with
+  [the brief](references/review.md#the-brief). Run at most 8 at once. When
+  the runtime has no subagents, review the batches in turn.
+- **The tools' output is input.** Each triage clause becomes an entry, unless
+  the review reads the clause and changes its flag: a gate phrase in a kept
+  gate is GREEN. Check each `findings[]` and `candidates[]` item of
+  `audit.json` by [the method](references/review.md#the-load-audit).
+- **Verify each RED** before you report it. Read the clause and the evidence
+  it cites again: the higher clause at its `path:line`, the `ls` of a dead
+  path, or the help output of a gone flag. A RED that does not hold takes its
+  true flag. The report counts these changes.
+
+## Phase 4: Report
+
+Print the report, and write the same text to `$OUT/review.md`:
+
+```
+# Agent-doc review: {repo name, or memory}   load model {loadModel}{, claude now X.Y.Z if different}
+{n} files · GREEN {g} · YELLOW {y} · RED {r} · {c} REDs changed in verification
+
+## Agent-doc review: {path}
+Size {chars} / {budget} · {loads at start-up | loads on demand | never loads} · GREEN {n} · YELLOW {n} · RED {n}
+
+### RED 1 · {TYPE} · {path}:{line}
+Clause: "{the clause}"
+Playbook: {the playbook rule, and its evidence}.
+Redline: {the exact new text, or "delete the clause"}.
+Fallback: {the second position, or "none (Tier 1)"}.
+
+### YELLOW 1 · {TYPE} · {path}:{line}
+…
+```
+
+- The second line counts files by their flag after the review.
+- A file section lists its RED entries, then its YELLOW entries, each set
+  numbered from 1. Each YELLOW entry has a `Playbook:` line, as each RED
+  entry has.
+- A file with no YELLOW or RED clause gets no section.
+- The start-up files come first, then the rest by path.
+- [The method](references/review.md#write-the-entry) defines `{TYPE}`, the
+  load words and each line of an entry.
+
+**Without `--apply`, stop here.** Nothing in the target repo or in a memory
+folder changed.
+
+## Phase 5: Apply to a repo (only with `--apply`)
+
+`--apply` edits on a branch of the target repo and opens a draft PR. The
+target repo's own agent instructions file governs each step below. Where it
+and this list disagree, it wins.
+
+1. **Choose the fix set** by the playbook's tiers: each RED (Tier 1), each
+   YELLOW in a file that loads at start-up (Tier 2), and each other YELLOW in
+   a file that the PR edits for one of those (Tier 3).
+   - Apply each redline. When a redline drops a fact that is still true, apply
+     its fallback: move the text to `docs/<path>` behind one pointer.
+   - Write each new glob from the code the rule is about, never from its
+     title. Never invent a fact to replace a dead reference.
+   - Put a redline you cannot check in the PR body as a proposal.
 2. **No ticket.** Agent-file fixes are doc and config edits below the root
    ticket bar (`~/Code/CLAUDE.md`), so they ship as a PR alone. Only a fix
    set that clears the bar (it records a decision, or spans more than one PR)
@@ -188,26 +199,48 @@ below; where it and this list disagree, it wins.
    --porcelain`):
    `git -C <main> fetch origin` then
    `git -C <main> worktree add --no-track -b <branch> <main>/.claude/worktrees/<branch> origin/<default>`,
-   with a `<branch>` that names no ticket (e.g. `docs/scope-agent-rules`):
+   with a `<branch>` that names no ticket (e.g. `docs/agent-doc-review`):
    `--no-ticket` refuses a branch that carries a ticket key.
-   (`--no-track`: a branch tracking the default branch can push onto it).
-4. **Edit** in that worktree. Honour the repo's mirror policies in the same
+   (`--no-track`: a branch that tracks the default branch can push onto it.)
+4. **Edit** in that worktree. Keep the repo's mirror policies in the same
    change (both AGENTS.md and CLAUDE.md).
-5. **Verify live**: re-run `audit --repo <worktree> --json`. Every fixed
-   finding must be gone, no new one may appear, and every new glob must show a
-   non-zero `matches` on the files it was written for.
-6. **Draft PR** from the worktree with `njord pr-open --no-ticket` (a
-   draft by default) and a plain title, e.g.
-   `docs: scope unscoped agent rules`.
+5. **Verify live**: run the triage and the load audit again on the worktree
+   (`audit --playbook --repo <worktree> --json` and
+   `audit --repo <worktree> --json`). Each fixed clause must be gone, no new
+   RED may appear, and each new glob must show a non-zero `matches` on the
+   files it was written for.
+6. **Draft PR** from the worktree with `njord pr-open --no-ticket` (a draft by
+   default) and a plain title, e.g. `docs: apply the agent-doc review`. Put the
+   report's first two lines and the proposals in the body.
 7. **Review by what the PR changes**, per the root rules' tiers: a PR of
    agent instruction files and rules only is prose and takes none. One that
    also changes a script, config or code takes that tier (for code,
    `/code-review xhigh --fix <full PR URL>`: the full URL, or it reviews the
    wrong repo's diff), then fix or answer every finding, push with
    `njord pr-open`, and re-run step 5.
-8. **Stop at the draft PR.** Print the PR URL and the line the
-   operator runs to finish: `njord pr-merge <PR>`. Never merge; never commit
-   to `main`.
+8. **Stop at the draft PR**, and print its URL. `--apply` never merges and
+   never commits to `main`.
+
+## Phase 5: Apply to memory (only with `--memory --apply`)
+
+A memory note is in no repo, so the fix is in place, with no PR.
+
+1. **Back up** each memory folder before the first edit. A copy that fails
+   stops the run before any edit.
+
+   ```bash
+   for d in ~/.claude/projects/*/memory; do f=$(basename "$(dirname "$d")"); mkdir -p "$OUT/backup/$f" && cp -Rp "$d/." "$OUT/backup/$f/" || { echo "backup failed: $d"; break; }; done
+   ```
+
+2. **Fix each RED note** by its redline: rewrite the note, or delete it and
+   its line in `MEMORY.md`. Leave each YELLOW note as it is. stark-ops' fact
+   routing hook can ask about each write: a fix only narrows or deletes a
+   note, so keep the note where it is.
+3. **Verify live**: run `audit --playbook --memory --json` again. Each fixed
+   RED must be gone, no new RED may appear, and each `MEMORY.md` link must
+   still name a file.
+4. **Print** each changed note, and the restore line of its folder:
+   `cp -Rp "$OUT/backup/<folder>/." ~/.claude/projects/<folder>/memory/`.
 
 ## Failure modes
 
@@ -215,6 +248,8 @@ below; where it and this list disagree, it wins.
 |---------|----------|
 | `not inside a git repository` (exit 2) | Point `--repo` at a checkout. |
 | `--always names no rule` (exit 2) | Pass rule file names that exist under `.claude/rules/`. |
-| A `frontmatter` candidate (YAML the tool does not model) | Confirm the rule's scope in a live session: `/context`, or an `InstructionsLoaded` hook logging `load_reason`. |
-| `claude --version` differs from `loadModel` | Report it; treat glob and frontmatter findings as needing a live re-check. |
+| A `frontmatter` candidate (YAML the tool does not model) | Confirm the rule's scope in a live session: `/context`, or an `InstructionsLoaded` hook that logs `load_reason`. |
+| `claude --version` differs from `loadModel` | Report it. Treat the glob and frontmatter findings as open until a live check. |
+| A subagent returns no entry for a file | Review that file in the main session. |
+| The memory backup fails | Stop before any edit. Report the folder. |
 | The worktree branch already exists (`--apply`) | Someone is on it. Stop and say so; never `--force`. |
