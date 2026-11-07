@@ -7,6 +7,8 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
+import { SWEEP_LABEL, sweepPlist } from "./rules_audit.ts";
+
 const CLI = path.join(import.meta.dirname, "rules_audit.ts");
 
 function repo(files: Record<string, string>): string {
@@ -252,5 +254,104 @@ test("--playbook --files: repo and memory files by name; a non-agent or missing 
     assert.match(outside.stderr, /in no git repository and no memory folder/);
   } finally {
     fs.rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+/** Stand-ins for `heimdall` and `launchctl`, first on PATH: each records its
+ *  name and argv as one JSON line, and exits with its code. */
+function fakeBin(codes: { heimdall?: number; launchctl?: number } = {}) {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "rules-audit-bin-")));
+  const log = path.join(dir, "calls.jsonl");
+  for (const name of ["heimdall", "launchctl"] as const) {
+    fs.writeFileSync(path.join(dir, name), [
+      `#!${process.execPath}`,
+      `require("node:fs").appendFileSync(${JSON.stringify(log)}, JSON.stringify([${JSON.stringify(name)}, ...process.argv.slice(2)]) + "\\n");`,
+      `process.exit(${codes[name] ?? 0});`,
+    ].join("\n"), { mode: 0o755 });
+  }
+  return {
+    dir,
+    env: (extra: NodeJS.ProcessEnv = {}) => ({ ...process.env, ...extra, PATH: `${dir}${path.delimiter}${process.env.PATH}` }),
+    calls: (): string[][] => (fs.existsSync(log) ? fs.readFileSync(log, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []),
+  };
+}
+
+test("--playbook --notify: one heimdall send with the summary; the exit stays the triage's; a failed send exits 1", () => {
+  const red = repo({ "CLAUDE.md": "# Rules\n\n- This is the operator's call.\n" });
+  const ok = fakeBin();
+  const bad = fakeBin({ heimdall: 4 });
+  const title = "Agent-doc sweep: RED 1 · YELLOW 0 · GREEN 0";
+  try {
+    const r = run(["--playbook", "--notify"], red, ok.env());
+    assert.equal(r.status, 3, r.stderr);
+    assert.match(r.stdout, /^RED {5}CLAUDE\.md /m);
+    assert.ok(r.stdout.endsWith(`notified: ${title}\n`), r.stdout);
+    assert.deepEqual(ok.calls(), [["heimdall", "send", "--body", "1 agent file.\nRED files (1):\n- CLAUDE.md: 1 RED (GATE 1)", "--", title]]);
+    // With --json, stdout stays the JSON report alone.
+    const json = run(["--playbook", "--notify", "--json"], red, ok.env());
+    assert.equal(json.status, 3, json.stderr);
+    assert.deepEqual(JSON.parse(json.stdout).totals, { GREEN: 0, YELLOW: 0, RED: 1 });
+    assert.match(json.stderr, /^notified: /m);
+    assert.equal(ok.calls().length, 2);
+    const failed = run(["--playbook", "--notify"], red, bad.env());
+    assert.equal(failed.status, 1);
+    assert.match(failed.stderr, /heimdall send failed \(exit 4\)/);
+  } finally {
+    for (const d of [red, ok.dir, bad.dir]) fs.rmSync(d, { recursive: true, force: true });
+  }
+});
+
+test("--notify needs --playbook; a schedule flag takes no other argument", () => {
+  const bin = fakeBin();
+  const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "rules-audit-home-")));
+  try {
+    const env = bin.env({ HOME: home, STARK_STATE_ROOT: path.join(home, "state") });
+    for (const [args, re] of [
+      [["--notify"], /--notify needs --playbook/],
+      [["--install-schedule", "--notify"], /--install-schedule takes no other argument/],
+      [["--uninstall-schedule", "--playbook"], /--uninstall-schedule takes no other argument/],
+    ] as const) {
+      const r = run([...args], os.tmpdir(), env);
+      assert.equal(r.status, 2, `${args.join(" ")}: ${r.stderr}`);
+      assert.match(r.stderr, re);
+    }
+    assert.deepEqual(bin.calls(), [], "a refused run calls neither heimdall nor launchctl");
+  } finally {
+    fs.rmSync(bin.dir, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("the sweep's plist runs --playbook --fleet --memory --notify on Mondays at 09:00 through env node", () => {
+  const p = sweepPlist("/x/tools/rules_audit.ts", "/s/agent-doc-sweep/weekly.log", "/opt/homebrew/bin:/usr/bin");
+  assert.match(p, new RegExp(`<key>Label</key><string>${SWEEP_LABEL}</string>`));
+  assert.match(p, /<string>\/usr\/bin\/env<\/string>\s*<string>node<\/string>\s*<string>\/x\/tools\/rules_audit\.ts<\/string>\s*<string>--playbook<\/string>\s*<string>--fleet<\/string>\s*<string>--memory<\/string>\s*<string>--notify<\/string>\s*<\/array>/);
+  assert.match(p, /<key>Weekday<\/key><integer>1<\/integer><key>Hour<\/key><integer>9<\/integer><key>Minute<\/key><integer>0<\/integer>/);
+  assert.match(p, /<key>StandardOutPath<\/key><string>\/s\/agent-doc-sweep\/weekly\.log<\/string>/);
+  assert.match(p, /<key>PATH<\/key><string>\/opt\/homebrew\/bin:\/usr\/bin<\/string>/);
+});
+
+test("--install-schedule writes the plist and loads it; --uninstall-schedule unloads it and removes it", { skip: process.platform !== "darwin" && "launchd is macOS only" }, () => {
+  const bin = fakeBin();
+  const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "rules-audit-home-")));
+  try {
+    const env = bin.env({ HOME: home, STARK_STATE_ROOT: path.join(home, "state") });
+    const plist = path.join(home, "Library", "LaunchAgents", `${SWEEP_LABEL}.plist`);
+    const domain = `gui/${process.getuid!()}`;
+    const install = run(["--install-schedule"], os.tmpdir(), env);
+    assert.equal(install.status, 0, install.stderr);
+    assert.match(install.stdout, new RegExp(`loaded ${domain}/${SWEEP_LABEL}: Mondays 09:00 local, output to ${path.join(home, "state", "agent-doc-sweep", "weekly.log")}`));
+    // With no ~/.claude/code-review/tools link, the job runs this file.
+    assert.match(fs.readFileSync(plist, "utf8"), new RegExp(`<string>${CLI}</string>`));
+    assert.ok(fs.statSync(path.join(home, "state", "agent-doc-sweep")).isDirectory());
+    assert.deepEqual(bin.calls(), [["launchctl", "bootout", `${domain}/${SWEEP_LABEL}`], ["launchctl", "bootstrap", domain, plist]]);
+    const uninstall = run(["--uninstall-schedule"], os.tmpdir(), env);
+    assert.equal(uninstall.status, 0, uninstall.stderr);
+    assert.match(uninstall.stdout, new RegExp(`unloaded ${domain}/${SWEEP_LABEL}\nremoved ${plist}`));
+    assert.equal(fs.existsSync(plist), false);
+    assert.deepEqual(bin.calls().at(-1), ["launchctl", "bootout", `${domain}/${SWEEP_LABEL}`]);
+  } finally {
+    fs.rmSync(bin.dir, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
   }
 });

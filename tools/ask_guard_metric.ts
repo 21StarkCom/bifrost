@@ -31,6 +31,7 @@ import { fileURLToPath } from "node:url";
 import { precheckCli } from "./cli_args_lib.ts";
 import { isMainModule } from "./main_module_lib.ts";
 import { stateRoot } from "./asset_root_lib.ts";
+import { installWeeklyJob, uninstallJob, weeklyPlist } from "./launchd_lib.ts";
 
 export const USAGE = `usage: ask_guard_metric.ts [--week YYYY-MM-DD] [--json] [--notify]
        ask_guard_metric.ts --install-schedule | --uninstall-schedule
@@ -436,95 +437,23 @@ export function historyPath(): string {
   return path.join(configDir(), "history.jsonl");
 }
 
-const xml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+/** The launchd job: `--notify` each Thursday at 09:00 local. */
+const JOB = { label: LABEL, args: ["--notify"], weekday: 4, hour: 9 } as const;
 
-/** The launchd job: `--notify` each Thursday 09:00 local, output to `log`. */
+/** The plist of the job, with its output to `log`. */
 export function plist(tool: string, log: string, envPath: string): string {
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>${LABEL}</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/usr/bin/env</string>
-    <string>node</string>
-    <string>${xml(tool)}</string>
-    <string>--notify</string>
-  </array>
-  <key>EnvironmentVariables</key>
-  <dict><key>PATH</key><string>${xml(envPath)}</string></dict>
-  <key>StartCalendarInterval</key>
-  <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
-  <key>ProcessType</key><string>Background</string>
-  <key>StandardOutPath</key><string>${xml(log)}</string>
-  <key>StandardErrorPath</key><string>${xml(log)}</string>
-</dict>
-</plist>
-`;
-}
-
-function plistPath(): string {
-  return path.join(os.homedir(), "Library", "LaunchAgents", `${LABEL}.plist`);
-}
-
-/** The tool path the job runs: the `~/.claude/code-review/tools` link into the
- * checkout when it is there, since a plugin cache path changes with each version. */
-function stableToolPath(): string {
-  const linked = path.join(os.homedir(), ".claude", "code-review", "tools", "ask_guard_metric.ts");
-  return fs.existsSync(linked) ? linked : fileURLToPath(import.meta.url);
-}
-
-/** The first `PATH` folder that holds an executable `bin`, as the installer's shell sees it. */
-function binDir(bin: string): string | undefined {
-  for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
-    if (!path.isAbsolute(dir)) continue;
-    try {
-      fs.accessSync(path.join(dir, bin), fs.constants.X_OK);
-      return dir;
-    } catch {
-      /* next */
-    }
-  }
-  return undefined;
-}
-
-function launchctl(args: string[]): { ok: boolean; out: string } {
-  const r = spawnSync("launchctl", args, { encoding: "utf8" });
-  return { ok: r.status === 0, out: `${r.stdout ?? ""}${r.stderr ?? ""}`.trim() };
+  return weeklyPlist({ ...JOB, tool, log, envPath });
 }
 
 function installSchedule(): number {
-  if (process.platform !== "darwin") {
-    process.stderr.write("--install-schedule needs macOS launchd\n");
-    return 1;
-  }
-  const log = path.join(stateRoot(), "ask-guard", "weekly.log");
-  fs.mkdirSync(path.dirname(log), { recursive: true });
-  const file = plistPath();
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  // launchd starts with a bare PATH: keep the folders that hold this install's
-  // node and heimdall (a version manager's shims, say), then the system ones.
-  const found = ["node", "heimdall"].map((bin) => binDir(bin)).filter((d): d is string => d !== undefined);
-  const envPath = [...new Set([...found, "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"])].join(":");
-  fs.writeFileSync(file, plist(stableToolPath(), log, envPath));
-  const domain = `gui/${process.getuid?.() ?? os.userInfo().uid}`;
-  launchctl(["bootout", `${domain}/${LABEL}`]);
-  const boot = launchctl(["bootstrap", domain, file]);
-  if (!boot.ok) {
-    process.stderr.write(`launchctl bootstrap ${domain} ${file} failed: ${boot.out}\n`);
-    return 1;
-  }
-  process.stdout.write(`installed ${file}\nloaded ${domain}/${LABEL}: Thursdays 09:00 local, output to ${log}\n`);
-  return 0;
-}
-
-function uninstallSchedule(): number {
-  const domain = `gui/${process.getuid?.() ?? os.userInfo().uid}`;
-  const out = launchctl(["bootout", `${domain}/${LABEL}`]);
-  fs.rmSync(plistPath(), { force: true });
-  process.stdout.write(`${out.ok ? "unloaded" : "not loaded:"} ${domain}/${LABEL}\nremoved ${plistPath()}\n`);
-  return 0;
+  return installWeeklyJob({
+    ...JOB,
+    toolName: "ask_guard_metric.ts",
+    fallback: fileURLToPath(import.meta.url),
+    log: path.join(stateRoot(), "ask-guard", "weekly.log"),
+    bins: ["node", "heimdall"],
+    when: "Thursdays 09:00 local",
+  });
 }
 
 /** The push body: the week, the baseline, the question counts and the 5 newest untagged questions. */
@@ -562,7 +491,7 @@ function main(argv: string[]): number {
     return 2;
   }
   if (flags.has("install-schedule")) return installSchedule();
-  if (flags.has("uninstall-schedule")) return uninstallSchedule();
+  if (flags.has("uninstall-schedule")) return uninstallJob(LABEL);
 
   let week: Week;
   try {

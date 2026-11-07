@@ -13,24 +13,41 @@
  *
  * `--playbook` triages agent files against the agent-doc playbook instead
  * (`triage` in `rules_audit_lib.ts`): a repo, the fleet under `~/Code/21Stark`,
- * the auto-memory folders, or a list of files.
+ * the auto-memory folders, or a list of files. `--notify` also sends its
+ * summary with `heimdall send`. `--install-schedule` writes and loads the
+ * launchd job that sends it each Monday (the weekly sweep); its output goes to
+ * `<stateRoot>/agent-doc-sweep/weekly.log`.
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
+import { stateRoot } from "./asset_root_lib.ts";
 import { precheckCli } from "./cli_args_lib.ts";
+import { installWeeklyJob, uninstallJob, weeklyPlist } from "./launchd_lib.ts";
 import { isMainModule } from "./main_module_lib.ts";
 import {
-  agentKind, auditRules, formatText, formatTriage, instructionKind, triage,
+  agentKind, auditRules, formatText, formatTriage, instructionKind, notifySummary, triage,
   type AgentKind, type RepoView, type TriageGroup,
 } from "./rules_audit_lib.ts";
 
-const USAGE = `usage: rules_audit.ts [--repo <path>] [--json] [--always <rule,…>]
+export const SWEEP_LABEL = "com.21stark.agent-doc-sweep";
+
+/** The weekly sweep: the fleet and the memory folders, each Monday at 09:00 local. */
+const SWEEP = { label: SWEEP_LABEL, args: ["--playbook", "--fleet", "--memory", "--notify"], weekday: 1, hour: 9 } as const;
+
+/** The plist of the sweep's launchd job, with its output to `log`. */
+export function sweepPlist(tool: string, log: string, envPath: string): string {
+  return weeklyPlist({ ...SWEEP, tool, log, envPath });
+}
+
+const USAGE =`usage: rules_audit.ts [--repo <path>] [--json] [--always <rule,…>]
                       [--file-budget <bytes>] [--always-budget <bytes>]
        rules_audit.ts --playbook [--repo <path>] [--fleet] [--memory]
-                      [--files <path,…>] [--json]
+                      [--files <path,…>] [--json] [--notify]
+       rules_audit.ts --install-schedule | --uninstall-schedule
 
 Audits one repo's agent instruction files — .claude/rules/**.md, CLAUDE.md,
 AGENTS.md — against how Claude Code and Codex load them: load scope, size
@@ -56,7 +73,15 @@ GREEN or YELLOW, 3 for RED. The inputs combine; with none, the current repo.
   --repo <path>           the agent files of one repo
   --fleet                 every repo under ~/Code/21Stark, and its own CLAUDE.md
   --memory                every ~/.claude/projects/*/memory/ folder
-  --files <path,…>        these agent files only`;
+  --files <path,…>        these agent files only
+  --notify                also send a summary with heimdall send: the RED
+                          files first, then the files over budget
+
+The weekly sweep:
+
+  --install-schedule      write and load the launchd job ${SWEEP_LABEL}
+                          (--playbook --fleet --memory --notify, Mondays 09:00 local)
+  --uninstall-schedule    unload and remove that job`;
 
 const PRUNE_DIRS = new Set(["node_modules", "bower_components", ".venv", "venv", "__pycache__"]);
 /** The files Claude Code reads as a folder's CLAUDE.md. */
@@ -372,14 +397,47 @@ function playbookMain(flags: Map<string, string | true>): number {
     return 1;
   }
   process.stdout.write(flags.has("json") ? `${JSON.stringify(report, null, 2)}\n` : `${formatTriage(report)}\n`);
+  if (flags.has("notify")) {
+    const { title, body } = notifySummary(report);
+    const s = spawnSync("heimdall", ["send", "--body", body, "--", title], { encoding: "utf8", timeout: 60_000 });
+    if (s.status !== 0) {
+      process.stderr.write(`rules_audit: heimdall send failed (${s.error?.message ?? `exit ${s.status}`}): ${(s.stderr ?? "").trim()}\n`);
+      return 1;
+    }
+    // stdout stays the report alone with --json.
+    (flags.has("json") ? process.stderr : process.stdout).write(`notified: ${title}\n`);
+  }
   return report.totals.RED ? 3 : 0;
+}
+
+function installSchedule(): number {
+  return installWeeklyJob({
+    ...SWEEP,
+    toolName: "rules_audit.ts",
+    fallback: fileURLToPath(import.meta.url),
+    log: path.join(stateRoot(), "agent-doc-sweep", "weekly.log"),
+    // git labels the files that a repo ignores; heimdall sends the summary.
+    bins: ["node", "heimdall", "git"],
+    when: "Mondays 09:00 local",
+  });
 }
 
 export function main(argv: string[]): number {
   const { flags } = precheckCli(argv, {
     values: ["--repo", "--always", "--file-budget", "--always-budget", "--files"],
-    switches: ["--json", "--playbook", "--fleet", "--memory"],
+    switches: ["--json", "--playbook", "--fleet", "--memory", "--notify", "--install-schedule", "--uninstall-schedule"],
   }, USAGE);
+  const mode = ["install-schedule", "uninstall-schedule"].find((k) => flags.has(k));
+  if (mode && flags.size > 1) {
+    process.stderr.write(`rules_audit: --${mode} takes no other argument\n`);
+    return 2;
+  }
+  if (mode === "install-schedule") return installSchedule();
+  if (mode === "uninstall-schedule") return uninstallJob(SWEEP_LABEL);
+  if (flags.has("notify") && !flags.has("playbook")) {
+    process.stderr.write("rules_audit: --notify needs --playbook\n");
+    return 2;
+  }
   if (flags.has("playbook")) {
     if (flags.has("always") || flags.has("file-budget") || flags.has("always-budget")) {
       process.stderr.write("rules_audit: --always, --file-budget and --always-budget do not apply with --playbook\n");

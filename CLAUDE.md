@@ -25,7 +25,7 @@ Add only rules, traps and pointers here. Put reasons, history and catalogs in `d
 - Resolve shipped assets with `assetRoot()` and mutable state with `stateRoot()`, both in `tools/asset_root_lib.ts`. Skills use `${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/code-review}`.
 - **Never hardcode `~/.claude/code-review/{tools,prompts,scripts,standards}`** in a skill or tool.
 - `tools/asset_links.ts` (`--check` / `--install`) provisions the five `~/.claude/code-review` links from `MANAGED_LINKS` in `tools/asset_links_lib.ts`. Retire a link by moving its row to `RETIRED_LINKS`, never by deleting the row.
-- Machine assets (settings, machine hooks, the `.envrc` GCP scope block) belong to idavoll (`21StarkCom/idavoll`). The one machine asset a tool here installs is the launchd job of `tools/ask_guard_metric.ts --install-schedule`.
+- Machine assets (settings, machine hooks, the `.envrc` GCP scope block) belong to idavoll (`21StarkCom/idavoll`). The machine assets a tool here installs are two launchd jobs: `tools/ask_guard_metric.ts --install-schedule` (Thursdays) and `tools/rules_audit.ts --install-schedule` (`com.21stark.agent-doc-sweep`, the weekly agent-doc sweep, Mondays).
 - `.worktreeinclude` copies gitignored files into Claude- and Codex-managed worktrees. A plain `git worktree add` does not read it, so a helper that creates a worktree copies the named files itself. idavoll's `gcp_scope.ts` writes its row. Never add a credential file or a broad glob to it.
 
 ## Layout

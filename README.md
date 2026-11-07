@@ -130,6 +130,8 @@ stark-ops also ships two hooks, both declared on the stark-ops entry of the mani
 
 `tools/ask_guard_metric.ts` measures the root rules' "Act, don't ask": each week it counts the operator's one-word replies (`go`, `yes`, `ship it`) beside a baseline week, and, from the Claude Code transcripts, the turns that end on a question, tagged (`Needs you (<tag>): …`) or untagged, with the newest untagged ones listed, since each points to a rule to fix (`--install-schedule` sets up the Thursday heimdall push).
 
+`tools/rules_audit.ts --install-schedule` sets up the weekly agent-doc sweep: each Monday at 09:00 it triages the agent files of the fleet and the memory notes (`--playbook --fleet --memory --notify`) and sends one heimdall push, the RED files first, then the files over budget.
+
 ### stark-constitution: docs, decisions and rules
 
 | Skill | What it does |
