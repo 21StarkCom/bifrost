@@ -84,6 +84,7 @@ const MOD_SOURCES: Record<string, string> = {
   "stark-progress": "./mods/stark-progress",
   "decision-deck": "./mods/decision-deck",
   "needs-you": "./mods/needs-you",
+  interview: "./mods/interview",
 };
 
 interface Plugin {
