@@ -123,7 +123,10 @@ The pipeline has two stages: you gate the spec at `/stark-author`, and checks ga
 
 /minion and /agnes run the same two shared docs, so their review gate and merge path cannot drift: [standards/worker-spine.md](standards/worker-spine.md) (bind → implement → verify live → PR → review by what it changes → merge → close) and [standards/stand-down.md](standards/stand-down.md) (the tab teardown after a `done`). A worker runs its own repo's release chain, and sends a need in another repo to a worker there, both by the spine's §8: a Minion reports it `blocked` for Gru to file and launch, and Agnes files and launches it herself.
 
-stark-ops also ships one hook, a PostToolUse `tools/fact_routing_hook.ts` that runs when a Write or Edit touches an auto-memory file and advises the model where the fact belongs. It takes the fleet's repo names from the vault-ecosystem checkout, and says so when it finds none and falls back to its built-in list. It is the safety net behind `/stark-memory`, declared on the stark-ops entry of the manifest, and it installs and updates with that plugin.
+stark-ops also ships two hooks, both declared on the stark-ops entry of the manifest, so they install and update with that plugin:
+
+- A PostToolUse `tools/fact_routing_hook.ts` runs when a Write or Edit touches an auto-memory file, and advises the model where the fact belongs. It takes the fleet's repo names from the vault-ecosystem checkout, and says so when it finds none and falls back to its built-in list. It is the safety net behind `/stark-memory`.
+- A PreToolUse `tools/rules_gate_hook.ts`, the agent-doc gate, runs before a Bash call to `njord pr-merge`. It triages the agent files the PR changes with `tools/rules_audit.ts --playbook`, at the PR head commit, and denies the merge on a RED clause. A tool error lets the merge go on, with one warning line.
 
 `tools/ask_guard_metric.ts` measures the root rules' "Act, don't ask": each week it counts the operator's one-word replies (`go`, `yes`, `ship it`) beside a baseline week, and, from the Claude Code transcripts, the turns that end on a question, tagged (`Needs you (<tag>): …`) or untagged, with the newest untagged ones listed, since each points to a rule to fix (`--install-schedule` sets up the Thursday heimdall push).
 
