@@ -141,12 +141,12 @@ export function classifyMemory(
   // BEFORE both corpus rules, since its prose trips the product-language and
   // two-slug tests by accident.
   if (IMPL_MARKERS.test(text)) return null;
-  // class 1 — product-level fleet fact: names a fleet entity AND reads
-  // product-level ("when to reach", relationship, selection).
+  // A product-level fleet fact: names a fleet entity AND reads product-level
+  // ("when to reach", relationship, selection).
   if (PRODUCT_LANG.test(text)) {
     return { route: "corpus", reason: `product-level, mentions ${slugs.slice(0, 4).join("/")} + when-to-reach language` };
   }
-  // class 1 — a cross-repo relationship (two+ entities, no impl markers, no
+  // A cross-repo relationship (two+ entities, no implementation markers, no
   // explicit when-to-reach language) is still product-level.
   if (slugs.length >= 2) {
     return { route: "corpus", reason: `cross-repo relationship: ${slugs.slice(0, 4).join("/")}` };

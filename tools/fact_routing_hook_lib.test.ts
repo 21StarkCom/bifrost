@@ -1,9 +1,9 @@
 // Tests for `tools/fact_routing_hook_lib.ts`. Covers the classifier (the corpus
 // route, the implementation facts it leaves in memory, and the other null
-// cases), the frontmatter/body parsers, the
-// whole-word slug matcher (hyphenated slugs, no substring false-hits), the
-// config-dir and auto-memory path rules, and the corpus slug reader. Every fixture is synthetic: real
-// memory files are never copied in.
+// cases), the frontmatter/body parsers, the whole-word slug matcher (hyphenated
+// slugs, no substring false-hits), the config-dir and auto-memory path rules,
+// and the corpus slug reader. Every fixture is synthetic: real memory files are
+// never copied in.
 import { strict as assert } from "node:assert";
 import fs from "node:fs";
 import os from "node:os";
@@ -61,8 +61,15 @@ test("class 1 — a cross-repo relationship (two slugs) routes to corpus even wi
 });
 
 test("null — an implementation fact about a repo stays in memory", () => {
-  const c = note("project", "The lint gate in tools/lint.ts trips on plume; the test covers the exit code.");
-  assert.equal(classifyMemory(c, "/x/projects/p/memory/f.md", SLUGS), null);
+  // Each note reads as when-to-reach language too, so only the implementation
+  // check keeps it out of the corpus: a word marker alone is enough.
+  for (const body of [
+    "Reach for plume: the lint gate in tools/lint.ts trips on it.",
+    "Reach for plume when a test needs an xlsx fixture.",
+    "Use meridian for the CI cron, not a one-off script.",
+  ]) {
+    assert.equal(classifyMemory(note("project", body), "/x/projects/p/memory/f.md", SLUGS), null, body);
+  }
 });
 
 test("null — a multi-repo implementation fact is not sent to the corpus", () => {
@@ -70,6 +77,9 @@ test("null — a multi-repo implementation fact is not sent to the corpus", () =
   // memory: the bare two-slug rule must not catch a repo's internals.
   const c = note("project", "frigg's cache schema is imported by tyr's sql adapter in internal/db.go.");
   assert.equal(classifyMemory(c, "/x/projects/p/memory/f.md", SLUGS), null);
+  // An implementation word with no path keeps the bare two-slug rule off too.
+  const d = note("project", "frigg's cache schema is imported by tyr's sql adapter.");
+  assert.equal(classifyMemory(d, "/x/projects/p/memory/f.md", SLUGS), null);
 });
 
 test("null — implementation markers win over product language", () => {
