@@ -22,7 +22,7 @@ A clause that contradicts a clause higher in the list is RED.
 - **GREEN:** keep the clause as it is.
 - **YELLOW:** write a redline: the exact new text, or "move to `docs/<path>`"
   as the fallback.
-- **RED:** fix the clause before the merge.
+- **RED:** write a redline, and fix the clause before the merge.
 
 Fix a flag by its tier:
 
