@@ -3,14 +3,13 @@
  *
  * A `PostToolUse` hook fires when Claude writes a `<project>/memory/<name>.md` auto-memory
  * file. This lib decides whether that fact was mis-stored: a **product-level
- * fleet fact** belongs in the vault-ecosystem corpus, a **repo
- * implementation/invariant** belongs in that repo's own `CLAUDE.md` — either way
- * it is stranded in per-project private memory. When a memory smells class-1
- * (corpus) or class-2 (repo-CLAUDE) the hook tells the writing session, which
- * holds the context to route it at once. No queue keeps the flag for later.
+ * fleet fact** belongs in the vault-ecosystem corpus, where every session can
+ * find it, not in one project's private memory. When a memory reads like one,
+ * the hook tells the writing session, which holds the context to route it at
+ * once. No queue keeps the flag for later.
  *
- * Classifier rule: vault-ecosystem/docs/specs/2026-08-29-fact-routing-and-corpus-intake-spec.md
- * (STARK-1781). That spec's queue and fold are retired; only its classes hold.
+ * No agent file is a target: a repo implementation fact stays in memory, and
+ * the hook says nothing about it.
  *
  * Pure + injectable so the classifier is unit-tested without a real memory tree.
  */
@@ -18,7 +17,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-export type Route = "corpus" | "repo-claude";
+export type Route = "corpus";
 
 export interface RoutingFlag {
   route: Route;
@@ -115,9 +114,9 @@ export function fleetSlugsMentioned(text: string, fleetSlugs: readonly string[])
 
 /**
  * Classify a just-written memory file. Returns the flag, or null when the fact
- * legitimately belongs in Claude memory (class 3 process/feedback) or carries no
- * routable signal. Errs toward flagging — the writing session decides; a missed fact is the
- * failure mode this exists to prevent.
+ * belongs in Claude memory (process, feedback, or a repo implementation fact)
+ * or carries no routable signal. Errs toward flagging: the writing session
+ * decides, and a missed fleet fact is the failure mode this exists to prevent.
  */
 export function classifyMemory(
   content: string,
@@ -138,19 +137,16 @@ export function classifyMemory(
   const slugs = fleetSlugsMentioned(text, fleetSlugs);
   if (slugs.length === 0) return null;
 
-  // class 2 — repo implementation/invariant that ended up in memory. Checked
-  // BEFORE both corpus rules so an *implementation* fact routes to the repo's
-  // CLAUDE.md whatever else it says or names (repo-impl is the dominant
-  // mis-store, and its prose trips the product-language test by accident).
-  if (IMPL_MARKERS.test(text)) {
-    return { route: "repo-claude", reason: `implementation detail about ${slugs.slice(0, 3).join("/")} — belongs in its CLAUDE.md` };
-  }
-  // class 1 — product-level fleet fact: names a fleet entity AND reads
-  // product-level ("when to reach", relationship, selection).
+  // A repo implementation fact stays in memory: no agent file takes it. Checked
+  // BEFORE both corpus rules, since its prose trips the product-language and
+  // two-slug tests by accident.
+  if (IMPL_MARKERS.test(text)) return null;
+  // A product-level fleet fact: names a fleet entity AND reads product-level
+  // ("when to reach", relationship, selection).
   if (PRODUCT_LANG.test(text)) {
     return { route: "corpus", reason: `product-level, mentions ${slugs.slice(0, 4).join("/")} + when-to-reach language` };
   }
-  // class 1 — a cross-repo relationship (two+ entities, no impl markers, no
+  // A cross-repo relationship (two+ entities, no implementation markers, no
   // explicit when-to-reach language) is still product-level.
   if (slugs.length >= 2) {
     return { route: "corpus", reason: `cross-repo relationship: ${slugs.slice(0, 4).join("/")}` };
@@ -163,7 +159,7 @@ export function classifyMemory(
 export const SCAFFOLD_NAMES: ReadonlySet<string> = new Set(["contributing", "index", "readme", "template"]);
 
 /** The fleet slugs to match when no corpus checkout answers (CI, a fresh
- *  machine): the vault-ecosystem entity folders as of 2026-10-02, plus
+ *  machine): a snapshot of the vault-ecosystem entity folders, plus
  *  `folkvang`, added by hand because the corpus has no folder for it yet.
  *  The hook reads this list only when the corpus yields no slugs, so where a
  *  corpus is checked out it matches a slug only once the corpus has its

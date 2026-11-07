@@ -1,6 +1,6 @@
 #!/usr/bin/env -S node --experimental-strip-types
 /**
- * fact-routing PostToolUse hook (STARK-1785).
+ * fact-routing PostToolUse hook.
  *
  * Shipped by the stark-ops plugin: its marketplace.json entry declares this hook
  * inline on PostToolUse through ${CLAUDE_PLUGIN_ROOT}, with `if` gates that start
@@ -9,16 +9,18 @@
  *
  * Reads the PostToolUse payload on stdin. When the written file is a
  * `<config dir>/projects/<project>/memory/<name>.md` auto-memory (config dir:
- * $CLAUDE_CONFIG_DIR, else ~/.claude) that smells corpus- or repo-CLAUDE-worthy,
- * it hands the model a one-line advisory as PostToolUse `additionalContext` on
- * stdout; plain stdout or stderr from a PostToolUse hook never reaches the model.
- * The writing session holds the fact's context, so the advisory asks it to route
- * the fact now or keep it; the hook writes nothing and keeps no record of the
- * flag. It is ADVISORY: it never blocks the tool and always exits 0.
+ * $CLAUDE_CONFIG_DIR, else ~/.claude) that reads like a fleet fact for the
+ * vault-ecosystem corpus, it hands the model a one-line advisory as PostToolUse
+ * `additionalContext` on stdout; plain stdout or stderr from a PostToolUse hook
+ * never reaches the model. The writing session holds the fact's context, so the
+ * advisory asks it to route the fact now or keep it; the hook writes nothing and
+ * keeps no record of the flag. It never names an agent file as a target. It is
+ * ADVISORY: it never blocks the tool and always exits 0, and it prints nothing
+ * when no fact matches.
  *
  * Fleet slugs come from the vault-ecosystem checkout ($ATLAS_ECOSYSTEM_PATH,
  * else ~/Code/Vaults/vault-ecosystem). When that yields none, the hook matches
- * the built-in FALLBACK_SLUGS and says so in the same `additionalContext`.
+ * the built-in FALLBACK_SLUGS, and a flag it raises says so.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -65,28 +67,21 @@ function main(): void {
   const corpusPath = defaultCorpusPath();
   const corpusSlugs = resolveFleetSlugs(corpusPath);
   const fellBack = corpusSlugs.length === 0;
-  const advisories: string[] = [];
-
   const flag = classifyMemory(content, fp, fellBack ? FALLBACK_SLUGS : corpusSlugs);
-  if (flag) {
-    const [target, when] =
-      flag.route === "corpus"
-        ? ["the vault-ecosystem corpus", "it says how fleet repos relate or when to reach one"]
-        : ["the repo's own CLAUDE.md", "every session in that repo needs it and the code does not show it"];
-    advisories.push(
-      `↳ fact-routing: ${path.basename(fp)} looks like it belongs in ${target} (${flag.reason}). ` +
-        `Move it there now only if ${when}; else keep it here. Nothing records this flag for later.`,
-    );
-  }
-  // Said on every memory write, flagged or not: a reader that no longer
-  // understands the corpus layout must not hide behind the built-in list.
+  if (!flag) return; // no fact matched: say nothing
+  const advisories = [
+    `↳ fact-routing: ${path.basename(fp)} looks like it belongs in the vault-ecosystem corpus (${flag.reason}). ` +
+      `Move it there now only if it says how fleet repos relate or when to reach one; else keep it here. ` +
+      `Nothing records this flag for later.`,
+  ];
+  // A flag raised on the built-in list says so: a reader that no longer
+  // understands the corpus layout must not hide behind that list.
   if (fellBack) {
     advisories.push(
       `↳ fact-routing: no fleet entity found under ${corpusPath} (repos/<slug>/index.md, systems/<slug>/index.md), ` +
         `so this ran on the built-in list of ${FALLBACK_SLUGS.length} slugs: the checkout is missing, or laid out in a way this hook cannot read.`,
     );
   }
-  if (advisories.length === 0) return;
   process.stdout.write(
     JSON.stringify({ hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext: advisories.join("\n") } }) + "\n",
   );

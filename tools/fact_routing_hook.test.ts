@@ -79,7 +79,7 @@ test("slugs come from the corpus checkout's entity folders, not the built-in lis
   }, FIXTURE_ONLY);
 });
 
-test("with no corpus the hook falls back to the built-in list and says so, flag or no flag", () => {
+test("with no corpus the hook falls back to the built-in list, and a flag says so", () => {
   withMemory(".claude", (home, cfg, memory) => {
     const flagged = run(home, memory, { ATLAS_ECOSYSTEM_PATH: path.join(home, "no-corpus") });
     assert.equal(flagged.status, 0, flagged.stderr);
@@ -91,12 +91,11 @@ test("with no corpus the hook falls back to the built-in list and says so, flag 
     assert.deepEqual(filesUnder(cfg), ONLY_THE_MEMORY);
   });
   // The fixture-only slug is in no built-in list, so nothing is flagged, and
-  // the fallback is still announced.
+  // the hook prints nothing: the fallback note rides only on a flag.
   withMemory(".claude", (home, cfg, memory) => {
     const quiet = run(home, memory, { ATLAS_ECOSYSTEM_PATH: path.join(home, "no-corpus") });
     assert.equal(quiet.status, 0, quiet.stderr);
-    assert.match(advisoryOf(quiet.stdout), FALLBACK_NOTE);
-    assert.doesNotMatch(advisoryOf(quiet.stdout), /looks like it belongs/);
+    assert.equal(quiet.stdout, "");
     assert.deepEqual(filesUnder(cfg), ONLY_THE_MEMORY);
   }, FIXTURE_ONLY);
 });
@@ -120,16 +119,21 @@ test("CLAUDE_CONFIG_DIR moves the memory root", () => {
   });
 });
 
-test("an implementation fact gets the repo-CLAUDE.md advisory and its own condition", () => {
+test("an implementation fact is routed nowhere: no advisory names an agent file", () => {
+  const IMPL = "---\nname: probe\ndescription: alfred's CI gate runs the race tests\ntype: project\n---\nRun the gate before a merge.\n";
   withMemory(".claude", (home, cfg, memory) => {
     const r = run(home, memory);
     assert.equal(r.status, 0, r.stderr);
-    assert.match(
-      advisoryOf(r.stdout),
-      /^↳ fact-routing: probe\.md looks like it belongs in the repo's own CLAUDE\.md \(implementation detail about alfred .*\)\. Move it there now only if every session in that repo needs it and the code does not show it; else keep it here\. Nothing records this flag for later\.$/,
-    );
+    assert.equal(r.stdout, "");
     assert.deepEqual(filesUnder(cfg), ONLY_THE_MEMORY);
-  }, "---\nname: probe\ndescription: alfred's CI gate runs the race tests\ntype: project\n---\nRun the gate before a merge.\n");
+  }, IMPL);
+  // On the built-in list too: no fallback note without a flag.
+  withMemory(".claude", (home, cfg, memory) => {
+    const r = run(home, memory, { ATLAS_ECOSYSTEM_PATH: path.join(home, "no-corpus") });
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout, "");
+    assert.deepEqual(filesUnder(cfg), ONLY_THE_MEMORY);
+  }, IMPL);
 });
 
 test("a repo's own .claude/projects/*/memory file is not auto-memory: no output, no file", () => {

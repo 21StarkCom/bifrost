@@ -112,7 +112,7 @@ apply and end.
 
 Rewrite to fit the caps. Every write goes through the **Write/Edit tools**. The
 fact-routing PostToolUse hook can answer a rewrite with an advisory to move the
-fact to a repo or the corpus: this skill is tidy-only, so keep the fact in memory.
+fact to the corpus: this skill is tidy-only, so keep the fact in memory.
 Work one project at a time; on `--all`, say so and proceed project by project.
 
 1. **Shorten index lines** over 150 chars to `- [Title](file.md) — one hook`
