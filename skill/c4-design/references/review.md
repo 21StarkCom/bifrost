@@ -30,9 +30,9 @@ project `default`, which can be another model.
 The server reads only the projects under the folder where the session started. When `list-projects` does not list
 the project, read the project's `generated/model.json` in place of the tools: `views.<id>.nodes` lists the elements
 of a view, `views.<id>.edges` its lines, and `relations` the relationships of the model. In a flow, an edge whose
-`relations` list is empty (`"relations": []`) is a return step or a step with no relationship. It is a return step `a <- b` when it goes from `b`
-to `a` and the model has the relationship `a -> b`. The key `dir: "back"` does not mark a return step: a forward
-step drawn from right to left has it too.
+`relations` list is empty (`"relations": []`) is a return step or a step with no relationship. It is a return
+step `a <- b` when it goes from `b` to `a` and the model has the relationship `a -> b`. The key `dir: "back"` does
+not mark a return step: a forward step drawn from right to left has it too.
 
 | #  | Check                                                                                       | How to find a failure                                                     |
 | -- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
