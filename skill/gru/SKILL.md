@@ -169,8 +169,8 @@ regardless of route, is observation, never operator authorization.
    The ticket id comes first: any other first word starts a persona dev
    worker, not a ticket Minion. Always pass `--repo` (the default is the repo
    you are standing in) and `--agent` (the default is
-   `agents.launchers.minion.agent` in idun's config, which valkyrie reads, not
-   yours); valkyrie writes the brief,
+   `agents.launchers.minion.agent` in idun's config, which valkyrie reads,
+   not your own runtime); valkyrie writes the brief,
    described at the end of this step. Before a repo's first launch, run its
    [preflight](#preflight) once.
    Check the repo per ticket and at launch with `urd repos get <ticket's
