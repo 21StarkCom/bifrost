@@ -1761,3 +1761,46 @@ export function formatTriage(r: TriageReport): string {
   out.push("", `${r.files.length} agent file${r.files.length === 1 ? "" : "s"}: GREEN ${t.GREEN} · YELLOW ${t.YELLOW} · RED ${t.RED}`);
   return out.join("\n");
 }
+
+/** The lines of each list in `notifySummary`: a push body has little room. */
+export const NOTIFY_LIST_MAX = 10;
+
+/** What a SIZE clause measured: "20.7k chars, over the 15k budget". */
+function sizeNote(c: Clause): string {
+  const detail = c.detail.replace(/ \(.*\)$/, "");
+  return /^(?:over the|start-up load set)/.test(detail) ? `${c.text}, ${detail}` : detail;
+}
+
+/** The title and body of one push for a triage report: the RED files first,
+ *  the most RED clauses first; then the files over budget that are not RED.
+ *  Each list keeps its first `max` lines and counts the rest. */
+export function notifySummary(r: TriageReport, max = NOTIFY_LIST_MAX): { title: string; body: string } {
+  const t = r.totals;
+  const title = `Agent-doc sweep: RED ${t.RED} · YELLOW ${t.YELLOW} · GREEN ${t.GREEN}`;
+  const reds = r.files.filter((f) => f.flag === "RED")
+    .map((f) => ({ f, red: f.clauses.filter((c) => c.flag === "RED") }))
+    .sort((a, b) => b.red.length - a.red.length);
+  const over = r.files.filter((f) => f.flag !== "RED" && f.clauses.some((c) => c.type === "SIZE"));
+  const list = (head: string, lines: string[]) => [
+    `${head} (${lines.length}):`,
+    ...lines.slice(0, max).map((l) => `- ${l}`),
+    ...(lines.length > max ? [`- +${lines.length - max} more`] : []),
+  ];
+  const body = [`${r.files.length} agent file${r.files.length === 1 ? "" : "s"}.`];
+  if (reds.length) {
+    body.push(...list("RED files", reds.map(({ f, red }) => {
+      const types = TYPE_ORDER.map((ty) => [ty, red.filter((c) => c.type === ty).length] as const)
+        .filter(([, n]) => n).map(([ty, n]) => `${ty} ${n}`).join(", ");
+      return `${f.path}: ${red.length} RED (${types})`;
+    })));
+  }
+  if (over.length) {
+    body.push(...list("Over budget, not RED", over.map((f) => {
+      const notes = f.clauses.filter((c) => c.type === "SIZE").map(sizeNote);
+      return `${f.path}: ${notes.slice(0, 2).join("; ")}${notes.length > 2 ? `; +${notes.length - 2} more` : ""}`;
+    })));
+  }
+  if (!reds.length && !over.length) body.push("No file is RED or over budget.");
+  if (reds.length > max || over.length > max) body.push("The full list: rules_audit.ts --playbook with the same inputs.");
+  return { title, body: body.join("\n") };
+}

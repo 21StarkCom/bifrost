@@ -4,7 +4,7 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 
 import {
-  agentKind, auditRules, formatText, formatTriage, injectedText, skillDescription, triage,
+  agentKind, auditRules, formatText, formatTriage, injectedText, notifySummary, skillDescription, triage,
   type AgentKind, type AuditInput, type RepoView, type TriageGroup, type TriageInput,
 } from "./rules_audit_lib.ts";
 
@@ -599,4 +599,38 @@ test("formatTriage prints one line per file, then the RED clauses, then the tota
     "",
     "2 agent files: GREEN 1 · YELLOW 0 · RED 1",
   ]);
+});
+
+test("notifySummary: the RED files first, most RED clauses first; then the files over budget that are not RED", () => {
+  const r = tri({
+    "CLAUDE.md": "- Plain rule here.\n",
+    "a/CLAUDE.md": "- This is the operator's call.\n",
+    "b/CLAUDE.md": `${"x".repeat(10_500)}\n`,
+    "d/CLAUDE.md": `- That is the operator's call.\n${"y".repeat(10_500)}\n`,
+    "e/CLAUDE.md": "- It is the operator's call.\n- Add a rule here for each lesson.\n",
+    "skill/s/SKILL.md": `---\nname: s\ndescription: ${"d".repeat(400)}\n---\n- Do the step.\n`,
+  });
+  const s = notifySummary(r);
+  assert.equal(s.title, "Agent-doc sweep: RED 3 · YELLOW 2 · GREEN 1");
+  assert.deepEqual(s.body.split("\n"), [
+    "6 agent files.",
+    "RED files (3):",
+    "- e/CLAUDE.md: 2 RED (GATE 1, GROWTH 1)",
+    "- a/CLAUDE.md: 1 RED (GATE 1)",
+    "- d/CLAUDE.md: 1 RED (GATE 1)",
+    "Over budget, not RED (2):",
+    "- b/CLAUDE.md: 10.5k chars, over the 10k budget",
+    "- skill/s/SKILL.md: description: 400 chars, over the 300 budget",
+  ]);
+  // Each list keeps its first `max` lines and counts the rest.
+  const cut = notifySummary(r, 1).body.split("\n");
+  assert.deepEqual(cut.slice(1, 4), ["RED files (3):", "- e/CLAUDE.md: 2 RED (GATE 1, GROWTH 1)", "- +2 more"]);
+  assert.equal(cut.at(-1), "The full list: rules_audit.ts --playbook with the same inputs.");
+  assert.deepEqual(notifySummary(tri({ "CLAUDE.md": "- Plain rule here.\n" })).body.split("\n"), ["1 agent file.", "No file is RED or over budget."]);
+});
+
+test("notifySummary: a load set over budget names its size, without the file list", () => {
+  const big = (c: string) => `${c.repeat(14_000)}\n`;
+  const r = tri({ "CLAUDE.md": big("w"), ".claude/rules/a.md": big("x"), ".claude/rules/b.md": big("y") }, { repo: true });
+  assert.match(notifySummary(r).body, /^- CLAUDE\.md: 42k chars in 3 files, start-up load set over the 40k budget$/m);
 });
