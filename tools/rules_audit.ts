@@ -59,6 +59,8 @@ GREEN or YELLOW, 3 for RED. The inputs combine; with none, the current repo.
   --files <path,…>        these agent files only`;
 
 const PRUNE_DIRS = new Set(["node_modules", "bower_components", ".venv", "venv", "__pycache__"]);
+/** The files Claude Code reads as a folder's CLAUDE.md. */
+const CLAUDE_FAMILY = ["CLAUDE.md", ".claude/CLAUDE.md", "CLAUDE.local.md"];
 const MAX_FILES = 250_000;
 const MAX_READ_BYTES = 8 * 1024 * 1024;
 
@@ -145,18 +147,19 @@ export function ignoredPaths(root: string, rels: string[]): Set<string> {
 export function claudeFamilyAbove(root: string): boolean {
   let dir = path.resolve(root);
   for (;;) {
-    if (["CLAUDE.md", ".claude/CLAUDE.md", "CLAUDE.local.md"].some((c) => fs.existsSync(path.join(dir, c)))) return true;
+    if (CLAUDE_FAMILY.some((c) => fs.existsSync(path.join(dir, c)))) return true;
     const up = path.dirname(dir);
     if (up === dir) return false;
     dir = up;
   }
 }
 
-export function buildView(root: string): RepoView {
-  const walk = walkRepo(root);
-  // No cache: the audit reads every file once for its word index, and keeping
-  // those texts would hold the whole repo in memory. It memoizes what it re-reads.
-  const read = (rel: string): string | null => {
+/** A reader of the files under `root`: null for a missing file or one over
+ *  MAX_READ_BYTES. No cache: the audit reads every file once for its word
+ *  index, and keeping those texts would hold the whole repo in memory. It
+ *  memoizes what it re-reads. */
+function readUnder(root: string): (rel: string) => string | null {
+  return (rel) => {
     try {
       const abs = path.join(root, rel);
       return fs.statSync(abs).size <= MAX_READ_BYTES ? fs.readFileSync(abs, "utf8") : null;
@@ -164,6 +167,11 @@ export function buildView(root: string): RepoView {
       return null;
     }
   };
+}
+
+export function buildView(root: string): RepoView {
+  const walk = walkRepo(root);
+  const read = readUnder(root);
   const labelled = walk.files.filter((f) => instructionKind(f) !== null || /(?:^|\/)\.codex\/config\.toml$/.test(f));
   const asked = (f: string) => walk.dirLinks.find((l) => f.startsWith(`${l}/`)) ?? f;
   const ignored = ignoredPaths(root, [...new Set(labelled.map(asked))]);
@@ -202,18 +210,37 @@ function gitTop(target: string): string | null {
 function folderView(root: string, files: string[]): RepoView {
   return {
     files,
-    read: (rel) => {
-      try {
-        const abs = path.join(root, rel);
-        return fs.statSync(abs).size <= MAX_READ_BYTES ? fs.readFileSync(abs, "utf8") : null;
-      } catch {
-        return null;
-      }
-    },
+    read: readUnder(root),
     exists: (rel) => fs.existsSync(path.join(root, rel)),
     ignored: new Set(),
     claudeFamilyAbove: true,
   };
+}
+
+/** The CLAUDE.md files above a repo that load with it at start-up: one in
+ *  each folder from `/` down to the repo's parent, until a folder is in a git
+ *  work tree. Such a folder (the main checkout above a worktree) and all below
+ *  it belong to that other repo. A link to the repo's own root file is skipped:
+ *  the load emulation counts that file. */
+export function claudeFilesAbove(root: string): { path: string; text: string }[] {
+  const real = fs.realpathSync(root);
+  const own = new Set(CLAUDE_FAMILY.map((n) => path.join(real, n)).filter((p) => fs.existsSync(p)).map((p) => fs.realpathSync(p)));
+  const dirs: string[] = [];
+  for (let d = path.dirname(real); ; d = path.dirname(d)) {
+    dirs.unshift(d);
+    if (path.dirname(d) === d) break;
+  }
+  const out: { path: string; text: string }[] = [];
+  for (const d of dirs) {
+    if (fs.existsSync(path.join(d, ".git"))) break;
+    for (const name of CLAUDE_FAMILY) {
+      const p = path.join(d, name);
+      const target = fs.existsSync(p) ? fs.realpathSync(p) : null;
+      if (!target || own.has(target) || !fs.statSync(target).isFile()) continue;
+      out.push({ path: displayPath(p), text: fs.readFileSync(target, "utf8") });
+    }
+  }
+  return out;
 }
 
 const MEMORY_RE = /^(.*\/\.claude\/projects\/[^/]+\/memory)\/(.+)$/;
@@ -231,13 +258,14 @@ class Collector {
 
   repo(root: string): TriageGroup {
     let g = this.groups.get(root);
-    if (!g) this.groups.set(root, (g = { root, view: buildView(root), repo: true, files: [] }));
+    if (!g) this.groups.set(root, (g = { root, view: buildView(root), repo: true, files: [], above: claudeFilesAbove(root) }));
     return g;
   }
 
-  folder(root: string, files: string[]): TriageGroup {
+  /** `files` is called only when the folder has no group yet. */
+  folder(root: string, files: () => string[]): TriageGroup {
     let g = this.groups.get(root);
-    if (!g) this.groups.set(root, (g = { root, view: folderView(root, files), repo: false, files: [] }));
+    if (!g) this.groups.set(root, (g = { root, view: folderView(root, files()), repo: false, files: [] }));
     return g;
   }
 
@@ -262,7 +290,7 @@ class Collector {
   }
 
   addMemory(dir: string): void {
-    const g = this.folder(dir, walkRepo(dir).files);
+    const g = this.folder(dir, () => walkRepo(dir).files);
     for (const rel of g.view.files) {
       const kind = memoryKind(rel);
       if (kind) this.add(g, rel, kind);
@@ -283,7 +311,7 @@ function collectFiles(c: Collector, list: string): void {
     if (mem) {
       const kind = memoryKind(mem[2]);
       if (!kind) throw new UsageError(`${item} is not an agent file`);
-      c.add(c.folder(mem[1], walkRepo(mem[1]).files), mem[2], kind, displayPath(abs));
+      c.add(c.folder(mem[1], () => walkRepo(mem[1]).files), mem[2], kind, displayPath(abs));
       continue;
     }
     const top = gitTop(path.dirname(real));
@@ -312,7 +340,7 @@ function playbookMain(flags: Map<string, string | true>): number {
       if (!fs.existsSync(fleet)) throw new UsageError(`no fleet folder at ${fleet}`);
       const entries = fs.readdirSync(fleet, { withFileTypes: true });
       const own = entries.filter((e) => !e.isDirectory() && agentKind(e.name) === "root").map((e) => e.name).sort();
-      const g = c.folder(fleet, own);
+      const g = c.folder(fleet, () => own);
       for (const name of own) c.add(g, name, "root");
       for (const e of entries.filter((x) => x.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
         const dir = path.join(fleet, e.name);
@@ -330,13 +358,19 @@ function playbookMain(flags: Map<string, string | true>): number {
     process.stderr.write(`rules_audit: ${(e as Error).message}\n`);
     return e instanceof UsageError ? 2 : 1;
   }
-  const rootPath = path.join(home, "Code", "CLAUDE.md");
-  let rootRules: { path: string; text: string } | undefined;
-  if (fs.existsSync(rootPath)) {
-    const real = fs.realpathSync(rootPath);
-    rootRules = { path: c.taken.get(real) ?? displayPath(rootPath), text: fs.readFileSync(real, "utf8") };
+  let report;
+  try {
+    const rootPath = path.join(home, "Code", "CLAUDE.md");
+    let rootRules: { path: string; text: string } | undefined;
+    if (fs.existsSync(rootPath)) {
+      const real = fs.realpathSync(rootPath);
+      rootRules = { path: c.taken.get(real) ?? displayPath(rootPath), text: fs.readFileSync(real, "utf8") };
+    }
+    report = triage({ groups: [...c.groups.values()], rootRules });
+  } catch (e) {
+    process.stderr.write(`rules_audit: ${(e as Error).message}\n`);
+    return 1;
   }
-  const report = triage({ groups: [...c.groups.values()], rootRules });
   process.stdout.write(flags.has("json") ? `${JSON.stringify(report, null, 2)}\n` : `${formatTriage(report)}\n`);
   return report.totals.RED ? 3 : 0;
 }

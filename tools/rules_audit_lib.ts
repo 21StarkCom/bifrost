@@ -915,7 +915,12 @@ export function auditRules(input: AuditInput): AuditReport {
     byPath.set(p, f);
   }
   // Each file's Claude load is settled here; the checks below only report.
-  if (input.loadOnly) return finish();
+  // The import walk above reports too: drop that, as `loadOnly` promises.
+  if (input.loadOnly) {
+    findings.length = 0;
+    candidates.length = 0;
+    return finish();
+  }
 
   // Load scope: every rule the loader reads.
   for (const f of inst.filter((x) => x.kind === "rule")) {
@@ -1425,7 +1430,10 @@ export const HISTORY_MARKERS: readonly HistoryMarker[] = [
   { label: "A STARK ticket id", pattern: String.raw`\bSTARK-[0-9]+\b`, flag: "YELLOW" },
   { label: "A Jira EI ticket id", pattern: String.raw`\bEI-[0-9]+\b`, flag: "YELLOW" },
   { label: "A date", pattern: String.raw`\b20[0-9]{2}-[0-9]{2}-[0-9]{2}\b`, flag: "YELLOW" },
-  { label: "A past habit", phrase: "used to", notAfter: ["is", "are", "was", "were", "be", "been"], flag: "RED" },
+  {
+    label: "A past habit", phrase: "used to", flag: "RED",
+    notAfter: ["is", "are", "was", "were", "be", "been", "being", "'s", "'re", "isn't", "aren't", "wasn't", "weren't"],
+  },
   { label: "A measurement story", phrase: "measured on", flag: "RED" },
   { label: "A move record", phrase: "moved here from", flag: "RED" },
 ];
@@ -1465,6 +1473,8 @@ export interface TriageGroup {
   repo: boolean;
   /** `path` is the name the report prints. */
   files: { rel: string; kind: AgentKind; path: string }[];
+  /** A repo's CLAUDE.md files above its root that load with it at start-up. */
+  above?: { path: string; text: string }[];
 }
 
 export interface TriageInput {
@@ -1550,7 +1560,9 @@ const GROWTH_RE = new RegExp(GROWTH_PHRASES.map(phraseSource).join("|"), "gi");
 
 function markerRe(m: HistoryMarker): RegExp {
   if (m.pattern) return new RegExp(m.pattern, "g");
-  const not = m.notAfter?.length ? `(?<!\\b(?:${m.notAfter.join("|")})(?:[\\s*_]+[\\w'’]+)?[\\s*_]+)` : "";
+  // `\b` holds before `'s` too: "it's" has a word boundary before its apostrophe.
+  const words = m.notAfter?.map((w) => w.replace(/'/g, "['’]")).join("|");
+  const not = words ? `(?<!\\b(?:${words})(?:[\\s*_]+[\\w'’]+)?[\\s*_]+)` : "";
   return new RegExp(not + phraseSource(m.phrase!), "gi");
 }
 
@@ -1604,11 +1616,16 @@ export function triageText(kind: AgentKind, raw: string): { chars: number; budge
   return { chars, budget, clauses };
 }
 
-/** Pointers that resolve to nothing: links, `@imports`, and code paths to a
- *  Markdown doc (a pointer says what to read). RED blocks a merge, so each
- *  check leans to a miss:
- *  - a code path to code, a build output, a tag or a glob is a reference, not
- *    a pointer, and whether it is stale needs the review;
+/** A template segment of a path: `NNN`, `XXX`, `YYYY`. */
+const PLACEHOLDER_RE = /(?:^|[/._-])(?:N{3,}|X{3,}|Y{4})(?=[/._-]|$)/;
+
+/** Pointers that resolve to nothing (a pointer says what to read). A dead
+ *  link or `@import` is RED: it resolves from the file, so it is dead. A code
+ *  path to a Markdown doc that is not in this repo is YELLOW: it may name a
+ *  doc in another repo. Each check leans to a miss:
+ *  - a code path to code, a build output, a tag, a glob or a template
+ *    (`docs/adr/NNN-title.md`) is a reference, not a pointer, and whether it
+ *    is stale needs the review;
  *  - a soft line (a fence, a negation, a creation) may name a thing that is
  *    gone on purpose;
  *  - a code path is often relative to a package, so one that names a doc
@@ -1625,19 +1642,22 @@ export function deadPointers(rel: string, kind: AgentKind, raw: string, tree: Tr
   };
   const inSomePackage = (token: string) => {
     const tail = `/${path.posix.normalize(token)}`;
-    return tree.files.some((f) => f.endsWith(tail));
+    return tree.baseNames.has(path.posix.basename(tail)) && tree.files.some((f) => f.endsWith(tail));
   };
   for (const ref of extractRefs(raw).refs) {
     const key = `${ref.line}:${ref.token}`;
     if (ref.soft || seen.has(key)) continue;
     seen.add(key);
     if (ref.kind === "path") {
-      if (!/\.mdx?$/i.test(ref.token) || GLOB_CHARS.test(ref.token)) continue;
+      if (!/\.mdx?$/i.test(ref.token) || GLOB_CHARS.test(ref.token) || PLACEHOLDER_RE.test(ref.token)) continue;
       if (kind === "skill" && !/^\.{1,2}\//.test(ref.token) && !besideSkill(ref.token)) continue;
     }
     if (resolveRef(ref, dir, tree) !== "missing") continue;
-    if (ref.kind === "path" && inSomePackage(ref.token)) continue;
-    out.push({ flag: "RED", type: "POINTER", line: ref.line, text: ref.token, detail: `dead ${ref.kind}` });
+    if (ref.kind === "link") {
+      out.push({ flag: "RED", type: "POINTER", line: ref.line, text: ref.token, detail: "dead link" });
+    } else if (!inSomePackage(ref.token)) {
+      out.push({ flag: "YELLOW", type: "POINTER", line: ref.line, text: ref.token, detail: "no such doc in this repo" });
+    }
   }
   if (kind === "root" || kind === "package" || kind === "rule") {
     for (const imp of scanImports(raw)) {
@@ -1670,12 +1690,17 @@ export function triage(input: TriageInput): TriageReport {
       mine.set(f.rel, file);
     }
     if (!g.repo || !mine.size) continue;
-    // The start-up load set, by the load emulation of `rules_load_lib.ts`.
-    const loaded = auditRules({ repoRoot: g.root, view: g.view, loadOnly: true }).files.filter((f) => f.claude === "always");
+    // The start-up load set: the repo's files by the load emulation of
+    // `rules_load_lib.ts`, and the CLAUDE.md files above it.
+    const inRepo = auditRules({ repoRoot: g.root, view: g.view, loadOnly: true }).files.filter((f) => f.claude === "always");
+    const loaded = [
+      ...inRepo.map((f) => ({ path: mine.get(f.path)?.path ?? f.path, chars: f.chars })),
+      ...(g.above ?? []).map((a) => ({ path: a.path, chars: injectedText(a.text).length })),
+    ];
     const chars = loaded.reduce((s, f) => s + f.chars, 0);
     const over = overBudget(chars, PLAYBOOK_BUDGETS.loadSet);
     // The root CLAUDE.md carries it when it is triaged; else the first loaded file that is.
-    const anchor = mine.get("CLAUDE.md") ?? loaded.map((f) => mine.get(f.path)).find((f) => f);
+    const anchor = mine.get("CLAUDE.md") ?? inRepo.map((f) => mine.get(f.path)).find((f) => f);
     if (!over || !anchor) continue;
     anchor.clauses.push({
       flag: over, type: "SIZE", line: 1, text: `${thousands(chars)} chars in ${loaded.length} files`,
@@ -1706,6 +1731,8 @@ export function triage(input: TriageInput): TriageReport {
 
   const totals: Record<Flag, number> = { GREEN: 0, YELLOW: 0, RED: 0 };
   const out = files.map(({ raw: _raw, ...f }) => {
+    // The root rules define the gates and hold the kept ones; nothing ranks above them.
+    if (f.path === root?.path) f.clauses = f.clauses.filter((c) => c.type !== "GATE");
     f.clauses.sort((a, b) => a.line - b.line || a.type.localeCompare(b.type));
     f.flag = f.clauses.some((c) => c.flag === "RED") ? "RED" : f.clauses.length ? "YELLOW" : "GREEN";
     totals[f.flag]++;

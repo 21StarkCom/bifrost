@@ -204,6 +204,32 @@ test("--playbook --fleet --memory: each agent file once, in one run, against the
   }
 });
 
+test("--playbook: the load set adds the CLAUDE.md files above a repo, up to a folder in a git work tree", () => {
+  const top = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "rules-audit-above-")));
+  const write = (rel: string, c: string, n: number) => {
+    fs.mkdirSync(path.dirname(path.join(top, rel)), { recursive: true });
+    fs.writeFileSync(path.join(top, rel), `${c.repeat(n)}\n`);
+  };
+  for (const r of ["r", "g", "g/w"]) assert.equal(spawnSync("git", ["init", "-q", path.join(top, r)]).status, 0);
+  write("CLAUDE.md", "a", 30_000); // above every repo here, in no work tree
+  write("r/CLAUDE.md", "b", 12_000); // 42k with the file above
+  write("g/CLAUDE.md", "c", 5_000); // above w, but in g's work tree: not w's
+  write("g/w/CLAUDE.md", "d", 9_000); // 39k without g's file
+  const env = { ...process.env, HOME: top };
+  try {
+    const load = (repoDir: string) => {
+      const r = run(["--playbook", "--repo", path.join(top, repoDir), "--json"], "/", env);
+      return (JSON.parse(r.stdout).files[0].clauses as { detail: string; text: string }[]).filter((c) => /load set/.test(c.detail));
+    };
+    const [r] = load("r");
+    assert.equal(r.text, "42k chars in 2 files");
+    assert.match(r.detail, /\(~\/r\/CLAUDE\.md, ~\/CLAUDE\.md\)$/);
+    assert.deepEqual(load("g/w"), []);
+  } finally {
+    fs.rmSync(top, { recursive: true, force: true });
+  }
+});
+
 test("--playbook --files: repo and memory files by name; a non-agent or missing file is refused", () => {
   const h = home();
   try {

@@ -5,7 +5,7 @@ import { test } from "node:test";
 
 import {
   agentKind, auditRules, formatText, formatTriage, injectedText, skillDescription, triage,
-  type AgentKind, type AuditInput, type RepoView, type TriageInput,
+  type AgentKind, type AuditInput, type RepoView, type TriageGroup, type TriageInput,
 } from "./rules_audit_lib.ts";
 
 function view(files: Record<string, string>, extra: Partial<RepoView> = {}): RepoView {
@@ -397,7 +397,7 @@ test("formatText renders the load summary, findings and candidates", () => {
 
 test("loadOnly settles the same loads as the full audit, with no findings", () => {
   const files = {
-    "CLAUDE.md": "root @docs/x.md\n",
+    "CLAUDE.md": "root @docs/x.md\n\n@docs/gone.md\n", // the import walk reports the dead one
     "docs/x.md": "imported\n",
     ".claude/rules/a.md": "unscoped\n",
     ".claude/rules/b.md": scoped("src/**"),
@@ -407,18 +407,25 @@ test("loadOnly settles the same loads as the full audit, with no findings", () =
   const lean = auditRules({ repoRoot: "/repo", view: view(files), loadOnly: true });
   assert.deepEqual(lean.totals.alwaysLoaded, full.totals.alwaysLoaded);
   assert.deepEqual(lean.totals.alwaysLoaded.sort(), [".claude/rules/a.md", "CLAUDE.md", "docs/x.md"]);
+  assert.ok(full.findings.some((f) => f.short_summary.startsWith("Dead @import")));
   assert.deepEqual([lean.findings, lean.candidates], [[], []]);
 });
 
 // ── Playbook triage ───────────────────────────────────────────────────────
 
 /** Triage one repo: every agent file in it, by `agentKind`, or the kinds given. */
-function tri(files: Record<string, string>, opts: { kinds?: Record<string, AgentKind>; repo?: boolean; rootRules?: TriageInput["rootRules"] } = {}) {
+function tri(
+  files: Record<string, string>,
+  opts: { kinds?: Record<string, AgentKind>; repo?: boolean; rootRules?: TriageInput["rootRules"]; above?: TriageGroup["above"] } = {},
+) {
   const kinds = opts.kinds ?? {};
   const list = Object.keys(files).sort()
     .map((rel) => ({ rel, kind: kinds[rel] ?? agentKind(rel), path: rel }))
     .filter((f): f is { rel: string; kind: AgentKind; path: string } => f.kind !== null);
-  return triage({ groups: [{ root: "/repo", view: view(files), repo: opts.repo ?? false, files: list }], rootRules: opts.rootRules });
+  return triage({
+    groups: [{ root: "/repo", view: view(files), repo: opts.repo ?? false, files: list, above: opts.above }],
+    rootRules: opts.rootRules,
+  });
 }
 const fileOf = (r: ReturnType<typeof tri>, p: string) => r.files.find((f) => f.path === p)!;
 const clauses = (r: ReturnType<typeof tri>, p: string) => fileOf(r, p).clauses.map((c) => `${c.flag} ${c.type} :${c.line}`);
@@ -512,15 +519,16 @@ test("triage: a copy of the root rules is RED; a copy of a sibling is YELLOW; th
   assert.deepEqual(clauses(self, "pkg/CLAUDE.md"), ["RED DUPLICATE :1"]);
 });
 
-test("triage: dead pointers are RED: links, @imports and paths to docs; code paths and a skill's target-repo paths are not checked", () => {
+test("triage: a dead link or @import is RED, a missing doc path YELLOW; code paths and a skill's target-repo paths are not checked", () => {
   const r = tri({
     "CLAUDE.md": [
       "- Read [the guide](docs/gone.md) first.", // 1 dead link
-      "- Read `docs/specs/old-spec.md` before you change it.", // 2 dead doc path
+      "- Read `docs/specs/old-spec.md` before you change it.", // 2 a doc path not in this repo (maybe in another)
       "- Read `docs/live.md` and [ok](docs/live.md).", // 3 live
       "- See `src/gone.ts` and `docs/` for code.", // 4 code paths: the review's
       "- Read `guide.md` in the package.", // 5 bare name
       "@docs/missing.md", // 6 dead import
+      "- Name an ADR `docs/adr/NNN-title.md` or a spec `docs/specs/YYYY-MM-DD-x.md`.", // 7 templates
     ].join("\n"),
     "docs/live.md": "live\n",
     "pkg/docs/local.md": "x\n",
@@ -529,11 +537,35 @@ test("triage: dead pointers are RED: links, @imports and paths to docs; code pat
     "skill/s/SKILL.md": "---\nname: s\ndescription: d\n---\n- Read `docs/adr/0001-x.md` in the target repo.\n- Read [ref](references/old.md) and `references/old2.md`.\n",
     "skill/s/references/here.md": "x\n",
   });
-  assert.deepEqual(clauses(r, "CLAUDE.md"), ["RED POINTER :1", "RED POINTER :2", "RED POINTER :6"]);
-  assert.deepEqual(fileOf(r, "CLAUDE.md").clauses.map((c) => c.text), ["docs/gone.md", "docs/specs/old-spec.md", "@docs/missing.md"]);
+  assert.deepEqual(clauses(r, "CLAUDE.md"), ["RED POINTER :1", "YELLOW POINTER :2", "RED POINTER :6"]);
+  assert.deepEqual(fileOf(r, "CLAUDE.md").clauses.map((c) => [c.text, c.detail]), [
+    ["docs/gone.md", "dead link"], ["docs/specs/old-spec.md", "no such doc in this repo"], ["@docs/missing.md", "dead @import"],
+  ]);
   assert.deepEqual(clauses(r, "pkg/CLAUDE.md"), []);
   assert.deepEqual(clauses(r, ".claude/rules/r.md"), []);
-  assert.deepEqual(clauses(r, "skill/s/SKILL.md"), ["RED POINTER :6", "RED POINTER :6"]);
+  assert.deepEqual(fileOf(r, "skill/s/SKILL.md").clauses.map((c) => `${c.flag} ${c.text}`).sort(), [
+    "RED references/old.md", "YELLOW references/old2.md",
+  ]);
+});
+
+test("triage: the root rules give no GATE flag; another file with the same gate words does", () => {
+  const gate = "- A message to a person or a channel that the request did not name needs a GO.\n";
+  const r = tri({ "CLAUDE.md": gate, "pkg/CLAUDE.md": gate }, { rootRules: { path: "CLAUDE.md", text: gate } });
+  assert.deepEqual(clauses(r, "CLAUDE.md"), []);
+  assert.deepEqual(clauses(r, "pkg/CLAUDE.md"), ["RED DUPLICATE :1", "RED GATE :1"]);
+});
+
+test("triage: 'used to' after a passive form, a contraction or a negation is no past habit", () => {
+  const r = tri({
+    "CLAUDE.md": [
+      "- It's used to sign releases.",
+      "- It isn't used to sign anything.",
+      "- They’re only used to build.",
+      "- Being used to it helps.",
+      "- The tool used to sign by hand.", // 5: a past habit
+    ].join("\n"),
+  });
+  assert.deepEqual(clauses(r, "CLAUDE.md"), ["RED HISTORY :5"]);
 });
 
 test("triage: a repo's start-up load set over 40k is flagged on its root CLAUDE.md", () => {
@@ -547,8 +579,13 @@ test("triage: a repo's start-up load set over 40k is flagged on its root CLAUDE.
   assert.match(load.text, /^42k chars in 3 files$/);
   assert.match(load.detail, /\.claude\/rules\/a\.md/);
   assert.doesNotMatch(load.detail, /c\.md/, "a path-scoped rule does not load at start-up");
-  const small = tri({ "CLAUDE.md": big("w"), ".claude/rules/a.md": `${"x".repeat(9_000)}\n` }, { repo: true });
-  assert.deepEqual(small.files.map((f) => f.flag), ["GREEN", "GREEN"]);
+  const smallFiles = { "CLAUDE.md": big("w"), ".claude/rules/a.md": `${"x".repeat(9_000)}\n` };
+  assert.deepEqual(tri(smallFiles, { repo: true }).files.map((f) => f.flag), ["GREEN", "GREEN"]);
+  // The CLAUDE.md files above the repo load with it.
+  const withAbove = tri(smallFiles, { repo: true, above: [{ path: "~/Code/CLAUDE.md", text: `${"v".repeat(18_000)}\n` }] });
+  const [above] = fileOf(withAbove, "CLAUDE.md").clauses;
+  assert.equal(above.text, "41k chars in 3 files");
+  assert.match(above.detail, /~\/Code\/CLAUDE\.md\)$/);
 });
 
 test("formatTriage prints one line per file, then the RED clauses, then the totals", () => {
