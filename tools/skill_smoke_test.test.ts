@@ -886,7 +886,7 @@ test("skill smoke: §8 — a worker releases its own repo and routes another rep
     assert.ok(!flat.includes(step), `worker-spine.md §8 has a worker file or launch work in another repo again: ${step}`);
   }
   const gaps = (/^## 6\. Gaps\n([\s\S]*?)^## /m.exec(spine)?.[1] ?? "").replace(/\s+/g, " ");
-  assert.ok(gaps.includes("only when it clears the root rules' ticket bar"), "worker-spine.md §6 no longer limits a follow-up to the ticket bar");
+  assert.ok(gaps.includes("only when the gap clears the root rules' ticket bar"), "worker-spine.md §6 no longer limits a follow-up to the ticket bar");
   assert.ok(!gaps.includes("fits the sitting"), "worker-spine.md §6 fixes side work again");
   const gru = fs.readFileSync(path.join(SKILLS_ROOT, "gru", "SKILL.md"), "utf8").replace(/\s+/g, " ");
   assert.ok(

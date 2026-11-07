@@ -303,15 +303,14 @@ A PR whose code did not change after step 3's run posts its step 3 run only.
 
 A gap is anything you find missing, broken or wrong while you work the ticket.
 
-- Fix a gap in the same PR when the ticket's acceptance needs it.
-- File a follow-up for a gap only when it clears the root rules' ticket bar: a
-  feature, a bug someone hit, work that spans PRs or sessions, or a decision.
-  Write it with the `stark-ticket` skill (`/stark-ticket` on Claude Code,
-  `$stark-ticket` on Codex), file it with `alfred task new` (unbound;
+- Fix a gap in the same PR.
+- File a follow-up instead only when the gap clears the root rules' ticket
+  bar: a feature, a bug someone hit, work that spans PRs or sessions, or a
+  decision. Write it with the `stark-ticket` skill (`/stark-ticket` on Claude
+  Code, `$stark-ticket` on Codex), file it with `alfred task new` (unbound;
   `task start` would bind your session to it), and comment its link on your
   ticket. `task new` checks only the headings, so the skill is the only check
   on what the follow-up says.
-- Leave out any other gap.
 
 If your ticket can still be finished without the follow-up, finish it. If it
 cannot, say so and stop.

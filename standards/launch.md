@@ -15,10 +15,11 @@ for a new tab.
   `alfred repo info --json`. With neither, stop and say so. Put the id on the
   launch line either way: `valkyrie minion` takes it as its first word, and any
   other first word starts a persona dev worker, not a ticket Minion.
-- **Gru:** valkyrie makes the launch id itself: the epic, or `GRU-<n>` from the
-  **first** ticket of `--tickets`. Never the id of a ticket Gru will work: that
-  id names Gru's own worktree, so Gru's step 2 reads its own peer row as the
-  Minion that owns the ticket and never launches it.
+- **Gru:** valkyrie makes the launch id itself: the epic, or `GRU-<n>`, `<n>`
+  the trailing digits of the **first** ticket of `--tickets` (`GRU-1234`).
+  Never the id of a ticket Gru will work: that id names Gru's own worktree, so
+  Gru's step 2 reads its own peer row as the Minion that owns the ticket and
+  never launches it.
 
 ## 2. Pick the repo
 
@@ -41,9 +42,10 @@ No `worktree` line of that list (with `--repo`, of
 `git -C <path> worktree list --porcelain`, `<path>` from
 `urd repos get <name> --json`) may end in `/<id>`. If one does, stop and say so.
 Trap: the id defaults to your bound ticket, whose worktree is often the one you
-stand in. A Claude launch onto a held id exits 4 while a live session stands in
-it, this one included, and otherwise re-enters the worktree, said only on
-stderr behind a normal ack. A Codex launch onto it is refused.
+stand in. A Claude Minion or Agnes launch onto a held id exits 4 while a live
+session stands in it, this one included, and otherwise re-enters the worktree,
+said only on stderr behind a normal ack. A Codex launch onto it is refused, and
+so is a Gru launch on either runtime (exit 2).
 
 ## 4. Launch once
 
@@ -79,11 +81,11 @@ A nonzero exit is the answer: report what valkyrie printed, and do not work
 around it.
 
 - **0** with `verified: true`: launched. The ack's `prompt` must read as you
-  meant (`$` for `/` on Codex):
+  meant. On Codex the skill's `/` is `$`; `/goal` stays as it is:
   - `/minion STARK-n`, naming your leader. For a peer leader, `coordination`
     names the route (`SendMessage` or `hermod-msg`). An operator leader's ack
     carries `leader: "operator"` and no `coordination`.
-  - `/goal /agnes STARK-n [text]`.
+  - `/goal /agnes STARK-n [text]` (`/goal $agnes STARK-n [text]` on Codex).
   - the `/gru start …` line you meant.
 - **1**: something started and did not come up, and valkyrie's stderr names
   what it left standing. Trap: when the tab opened, stdout under `--json` still
@@ -131,5 +133,7 @@ the tab of the Gru that runs. A second `--new-tab` on the same input meets the
 first Gru's worktree, and on Codex its branch, and valkyrie refuses it (exit
 2). When that Gru has ended, remove its worktree with
 `git -C <main checkout> worktree remove <path>` and its branch with
-`git -C <main checkout> branch -d <launch id>`, never with `--force` or `-D`,
-then launch.
+`git -C <main checkout> branch -d <branch>`, never with `--force` or `-D`,
+then launch. The branch is `<launch id>` on Codex and `worktree-<launch id>`
+on Claude: read it from the worktree's `branch` line in
+`git worktree list --porcelain` before you remove the worktree.

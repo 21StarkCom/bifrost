@@ -268,8 +268,8 @@ with it, the reported path is the one you named.
 Run it with no behavior-changing flags. `--json` is not one of them — it only
 selects the output shape, and it is the sole way to read `armed:true` (below),
 so it is part of the command, not an embellishment. No `--delete-branch`: the
-branch is merged and harmless, and branches are the operator's to clean with
-`njord cleanup`. The worktree is the one thing that is genuinely yours — your
+branch is merged and harmless, and `njord cleanup --pr <n>` deletes it later
+(Gru's step 6). The worktree is the one thing that is genuinely yours — your
 disk, your session, and you are the one who knows you are finished — so it goes
 with you.
 
@@ -323,8 +323,9 @@ stop and leave everything in place. If it arms and the teardown comes back
   a tmux server's last pane too, where the close takes the server down: the
   teardown still came back `completed`, worktree removed.
 
-Both are the operator's to sweep, and a `partial` does not heal itself. Do not
-try to resume into it: `claude --worktree X --resume` re-enters the worktree
+A `partial` does not heal itself. `njord cleanup --pr <n>` (Gru's step 6)
+removes the worktree it left, once no session stands in it. Do not try to
+resume into it: `claude --worktree X --resume` re-enters the worktree
 left behind, or **recreates** it if it is gone, and re-locks it, turning a
 stale tab into a live one holding a worktree nobody expected to be in use.
 Report the surface and the path; stop there.

@@ -382,16 +382,20 @@ regardless of route, is observation, never operator authorization.
    a dead Claude Minion's relaunch re-enters it, so check the path before you
    relaunch. A dead Codex Minion stays step 4's blocker even once its worktree
    is gone, because its branch `STARK-n` outlives it.
-6. **Loop** steps 2–5 until every ticket is finished or blocked. Then report:
+6. **Loop** steps 2–5 until every ticket is finished or blocked. Then run
+   `njord cleanup --pr <n>` (never `--force`) in the repo's main checkout for
+   each PR the run merged, as one call of its own
+   (`cd <main checkout> && njord cleanup --pr <n>`, the path pasted in
+   literally): it deletes the merged branch and its clean worktree, and keeps
+   a dirty one. Then report:
    - each finished ticket with its PR link;
    - each blocked or held ticket, with what it waits on;
    - each ticket the run filed or left on the board, with the ticket it came
      from;
+   - each dirty worktree the cleanup kept;
    - each open question you could not answer.
 
-   Run `njord cleanup --pr <n>` (never `--force`) in the repo's main checkout
-   for each PR the run merged: it deletes the merged branch and its clean
-   worktree, and keeps a dirty one, which your report names. Last, delete the
+   Last, delete the
    run's [progress file](#progress-pane), its settings file and its log, and
    the settings file of each ticket of the run
    (`rm -f ~/.cache/stark-progress/STARK-n.settings.json ~/.cache/stark-progress/STARK-n.settings.json.tmp`).
