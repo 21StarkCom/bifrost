@@ -50,6 +50,9 @@ The cases that agents get wrong most often:
 - **An AI agent.** Use `person` when it acts as a user (it runs the CLI or reads the UI for a person). Use a
   `container` when your team builds the agent program. Use an `externalSystem` for a vendor's API or a vendor's
   CLI that your system calls or runs (the Anthropic API, the `claude` CLI): a vendor builds it, so test 1 wins.
+- **A vendor's program that your system runs** (a CLI, a headless browser) is an `externalSystem` by test 1. Model
+  it when it does a job that a reader of the view must know, such as the AI that answers a chat. Name a helper tool
+  (`git` to list files, a headless browser that takes the PNGs) in the `technology` of the container that runs it.
 - **A component cannot deploy alone.** A unit that you can deploy alone is a container.
 - **A package with no entry point is a library, not a container.** A folder with no `main`, no `bin` and no
   server start runs inside the process of each container that imports it. A browser app's entry point is its

@@ -103,8 +103,9 @@ skill.
 - Use `parallel` for steps that run at the same time, and `alt` with `when` and `else` for a choice. Name each
   branch by its condition. Floorplan's own `flowBuild` uses `alt`, `parallel` and `notes`, and `flowDesignLoop`
   uses `loop` and `notes`. Copy their syntax only: they do not pass each check of this section.
-- Show the failure path of a step when the failure changes what the system does: a retry, a timeout, a message
-  that goes to a dead-letter queue. Use `alt`, and write the retry count or the timeout in the step's `notes`.
+- Show the failure path of a step when the failure changes what the system does: a retry, a timeout, a stop on an
+  error that ends the flow, a message that goes to a dead-letter queue. Use `alt`, and write the retry count or the
+  timeout in the step's `notes`.
 - Put `navigateTo <flow id>` on the relationship of the flow's first step, in the first branch when the step is in
   an `alt`. A relationship takes one `navigateTo`: when two flows start with the same relationship, give it the
   flow of the main use case. The reader of a view that shows the line can then open the flow from it.

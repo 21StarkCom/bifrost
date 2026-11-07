@@ -29,8 +29,8 @@ project `default`, which can be another model.
 
 The server reads only the projects under the folder where the session started. When `list-projects` does not list
 the project, read the project's `generated/model.json` in place of the tools: `views.<id>.nodes` lists the elements
-of a view, `views.<id>.edges` its lines, and `relations` the relationships of the model. In a flow, an edge with
-no `relations` is a return step or a step with no relationship. It is a return step `a <- b` when it goes from `b`
+of a view, `views.<id>.edges` its lines, and `relations` the relationships of the model. In a flow, an edge whose
+`relations` list is empty (`"relations": []`) is a return step or a step with no relationship. It is a return step `a <- b` when it goes from `b`
 to `a` and the model has the relationship `a -> b`. The key `dir: "back"` does not mark a return step: a forward
 step drawn from right to left has it too.
 
@@ -40,16 +40,33 @@ step drawn from right to left has it too.
 | M2 | Each relationship title is a verb phrase that reads "source <title> target".                | A title of one word, "uses", "calls", or a noun.                          |
 | M3 | Each relationship has a kind (`sync` or `async`).                                           | A relationship written with `->`, not `-[sync]->` or `-[async]->`.       |
 | M4 | Each arrow starts at the element that starts the work. No `<->` for a call.                 | `<->`; a title in the passive voice ("is called by").                    |
-| M5 | One relationship for each pair of elements, with a summary title.                           | Two or more relationships between the same two elements; one relationship whose title covers only some of what the source does with the target. |
+| M5 | One relationship from each source to each target, with a summary title. `a -> b` and `b -> a` are two different pairs. | Two or more relationships from the same source to the same target; one relationship whose title covers only some of what the source does with the target. |
 | M6 | A relationship is in the model once, at the lowest level known.                             | The same pair at the system level and at the container level.            |
 | M7 | Each description says what the element does, and for whom when the title does not say it.  | "Handles business logic", "Backend service", a copy of the title; a description that leaves out a main job of the element. |
-| M8 | Each technology names a language, a framework or a product; no code path.                   | A path such as `packages/api` in `technology`.                            |
+| M8 | Each technology of an element names a language, a framework or a product; no code path.     | A path such as `packages/api` in `technology`; a protocol in the technology of an element ("MCP over stdio"): a protocol goes on a relationship. |
 | M9 | One name for one thing; no acronym that a reader may not know; no "Service A".             | Two titles for one role ("Customer", "User"); one title that can name two elements. |
 | M10 | Each element is in a view, and each element has a relationship. A relationship of a child counts for its parent. | `read-element` (server `floorplan-model`, with `project`): an empty `includedInViews`. |
 | M11 | Each step of a flow has a relationship in the model between the same two elements. A return step `a <- b` uses the relationship `a -> b`. | `find-relationships` (server `floorplan-model`, with `project`) for each step's pair. |
-| M12 | The model matches the code: each container runs, each relationship is a real call, and each process that the product ships or runs has an element. One element is one process role: a bin that runs in two roles that other elements call apart (a CLI, and the server that its `mcp` command starts) is two elements. | A `code` path of a `container` with no entry point (no `main`, no `bin`, no code that starts a server when the package runs; a start function that only other packages call is not one), or of a `webApp` with no `index.html` and no bundler entry; a call in the code with no relationship; a shipped process with no element. Put a process that the repo holds but does not ship (an editor extension, a dev tool) in a question for the operator. |
+| M12 | The model matches the code. See [M12 in detail](#m12-in-detail).                            | A container that does not run; a call in the code with no relationship; a shipped process with no element. |
 | M13 | Each technology on a relationship names the protocol, the format or the transport of the call, as modeling.md says. A relationship from a person needs no technology, so removing a bad one is a fix too. | A library, an SDK or a tool name alone ("Floorplan SDK", "Vite", "Huginn"), or the name of a product at one end of the call. |
 | M14 | Each hand-written view has a `description` of one sentence, which says what a reader learns from the view. | A `view` block with no `description`.                                     |
+
+### M12 in detail
+
+- **Each container runs.** Find the entry point that the product runs for the container's role: a `main`, a
+  `bin`, or code that starts a server when the package runs. A start function that only other packages call is not
+  an entry point. A `webApp`'s entry point is its `index.html` or its bundler entry.
+- **The `code` key points at the code that runs.** A `code` path whose own bin the product never runs, while the
+  product runs the role through another bin, is a fault: point `code` at the code of the role.
+- **One element is one process role.** A bin that runs in two roles that other elements call apart (a CLI, and the
+  server that its `mcp` command starts) is two elements.
+- **Each relationship with a container at one end is a real call** in the code. A relationship between people,
+  external systems or systems has no call to read: M2 and M4 check it.
+- **Each process that the product ships has an element.** A process ships when a release script or a CI job of the
+  repo builds and publishes it. A process that has only a publish or a deploy script, which no release script and
+  no CI job runs, is a question for the operator.
+- **A vendor's program that the code runs** follows the case "A vendor's program that your system runs" of
+  modeling.md: an `externalSystem` for a job that a reader must know, and a helper tool named in a `technology`.
 
 ## Picture checks
 
@@ -83,7 +100,8 @@ modeling.md, such as a code path in `technology` (M8); never shorten a text belo
   file in plain words ("updates the README") and puts its path in `notes`.
 - A return step shows only an answer that matters: data that a later step uses, or the end of the flow.
 - The `include` list orders the lifelines by the step where each element first takes part, read as views.md says.
-- A step that can fail in a way that changes the flow shows the failure path with `alt`.
+- A step that can fail in a way that changes the flow, a stop on an error included, shows the failure path with
+  `alt`.
 - The relationship of the flow's first step has `navigateTo` with the flow's id, as views.md says.
 
 ## Deployment checks
@@ -96,8 +114,9 @@ modeling.md, such as a code path in `technology` (M8); never shorten a text belo
 ## Report the findings
 
 1. Fix each failure in a proposal by yourself when the fix is clear, and run `check` and `render` again.
-2. Put each failure that needs the operator's choice in a question on the canvas (step 4 of the loop). Name the
-   check, such as "M5", the element id, and your suggested fix.
+2. Put each failure that needs the operator's choice in a question. Name the check, such as "M5", the element id,
+   and your suggested fix. For a proposal, ask it on the canvas (step 4 of the loop). For a review with no
+   proposal, list the questions in the chat under their own heading, **Questions**, after the two groups of item 4.
 3. For a review with no proposal, list the findings in the chat, one line each: the check, the element id or the
    view id, what is wrong, and the fix.
 4. Sort each fix into one of two groups:
