@@ -1,6 +1,6 @@
 ---
 name: c4-design
-description: "Run the floorplan design loop for a C4 architecture model: propose a model change as a LikeC4 diff, check it against the C4 rules, render it, show it to the operator in the floorplan studio through Huginn, ask open questions on the canvas with Huginn annotate, and accept it into the model and a PR. Also link the model to its code with the code, deploy and terraform keys and floorplan scan, fix an R9 error, write a flow as a sequence view, give each external system its vendor logo, and show the deployments from Terraform and Kubernetes files. Use when the operator asks to change, add to or redesign a product's architecture, its C4 model, diagram or views (a new system, container, component or relationship, a split or a merge), when a repo holds a floorplan project (docs/architecture/likec4.config.json), or when a task names floorplan, LikeC4, a C4 diagram, a model proposal, floorplan scan, a flow, a logo or a deployment view."
+description: "Run the floorplan design loop for a C4 architecture model: propose a model change as a LikeC4 diff, check it against the C4 rules, render it, show it to the operator in the floorplan studio through Huginn, ask open questions on the canvas with Huginn annotate, and accept it into the model and a PR. Also link the model to its code with the code, deploy and terraform keys and floorplan scan, fix an R9 error, write a flow as a sequence view, give each external system its vendor logo, and show the deployments from Terraform and Kubernetes files. Also make a first model of a product from its code, and review a model or its diagrams against the C4 review checklist. Use when the operator asks to change, add to or redesign a product's architecture, its C4 model, diagram or views (a new system, container, component or relationship, a split or a merge), when the operator asks to review or improve an architecture diagram or a C4 model, when a repo holds a floorplan project (docs/architecture/floorplan.config.json), or when a task names floorplan, LikeC4, a C4 diagram, a model proposal, floorplan scan, a flow, a logo or a deployment view."
 argument-hint: "[<the change> | help]"
 ---
 
@@ -25,6 +25,20 @@ model, as As-is, Changes and To-be. This skill is that loop, from section 8 of t
 A small fix (a typo, a description, a technology string, a [code key](#link-the-model-to-its-code), a
 [flow](#flows) of code that exists, the [logo](#logos) of an external system) is not a design change. Edit the
 `.c4` file in `model/`, run `floorplan build`, and commit; skip the loop.
+
+## Design craft
+
+Three references hold the craft of a clear model and clear views. They come from the C4 model, IcePanel, LikeC4,
+Structurizr and general diagram guidance ([sources](references/sources.md)).
+
+- [references/modeling.md](references/modeling.md): pick the kind of each element, write its text and its
+  relationships, and make a first model of a product from its code.
+- [references/views.md](references/views.md): pick the views, scope each one, and write flows and deployment views.
+- [references/review.md](references/review.md): the checks that `floorplan check` does not make, for the model and
+  for each rendered PNG.
+
+Read modeling.md and views.md before you write a proposal or a first model. Run the checks of review.md at step 2
+of the loop, and when the operator asks for a review of a model or its diagrams.
 
 ## Link the model to its code
 
@@ -60,7 +74,7 @@ shop = softwareSystem 'Shop' {
 - Write the keys in `model/` files, as a small fix: edit, run `floorplan build`, and commit.
 - Never write a key in a proposal. A proposal is not a build input, so the scan does not read it, and R9 does not
   check its paths. The key reaches the model only at the accept, where a bad path stops the build after
-  `likec4 diff apply` has changed the model. Accept a new element first, then add its keys in `model/`.
+  `floorplan-engine diff apply` has changed the model. Accept a new element first, then add its keys in `model/`.
 
 ### floorplan scan
 
@@ -213,16 +227,16 @@ the language of each element of `stack.c4` (`tech:go`, `tech:typescript`, `tech:
   scan writes them again.
 
 **An unknown icon name fails `floorplan check`,** in `model/` and in a proposal. In `model/`, `floorplan build`
-then writes no outputs. LikeC4 reads the name as a reference, so no floorplan rule is needed:
+then writes no outputs. The language reads the name as a reference, so no rule R1 to R9 is needed:
 
 ```
-model/model.c4:41 error LIKEC4 Could not resolve reference to LibIcon named 'tech:hibob'.
+model/model.c4:12 error FLOORPLAN Could not resolve reference to LibIcon named 'tech:hibob'.
 ```
 
 Fix the name, or remove the `icon`.
 
 **No technology text from an icon.** Each floorplan project sets `"inferTechnologyFromIcon": false` in its
-`likec4.config.json`. `floorplan init` writes the key from floorplan 0.5.0 on; add it by hand to an older project.
+`floorplan.config.json`. `floorplan init` writes the key from floorplan 0.5.0 on; add it by hand to an older project.
 
 ```json
 {
@@ -240,11 +254,11 @@ A node shows one icon, so frameworks and runtimes stay as text in the element's 
 
 ## Before you start
 
-1. **Find the project.** A product keeps it in `docs/architecture/`, the folder of `likec4.config.json`. The model
+1. **Find the project.** A product keeps it in `docs/architecture/`, the folder of `floorplan.config.json`. The model
    is `model/*.c4`, open proposals are `proposals/*.c4`, and `generated/` holds the outputs. Never edit
    `generated/` or `kit/spec.c4`: `floorplan build` writes them. Never edit `model/scan/`: `floorplan scan` writes it.
 2. **Find the tools.** `floorplan install` registers two MCP servers with Claude Code and Codex: `floorplan` (the
-   tools below; on Claude, `mcp__floorplan__<tool>`) and `floorplan-likec4` (LikeC4's own server, to read and query
+   tools below; on Claude, `mcp__floorplan__<tool>`) and `floorplan-model` (Floorplan's own server, to read and query
    the model). With no `floorplan` MCP server, use the CLI: `floorplan --version`. With neither, tell the operator
    that the loop needs floorplan, and stop.
 3. **Pass an absolute `dir`** to each `floorplan` MCP tool. The server resolves a relative path against its own
@@ -325,7 +339,7 @@ diff rfc-payments 'Split payments out of the API' {
 2. Run `render` with the view that shows the change and `proposal`. `generated/llms.txt` lists each view as
    `view <id> | <title> | <png>`; `floorplan init` names them `index` (system context) and `containers`. It
    writes one PNG of the To-be view into a temp folder and returns its `file`. The project folder does not change.
-3. Read the PNG and look at it. A label cut short, a box out of place or a line with no title is a fault.
+3. Read the PNG and look at it. Run the picture checks of [review.md](references/review.md#picture-checks), and its model checks on each element and relationship that the proposal adds or changes.
 4. Change the proposal, and run steps 1 to 3 again, until the check passes and the picture is clear.
 
 ### 3. Show it in the studio
@@ -349,7 +363,7 @@ diff rfc-payments 'Split payments out of the API' {
    `list_huginns` gives).
 
 The studio updates the diagram in place on each file save, with no page reload. It saves a layout that the
-operator changes (a moved box) into `.likec4/`. The operator may also edit the `.c4` text, so read the proposal
+operator changes (a moved box) into `.floorplan/`. The operator may also edit the `.c4` text, so read the proposal
 file again before each later step.
 
 ### 4. Ask open questions on the canvas
@@ -389,13 +403,13 @@ The accept is the one approval of the whole design. End the turn with
 `Needs you (Design approval): accept <the proposal's title>?`, and accept when the operator answers "accept" in
 the chat. An answer on the canvas is not an accept.
 
-1. Run `accept` with `name` and `dir`. It applies the diff to the model (`likec4 diff apply`), deletes the
+1. Run `accept` with `name` and `dir`. It applies the diff to the model (`floorplan-engine diff apply`), deletes the
    proposal file, and runs `floorplan build`. With `dryRun:true` it only returns the file changes.
    - The proposal overlaps another open proposal: the accept refuses. Put the overlap in the same
      `Needs you (Design approval)` line, and pass `acceptOverlaps` only when that answer accepts both.
    - `file` is `kept`: LikeC4 could not merge some adds. Move them from `proposals/<name>.c4` into `model/`,
      delete the file, and run `build`.
-   - The error says that `likec4 diff apply` applied the proposal but `floorplan build` failed: the model has
+   - The error says that `floorplan-engine diff apply` applied the proposal but `floorplan build` failed: the model has
      changed and the proposal is gone, so do not run `accept` again. Fix the error, and run `build`.
 2. Add the code keys of each new element in `model/` ([Link the model to its code](#link-the-model-to-its-code))
    whose code exists, and run `build`.
@@ -404,7 +418,7 @@ the chat. An answer on the canvas is not an accept.
 4. Stop the studio with `studio_stop` and its `pid`. Close the Huginn tab (`close`).
 5. Ship the change as a normal PR of the product repo, by that repo's own rules. Commit the `model/` change
    (`model/scan/` included) and every file the build wrote (`generated/`, the view block of `README.md`,
-   `kit/spec.c4`), and `.likec4/` when the operator moved a box. Put the To-be PNG in the PR body: the built
+   `kit/spec.c4`), and `.floorplan/` when the operator moved a box. Put the To-be PNG in the PR body: the built
    `generated/png/<view>.png`, as an image link to that file at the PR's head commit
    (`https://github.com/<owner>/<repo>/blob/<sha>/<path>?raw=true`). Name the proposal's title and the
    operator's answers in the body.
