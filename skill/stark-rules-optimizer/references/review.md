@@ -20,7 +20,8 @@ Do these steps for each clause:
 
 1. Give it the type of the playbook row it fits. A clause that fits two rows
    takes the row with the worse flag.
-2. Flag it by that row.
+2. Flag it by that row. A line is 100 chars of text, whatever the wrap: a
+   TRAP over 200 chars is over two lines.
 3. Read it against each file above it in the order of precedence. A clause
    that contradicts a higher clause is RED, whatever its type, with the type
    `CONFLICT`. A nested AGENTS.md that overrides its root inside its own folder
@@ -66,7 +67,14 @@ Each `findings[]` and `candidates[]` item of `audit.json` is a candidate at its
 
 ## Write the entry
 
-Write one entry for each YELLOW and RED clause:
+Start each file with its header and its summary line, in exactly this form:
+
+```
+## Agent-doc review: tyr/gcp/run/CLAUDE.md
+Size 7.9k / 10k · loads on demand · GREEN 25 · YELLOW 14 · RED 3
+```
+
+Then write one entry for each YELLOW and RED clause:
 
 ```
 ### RED 1 · CONFLICT · tyr/CLAUDE.md:38
@@ -135,5 +143,5 @@ as an absolute path:
 > review method.
 >
 > Return, for each file: its `## Agent-doc review: {path}` header, its
-> summary line, and one entry for each YELLOW and RED clause, RED first, in
-> the entry form of the method.
+> summary line in the form of the method, and one entry for each YELLOW and
+> RED clause, RED first, in the entry form of the method.
