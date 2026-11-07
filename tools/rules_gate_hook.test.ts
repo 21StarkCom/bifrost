@@ -9,7 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import { findMerges, render, shellCommands } from "./rules_gate_hook.ts";
+import { BUDGET_MS, findMerges, render, shellCommands, timeLeft } from "./rules_gate_hook.ts";
 
 const HOOK = path.join(import.meta.dirname, "rules_gate_hook.ts");
 const RED_LINE = "This is the operator's call.\n";
@@ -38,7 +38,23 @@ test("findMerges reads the PR, skips option values, and follows cd", () => {
   assert.deepEqual(findMerges("STARK=1 env X=2 /opt/bin/njord pr-merge 5", "/r"), [at(5)]);
   assert.deepEqual(findMerges("cd sub && njord pr-merge 3", "/r"), [at(3, "/r/sub")]);
   assert.deepEqual(findMerges("cd ~/x && njord pr-merge", "/r", "/h"), [at(null, "/h/x")]);
+  assert.deepEqual(findMerges('cd "$HOME/x" && njord pr-merge; cd ${HOME} && njord pr-merge', "/r", "/h"), [at(null, "/h/x"), at(null, "/h")]);
   assert.deepEqual(findMerges('echo "njord pr-merge 5"; njord pr-list; git log', "/r"), []);
+  // A cd inside a subshell or a $( … ) ends with it.
+  assert.deepEqual(findMerges("(cd ../o && njord pr-merge 3); njord pr-merge 4", "/r/b"), [at(3, "/r/o"), at(4, "/r/b")]);
+  assert.deepEqual(findMerges('x=$(cd /t; pwd) && njord pr-merge 6', "/r"), [at(6)]);
+  assert.deepEqual(findMerges("(cd a); (njord pr-merge 7)", "/r"), [at(7)]);
+});
+
+test("shellCommands marks each subshell's start and end", () => {
+  assert.deepEqual(shellCommands("(cd a && b) | c"), ["(", ["cd", "a"], ["b"], ")", ["c"]]);
+});
+
+test("timeLeft cuts each subprocess timeout to what is left of the shared budget", () => {
+  assert.equal(BUDGET_MS, 240_000);
+  assert.equal(timeLeft(30_000, 1_000, 100_000), 30_000);
+  assert.equal(timeLeft(120_000, 95_000, 100_000), 5_000);
+  assert.equal(timeLeft(120_000, 200_000, 100_000), 1, "never 0, which spawnSync reads as no timeout");
 });
 
 test("render denies on a RED, warns without a decision, and says nothing on a pass", () => {
@@ -168,6 +184,20 @@ test("a PR that changes no agent file, deletes one, or is not open passes withou
   });
 });
 
+test("a PR to the repo that holds the root rules triages them as the root rules, not as a copy", () => {
+  withFixture((f) => {
+    // ~/Code/CLAUDE.md points into the repo, as it points into idavoll.
+    fs.mkdirSync(path.join(f.dir, "home", "Code"));
+    fs.symlinkSync(path.join(f.repo, "CLAUDE.md"), path.join(f.dir, "home", "Code", "CLAUDE.md"));
+    const sha = f.commit({ "CLAUDE.md": CLEAN + RED_LINE });
+    f.pr(view(sha, [["CLAUDE.md", "MODIFIED"]]));
+    const r = f.run("njord pr-merge 5");
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout, "", "the root rules define the gates and copy nothing");
+    assert.deepEqual(fs.readdirSync(f.tmp), []);
+  });
+});
+
 test("a head commit that is not local is fetched from the PR ref", () => {
   withFixture((f) => {
     const origin = path.join(f.dir, "origin.git");
@@ -205,6 +235,11 @@ test("a tool error lets the merge go on, with one warning line", () => {
     assert.equal(noPr.systemMessage, 'agent-doc gate: could not read the PR of this branch (no pull requests found for branch "x"); the merge goes on unchecked.');
     assert.equal(noPr.hookSpecificOutput.additionalContext, noPr.systemMessage);
 
+    const gone = path.join(f.dir, "gone");
+    const noDir = f.run(`cd ${gone} && njord pr-merge`);
+    assert.equal(JSON.parse(noDir.stdout).systemMessage, `agent-doc gate: the merge runs in ${gone}, which is not a folder here; the merge goes on unchecked.`);
+    assert.deepEqual(noDir.gh, []);
+
     // The PR names an agent file that its head commit does not hold: triage exits 2.
     const sha = f.commit({ "tools/x.ts": "x\n" });
     f.pr(view(sha, [["CLAUDE.md", "MODIFIED"]]));
@@ -230,8 +265,10 @@ test("argv: help prints the usage, and anything else is refused", () => {
   const help = spawnSync(process.execPath, ["--no-warnings", HOOK, "--help"], { encoding: "utf8", input: "" });
   assert.equal(help.status, 0);
   assert.match(help.stdout, /^usage: rules_gate_hook\.ts/);
-  const bad = spawnSync(process.execPath, ["--no-warnings", HOOK, "--nope"], { encoding: "utf8", input: "" });
-  assert.equal(bad.status, 2);
-  assert.match(bad.stderr, /^unsupported argument: --nope/);
-  assert.equal(bad.stdout, "");
+  for (const [arg, refusal] of [["--nope", /^unknown argument: --nope\nusage: rules_gate_hook\.ts/], ["5", /^unexpected positional argument: 5\nusage:/]] as const) {
+    const bad = spawnSync(process.execPath, ["--no-warnings", HOOK, arg], { encoding: "utf8", input: "" });
+    assert.equal(bad.status, 2);
+    assert.match(bad.stderr, refusal);
+    assert.equal(bad.stdout, "");
+  }
 });

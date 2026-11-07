@@ -16,8 +16,9 @@
  *   4. runs `rules_audit.ts --playbook --files` on those files in the copy.
  * Exit 3 (a RED) denies the call, and the reason holds the triage report.
  * Exit 0 allows it, with no output. Any other result (a tool error, no PR, no
- * network) allows it and prints one warning line, to the operator as
- * `systemMessage` and to the model as `additionalContext`.
+ * network, or the end of the 240s that all its subprocesses share) allows it
+ * and prints one warning line, to the operator as `systemMessage` and to the
+ * model as `additionalContext`.
  *
  * The copy sits outside the workspace, so the start-up load set it measures
  * counts no CLAUDE.md above the repo: a load-set RED can pass here, and the
@@ -29,6 +30,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import { precheckCli } from "./cli_args_lib.ts";
 import { isMainModule } from "./main_module_lib.ts";
 import { agentKind } from "./rules_audit_lib.ts";
 
@@ -43,13 +45,17 @@ const VALUE_FLAGS = new Set(["--pr", "--changelog-section", "--force-reason", "-
 const WRAPPERS = new Set(["env", "command", "time", "nohup", "exec"]);
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
+/** The words of one simple command, or the start or end of a subshell. */
+export type ShellPart = string[] | "(" | ")";
+
 /**
  * The words of each simple command in a shell line, split at unquoted
- * `; & | ( )` and newlines. Quotes and backslashes are resolved; `$` expansions
- * stay as text. Enough to find a `njord pr-merge` and its arguments.
+ * `; & | ( )` and newlines, with each unquoted `(` and `)` as a part of its
+ * own. Quotes and backslashes are resolved; `$` expansions stay as text.
+ * Enough to find a `njord pr-merge`, its arguments and the folder it runs in.
  */
-export function shellCommands(line: string): string[][] {
-  const out: string[][] = [];
+export function shellCommands(line: string): ShellPart[] {
+  const out: ShellPart[] = [];
   let words: string[] = [];
   let word = "";
   let inWord = false;
@@ -88,6 +94,7 @@ export function shellCommands(line: string): string[][] {
       i = end < 0 ? line.length : end - 1;
     } else if (";&|()\n".includes(c)) {
       endCommand();
+      if (c === "(" || c === ")") out.push(c);
     } else if (c === " " || c === "\t" || c === "\r") {
       endWord();
     } else {
@@ -127,14 +134,24 @@ function mergeArgs(args: string[], cwd: string): MergeCall {
 export function findMerges(line: string, cwd: string, home = os.homedir()): MergeCall[] {
   const out: MergeCall[] = [];
   let dir = cwd;
+  /** The folder outside each open subshell: a `cd` inside one ends with it. */
+  const outer: string[] = [];
   for (const words of shellCommands(line)) {
+    if (words === "(") {
+      outer.push(dir);
+      continue;
+    }
+    if (words === ")") {
+      dir = outer.pop() ?? dir;
+      continue;
+    }
     let i = 0;
     while (i < words.length && (ASSIGNMENT.test(words[i]) || WRAPPERS.has(words[i]))) i++;
     const name = words[i];
     if (name === "cd") {
       const to = words[i + 1];
-      if (to === undefined || to === "~") dir = home;
-      else if (to !== "-") dir = path.resolve(dir, to.replace(/^~(?=\/)/, home));
+      if (to === undefined) dir = home;
+      else if (to !== "-") dir = path.resolve(dir, to.replace(/^(~|\$HOME|\$\{HOME\})(?=\/|$)/, home));
     } else if (name !== undefined && path.basename(name) === "njord" && words[i + 1] === "pr-merge") {
       out.push(mergeArgs(words.slice(i + 2), dir));
     }
@@ -153,15 +170,54 @@ interface Ran {
   stderr: string;
 }
 
-function run(cmd: string, args: string[], cwd: string, timeoutMs: number): Ran {
+/** The time all subprocesses of one hook run share. Claude Code kills a command
+ *  hook at 600s, before its `finally` can delete the temp copy. */
+export const BUDGET_MS = 240_000;
+const DEADLINE = Date.now() + BUDGET_MS;
+
+/** A subprocess timeout cut to what is left of the budget: at least 1ms, since
+ *  a 0 timeout means none to spawnSync. */
+export function timeLeft(timeoutMs: number, now = Date.now(), deadline = DEADLINE): number {
+  return Math.max(1, Math.min(timeoutMs, deadline - now));
+}
+
+function run(cmd: string, args: string[], cwd: string, timeoutMs: number, env?: NodeJS.ProcessEnv): Ran {
   const r = spawnSync(cmd, args, {
-    cwd, encoding: "utf8", timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"],
+    cwd, env, encoding: "utf8", timeout: timeLeft(timeoutMs), maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"],
   });
   return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr || r.error?.message || "" };
 }
 
 function firstLine(text: string): string {
   return text.split("\n").map((l) => l.trim()).find(Boolean) ?? "no output";
+}
+
+/**
+ * Where the root rules (~/Code/CLAUDE.md) sit in the repo at `cwd`, as a repo
+ * path, or null when that repo does not hold them. Worktrees of one repo share
+ * a git common dir, so a worktree of that repo counts too.
+ */
+function rootRulesIn(cwd: string, home: string): string | null {
+  let real: string;
+  try {
+    real = fs.realpathSync(path.join(home, "Code", "CLAUDE.md"));
+  } catch {
+    return null;
+  }
+  const where = (dir: string) => {
+    const r = run("git", ["rev-parse", "--path-format=absolute", "--git-common-dir", "--show-toplevel"], dir, 30_000);
+    const [common, top] = r.status === 0 ? r.stdout.trim().split("\n") : [];
+    if (!common || !top) return null;
+    try {
+      return { common: fs.realpathSync(common), top: fs.realpathSync(top) };
+    } catch {
+      return null;
+    }
+  };
+  const here = where(cwd);
+  const there = where(path.dirname(real));
+  if (!here || !there || here.common !== there.common) return null;
+  return path.relative(there.top, real).split(path.sep).join("/");
 }
 
 function hasCommit(cwd: string, sha: string): boolean {
@@ -192,7 +248,10 @@ function changedAgentFiles(cwd: string, pr: PrFiles): string[] | string {
 }
 
 /** Triage the agent files one `njord pr-merge` would merge. */
-export function gate(call: MergeCall, audit = AUDIT): Verdict {
+export function gate(call: MergeCall, audit = AUDIT, home = os.homedir()): Verdict {
+  if (!fs.statSync(call.cwd, { throwIfNoEntry: false })?.isDirectory()) {
+    return warn(`the merge runs in ${call.cwd}, which is not a folder here`);
+  }
   const select = call.pr === null ? [] : [String(call.pr)];
   const view = run("gh", ["pr", "view", ...select, "--json", "number,state,headRefOid,changedFiles,files"], call.cwd, 30_000);
   const which = call.pr === null ? "the PR of this branch" : `PR #${call.pr}`;
@@ -229,7 +288,18 @@ export function gate(call: MergeCall, audit = AUDIT): Verdict {
       const r = run(cmd, [...args], cwd, 120_000);
       if (r.status !== 0) return warn(`could not copy the head of PR #${pr.number}: ${cmd} ${args[0]} (${firstLine(r.stderr)})`);
     }
-    const r = run(process.execPath, [audit, "--playbook", "--files", files.join(",")], tree, 120_000);
+    // ~/Code/CLAUDE.md does not point into the copy, so the triage would read a
+    // PR's own root rules as a copy of the live ones, and flag their gates. When
+    // the PR changes the root rules, a throwaway HOME points it at the copy.
+    let env: NodeJS.ProcessEnv | undefined;
+    const rules = rootRulesIn(call.cwd, home);
+    if (rules !== null && files.includes(rules)) {
+      const fakeHome = path.join(tmp, "home");
+      fs.mkdirSync(path.join(fakeHome, "Code"), { recursive: true });
+      fs.symlinkSync(path.join(tree, rules), path.join(fakeHome, "Code", "CLAUDE.md"));
+      env = { ...process.env, HOME: fakeHome };
+    }
+    const r = run(process.execPath, [audit, "--playbook", "--files", files.join(",")], tree, 120_000, env);
     if (r.status === 0) return PASS;
     if (r.status === 3) {
       return {
@@ -283,23 +353,16 @@ function main(): Verdict[] {
 }
 
 if (isMainModule(import.meta.url)) {
-  // Argv is not part of the PreToolUse protocol: a help request or a mistake.
-  // A refusal goes to stderr, since Claude Code reads this hook's stdout.
-  const arg = process.argv[2];
-  if (arg !== undefined) {
-    const asked = ["help", "--help", "-h"].includes(arg);
-    if (asked) process.stdout.write(USAGE);
-    else process.stderr.write(`unsupported argument: ${arg}\n${USAGE}`);
-    process.exitCode = asked ? 0 : 2;
-  } else {
-    let out: object | null;
-    try {
-      out = render(main());
-    } catch (e) {
-      out = render([warn(`the check failed (${firstLine((e as Error).message)})`)]);
-    }
-    // No process.exit: on macOS a pipe write is async, and exit would cut it.
-    if (out) process.stdout.write(`${JSON.stringify(out)}\n`);
-    process.exitCode = 0;
+  // Argv is not part of the PreToolUse protocol: help prints the usage, and
+  // anything else is refused on stderr, since Claude Code reads this stdout.
+  precheckCli(process.argv.slice(2), {}, USAGE);
+  let out: object | null;
+  try {
+    out = render(main());
+  } catch (e) {
+    out = render([warn(`the check failed (${firstLine((e as Error).message)})`)]);
   }
+  // No process.exit: on macOS a pipe write is async, and exit would cut it.
+  if (out) process.stdout.write(`${JSON.stringify(out)}\n`);
+  process.exitCode = 0;
 }
