@@ -507,7 +507,7 @@ function brokenMdLinks(file: string, res: RegExp[]): string[] {
   return broken;
 }
 
-const SHARED_WORKER_DOCS = ["stand-down.md", "worker-spine.md"];
+const SHARED_WORKER_DOCS = ["launch.md", "stand-down.md", "worker-spine.md"];
 // The one directory that ships the shared worker docs. One list, because the
 // link check and the pane-count guards below all walk it — a doc dir added to
 // one and not the other is a copy nothing reads.
@@ -671,8 +671,10 @@ function gruLaunchOperands(line: string): string[] {
   return [/^--tickets\s+\S+/.exec(rest)?.[0] ?? rest.split(/\s+/)[0] ?? ""];
 }
 
-test("skill smoke: skill/gru — Gru is never launched on a ticket it works", () => {
-  const file = path.join(SKILLS_ROOT, "gru", "SKILL.md");
+const LAUNCH_DOC = path.join(REPO_ROOT, "standards", "launch.md");
+
+test("skill smoke: standards/launch.md — Gru is never launched on a ticket it works", () => {
+  const file = LAUNCH_DOC;
   const lines = fencedLaunchLines(file, /^\s*valkyrie gru\b/);
   assert.equal(lines.length, 1, "expected exactly one fenced `valkyrie gru` launch form");
   for (const line of lines) {
@@ -689,14 +691,28 @@ test("skill smoke: skill/gru — Gru is never launched on a ticket it works", ()
   assert.match(fs.readFileSync(file, "utf8"), /Never the id of a ticket Gru will work/);
 });
 
+// The three worker skills keep one launcher block: the shared launch doc. A
+// skill that grows its own copy again drifts from it.
+test("skill smoke: the worker skills point --new-tab at the one launch doc", () => {
+  for (const name of ["agnes", "gru", "minion"]) {
+    const text = fs.readFileSync(path.join(SKILLS_ROOT, name, "SKILL.md"), "utf8");
+    assert.ok(text.includes("](../../standards/launch.md)"), `skill/${name} no longer points --new-tab at standards/launch.md`);
+    assert.deepEqual(
+      fencedLaunchLines(path.join(SKILLS_ROOT, name, "SKILL.md"), /^\s*valkyrie (gru|minion|agnes)\b/),
+      [],
+      `skill/${name} carries its own fenced valkyrie launch line again`,
+    );
+  }
+});
+
 // The worker launchers moved from `hermod ticket` to idun (STARK-10154), then
 // to valkyrie (STARK-13714). A fenced `hermod ticket` line left in any of the
 // worker skills would launch on a hermod path that bypasses valkyrie's
 // exit-code contract and idun's managed Codex account.
-for (const name of ["agnes", "gru", "minion"]) {
-  test(`skill smoke: skill/${name} — no fenced \`hermod ticket\` launch line`, () => {
-    const lines = fencedLaunchLines(path.join(SKILLS_ROOT, name, "SKILL.md"), /^\s*hermod ticket\b/);
-    assert.deepEqual(lines, [], `skill/${name} still launches through hermod ticket`);
+for (const file of ["skill/agnes/SKILL.md", "skill/gru/SKILL.md", "skill/minion/SKILL.md", "standards/launch.md"]) {
+  test(`skill smoke: ${file} — no fenced \`hermod ticket\` launch line`, () => {
+    const lines = fencedLaunchLines(path.join(REPO_ROOT, ...file.split("/")), /^\s*hermod ticket\b/);
+    assert.deepEqual(lines, [], `${file} still launches through hermod ticket`);
   });
 }
 
@@ -862,19 +878,27 @@ test("skill smoke: §8 — a worker releases its own repo and routes another rep
   const spine = fs.readFileSync(path.join(REPO_ROOT, "standards", "worker-spine.md"), "utf8");
   const section = /^## 8\. Releases and other repos\n([\s\S]*)/m.exec(spine)?.[1] ?? "";
   assert.ok(section.includes("**A release of your own repo is yours.**"), "worker-spine.md §8 no longer gives a worker its own release");
-  assert.ok(section.includes("**A need in another repo goes to a worker in that repo.**"), "worker-spine.md §8 no longer routes another repo's need");
+  assert.ok(section.includes("**A need in another repo is a `blocked`.**"), "worker-spine.md §8 no longer makes another repo's need a `blocked`");
   const flat = section.replace(/\s+/g, " ");
-  assert.ok(flat.includes("**With a leader** (`/minion`): report `blocked`"), "worker-spine.md §8 no longer has a led worker report `blocked`");
-  for (const step of ["`alfred task new --on-repo <repo>", "`valkyrie agnes STARK-m --repo <repo>"]) {
-    assert.ok(flat.includes(step), `worker-spine.md §8 no longer has a worker with no leader act on it: ${step}`);
+  assert.ok(flat.includes("**With a leader** (`/minion`): report it to your leader"), "worker-spine.md §8 no longer has a led worker report it");
+  assert.ok(flat.includes("**With no leader** (`/agnes`): comment it on your ticket"), "worker-spine.md §8 no longer has Agnes stop on it");
+  for (const step of ["alfred task new --on-repo", "valkyrie agnes STARK-m"]) {
+    assert.ok(!flat.includes(step), `worker-spine.md §8 has a worker file or launch work in another repo again: ${step}`);
   }
+  const gaps = (/^## 6\. Gaps\n([\s\S]*?)^## /m.exec(spine)?.[1] ?? "").replace(/\s+/g, " ");
+  assert.ok(gaps.includes("only when it clears the root rules' ticket bar"), "worker-spine.md §6 no longer limits a follow-up to the ticket bar");
+  assert.ok(!gaps.includes("fits the sitting"), "worker-spine.md §6 fixes side work again");
   const gru = fs.readFileSync(path.join(SKILLS_ROOT, "gru", "SKILL.md"), "utf8").replace(/\s+/g, " ");
   assert.ok(
     gru.includes("hold its merge until the previous `done` is confirmed. In a repo whose done is *released*, that `done` comes after the release"),
     "gru lifts a no-queue repo's merge hold before the previous release ends",
   );
   assert.ok(gru.includes("send that Minion `unblocked <what cleared it>`"), "gru no longer sends a cleared Minion `unblocked`");
-  assert.doesNotMatch(gru, /operator did not name|the operator decides whether|operator's call, not yours/, "gru gives a step back to the operator");
+  assert.doesNotMatch(
+    gru,
+    /operator did not name|the operator decides whether|operator's call, not yours|operator's to sweep|registry is the operator's|run by the operator|ask the operator nothing/,
+    "gru gives a step back to the operator",
+  );
   const minion = fs.readFileSync(path.join(SKILLS_ROOT, "minion", "SKILL.md"), "utf8");
   assert.ok(minion.includes("**`unblocked` resumes you.**"), "minion lost its `unblocked` resume");
   const hits = [
@@ -911,12 +935,13 @@ test("skill smoke: skills, standards and agent docs carry no cloud route", () =>
 test("skill smoke: minion — the operator-leader shape", () => {
   const minion = fs.readFileSync(path.join(SKILLS_ROOT, "minion", "SKILL.md"), "utf8");
   const standDown = fs.readFileSync(path.join(REPO_ROOT, "standards", "stand-down.md"), "utf8");
-  const fence = fencedLaunchLines(path.join(SKILLS_ROOT, "minion", "SKILL.md"), /^\s*valkyrie minion\b/);
+  const launch = fs.readFileSync(LAUNCH_DOC, "utf8").replace(/\s+/g, " ");
+  const fence = fencedLaunchLines(LAUNCH_DOC, /^\s*valkyrie minion\b/);
   assert.ok(fence.some((line) => /--leader <peer>\|operator\b/.test(line)), "the valkyrie minion line no longer passes --leader operator through");
   assert.ok(minion.includes("**`leader operator`:**"), "minion's Reporting lost the operator route");
-  assert.ok(minion.includes("**`--leader operator`**"), "minion's New tab lost the operator-leader shape");
-  assert.ok(!minion.includes("no third shape"), "minion still counts two launch shapes");
-  assert.ok(minion.includes("no shape in which nobody receives the report"), "minion lost the rule that some shape receives the report");
+  assert.ok(launch.includes("**Minion, `leader operator`:**"), "the launch doc lost the operator-leader shape");
+  assert.ok(!launch.includes("no third shape"), "the launch doc still counts two launch shapes");
+  assert.ok(launch.includes("no launch in which nobody receives a Minion's report"), "the launch doc lost the rule that some launch receives the report");
   assert.ok(standDown.includes("brief reads `leader operator` waits for one word"), "stand-down.md lost the operator-led Minion's wait");
 });
 

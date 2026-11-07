@@ -399,13 +399,13 @@ read only, as the `gh` login of the machine.
 
 **Settings.** Four rows for the run, each a value in a frame you select to change. A
 press on one writes all four to the run's settings file at once; Gru reads it
-before each launch and each scope change ([the Gru skill](../../skill/gru/SKILL.md#progress-pane)):
+before each launch and each scope change ([the Gru skill](../../skill/gru/references/progress-pane.md)):
 
 | Row | Field | What Gru does |
 |---|---|---|
-| Decide for me | `decideForMe` | On: splits a ticket across repos, and adds a blocking ticket, by itself. Off: holds the ticket `blocked` and asks in its report. |
+| Decide for me | `decideForMe` | On: splits a ticket across repos, and adds a blocking ticket, by itself. Off, the default: holds the ticket `blocked` and asks in its report. |
 | Workers at once | `maxWorkers` | Keeps up to this many Minions alive, 1 to 8. A launch above 8 shows its own value; `−` steps it down to 8, and `+` does not change it. |
-| Pick up follow-ups | `followUps` | On: a ticket a Minion files joins the run. Off: it waits on the board, named in the report. |
+| Pick up follow-ups | `followUps` | On: a ticket a Minion files joins the run. Off, the default: it waits on the board, named in the report. |
 | Worker type | `minionAgent` | The runtime of each new Minion, `claude` or `codex`. A relaunch keeps its runtime. |
 
 Under `This pane`, one more row that the pane alone reads, in every run:
@@ -644,11 +644,11 @@ draws as `no file yet`.
 the Gru pane writes and Gru reads before each launch and each scope change:
 
 ```json
-{ "decideForMe": true, "maxWorkers": 3, "followUps": true, "minionAgent": "claude" }
+{ "decideForMe": false, "maxWorkers": 3, "followUps": false, "minionAgent": "claude" }
 ```
 
 A field that is absent or of the wrong type takes the run file's value, else
-the default: `decideForMe` `true`, `maxWorkers` 3, `followUps` `true`,
+the default: `decideForMe` `false`, `maxWorkers` 3, `followUps` `false`,
 `minionAgent` `claude`. `maxWorkers` is 1 to 8 in the settings file; in the
 run file it is the launch's `--max-workers`, with no cap. A `*.settings.json` file is
 never a run file. Gru deletes it with the run file when the run ends.
