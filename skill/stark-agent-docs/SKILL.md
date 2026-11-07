@@ -76,6 +76,8 @@ the loaders differ from what the file names suggest.
 TOOLS="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/code-review}/tools"
 # load scope, globs, size budgets, dead references
 node --no-warnings "$TOOLS/rules_audit.ts" --repo .
+# GREEN, YELLOW or RED for each agent file, by the playbook; exit 3 on RED
+node --no-warnings "$TOOLS/rules_audit.ts" --playbook --repo .
 ```
 
 ## 4. Review it

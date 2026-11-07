@@ -90,6 +90,7 @@ Each tool's `--help` and file header give its use. The traps:
 - `ask_guard_metric.ts` measures the root rules' "Act, don't ask". `tools/ask_guard_metric.test.ts` holds the `needs-you` mod's tags to the metric's.
 - `rules_audit.ts` audits one repo's instruction files against `LOAD_MODEL` in `tools/rules_load_lib.ts`. It walks the disk, not `git ls-files`, since Claude Code loads gitignored instruction files too.
 - When you change a loader cap in `tools/memory_tidy_lib.ts` or `tools/rules_load_lib.ts`, change `skill/stark-agent-docs/references/load-facts.md` too; `tools/agent_docs_facts.test.ts` pins them.
+- When you change a playbook budget or phrase list in `tools/rules_audit_lib.ts`, change the table in `skill/stark-agent-docs/references/playbook.md` too; the same test pins them.
 
 ## Skills
 

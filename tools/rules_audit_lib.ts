@@ -19,6 +19,9 @@
  * a step to the operator — is returned as `candidates[]` for the skill to
  * verify, never as a finding.
  *
+ * `triage` is the no-model pre-screen of the agent-doc playbook: one GREEN,
+ * YELLOW or RED flag per agent file (see "Playbook triage" below).
+ *
  * Pure: every read goes through the `RepoView` the caller passes.
  */
 import path from "node:path";
@@ -487,12 +490,14 @@ export const GATE_PHRASES: readonly string[] = [
   "the operator's OK", "the operator's to", "go-ahead",
 ];
 
-const GATE_RE = new RegExp(
-  GATE_PHRASES.map((p) =>
-    `\\b${p.split(" ").map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/'/g, "['’]")).join("[\\s*_]+")}(?![\\w'’-])`,
-  ).join("|"),
-  "gi",
-);
+/** A phrase as a regex source: whole words, any apostrophe, and a line break
+ *  or `*`/`_` emphasis between words. Compile it with the `i` flag. */
+function phraseSource(phrase: string): string {
+  const words = phrase.split(" ").map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/'/g, "['’]"));
+  return `\\b${words.join("[\\s*_]+")}(?![\\w'’-])`;
+}
+
+const GATE_RE = new RegExp(GATE_PHRASES.map(phraseSource).join("|"), "gi");
 
 /** Same-length blanks over code spans and double-quoted text, so offsets
  *  (and `lineAt`) still hold: a phrase there is cited, not stated. A quote
@@ -518,6 +523,19 @@ function tableRows(raw: string): Block[] {
     .map(({ n, text }) => ({ line: n, text: text.trim(), starts: [{ offset: 0, line: n }] }));
 }
 
+/** The sentence of `text` around the match at [start, end), its list marker
+ *  removed, clipped to 160 chars around the match. `plain` is `text` with the
+ *  cited parts blanked, so a sentence end inside one does not split it. */
+function sentenceAround(text: string, plain: string, start: number, end: number): { from: number; shown: string } {
+  const { from, to } = sentenceBounds(plain, start, end);
+  const raw = text.slice(from, to);
+  const body = raw.replace(/^\s*(?:(?:[-*+>]|\d+\.)\s+|#+\s+)*/, "");
+  const sentence = body.trimEnd();
+  const hit = start - from - (raw.length - body.length);
+  const at = Math.max(Math.min(hit - 60, sentence.length - 159), 0);
+  return { from, shown: sentence.length <= 160 ? sentence : `${at ? "…" : ""}${clip(sentence.slice(at), at ? 159 : 160)}` };
+}
+
 /** Sentences that state gate words, one candidate per sentence, on the line
  *  where its first match starts; a phrase may wrap across lines. */
 export function findGates(file: string, text: string): Candidate[] {
@@ -529,14 +547,8 @@ export function findGates(file: string, text: string): Candidate[] {
     for (const m of plain.matchAll(GATE_RE)) {
       const words = m[0].replace(/[\s*_]+/g, " ");
       if (/ Go$/.test(words)) continue;
-      const { from, to } = sentenceBounds(plain, m.index, m.index + m[0].length);
+      const { from, shown } = sentenceAround(block.text, plain, m.index, m.index + m[0].length);
       if (!open || open.from !== from) {
-        const raw = block.text.slice(from, to);
-        const body = raw.replace(/^\s*(?:(?:[-*+>]|\d+\.)\s+|#+\s+)*/, "");
-        const sentence = body.trimEnd();
-        const hit = m.index - from - (raw.length - body.length);
-        const at = Math.max(Math.min(hit - 60, sentence.length - 159), 0);
-        const shown = sentence.length <= 160 ? sentence : `${at ? "…" : ""}${clip(sentence.slice(at), at ? 159 : 160)}`;
         open = { from, cand: { kind: "gate", file, line: lineAt(block, m.index), text: shown, detail: "" }, words: [] };
         out.push(open.cand);
       }
@@ -557,7 +569,7 @@ function kib(bytes: number): string {
 
 // ── Reference resolution ──────────────────────────────────────────────────
 
-interface Tree {
+export interface Tree {
   files: readonly string[];
   fileSet: Set<string>;
   dirSet: Set<string>;
@@ -567,6 +579,20 @@ interface Tree {
   baseNames: Set<string>;
   topLevel: Set<string>;
   view: RepoView;
+}
+
+/** The lookup sets `resolveRef` reads, built once from the view's files. */
+export function buildTree(view: RepoView): Tree {
+  const files = [...view.files].sort();
+  const dirSet = new Set<string>();
+  for (const f of files) {
+    const parts = f.split("/");
+    for (let i = 1; i < parts.length; i++) dirSet.add(parts.slice(0, i).join("/"));
+  }
+  return {
+    files, fileSet: new Set(files), dirSet, dirs: [...dirSet], baseNames: new Set(files.map((f) => path.posix.basename(f))),
+    topLevel: new Set(files.map((f) => f.split("/")[0])), view,
+  };
 }
 
 type Resolution = "ok" | "missing" | "unanchored" | "bare-missing";
@@ -629,6 +655,9 @@ export interface AuditInput {
   budgets?: Partial<Budgets>;
   /** Overrides the declared always-loaded set (rule names or paths). */
   always?: string[];
+  /** Stop once each file's load is known: `files` and `totals` only, with no
+   *  findings or candidates. The playbook triage needs no more. */
+  loadOnly?: boolean;
 }
 
 function wordSet(view: RepoView, skip: Set<string>): Set<string> {
@@ -650,17 +679,8 @@ function relTo(owner: string, file: string): string | null {
 export function auditRules(input: AuditInput): AuditReport {
   const { view, repoRoot } = input;
   const budgets: Budgets = { ...DEFAULT_BUDGETS, ...input.budgets };
-  const files = [...view.files].sort();
-  const fileSet = new Set(files);
-  const dirSet = new Set<string>();
-  for (const f of files) {
-    const parts = f.split("/");
-    for (let i = 1; i < parts.length; i++) dirSet.add(parts.slice(0, i).join("/"));
-  }
-  const tree: Tree = {
-    files, fileSet, dirSet, dirs: [...dirSet], baseNames: new Set(files.map((f) => path.posix.basename(f))),
-    topLevel: new Set(files.map((f) => f.split("/")[0])), view,
-  };
+  const tree = buildTree(view);
+  const { files, fileSet, dirSet } = tree;
   const universes = new Map<string, string[]>();
   const universeOf = (owner: string): string[] => {
     let u = universes.get(owner);
@@ -894,6 +914,8 @@ export function auditRules(input: AuditInput): AuditReport {
     inst.push(f);
     byPath.set(p, f);
   }
+  // Each file's Claude load is settled here; the checks below only report.
+  if (input.loadOnly) return finish();
 
   // Load scope: every rule the loader reads.
   for (const f of inst.filter((x) => x.kind === "rule")) {
@@ -1079,9 +1101,7 @@ export function auditRules(input: AuditInput): AuditReport {
         : `Move package-specific detail into path-scoped rules or nested instruction files, and trim what the code already says.`,
     });
   }
-  const alwaysFiles = inst.filter((f) => f.claude === "always").sort((a, b) => b.bytes - a.bytes);
-  const alwaysBytes = alwaysFiles.reduce((s, f) => s + f.bytes, 0);
-  const alwaysChars = alwaysFiles.reduce((s, f) => s + f.chars, 0);
+  const { files: alwaysFiles, bytes: alwaysBytes, chars: alwaysChars } = alwaysLoadedOf(inst);
   if (alwaysBytes > budgets.alwaysBytes) {
     const top = alwaysFiles.slice(0, 5).map((f) => `${f.path} ${kib(f.bytes)}`).join(", ");
     const anchor = alwaysFiles.find((f) => f.kind === "claude-md") ?? alwaysFiles[0];
@@ -1274,29 +1294,40 @@ export function auditRules(input: AuditInput): AuditReport {
   candidates.push(...findDuplicates(docs, coLoad));
   for (const d of docs) candidates.push(...findNarrative(d.file, d.text), ...findGates(d.file, d.text));
 
-  const sev: Record<Severity, number> = { high: 0, medium: 1, low: 2 };
-  findings.sort((a, b) =>
-    sev[a.severity] - sev[b.severity] || a.category.localeCompare(b.category) ||
-    a.file.localeCompare(b.file) || a.line - b.line);
-  const ruleFiles = inst.filter((f) => f.kind === "rule");
-  return {
-    repoRoot,
-    loadModel: LOAD_MODEL,
-    repoFiles: files.length,
-    budgets,
-    declaredAlways: declared,
-    files: inst.sort((a, b) => a.path.localeCompare(b.path)),
-    totals: {
-      instructionFiles: inst.length,
-      rules: ruleFiles.length,
-      unscopedRules: ruleFiles.filter((f) => f.owner === "." && f.claude === "always").length,
-      alwaysLoadedBytes: alwaysBytes,
-      alwaysLoadedTokens: Math.round(alwaysChars / 4),
-      alwaysLoaded: alwaysFiles.map((f) => f.path),
-    },
-    findings,
-    candidates,
-  };
+  return finish();
+
+  function finish(): AuditReport {
+    const sev: Record<Severity, number> = { high: 0, medium: 1, low: 2 };
+    findings.sort((a, b) =>
+      sev[a.severity] - sev[b.severity] || a.category.localeCompare(b.category) ||
+      a.file.localeCompare(b.file) || a.line - b.line);
+    const ruleFiles = inst.filter((f) => f.kind === "rule");
+    const always = alwaysLoadedOf(inst);
+    return {
+      repoRoot,
+      loadModel: LOAD_MODEL,
+      repoFiles: files.length,
+      budgets,
+      declaredAlways: declared,
+      files: inst.sort((a, b) => a.path.localeCompare(b.path)),
+      totals: {
+        instructionFiles: inst.length,
+        rules: ruleFiles.length,
+        unscopedRules: ruleFiles.filter((f) => f.owner === "." && f.claude === "always").length,
+        alwaysLoadedBytes: always.bytes,
+        alwaysLoadedTokens: Math.round(always.chars / 4),
+        alwaysLoaded: always.files.map((f) => f.path),
+      },
+      findings,
+      candidates,
+    };
+  }
+}
+
+/** The files Claude Code loads at session start, largest first, and their sum. */
+function alwaysLoadedOf(inst: readonly InstructionFile[]): { files: InstructionFile[]; bytes: number; chars: number } {
+  const files = inst.filter((f) => f.claude === "always").sort((a, b) => b.bytes - a.bytes);
+  return { files, bytes: files.reduce((s, f) => s + f.bytes, 0), chars: files.reduce((s, f) => s + f.chars, 0) };
 }
 
 // ── Text rendering ────────────────────────────────────────────────────────
@@ -1342,5 +1373,364 @@ export function formatText(r: AuditReport, maxCandidates = 40): string {
     out.push(`  ${c.kind} ${c.file}:${c.line} — ${c.text} (${c.detail}${also})`);
   }
   if (r.candidates.length > maxCandidates) out.push(`  … ${r.candidates.length - maxCandidates} more (--json lists all)`);
+  return out.join("\n");
+}
+
+// ── Playbook triage ───────────────────────────────────────────────────────
+//
+// The no-model pre-screen of `skill/stark-agent-docs/references/playbook.md`:
+// each agent file gets GREEN, YELLOW or RED from its size, its phrases, its
+// copies and its dead pointers. `tools/agent_docs_facts.test.ts` pins the
+// constants below to the playbook's tables.
+
+/** The size budgets of the playbook, in chars. Over a budget is YELLOW; over
+ *  twice the budget is RED. */
+export const PLAYBOOK_BUDGETS = {
+  /** A repo's root CLAUDE.md or AGENTS.md. */
+  rootFile: 15_000,
+  /** A package CLAUDE.md or a rule file. */
+  packageFile: 10_000,
+  /** A SKILL.md core: its body, without the frontmatter. */
+  skillCore: 15_000,
+  /** A skill's `description:`. */
+  skillDescription: 300,
+  /** A `MEMORY.md` index. */
+  memoryIndex: 8_000,
+  /** Each line of a `MEMORY.md` index. */
+  memoryIndexLine: 150,
+  /** All files that load together at start-up in one repo. */
+  loadSet: 40_000,
+} as const;
+
+/** Phrases that tell agents to add facts, lessons or files to agent files. */
+export const GROWTH_PHRASES: readonly string[] = [
+  "add a rule", "update this file", "record the lesson", "lessons learned",
+  "add it to CLAUDE.md", "add it to AGENTS.md",
+];
+
+export interface HistoryMarker {
+  label: string;
+  /** A JavaScript regular expression, matched with its case. */
+  pattern?: string;
+  /** A phrase, matched as whole words with any case. */
+  phrase?: string;
+  /** Words that make the phrase no marker when they come before it, with at
+   *  most one word between: "is used to", "is never used to". */
+  notAfter?: readonly string[];
+  flag: "YELLOW" | "RED";
+}
+
+/** Markers of history: the source of a rule (YELLOW), or a story (RED). */
+export const HISTORY_MARKERS: readonly HistoryMarker[] = [
+  { label: "A STARK ticket id", pattern: String.raw`\bSTARK-[0-9]+\b`, flag: "YELLOW" },
+  { label: "A Jira EI ticket id", pattern: String.raw`\bEI-[0-9]+\b`, flag: "YELLOW" },
+  { label: "A date", pattern: String.raw`\b20[0-9]{2}-[0-9]{2}-[0-9]{2}\b`, flag: "YELLOW" },
+  { label: "A past habit", phrase: "used to", notAfter: ["is", "are", "was", "were", "be", "been"], flag: "RED" },
+  { label: "A measurement story", phrase: "measured on", flag: "RED" },
+  { label: "A move record", phrase: "moved here from", flag: "RED" },
+];
+
+export type Flag = "GREEN" | "YELLOW" | "RED";
+export type AgentKind = "root" | "package" | "rule" | "skill" | "memory-index" | "memory-note";
+export type ClauseType = "SIZE" | "GATE" | "GROWTH" | "HISTORY" | "DUPLICATE" | "POINTER";
+
+export interface Clause {
+  flag: "YELLOW" | "RED";
+  type: ClauseType;
+  line: number;
+  text: string;
+  detail: string;
+}
+
+export interface TriagedFile {
+  path: string;
+  kind: AgentKind;
+  /** Chars that load: frontmatter and block HTML comments removed. */
+  chars: number;
+  budget: number | null;
+  flag: Flag;
+  clauses: Clause[];
+}
+
+export interface TriageReport {
+  files: TriagedFile[];
+  totals: Record<Flag, number>;
+}
+
+export interface TriageGroup {
+  /** The folder that `files[].rel` starts from: a repo, a memory folder or the workspace. */
+  root: string;
+  view: RepoView;
+  /** A git repo: its start-up load set is measured against the budget. */
+  repo: boolean;
+  /** `path` is the name the report prints. */
+  files: { rel: string; kind: AgentKind; path: string }[];
+}
+
+export interface TriageInput {
+  groups: TriageGroup[];
+  /** The root rules, the top of the precedence list. A copy of one of their
+   *  clauses is RED. `path` is the report name: the triaged file's own name
+   *  when the root rules are one of the triaged files. */
+  rootRules?: { path: string; text: string };
+}
+
+/** The playbook kind of a repo-relative path, or null for no agent file. A
+ *  memory file has its kind from its folder, so the caller names it. */
+export function agentKind(rel: string): AgentKind | null {
+  const k = instructionKind(rel);
+  if (k) return k.kind === "rule" ? "rule" : k.owner === "." ? "root" : "package";
+  return path.posix.basename(rel) === "SKILL.md" ? "skill" : null;
+}
+
+function budgetOf(kind: AgentKind): number | null {
+  switch (kind) {
+    case "root": return PLAYBOOK_BUDGETS.rootFile;
+    case "package":
+    case "rule": return PLAYBOOK_BUDGETS.packageFile;
+    case "skill": return PLAYBOOK_BUDGETS.skillCore;
+    case "memory-index": return PLAYBOOK_BUDGETS.memoryIndex;
+    case "memory-note": return null;
+  }
+}
+
+/** YELLOW over the budget, RED over twice the budget, else null. */
+function overBudget(size: number, budget: number): "YELLOW" | "RED" | null {
+  return size > 2 * budget ? "RED" : size > budget ? "YELLOW" : null;
+}
+
+/** `31`, `16.2k`: a char count as the playbook writes budgets. */
+function thousands(chars: number): string {
+  return chars < 1000 ? String(chars) : `${Number((chars / 1000).toFixed(1))}k`;
+}
+
+/** A skill's `description:` as YAML reads it, with the line it starts on. */
+export function skillDescription(raw: string): { text: string; line: number } | null {
+  const fm = readFrontmatter(raw);
+  if (fm.yaml === null) return null;
+  const lines = fm.yaml.split("\n").map((l) => l.replace(/\r$/, ""));
+  const i = lines.findIndex((l) => /^description\s*:/.test(l));
+  if (i < 0) return null;
+  const rest = lines[i].replace(/^description\s*:/, "").trim();
+  const more: string[] = [];
+  for (let j = i + 1; j < lines.length && (/^\s/.test(lines[j]) || lines[j] === ""); j++) more.push(lines[j].trim());
+  let text: string;
+  if (/^[>|][-+]?[0-9]?$/.test(rest)) text = more.join(" ").trim();
+  else {
+    text = [rest, ...more].join(" ").trim();
+    if (/^".*"$/s.test(text)) {
+      try {
+        text = JSON.parse(text) as string;
+      } catch {
+        text = text.slice(1, -1);
+      }
+    } else if (/^'.*'$/s.test(text)) text = text.slice(1, -1).replace(/''/g, "'");
+  }
+  return { text, line: i + 2 };
+}
+
+/** Each match of `re` in the prose and the table rows, outside code spans,
+ *  fences and double quotes: the line it starts on, and its sentence. */
+function phraseHits(text: string, re: RegExp): { line: number; match: string; sentence: string }[] {
+  const out: { line: number; match: string; sentence: string }[] = [];
+  for (const block of [...proseBlocks(text), ...tableRows(text)]) {
+    const plain = blankCited(block.text);
+    for (const m of plain.matchAll(re)) {
+      out.push({
+        line: lineAt(block, m.index),
+        match: m[0].replace(/[\s*_]+/g, " "),
+        sentence: sentenceAround(block.text, plain, m.index, m.index + m[0].length).shown,
+      });
+    }
+  }
+  return out;
+}
+
+const GROWTH_RE = new RegExp(GROWTH_PHRASES.map(phraseSource).join("|"), "gi");
+
+function markerRe(m: HistoryMarker): RegExp {
+  if (m.pattern) return new RegExp(m.pattern, "g");
+  const not = m.notAfter?.length ? `(?<!\\b(?:${m.notAfter.join("|")})(?:[\\s*_]+[\\w'’]+)?[\\s*_]+)` : "";
+  return new RegExp(not + phraseSource(m.phrase!), "gi");
+}
+
+const MARKER_RES = HISTORY_MARKERS.map((m) => ({ m, re: markerRe(m) }));
+
+/** The checks that read one file alone: size, phrases and markers. */
+export function triageText(kind: AgentKind, raw: string): { chars: number; budget: number | null; clauses: Clause[] } {
+  const clauses: Clause[] = [];
+  const chars = injectedText(raw).length;
+  const budget = budgetOf(kind);
+  const size = budget === null ? null : overBudget(chars, budget);
+  if (size) {
+    clauses.push({
+      flag: size, type: "SIZE", line: 1, text: `${thousands(chars)} chars`,
+      detail: `over the ${thousands(budget!)} budget${size === "RED" ? " twice over" : ""}`,
+    });
+  }
+  if (kind === "skill") {
+    const d = skillDescription(raw);
+    const over = d && overBudget(d.text.length, PLAYBOOK_BUDGETS.skillDescription);
+    if (d && over) {
+      clauses.push({
+        flag: over, type: "SIZE", line: d.line, text: clip(d.text, 80),
+        detail: `description: ${d.text.length} chars, over the ${PLAYBOOK_BUDGETS.skillDescription} budget${over === "RED" ? " twice over" : ""}`,
+      });
+    }
+  }
+  if (kind === "memory-index") {
+    raw.split("\n").forEach((line, i) => {
+      const len = line.replace(/\r$/, "").length;
+      const over = overBudget(len, PLAYBOOK_BUDGETS.memoryIndexLine);
+      if (over) {
+        clauses.push({
+          flag: over, type: "SIZE", line: i + 1, text: clip(line, 80),
+          detail: `index line: ${len} chars, over the ${PLAYBOOK_BUDGETS.memoryIndexLine} budget${over === "RED" ? " twice over" : ""}`,
+        });
+      }
+    });
+  }
+  for (const g of findGates("", raw)) {
+    clauses.push({ flag: "RED", type: "GATE", line: g.line, text: g.text, detail: g.detail.replace(/: a step .*$/, "") });
+  }
+  for (const h of phraseHits(raw, GROWTH_RE)) {
+    clauses.push({ flag: "RED", type: "GROWTH", line: h.line, text: h.sentence, detail: `growth words "${h.match}"` });
+  }
+  for (const { m, re } of MARKER_RES) {
+    for (const h of phraseHits(raw, re)) {
+      clauses.push({ flag: m.flag, type: "HISTORY", line: h.line, text: h.sentence, detail: `${m.label[0].toLowerCase()}${m.label.slice(1)} "${h.match}"` });
+    }
+  }
+  return { chars, budget, clauses };
+}
+
+/** Pointers that resolve to nothing: links, `@imports`, and code paths to a
+ *  Markdown doc (a pointer says what to read). RED blocks a merge, so each
+ *  check leans to a miss:
+ *  - a code path to code, a build output, a tag or a glob is a reference, not
+ *    a pointer, and whether it is stale needs the review;
+ *  - a soft line (a fence, a negation, a creation) may name a thing that is
+ *    gone on purpose;
+ *  - a code path is often relative to a package, so one that names a doc
+ *    anywhere in the repo counts as found;
+ *  - a skill's code paths name files of the repo it runs in, so only its links
+ *    and the paths that start beside it (`references/…`) are checked. */
+export function deadPointers(rel: string, kind: AgentKind, raw: string, tree: Tree): Clause[] {
+  const out: Clause[] = [];
+  const dir = path.posix.dirname(rel);
+  const seen = new Set<string>();
+  const besideSkill = (token: string) => {
+    const first = path.posix.join(dir, token.split("/")[0]);
+    return token.includes("/") && (tree.fileSet.has(first) || tree.dirSet.has(first));
+  };
+  const inSomePackage = (token: string) => {
+    const tail = `/${path.posix.normalize(token)}`;
+    return tree.files.some((f) => f.endsWith(tail));
+  };
+  for (const ref of extractRefs(raw).refs) {
+    const key = `${ref.line}:${ref.token}`;
+    if (ref.soft || seen.has(key)) continue;
+    seen.add(key);
+    if (ref.kind === "path") {
+      if (!/\.mdx?$/i.test(ref.token) || GLOB_CHARS.test(ref.token)) continue;
+      if (kind === "skill" && !/^\.{1,2}\//.test(ref.token) && !besideSkill(ref.token)) continue;
+    }
+    if (resolveRef(ref, dir, tree) !== "missing") continue;
+    if (ref.kind === "path" && inSomePackage(ref.token)) continue;
+    out.push({ flag: "RED", type: "POINTER", line: ref.line, text: ref.token, detail: `dead ${ref.kind}` });
+  }
+  if (kind === "root" || kind === "package" || kind === "rule") {
+    for (const imp of scanImports(raw)) {
+      if (imp.inListCode || /^[~/]/.test(imp.token)) continue;
+      if (!EXT_RE.test(imp.token) && !/^\.{1,2}\//.test(imp.token)) continue;
+      const target = path.posix.normalize(path.posix.join(dir, imp.token));
+      const stripped = path.posix.normalize(path.posix.join(dir, imp.token.replace(/[.,;:)!?]+$/, "")));
+      if (target.startsWith("../") || tree.view.exists(target) || tree.view.exists(stripped)) continue;
+      out.push({ flag: "RED", type: "POINTER", line: imp.line, text: `@${imp.token}`, detail: "dead @import" });
+    }
+  }
+  return out;
+}
+
+/** Triage every file of every group: one flag per file, from its clauses. */
+export function triage(input: TriageInput): TriageReport {
+  const files: (TriagedFile & { raw: string })[] = [];
+  const byPath = new Map<string, TriagedFile>();
+  for (const g of input.groups) {
+    const tree = buildTree(g.view);
+    const mine = new Map<string, TriagedFile>();
+    for (const f of g.files) {
+      const raw = g.view.read(f.rel);
+      if (raw === null) continue;
+      const t = triageText(f.kind, raw);
+      const file = { path: f.path, kind: f.kind, chars: t.chars, budget: t.budget, flag: "GREEN" as Flag, clauses: t.clauses, raw };
+      file.clauses.push(...deadPointers(f.rel, f.kind, raw, tree));
+      files.push(file);
+      byPath.set(file.path, file);
+      mine.set(f.rel, file);
+    }
+    if (!g.repo || !mine.size) continue;
+    // The start-up load set, by the load emulation of `rules_load_lib.ts`.
+    const loaded = auditRules({ repoRoot: g.root, view: g.view, loadOnly: true }).files.filter((f) => f.claude === "always");
+    const chars = loaded.reduce((s, f) => s + f.chars, 0);
+    const over = overBudget(chars, PLAYBOOK_BUDGETS.loadSet);
+    // The root CLAUDE.md carries it when it is triaged; else the first loaded file that is.
+    const anchor = mine.get("CLAUDE.md") ?? loaded.map((f) => mine.get(f.path)).find((f) => f);
+    if (!over || !anchor) continue;
+    anchor.clauses.push({
+      flag: over, type: "SIZE", line: 1, text: `${thousands(chars)} chars in ${loaded.length} files`,
+      detail: `start-up load set over the ${thousands(PLAYBOOK_BUDGETS.loadSet)} budget${over === "RED" ? " twice over" : ""} (${loaded.map((f) => f.path).join(", ")})`,
+    });
+  }
+
+  // Copies: of a root rule (RED), or of another agent file (YELLOW).
+  const root = input.rootRules;
+  const docs = files.map((f) => ({ file: f.path, text: f.raw }));
+  if (root && !byPath.has(root.path)) docs.push({ file: root.path, text: root.text });
+  for (const c of findDuplicates(docs)) {
+    const locs = [{ file: c.file, line: c.line }, ...(c.also ?? [])];
+    if (new Set(locs.map((l) => l.file)).size < 2) continue;
+    const rootLoc = root ? locs.find((l) => l.file === root.path) : undefined;
+    for (const l of locs) {
+      const target = byPath.get(l.file);
+      if (!target || l.file === rootLoc?.file) continue;
+      const others = locs.filter((o) => o.file !== l.file);
+      target.clauses.push(rootLoc
+        ? { flag: "RED", type: "DUPLICATE", line: l.line, text: c.text, detail: `a copy of the root rules at ${rootLoc.file}:${rootLoc.line}` }
+        : {
+          flag: "YELLOW", type: "DUPLICATE", line: l.line, text: c.text,
+          detail: `also at ${others.slice(0, 2).map((o) => `${o.file}:${o.line}`).join(", ")}${others.length > 2 ? `, +${others.length - 2}` : ""}`,
+        });
+    }
+  }
+
+  const totals: Record<Flag, number> = { GREEN: 0, YELLOW: 0, RED: 0 };
+  const out = files.map(({ raw: _raw, ...f }) => {
+    f.clauses.sort((a, b) => a.line - b.line || a.type.localeCompare(b.type));
+    f.flag = f.clauses.some((c) => c.flag === "RED") ? "RED" : f.clauses.length ? "YELLOW" : "GREEN";
+    totals[f.flag]++;
+    return f;
+  });
+  return { files: out, totals };
+}
+
+const TYPE_ORDER: readonly ClauseType[] = ["SIZE", "GATE", "GROWTH", "HISTORY", "DUPLICATE", "POINTER"];
+
+/** One line per file, then each RED clause as `path:line`, then the totals. */
+export function formatTriage(r: TriageReport): string {
+  const out: string[] = [];
+  for (const f of r.files) {
+    const counts = TYPE_ORDER.map((t) => [t, f.clauses.filter((c) => c.type === t).length] as const)
+      .filter(([, n]) => n).map(([t, n]) => ` · ${t} ${n}`).join("");
+    const size = f.budget === null ? `${thousands(f.chars)} chars` : `${thousands(f.chars)}/${thousands(f.budget)} chars`;
+    out.push(`${f.flag.padEnd(6)}  ${f.path}  ${size}${counts}`);
+  }
+  const red = r.files.flatMap((f) => f.clauses.filter((c) => c.flag === "RED").map((c) => ({ f, c })));
+  if (red.length) {
+    out.push("", "RED clauses:");
+    for (const { f, c } of red) out.push(`  ${f.path}:${c.line}  ${c.type}  ${c.detail}: ${c.text}`);
+  }
+  const t = r.totals;
+  out.push("", `${r.files.length} agent file${r.files.length === 1 ? "" : "s"}: GREEN ${t.GREEN} · YELLOW ${t.YELLOW} · RED ${t.RED}`);
   return out.join("\n");
 }

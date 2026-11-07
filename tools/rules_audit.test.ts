@@ -20,8 +20,32 @@ function repo(files: Record<string, string>): string {
   return dir;
 }
 
-function run(args: string[], cwd = os.tmpdir()) {
-  return spawnSync(process.execPath, ["--no-warnings", CLI, ...args], { cwd, encoding: "utf8" });
+function run(args: string[], cwd = os.tmpdir(), env: NodeJS.ProcessEnv = process.env) {
+  return spawnSync(process.execPath, ["--no-warnings", CLI, ...args], { cwd, encoding: "utf8", env });
+}
+
+/** A home with a fleet folder of one repo, the root rules, and one memory folder. */
+function home(): { dir: string; env: NodeJS.ProcessEnv } {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "rules-audit-home-")));
+  const write = (rel: string, text: string) => {
+    fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+    fs.writeFileSync(path.join(dir, rel), text);
+  };
+  const fleet = path.join(dir, "Code", "21Stark");
+  fs.mkdirSync(fleet, { recursive: true });
+  assert.equal(spawnSync("git", ["init", "-q", path.join(fleet, "alpha")]).status, 0);
+  write("Code/21Stark/alpha/CLAUDE.md", "# Alpha\n\n- Never commit or push to a default branch directly unless the operator asks.\n");
+  write("Code/21Stark/alpha/docs/workspace/CLAUDE.md", "# Workspace\n\n- One clone per repo.\n");
+  write("Code/21Stark/alpha/skill/s/SKILL.md", "---\nname: s\ndescription: A short skill.\n---\n- Do the step.\n");
+  fs.symlinkSync("CLAUDE.md", path.join(fleet, "alpha", "AGENTS.md"));
+  fs.symlinkSync("alpha/docs/workspace/CLAUDE.md", path.join(fleet, "CLAUDE.md"));
+  fs.mkdirSync(path.join(fleet, "not-a-repo"));
+  write("Code/21Stark/not-a-repo/CLAUDE.md", "# Not a repo\n");
+  write("Code/CLAUDE.md", "# Root\n\n- Never commit or push to a default branch directly unless the operator asks.\n");
+  write(".claude/projects/-p1/memory/MEMORY.md", "# Memory index\n\n- [Note](note.md) — a hint\n");
+  write(".claude/projects/-p1/memory/note.md", "---\nname: note\n---\n\nThe build used to take an hour.\n");
+  fs.mkdirSync(path.join(dir, ".claude", "projects", "-p2"));
+  return { dir, env: { ...process.env, HOME: dir } };
 }
 
 test("a gitignored .claude/ is still audited, and labelled as local-only", () => {
@@ -114,8 +138,93 @@ test("refusals: not a repo, a bad budget, an unknown --always rule, help", () =>
     const help = run(["--help"]);
     assert.equal(help.status, 0);
     assert.match(help.stdout, /^usage: rules_audit\.ts/);
+    assert.match(help.stdout, /--playbook/);
+    const noPlaybook = run(["--fleet"]);
+    assert.equal(noPlaybook.status, 2);
+    assert.match(noPlaybook.stderr, /need --playbook/);
+    const mixed = run(["--playbook", "--repo", dir, "--always", "a.md"]);
+    assert.equal(mixed.status, 2);
+    assert.match(mixed.stderr, /do not apply with --playbook/);
+    const notRepoPlaybook = run(["--playbook", "--repo", plain]);
+    assert.equal(notRepoPlaybook.status, 2);
+    assert.match(notRepoPlaybook.stderr, /not inside a git repository/);
   } finally {
     fs.rmSync(plain, { recursive: true, force: true });
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("--playbook --repo: a gate phrase is RED with its path:line and exit 3; rules only is GREEN and exit 0", () => {
+  const red = repo({ "CLAUDE.md": "# Rules\n\n- Run the tests.\n- This is the operator's call.\n" });
+  const green = repo({ "CLAUDE.md": "# Rules\n\n- Run the tests before you push.\n" });
+  try {
+    const r = run(["--playbook", "--repo", red], red);
+    assert.equal(r.status, 3, r.stderr);
+    assert.match(r.stdout, /^RED {5}CLAUDE\.md {2}\d+\/15k chars · GATE 1$/m);
+    assert.match(r.stdout, /^ {2}CLAUDE\.md:4 {2}GATE {2}gate words "the operator's call": This is the operator's call\.$/m);
+    const g = run(["--playbook"], green);
+    assert.equal(g.status, 0, g.stderr);
+    assert.match(g.stdout, /^GREEN {3}CLAUDE\.md /m);
+    assert.match(g.stdout, /1 agent file: GREEN 1 · YELLOW 0 · RED 0/);
+    const json = JSON.parse(run(["--playbook", "--repo", red, "--json"]).stdout);
+    assert.deepEqual(json.totals, { GREEN: 0, YELLOW: 0, RED: 1 });
+    assert.equal(json.files[0].clauses[0].type, "GATE");
+  } finally {
+    fs.rmSync(red, { recursive: true, force: true });
+    fs.rmSync(green, { recursive: true, force: true });
+  }
+});
+
+test("--playbook --fleet --memory: each agent file once, in one run, against the root rules", () => {
+  const h = home();
+  try {
+    const fleet = run(["--playbook", "--fleet"], "/", h.env);
+    assert.equal(fleet.status, 3, fleet.stderr);
+    const lines = (out: string) => out.split("\n").filter((l) => /^(?:GREEN|YELLOW|RED) {2}/.test(l)).map((l) => l.split(/\s+/).slice(0, 2).join(" "));
+    // The workspace map is a link into alpha: it is triaged once, by its fleet name.
+    assert.deepEqual(lines(fleet.stdout), [
+      "GREEN ~/Code/21Stark/CLAUDE.md",
+      "RED ~/Code/21Stark/alpha/CLAUDE.md",
+      "GREEN ~/Code/21Stark/alpha/skill/s/SKILL.md",
+    ]);
+    assert.match(fleet.stdout, /alpha\/CLAUDE\.md:3 {2}DUPLICATE {2}a copy of the root rules at ~\/Code\/CLAUDE\.md:3/);
+    const memory = run(["--playbook", "--memory"], "/", h.env);
+    assert.equal(memory.status, 3, memory.stderr);
+    assert.deepEqual(lines(memory.stdout), [
+      "GREEN ~/.claude/projects/-p1/memory/MEMORY.md",
+      "RED ~/.claude/projects/-p1/memory/note.md",
+    ]);
+    assert.match(memory.stdout, /note\.md:5 {2}HISTORY {2}a past habit "used to"/);
+    const both = run(["--playbook", "--fleet", "--memory"], "/", h.env);
+    assert.equal(both.status, 3, both.stderr);
+    assert.deepEqual(lines(both.stdout), [...lines(fleet.stdout), ...lines(memory.stdout)]);
+    assert.match(both.stdout, /5 agent files: GREEN 3 · YELLOW 0 · RED 2/);
+  } finally {
+    fs.rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("--playbook --files: repo and memory files by name; a non-agent or missing file is refused", () => {
+  const h = home();
+  try {
+    const alpha = path.join(h.dir, "Code", "21Stark", "alpha");
+    const note = path.join(h.dir, ".claude", "projects", "-p1", "memory", "note.md");
+    const r = run(["--playbook", "--files", `skill/s/SKILL.md,${note}`], alpha, h.env);
+    assert.equal(r.status, 3, r.stderr);
+    assert.match(r.stdout, /^GREEN {3}skill\/s\/SKILL\.md /m);
+    assert.match(r.stdout, /^RED {5}~\/\.claude\/projects\/-p1\/memory\/note\.md /m);
+    assert.match(r.stdout, /2 agent files/);
+    fs.writeFileSync(path.join(alpha, "README.md"), "# Readme\n");
+    const notAgent = run(["--playbook", "--files", "README.md"], alpha, h.env);
+    assert.equal(notAgent.status, 2);
+    assert.match(notAgent.stderr, /README\.md is not an agent file/);
+    const missing = run(["--playbook", "--files", "nope/CLAUDE.md"], alpha, h.env);
+    assert.equal(missing.status, 2);
+    assert.match(missing.stderr, /nope\/CLAUDE\.md: no such file/);
+    const outside = run(["--playbook", "--files", path.join(h.dir, "Code", "CLAUDE.md")], alpha, h.env);
+    assert.equal(outside.status, 2);
+    assert.match(outside.stderr, /in no git repository and no memory folder/);
+  } finally {
+    fs.rmSync(h.dir, { recursive: true, force: true });
   }
 });
