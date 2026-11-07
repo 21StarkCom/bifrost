@@ -1,5 +1,6 @@
-// Tests for `tools/fact_routing_hook_lib.ts` (STARK-1785). Covers the classifier
-// (the four routing classes + the null cases), the frontmatter/body parsers, the
+// Tests for `tools/fact_routing_hook_lib.ts`. Covers the classifier (the corpus
+// route, the implementation facts it leaves in memory, and the other null
+// cases), the frontmatter/body parsers, the
 // whole-word slug matcher (hyphenated slugs, no substring false-hits), the
 // config-dir and auto-memory path rules, and the corpus slug reader. Every fixture is synthetic: real
 // memory files are never copied in.
@@ -59,22 +60,25 @@ test("class 1 — a cross-repo relationship (two slugs) routes to corpus even wi
   assert.equal(classifyMemory(c, "/x/projects/p/memory/f.md", SLUGS)?.route, "corpus");
 });
 
-test("class 2 — implementation detail about a repo routes to repo-claude", () => {
+test("null — an implementation fact about a repo stays in memory", () => {
   const c = note("project", "The lint gate in tools/lint.ts trips on plume; the test covers the exit code.");
-  assert.equal(classifyMemory(c, "/x/projects/p/memory/f.md", SLUGS)?.route, "repo-claude");
+  assert.equal(classifyMemory(c, "/x/projects/p/memory/f.md", SLUGS), null);
 });
 
-test("class 2 — a multi-repo IMPLEMENTATION fact routes to repo-claude, not corpus", () => {
-  // Two slugs, but impl markers present → the repo, not the corpus. Guards the
-  // dominant mis-store class (repo-implementation) against the bare 2-slug rule.
+test("null — a multi-repo implementation fact is not sent to the corpus", () => {
+  // Two slugs would route to the corpus, but implementation markers keep it in
+  // memory: the bare two-slug rule must not catch a repo's internals.
   const c = note("project", "frigg's cache schema is imported by tyr's sql adapter in internal/db.go.");
-  assert.equal(classifyMemory(c, "/x/projects/p/memory/f.md", SLUGS)?.route, "repo-claude");
+  assert.equal(classifyMemory(c, "/x/projects/p/memory/f.md", SLUGS), null);
 });
 
-test("class 2 — implementation markers win over product language", () => {
-  // File paths plus an incidental "instead of": a repo note, not a fleet fact.
-  const c = note("project", "plume writes the sheet in pkg/xlsx/writer.go with a streaming encoder instead of buffering rows.");
-  assert.equal(classifyMemory(c, "/x/projects/p/memory/f.md", SLUGS)?.route, "repo-claude");
+test("null — implementation markers win over product language", () => {
+  // File paths plus "use plume for": a repo note, not a fleet fact.
+  const c = note("project", "Use plume for the sheet: pkg/xlsx/writer.go streams rows instead of buffering them.");
+  assert.equal(classifyMemory(c, "/x/projects/p/memory/f.md", SLUGS), null);
+  // The same selection words with no implementation marker go to the corpus.
+  const d = note("project", "Use plume for the sheet instead of a spreadsheet macro.");
+  assert.equal(classifyMemory(d, "/x/projects/p/memory/f.md", SLUGS)?.route, "corpus");
 });
 
 test("null — ordinary prose around one slug is not when-to-reach language", () => {
@@ -97,18 +101,18 @@ test("null — a ticket progress log routes nowhere", () => {
 });
 
 test("a note that cites a finished ticket in passing is not a progress log", () => {
-  // The note is about a live bug; the merged ticket is only a sibling it names.
-  const c = "---\nname: x\ntype: project\ndescription: frigg picks the tracker from the cwd remote (sibling STARK-4242 merged)\n---\n\nfrigg reads the remote in internal/route.go.\n";
-  assert.equal(classifyMemory(c, "/x/projects/p/memory/frigg-tracker-routing.md", SLUGS)?.route, "repo-claude");
+  // The note is about a fleet fact; the merged ticket is only a sibling it names.
+  const c = "---\nname: x\ntype: project\ndescription: reach for frigg to pick the tracker (sibling STARK-4242 merged)\n---\n\nfrigg reads the remote of the cwd.\n";
+  assert.equal(classifyMemory(c, "/x/projects/p/memory/frigg-tracker-routing.md", SLUGS)?.route, "corpus");
 });
 
 test("a ticket id alone, or a completion word alone, is not a progress log", () => {
   const fp = "/x/projects/p/memory/f.md";
-  assert.equal(classifyMemory(note("project", "frigg main requires the ci gate (STARK-4242)."), fp, SLUGS)?.route, "repo-claude");
-  assert.equal(classifyMemory(note("project", "frigg's merged cache schema lives in internal/db.go."), fp, SLUGS)?.route, "repo-claude");
+  assert.equal(classifyMemory(note("project", "Reach for frigg to read the tracker (STARK-4242)."), fp, SLUGS)?.route, "corpus");
+  assert.equal(classifyMemory(note("project", "Reach for frigg for the merged cache."), fp, SLUGS)?.route, "corpus");
   // "fail-closed" is not "closed", and "done-when" is not "done".
-  assert.equal(classifyMemory(note("project", "STARK-4242: frigg's gate is fail-closed."), fp, SLUGS)?.route, "repo-claude");
-  assert.equal(classifyMemory(note("project", "STARK-4242: a green done-when misses plume's hostile-input tests."), fp, SLUGS)?.route, "repo-claude");
+  assert.equal(classifyMemory(note("project", "STARK-4242: reach for frigg; its policy is fail-closed."), fp, SLUGS)?.route, "corpus");
+  assert.equal(classifyMemory(note("project", "STARK-4242: reach for plume when a done-when needs a sheet."), fp, SLUGS)?.route, "corpus");
 });
 
 test("classifier scans the description field, not only the body", () => {
