@@ -1,6 +1,8 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
+import { localTime } from './register'
+
 const PANE = {
   plugin: 'interview',
   component: 'Pane',
@@ -36,7 +38,7 @@ const SURFACES = ['terminal', 'desktop'] as const
 
 const NOW = Date.UTC(2026, 10, 7, 9, 30)
 // The pane shows the local time, in the zone the test runs in.
-const LOCAL = new Date(NOW).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })
+const LOCAL = localTime(NOW)
 
 // Nothing sits beneath the plugin: these hooks stand for the engine. `sent`
 // collects each prompt that reaches the bottom, `status` each status line.
@@ -394,6 +396,8 @@ for (const surface of SURFACES) {
 
       const ui = await $.ui.mount({ ...PANE, surface })
       expect(await ui.find({ type: 'Text', text: /Which color\?/ })).toBeDefined()
+      // The form's chip, `header`, shows in bold before the question's detail.
+      expect(await ui.find({ type: 'Markdown', text: '**Color**' })).toBeDefined()
       expect((await ui.find({ key: 'opt-A1-1' }))?.text).toMatch(/○ blue/)
       await ui.press({ key: 'opt-A1-1' })
       await ui.press({ key: 'send' })
@@ -426,6 +430,23 @@ test('a number question keeps the engine form', { options: { askUserQuestion: tr
   }
   await $.tool.call(counted as unknown as typeof AUQ)
   expect(reached).toBe(1)
+})
+
+test('an option preview keeps the engine form', { options: { askUserQuestion: true } }, async ($, on) => {
+  const { status } = engine(on)
+  let reached = 0
+  on('tool.call', { tool: 'AskUserQuestion' }, () => {
+    reached += 1
+
+    return { result: { questions: [], answers: { 'Which color?': 'red' } } }
+  })
+  const previewed = {
+    ...AUQ,
+    questions: [{ ...AUQ.questions[0], options: [{ label: 'red', description: 'warm', preview: '■ red' }, { label: 'blue', description: 'calm' }] }],
+  }
+  await $.tool.call(previewed as unknown as typeof AUQ)
+  expect(reached).toBe(1)
+  expect(status.length).toBe(0)
 })
 
 test('with the setting off, AskUserQuestion goes to the engine', async ($, on) => {

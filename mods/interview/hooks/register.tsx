@@ -345,7 +345,11 @@ async function applyAsk($: EngineInterface, parsed: Parsed): Promise<string[]> {
     `${open} ${open === 1 ? 'question is' : 'questions are'} open.`,
   ]
   if (open > 0) {
-    const opened = await $.ui.open({ id: PANE, title: TITLE })
+    // The questions are in the pane already: a failed open must not undo the
+    // call, or AskUserQuestion's fallback would ask them in the form as well.
+    const opened = await $.ui
+      .open({ id: PANE, title: TITLE })
+      .catch((error: unknown) => ({ isPlaced: false, reason: error instanceof Error ? error.message : String(error) }))
     lines.push(
       'Keep working on what does not depend on the answers. Each answer reaches you as a message from the person ' +
         'in an <interview-answers> block, during this turn or after it. Do not ask these questions again in your reply.',
@@ -357,7 +361,8 @@ async function applyAsk($: EngineInterface, parsed: Parsed): Promise<string[]> {
 }
 
 // AskUserQuestion's questions as `ask` questions, each under the next free id
-// `A<n>`, or null when the pane cannot show one of them (a `number` question).
+// `A<n>`, or null when the pane cannot show one of them: a `number` question,
+// or an option with a `preview` the operator should compare in the form.
 export function fromAskUserQuestion(
   input: Record<string, unknown>,
   known: readonly Question[],
@@ -368,6 +373,10 @@ export function fromAskUserQuestion(
   const out: Record<string, unknown>[] = []
   for (const raw of input.questions as Record<string, unknown>[]) {
     if (raw === null || typeof raw !== 'object' || typeof raw.question !== 'string' || raw.kind === 'number') return null
+    const hasPreview =
+      Array.isArray(raw.options) &&
+      (raw.options as Record<string, unknown>[]).some(o => typeof o?.preview === 'string' && o.preview.trim() !== '')
+    if (hasPreview) return null
     while (taken.has(`A${n}`)) n += 1
     const id = `A${n}`
     taken.add(id)
@@ -375,12 +384,19 @@ export function fromAskUserQuestion(
       raw.kind === 'text' || !Array.isArray(raw.options)
         ? []
         : (raw.options as Record<string, unknown>[]).map(o => ({ label: o?.label, detail: o?.description }))
+    const detail = [
+      typeof raw.header === 'string' && raw.header.trim() !== '' ? `**${raw.header.trim()}**` : '',
+      typeof raw.description === 'string' ? raw.description.trim() : '',
+    ]
+      .filter(Boolean)
+      .join(' · ')
     out.push({
       id,
       question: raw.question,
       options,
       multiSelect: raw.multiSelect === true,
-      ...(typeof raw.description === 'string' ? { detail: raw.description } : {}),
+      // The form shows `header` as a chip: the pane shows it in bold before the description.
+      ...(detail === '' ? {} : { detail }),
     })
   }
 
@@ -420,9 +436,12 @@ export const register: Register = (on, options) => {
 
   // With the `askUserQuestion` setting on, Claude's own AskUserQuestion goes to
   // the pane and returns at once with no answers, so Claude keeps working. A
-  // call the pane cannot show (a `number` question) gets the engine's form.
+  // call the pane cannot show (a `number` question, an option preview) gets the
+  // engine's form, and so does a subagent's: its answers would reach only the
+  // main loop.
   if (options.askUserQuestion === true) {
     on('tool.call', { tool: 'AskUserQuestion' }, async ($, e, next) => {
+      if (e.agentId !== undefined) return next(e)
       const known = await read($, questionsAtom)
       const asked = fromAskUserQuestion(e as unknown as Record<string, unknown>, known)
       const parsed = asked === null ? 'not shown in the pane' : parseAsk({ questions: asked }, known)

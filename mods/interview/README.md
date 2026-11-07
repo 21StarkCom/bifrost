@@ -70,10 +70,11 @@ Interview pane`), or in settings under `pluginConfigs.interview.options`.
 With it on, Claude's own `AskUserQuestion` calls go to the pane and return at
 once, so Claude keeps working:
 
-- Each question gets the next free id `A1`, `A2`, …, and its options keep their labels and descriptions.
+- Each question gets the next free id `A1`, `A2`, …, and its options keep their labels and descriptions. Its `header`, the chip in the form, shows in bold before its description.
 - The call returns an empty `answers` result. A note beside it tells Claude the questions went to the pane, under which ids.
 - The answers then reach Claude by the routes below, as answers to `ask` do.
-- A question the pane cannot show (a `number` question, in a build whose form takes `kind`) goes to Claude Code's own form, and so does the whole call.
+- A question the pane cannot show (a `number` question, in a build whose form takes `kind`, or an option with a `preview`) goes to Claude Code's own form, and so does the whole call.
+- A subagent's call goes to Claude Code's own form: the pane's answers reach only the main loop.
 
 ## How an answer reaches Claude
 
