@@ -52,13 +52,18 @@ The cases that agents get wrong most often:
   (Anthropic, OpenAI).
 - **A component cannot deploy alone.** A unit that you can deploy alone is a container.
 - **A package with no entry point is a library, not a container.** A folder with no `main`, no `bin` and no
-  server start runs inside the process of each container that imports it.
+  server start runs inside the process of each container that imports it. A browser app's entry point is its
+  `index.html` or the entry file of its bundler, so its folder is a `webApp`.
+- **Files as data.** A store of files that a system reads and writes, such as a git repo of documents or a bucket,
+  is a data store. Run test 1 on its owner: the store of another team is an `externalSystem`, and your own store
+  is a `database`.
 
 ### Leave it out
 
 These are not elements of a context, container or component view:
 
-- A library, a package, a JAR or a folder. Name a library in the `technology` of the container that uses it.
+- A library, a package, a JAR or a folder of code. Name a library in the `technology` of the container that uses
+  it.
 - Kubernetes objects (a pod, a service, an ingress, a namespace), Docker, load balancers, DNS, firewalls, NAT and
   API gateways that only route. They belong on the deployment view, as nodes, or nowhere. The scan writes the
   nodes that the kit has kinds for from the `terraform` and `deploy` keys.
@@ -80,7 +85,7 @@ These are not elements of a context, container or component view:
 - **`technology`.** For a container or a component: the language and the main framework or runtime ("Go, gRPC",
   "TypeScript, React"). For a data store: the product ("Cloud SQL for PostgreSQL"). Do not put a code path in it:
   the `code` key holds the path and the scan makes the link.
-- **`icon`.** Only on an external system, for its vendor: see the section Logos of the skill.
+- **`icon`.** On an external system, the logo of its vendor: see the section Logos of the skill.
 - Write the text in the language of the readers: a context view is for everyone, so its text has no protocols and
   no framework names.
 
@@ -88,13 +93,19 @@ These are not elements of a context, container or component view:
 
 - **One direction.** Draw each arrow from the element that starts the work: the caller, the sender, or the reader
   of a queue. Never use `<->` for a call; keep it for traffic that goes both ways on its own, such as replication.
+  A server that sends the code of a web app to the browser is the sender: draw `server -> webApp 'delivers to the
+  browser'`, and draw each call of the web app from the `webApp`.
 - **A title on every relationship** (R6). Write a verb phrase that reads as "source <title> target": `shop.web ->
   shop.api 'posts the cart to'`. Never "uses", "calls" or a noun such as "orders".
-- **A technology on each relationship between containers** (R6): the protocol and the format, such as
-  `HTTPS/JSON`, `gRPC`, `SQL`, `Pub/Sub`, or `stdio` for a child process. Not a library or an SDK name: a call
-  through a library stays inside one process, so the callee is not a container.
+- **A technology on each relationship between containers** (R6): the protocol, the format or the transport of the
+  call, such as `HTTPS/JSON`, `gRPC`, `SQL`, `WebSocket`, `Pub/Sub`, or `stdio` for a child process. A messaging
+  product that carries the call, such as `Pub/Sub`, counts as its transport. Never a library or an SDK: a call
+  through a library stays inside one process, so the callee is not a container. Never a tool name alone (`Vite`,
+  a browser driver) or the name of the product at one end of the call. A tool name can follow the protocol in
+  parentheses: `WebSocket (Vite RPC)`.
 - **A kind** from the kit on each relationship: `-[sync]->` (a solid line) for a call that waits for its answer, or
-  for a person who works in a UI, and `-[async]->` (a dotted line) for a message or an event. A relationship with no
+  for a person who works in a UI or a chat, and `-[async]->` (a dotted line) for a message or an event that the
+  sender does not wait on. A relationship with no
   kind gets a dashed line, which the key does not explain and which looks like the dotted one.
 - **One relationship for one pair of elements.** When A does three things with B, write one title that sums them
   up ("browses and buys products in"). Show each use case as a flow, not as one more arrow. Several titles for one

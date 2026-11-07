@@ -91,9 +91,9 @@ hand-written file and never commits. `floorplan build` runs it first; `--no-scan
 - `model/scan/` is the scan's. Each file starts with `// Written by floorplan scan. Do not edit.` Never edit one:
   R9 fails on the change, and the next scan writes the file again.
 - The scan also owns the stack keys `language`, `language-version`, `runtime`, `frameworks` and `image`, the view
-  ids `stack` and `deployment`, and the style group id `languageLogos`. Do not write them by hand: LikeC4 adds a
-  hand-written value of a key to the scan's value, and a second view or style group with one of those ids is a
-  duplicate.
+  ids `stack` and `deployment`, and the style group id `languageLogos`. Do not write them by hand: floorplan's
+  engine adds a hand-written value of a key to the scan's value, and a second view or style group with one of
+  those ids is a duplicate.
 - A project with no key gets no `model/scan/` folder, and R9 passes.
 - A key with a problem stops `floorplan build`: it prints the problem and writes no outputs.
 
@@ -143,9 +143,11 @@ dynamic view flowCheckout {
 - Name leaf elements only: people, external systems, and containers or components with no children. A sequence
   view shows only leaf elements, so a step names `shop.api`, never `shop`.
 - Write one flow for each main path, not one for each function. Read the code of each step before you write it.
-- floorplan's own model has two flows to copy: `flowBuild` and `flowDesignLoop` in `docs/architecture/model/views.c4`
-  of floorplan. They use `alt` with `when` and `else`, `loop`, `parallel`, and a step's `notes`. The syntax is in
-  `apps/docs/src/content/docs/dsl/Views/dynamic.mdx` there.
+- floorplan's own model has two flows whose syntax you can copy: `flowBuild` and `flowDesignLoop` in
+  `docs/architecture/model/views.c4` of floorplan. `flowBuild` uses `alt` with `when` and `else`, `parallel` and a
+  step's `notes`; `flowDesignLoop` uses `loop` and `notes`. The syntax is in
+  `apps/docs/src/content/docs/dsl/Views/dynamic.mdx` there. Write the titles and steps by
+  [views.md](references/views.md#flows), not by those two.
 - Run `floorplan build`, then `render` the flow's view id and look at the PNG, as in step 2 of the loop.
 - No rule asks for a flow.
 
@@ -246,8 +248,8 @@ Fix the name, or remove the `icon`.
 }
 ```
 
-Without the key, LikeC4 gives each element with an icon and no `technology` a technology text from the icon's name,
-such as "Github" or "Slack", under its title. The text repeats the logo, and it can spell a brand name wrong
+Without the key, the engine gives each element with an icon and no `technology` a technology text from the icon's
+name, such as "Github" or "Slack", under its title. The text repeats the logo, and it can spell a brand name wrong
 ("Github" for GitHub).
 
 A node shows one icon, so frameworks and runtimes stay as text in the element's card.
@@ -291,7 +293,7 @@ Each step names the `floorplan` MCP tool, then the CLI command that does the sam
 Run `propose` with a short LikeC4 id as `name` (`rfc-payments`) and the operator's request as `title`. It writes
 `proposals/<name>.c4` with an empty diff, and refuses a name that a diff of the project already has.
 
-Then write the change into that file, by hand, as `.c4` text. Do not use LikeC4's DSL writer: it drops comments
+Then write the change into that file, by hand, as `.c4` text. Do not use the engine's DSL writer: it drops comments
 and formatting. The syntax is in `apps/docs/src/content/docs/dsl/diff.mdx` of floorplan:
 
 ```likec4
@@ -339,7 +341,8 @@ diff rfc-payments 'Split payments out of the API' {
 2. Run `render` with the view that shows the change and `proposal`. `generated/llms.txt` lists each view as
    `view <id> | <title> | <png>`; `floorplan init` names them `index` (system context) and `containers`. It
    writes one PNG of the To-be view into a temp folder and returns its `file`. The project folder does not change.
-3. Read the PNG and look at it. Run the picture checks of [review.md](references/review.md#picture-checks), and its model checks on each element and relationship that the proposal adds or changes.
+3. Read the PNG and look at it. Run the picture checks of [review.md](references/review.md#picture-checks), and
+   its model checks on each element and relationship that the proposal adds or changes.
 4. Change the proposal, and run steps 1 to 3 again, until the check passes and the picture is clear.
 
 ### 3. Show it in the studio
@@ -407,7 +410,7 @@ the chat. An answer on the canvas is not an accept.
    proposal file, and runs `floorplan build`. With `dryRun:true` it only returns the file changes.
    - The proposal overlaps another open proposal: the accept refuses. Put the overlap in the same
      `Needs you (Design approval)` line, and pass `acceptOverlaps` only when that answer accepts both.
-   - `file` is `kept`: LikeC4 could not merge some adds. Move them from `proposals/<name>.c4` into `model/`,
+   - `file` is `kept`: the engine could not merge some adds. Move them from `proposals/<name>.c4` into `model/`,
      delete the file, and run `build`.
    - The error says that `floorplan-engine diff apply` applied the proposal but `floorplan build` failed: the model has
      changed and the proposal is gone, so do not run `accept` again. Fix the error, and run `build`.
@@ -428,6 +431,6 @@ model does not change.
 
 ## Two agents, two proposals
 
-Two agents can each work on a proposal in the same project at the same time. LikeC4 warns on both when they
+Two agents can each work on a proposal in the same project at the same time. floorplan warns on both when they
 change the same element. Accept over that warning only when the operator's design approval names both
 proposals; the other agent's proposal is theirs to change.

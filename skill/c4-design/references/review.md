@@ -23,26 +23,32 @@ most of them.
 Read the `.c4` files of `model/` and of the proposal. For each check, the fix is in
 [modeling.md](modeling.md) or [views.md](views.md).
 
-The MCP tools of the server `floorplan-model` take a `project` argument. Pass the `name` of the project's
-`floorplan.config.json`; `list-projects` lists the names. With no `project`, a tool reads the project `default`,
-which can be another model of the workspace.
+The MCP tools of the server `floorplan-model` take a `project` argument: the project's id. The id is the `name` of
+the project's `floorplan.config.json`, and `list-projects` lists each id. With no `project`, a tool reads the
+project `default`, which can be another model.
+
+The server reads only the projects under the folder where the session started. When `list-projects` does not list
+the project, read the project's `generated/model.json` in place of the tools: `views.<id>.nodes` lists the elements
+of a view, `views.<id>.edges` its lines, and `relations` the relationships of the model. In a flow, a return step
+`a <- b` is an edge from `b` to `a` with `dir: "back"` and no `relations`: check it against the relationship
+`a -> b`. Each other edge with no `relations` is a step with no relationship.
 
 | #  | Check                                                                                       | How to find a failure                                                     |
 | -- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| M1 | Each element has the right kind: the tests of modeling.md, in order.                        | A library, a folder, a pod, a load balancer or a team as an element.     |
+| M1 | Each element has the right kind: the tests of modeling.md, in order.                        | A library, a folder of code, a pod, a load balancer or a team as an element. |
 | M2 | Each relationship title is a verb phrase that reads "source <title> target".                | A title of one word, "uses", "calls", or a noun.                          |
 | M3 | Each relationship has a kind (`sync` or `async`).                                           | A relationship written with `->`, not `-[sync]->` or `-[async]->`.       |
 | M4 | Each arrow starts at the element that starts the work. No `<->` for a call.                 | `<->`; a title in the passive voice ("is called by").                    |
-| M5 | One relationship for each pair of elements, with a summary title.                           | Two or more relationships between the same two elements.                  |
+| M5 | One relationship for each pair of elements, with a summary title.                           | Two or more relationships between the same two elements; one relationship whose title covers only some of what the source does with the target. |
 | M6 | A relationship is in the model once, at the lowest level known.                             | The same pair at the system level and at the container level.            |
 | M7 | Each description says what the element does, and for whom when the title does not say it.  | "Handles business logic", "Backend service", a copy of the title; a description that leaves out a main job of the element. |
 | M8 | Each technology names a language, a framework or a product; no code path.                   | A path such as `packages/api` in `technology`.                            |
 | M9 | One name for one thing; no acronym that a reader may not know; no "Service A".             | Two titles for one role ("Customer", "User"); one title that can name two elements. |
-| M10 | Each element is in a view, and each element has a relationship.                           | `read-element` (server `floorplan-model`, with `project`): an empty `includedInViews`. |
-| M11 | Each step of a flow has a relationship in the model between the same two elements.        | `find-relationships` (server `floorplan-model`, with `project`) for each step's pair. |
-| M12 | The model matches the code: each container runs, each relationship is a real call.       | A `code` path with no entry point (no `main`, no `bin`, no server start); a call in the code with no relationship; a process in the code with no element. |
-| M13 | Each relationship technology names a protocol, a format or a mechanism.                    | An SDK or a library name ("Floorplan SDK"): the call stays in one process. |
-| M14 | Each hand-written view has a `description`: the question that it answers.                 | A `view` block with no `description`.                                     |
+| M10 | Each element is in a view, and each element has a relationship. A relationship of a child counts for its parent. | `read-element` (server `floorplan-model`, with `project`): an empty `includedInViews`. |
+| M11 | Each step of a flow has a relationship in the model between the same two elements. A return step `a <- b` uses the relationship `a -> b`. | `find-relationships` (server `floorplan-model`, with `project`) for each step's pair. |
+| M12 | The model matches the code: each container runs, each relationship is a real call, and each process that the product ships or runs has an element. | A `code` path of a `container` with no entry point (no `main`, no `bin`, no code that starts a server when the package runs; a start function that only other packages call is not one), or of a `webApp` with no `index.html` and no bundler entry; a call in the code with no relationship; a shipped process with no element. Put a process that the repo holds but does not ship (an editor extension, a dev tool) in a question for the operator. |
+| M13 | Each relationship technology names the protocol, the format or the transport of the call, as modeling.md says. | A library, an SDK or a tool name alone ("Floorplan SDK", "Vite", "Huginn"), or the name of a product at one end of the call. |
+| M14 | Each hand-written view has a `description` of one sentence, which says what a reader learns from the view. | A `view` block with no `description`.                                     |
 
 ## Picture checks
 
@@ -55,11 +61,11 @@ The scan writes the views `stack` and `deployment`. Skip P1 for them: their titl
 | #  | Check                                                                                       | A failure looks like                                                       |
 | -- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | P1 | The view title names the type and the scope ("Containers: Shop").                         | "Overview", "Containers", no title. The PNG has no title: read the view. |
-| P2 | All elements are at one level.                                                              | A component next to a system; a vendor next to an endpoint.               |
+| P2 | All elements are at the level of the view, by the rule "One level in each view" of views.md. | A component next to a system; a vendor next to an endpoint.               |
 | P3 | The view has 20 elements or fewer, and a reader can follow each line.                      | More than 20 boxes; lines that cross many times; a line that loops round. |
 | P4 | Each line has a title, and the title reads right in the direction of the arrow.            | A line with no label; "receives data from" on an arrow that points out.   |
 | P5 | No line has the label `[...]`.                                                              | `[...]`: relationships with different titles merged into one line.        |
-| P6 | No label is cut short, and no box is out of place.                                          | A title that ends in "…"; a box far from the boxes it connects to.        |
+| P6 | No text is cut short, and no box is out of place. The text is each line of a card (title, technology, description) and the label of each line. | Text that ends in "…" or "..."; a box far from the boxes it connects to. |
 | P7 | The words match the reader: no protocols on a context view.                                 | `HTTPS`, `gRPC` or a framework name on the context view.                  |
 | P8 | No infrastructure on a context or container view.                                           | A box for a load balancer, a cluster, a namespace or a gateway.           |
 | P9 | Each line style and colour has a meaning in the key of the kit.                             | A dashed line: a relationship with no kind (M3).                          |
@@ -70,11 +76,12 @@ The scan writes the views `stack` and `deployment`. Skip P1 for them: their titl
 - One flow shows one use case, and its title names the use case ("Flow: checkout").
 - Each step title is the specific action, as a verb phrase from the sender.
 - The flow names leaf elements only.
-- Detail is in the `notes` of a step, not in its title. A command or a file name is detail.
+- Detail is in the `notes` of a step, not in its title. A command, a flag or a path is detail. A title names a
+  file in plain words ("updates the README") and puts its path in `notes`.
 - A return step shows only an answer that matters: data that a later step uses, or the end of the flow.
-- The `include` list orders the lifelines by the step where each element first takes part.
+- The `include` list orders the lifelines by the step where each element first takes part, read as views.md says.
 - A step that can fail in a way that changes the flow shows the failure path with `alt`.
-- The relationship in the model that starts the flow has `navigateTo` with the flow's id.
+- The relationship of the flow's first step has `navigateTo` with the flow's id, as views.md says.
 
 ## Deployment checks
 
@@ -91,16 +98,17 @@ The scan writes the views `stack` and `deployment`. Skip P1 for them: their titl
 3. For a review with no proposal, list the findings in the chat, one line each: the check, the element id or the
    view id, what is wrong, and the fix.
 4. Sort each fix into one of two groups:
-   - **Small fix, in `model/`:** a title, a description, a `summary`, a technology, the `sync` or `async` kind of a
-     relationship, the title of a relationship, a view, or a step of a flow of code that exists.
    - **Proposal:** add or remove an element or a relationship, change the kind of an element or its parent, or
-     change the two elements that a relationship connects.
+     change the two elements that a relationship connects or its direction.
+   - **Small fix, in `model/`:** each other fix. Examples: a title, a description, a `summary`, a technology, the
+     `sync` or `async` kind or the `navigateTo` of a relationship, a view, and the steps, `notes` and `include`
+     list of a flow that shows code that exists.
 
 ## Anti-patterns
 
 | Anti-pattern                                                    | Fix                                                                         |
 | --------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| One view that shows everything                                  | One view for each question; split at 20 elements                            |
+| One view that shows everything                                  | One view for each question; split above 20 elements                         |
 | One bus container with all the services around it              | One `queue` for each queue or topic, or the topic named on each line        |
 | Modules of a monolith as containers                             | One container; its modules as components                                    |
 | Microservices of many teams as containers of one system         | One `softwareSystem` for each team's service                                |

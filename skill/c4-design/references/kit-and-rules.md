@@ -18,8 +18,9 @@ Do not edit that copy: the next build writes it again, and rule R8 fails on a ch
 | `queue`          | 2         | queue   | inside a `softwareSystem`               |
 | `component`      | 3         | box     | inside one of the five container kinds  |
 
-The five container kinds are `container`, `webApp`, `mobileApp`, `database` and `queue`. The colours are the
-classic C4 palette, set by the kit; a model sets no colour.
+The five container kinds are `container`, `webApp`, `mobileApp`, `database` and `queue`. The kit sets the
+colours: the C4 roles of the draupnir house theme, a blue scale with the theme's neutral for an external system,
+not the classic C4 palette. A model sets no colour.
 
 ## Deployment node kinds
 
@@ -45,7 +46,8 @@ names no project goes in the project of its own folder, or of the nearest parent
 - `async`: a dotted line, for a message, an event or a queue.
 - `sync`: a solid line, for a call that waits for its answer.
 
-Write a kind as `a -[async]-> b 'publishes orders'`. A relationship with no kind gets a dashed line, which the key does not explain. Give each relationship a kind.
+Write a kind as `a -[async]-> b 'publishes orders'`. A relationship with no kind gets a dashed line, which the key
+does not explain. Give each relationship a kind.
 
 ## Rules of `floorplan check`
 
