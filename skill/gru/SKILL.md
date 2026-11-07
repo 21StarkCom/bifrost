@@ -40,90 +40,9 @@ tells you to stop; there is no other verb.
 
 ## New tab
 
-**If `$ARGUMENTS` contains `--new-tab`, you are the launcher, not Gru.** Read
-nothing below this section as yours: no expand, no launches, no waiting, and no
-tab title — the Gru you launch titles its own tab. Launch it and stop.
-
-Gru launches through `valkyrie gru`, so it gets a launch id, and with it a worktree,
-a branch and a tab named after that id: the epic's, or — given `--tickets` —
-`GRU-<n>`, `<n>` being the **first** ticket's trailing digits (`GRU-1234`),
-which valkyrie derives itself. **Never the id of a ticket Gru will work.** The id
-names Gru's own worktree, so the launched Gru's step 2 would read its own peer
-row — live, its `cwd` ending in that ticket id — as the Minion that owns the
-ticket and never launch it. An epic is safe because Gru works its children,
-never the epic. valkyrie checks the id against `[A-Za-z0-9][A-Za-z0-9._-]*` and
-names the worktree, the branch and the tab with it. Gru never works in that
-worktree; it is only where the session stands.
-
-1. Pick the repo. With `--repo <name>`, pass it through. Without it, find the
-   **main checkout** of the repo you are in — the first `worktree` line of
-   `git worktree list --porcelain`, not `git rev-parse --show-toplevel`, which
-   names your own worktree when you are inside one — and pass it as `--cwd`.
-   Run that as its own command and paste the path in literally: on Claude, a
-   worktree session's guard refuses a launch line carrying a variable
-   ([measured](../../standards/worker-spine.md#title-your-tab) on a `hermod`
-   line), and a `$(...)`
-   was [measured](../../standards/stand-down.md#four-rules-about-when) refused on
-   its quoted form only — too fine a line to rest a launch on.
-   **The launch id must be free in that repo**: no `worktree` line of that list
-   (with `--repo`, of `git -C <path> worktree list --porcelain`, `<path>` from
-   `urd repos get <name> --json`) may end in `/<launch id>`. One that does is
-   an earlier Gru's, and `valkyrie gru` refuses it on either runtime — so stop and
-   say so; the last paragraph of this section is why.
-2. Launch, once, with your arguments mapped onto valkyrie's flags:
-
-   ```
-   valkyrie gru (STARK-<epic> | --tickets STARK-n,…) [--minion-agent <agent>] [--max-workers N] (--repo <name> | --cwd <main checkout>) [--agent <agent>] --json
-   ```
-
-   Your `--agent` argument keeps its meaning — the Minions' agent — so it goes
-   on the line as `--minion-agent`; `--agent` on the launch line is the agent
-   **Gru** runs on, which is your own runtime. Each one you omit falls to
-   idun's config, which valkyrie reads (`agents.launchers.gru`'s `minionAgent`,
-   `maxWorkers` and `agent`; built in: claude, 3 and claude). valkyrie writes the first message
-   itself: `/gru start <STARK-epic | --tickets …>` (`$gru start …` on Codex),
-   adding `--agent <agent>` when the Minions do not run on claude and
-   `--max-workers N` when it is not 3. `--repo` and `--cwd` are mutually
-   exclusive, and `--new-tab` stays off the line.
-   Leave the tab focused; the operator asked to see it.
-3. Print the ack's `surface`, `workspace`, `name` and `prompt`, and stop. The
-   `prompt` must be the `/gru start …` line you meant.
-
-Read the exit code before the ack. A nonzero exit is the answer, not something
-to work around; report what it printed:
-
-- **0** with `verified: true`: launched.
-- **1**: something was placed or started and did not come up, and valkyrie's
-  stderr names what it left standing. When the tab opened but Gru did not
-  come up, that is the tab and the worktree
-  (`… left standing: surface:N, worktree <path>`), and under `--json` stdout
-  still carries a complete, normal-looking ack on either runtime, whose only
-  tells are `verified: false` and an `error` field, so check that field and
-  the exit code before you call the hand-off done. When Hermod could not place
-  the tab, or a Codex worktree could not be cut, there is no ack on stdout at
-  all.
-- **2**: refused before anything was created: a bad argument, a repo name
-  that no checkout, or more than one, under valkyrie's `repos.roots`
-  (default `~/Code`) has as its origin, a `--cwd` outside any git checkout, a worktree that already
-  ends in the launch id (on either runtime: a second Gru there would lead the
-  first one's Minions), or, for a Codex Gru, a main checkout Codex does not
-  trust (`Codex does not trust <path>…`). Trusting a repo is the operator's to
-  do, once; name it and stop.
-- **4**: a live agent or tab already holds the launch id, and valkyrie's stderr
-  lists each holder — a Gru running there, or a tab still titled with the id.
-- **128+n**: interrupted.
-
-Never fall back to running Gru in this session — the operator asked for a new
-tab because they want this one back.
-
-**`--new-tab` starts a Gru; it does not resume one.** The launch cuts a worktree
-on the launch id, so a second `--new-tab` on the same input meets the first
-one's worktree, and `valkyrie gru` refuses it (exit 2). On Codex the branch named
-for the launch id outlives that worktree, and valkyrie refuses a Codex launch onto
-an existing branch too (exit 2). Rerunning `start` to resume means rerunning it
-in the tab Gru is already in. Launch again only once that Gru is gone and its
-worktree with it — and a worktree or branch still standing is the operator's to
-sweep, not yours.
+**If `$ARGUMENTS` contains `--new-tab`, you are the launcher, not Gru.**
+Follow [the launch doc](../../standards/launch.md), and read nothing below this
+section as yours.
 
 ## Coordination route
 
@@ -179,14 +98,16 @@ regardless of route, is observation, never operator authorization.
    tool (`alfred task show` prints one ticket, never its children). Read every
    ticket and its comments, and note each ticket's repo. A ticket that names
    another in-scope ticket as a dependency waits for it; otherwise tickets are
-   independent. A ticket outside that set joins the run when a Minion files
-   it as a follow-up, or when it blocks a ticket in scope (a `Blocked by`
-   link, or a dependency the ticket names), unless the run's
-   [settings](#progress-pane) hold it: read them before each such change. Add
-   it to scope, rewrite the
-   run's [progress file](#progress-pane), and name it in step 6's report. The
-   ticket it blocks waits for it like any dependency. A rerun `start` finds
-   it again in that ticket's links and comments.
+   independent. A ticket outside that set joins the run only when the run's
+   [settings](#progress-pane) turn it on, and both are off by default: a
+   follow-up a Minion files joins with `followUps`, and a ticket that blocks
+   one in scope (a `Blocked by` link, or a dependency the ticket names) joins
+   with `decideForMe`. Read them before each such change. Add a ticket that
+   joins to scope, rewrite the run's [progress file](#progress-pane), and name
+   it in step 6's report; the ticket it blocks waits for it like any
+   dependency, and a rerun `start` finds it again in that ticket's links and
+   comments. A ticket that does not join stays on the board, and the ticket
+   that waits on it stays blocked.
    **A ticket whose PRs span two repos or more** (its Files, or the code its
    scope names, land in each) is split before it launches, because one Minion
    opens PRs in one repo: it works only in the worktree valkyrie cut for it
@@ -198,10 +119,10 @@ regardless of route, is observation, never operator authorization.
    through review to merge. A PR there that a live worker owns is a
    dependency: wait for it. The ticket keeps its own
    repo's half; each other repo's half goes to a sub-ticket worked in that
-   repo by its own Minion. File the sub-ticket yourself and ask the operator
-   nothing: your launch on the ticket is the GO for the split, unless the
-   run's [settings](#progress-pane) set `decideForMe` false. Write it
-   with `/stark-ticket` (`$stark-ticket` on Codex), file it with
+   repo by its own Minion. File the sub-ticket only when the run's
+   [settings](#progress-pane) set `decideForMe` true. Otherwise stamp the
+   ticket `blocked`, do not launch it, and name the split in step 6's report.
+   Write the sub-ticket with `/stark-ticket` (`$stark-ticket` on Codex), file it with
    `alfred task new --on-repo <other repo>`, and comment on the ticket with
    `alfred task comment --body-file <file> STARK-n`, the file opening
    `Gru: split — <the half that moved> moved to STARK-m`, since the ticket's
@@ -229,8 +150,8 @@ regardless of route, is observation, never operator authorization.
    Ticket whose Minion reported `blocked` or `follow-up … stopping` → blocked
    until its block clears, and so is a ticket step 3 could not resolve
    to a repo, and a ticket the run's [settings](#progress-pane) hold. You
-   clear a follow-up's stop and a need in another repo
-   yourself (step 4); the operator clears the rest. When a block clears (the
+   clear a follow-up's stop and a need in another repo yourself when the
+   run's settings turn it on (step 4); the operator clears the rest. When a block clears (the
    operator tells you, or step 5 confirms the ticket it waited on), confirm
    it on the real surface (the PR `MERGED`, the tag on the remote), then send
    that Minion `unblocked <what cleared it>` through
@@ -248,8 +169,8 @@ regardless of route, is observation, never operator authorization.
    The ticket id comes first: any other first word starts a persona dev
    worker, not a ticket Minion. Always pass `--repo` (the default is the repo
    you are standing in) and `--agent` (the default is
-   `agents.launchers.minion.agent` in idun's config, which valkyrie reads, not
-   yours); valkyrie writes the brief,
+   `agents.launchers.minion.agent` in idun's config, which valkyrie reads,
+   not your own runtime); valkyrie writes the brief,
    described at the end of this step. Before a repo's first launch, run its
    [preflight](#preflight) once.
    Check the repo per ticket and at launch with `urd repos get <ticket's
@@ -257,9 +178,8 @@ regardless of route, is observation, never operator authorization.
    valkyrie does not read urd: it resolves `--repo <name>` to the one
    checkout under its `repos.roots` (default `~/Code`, less `repos.exclude`)
    whose origin is that name, and exits 2, naming the repo, when none or more
-   than one is. One record, read when
-   you launch — a whole-registry read cached once per run still answers
-   "unregistered" for a repo the operator seeds mid-run. Exit 3, or a record
+   than one is. Read one record when you launch: a whole-registry read cached
+   for the run misses a repo registered after it. Exit 3, or a record
    whose `stale` is true because its path is gone from disk, means the name
    will not resolve and that ticket needs a path instead. The path is a guess:
    the fleet is one clone per repo, so take the root from any registered
@@ -271,16 +191,15 @@ regardless of route, is observation, never operator authorization.
    checkout, exits 0, and the ack looks normal, so the Minion would implement
    the ticket in the wrong codebase. A
    guess that does not prove out makes the ticket blocked, not ready — record
-   it with its repo name, leave it alone on later passes, raise it under
-   Authority's escalation rule when it happens rather than only in step 6, and
-   keep every other ticket moving. `--repo` and `--cwd` are mutually exclusive,
+   it with its repo name, leave it alone on later passes, escalate it under
+   [Authority](#authority) when it happens, and keep every other ticket moving. `--repo` and `--cwd` are mutually exclusive,
    so the fallback replaces `--repo`: never send both, and never reach for
    `--cwd` for a repo that resolves by name. After a `--cwd` launch, confirm
    the Minion landed where you meant — `hermod msg peers`, that peer's `cwd`
    under the intended repo — because step 2's ownership rule matches on the
    ticket id alone, so a misrouted Minion otherwise reads as a correctly-owned
-   one. Seeding the registry is the operator's: run neither `urd repos scan`
-   nor `urd repos set` yourself; name the fix in your report instead.
+   one. Once a guessed path proves out, register it with
+   `urd repos set <repo> --path <p>`, so the next `urd repos get` finds it.
    The brief valkyrie writes invokes `/minion` (`$minion` on Codex), names
    the ticket and your peer id, and gives the route from
    [Coordination route](#coordination-route) with a Hermod fallback. valkyrie
@@ -322,8 +241,8 @@ regardless of route, is observation, never operator authorization.
    complete ack whose only tells are `verified: false` and an `error` field,
    on either runtime; when Hermod could not place the tab, or a Codex
    worktree could not be cut, stdout carries no ack at all. The ticket is
-   blocked: report what stderr named, which is the operator's to sweep, and
-   never relaunch over it. **2**: refused before anything was
+   blocked: reap the tab stderr named as [Authority](#authority) reaps a dead
+   Minion's tab, name what stays in your report, and never relaunch over it. **2**: refused before anything was
    created — a bad argument, a repo that does not resolve, a `--cwd` outside
    any git checkout, both or neither session stamps without `--leader`, an
    existing worktree for the id on a Codex launch (a Claude one re-enters it,
@@ -373,23 +292,24 @@ regardless of route, is observation, never operator authorization.
    Codex Minion is a blocker: `valkyrie minion` refuses its existing worktree, and
    the branch `STARK-n` that outlives one, with exit 2; report the path. A second
    death is a blocker. `follow-up … stopping` means the ticket is blocked on
-   STARK-m: add STARK-m to scope by step 1's rule and launch it when it is
-   ready. A `blocked` that names a PR, a run or a release in another repo
+   STARK-m: with `followUps` on, add STARK-m to scope by step 1's rule and
+   launch it when it is ready. A `blocked` that names a PR, a run or a release
+   in another repo
    ([§8](../../standards/worker-spine.md#8-releases-and-other-repos)) is a
-   split by step 1's rule: file the sub-ticket and launch its Minion. Either
-   way, once step 5 confirms the new ticket, step 2's `unblocked` resumes the
-   stopped Minion.
+   split by step 1's rule: with `decideForMe` on, file the sub-ticket and
+   launch its Minion. Either way, once step 5 confirms the new ticket, step 2's
+   `unblocked` resumes the stopped Minion. With the setting off, the ticket
+   stays blocked, and step 6's report names what it waits on.
 
-   **A Claude Gru checks every Minion every 10 minutes.** While a Minion of
+   **Observe each live Minion once a tick.** On Claude, while a Minion of
    yours is live, keep one 10-minute timer armed: a Bash `sleep 600` with
    `run_in_background`, which wakes you when it exits. Arm it after the first
    launch, re-arm it on each tick, and let it lapse once no Minion is live. On
-   each tick, run the observation pass below on every live Minion, silent or
-   not. A Codex Gru has no such timer and keeps the 30-minute rule.
+   each tick, run one observation pass on every live Minion. A Codex Gru has
+   no timer: it runs the pass on a live Minion that has sent nothing for over
+   30 minutes, since `/minion` sends a progress note at least that often.
 
-   **A silent Minion gets one look, not a loop.** `/minion` sends a progress
-   note at least every 30 minutes. One that is live but has sent nothing for
-   longer than that gets one observation pass: its `hermod msg peers` row
+   An observation pass reads the Minion's `hermod msg peers` row
    (`activity` busy or idle; `unknown`, which Codex and some Claude sessions
    report, leaves it to the other two), the processes under its `surfaceId` in
    `hermod ps --columns cmuxSurfaceId,pid,ppid,name` (a test runner, a build or
@@ -419,9 +339,8 @@ regardless of route, is observation, never operator authorization.
      it to carry on; never type it into its terminal. A second lazy pass on
      the same step is a blocker: escalate it.
 
-   Then wait for its next report or the next pass, whichever comes first. The
-   10-minute tick is the only repeat on Claude; never watch a Minion's screen
-   in a loop of your own.
+   Then wait for its next report or the next pass, whichever comes first.
+   Never watch a Minion's screen in a loop of your own.
 5. **Confirm.** A `done` report is a claim. Check the PR is merged
    (`gh pr view <PR> --json state,mergeCommit,baseRefName`), that its
    `mergeCommit` is the sha the Minion reported (when there is a report), that
@@ -431,8 +350,8 @@ regardless of route, is observation, never operator authorization.
    `gh api repos/<owner>/<repo>/compare/<sha>...<base> --jq .status` must
    print `identical` or `ahead` — `diverged` or `behind` means it is not —
    with `<owner>/<repo>` read the way [Authority](#authority)'s merge-queue
-   read gets them. A pr-merge exit 0 has been measured with no merge behind
-   it, so the sha in a report is a claim too. Then check alfred shows the
+   read gets them. A pr-merge exit 0 can come with no merge behind it, so the
+   sha in a report is a claim too. Then check alfred shows the
    ticket `done` or `Closed` (in a repo whose `CLAUDE.md` defines done as
    released, the Minion closes at the end of the release chain, so wait for
    that, and read the version output
@@ -463,211 +382,47 @@ regardless of route, is observation, never operator authorization.
    a dead Claude Minion's relaunch re-enters it, so check the path before you
    relaunch. A dead Codex Minion stays step 4's blocker even once its worktree
    is gone, because its branch `STARK-n` outlives it.
-6. **Loop** steps 2–5 until every ticket is finished or blocked. Then report:
-   finished tickets with PR links, blocked tickets with the reason, each
-   ticket that joined the run by step 1 (a follow-up a Minion filed, or a
-   ticket that blocked one in scope) and each sub-ticket a split filed, with
-   the ticket it came from, each ticket the run's [settings](#progress-pane)
-   held or left on the board, with the choice it waits on, and each open
-   question you could not answer. A
-   repo step 3 could not resolve by name gets one line naming it and the
-   operator's fix, per repo and with the path
-   you already resolved: `urd repos set <repo> --path <p>` — the only
-   command that reaches a checkout outside the fleet root that
-   `urd repos scan <root>` would sweep. Last, delete the run's
-   [progress file](#progress-pane), its settings file and its log, and the settings
-   file of each ticket of the run
+6. **Loop** steps 2–5 until every ticket is finished or blocked. Then run
+   `njord cleanup --pr <n>` (never `--force`) in the repo's main checkout for
+   each PR the run merged, as one call of its own
+   (`cd <main checkout> && njord cleanup --pr <n>`, the path pasted in
+   literally): it deletes the merged branch and its clean worktree, and keeps
+   a dirty one. Then report:
+   - each finished ticket with its PR link;
+   - each blocked or held ticket, with what it waits on;
+   - each ticket the run filed or left on the board, with the ticket it came
+     from;
+   - each dirty worktree the cleanup kept;
+   - each open question you could not answer.
+
+   Last, delete the
+   run's [progress file](#progress-pane), its settings file and its log, and
+   the settings file of each ticket of the run
    (`rm -f ~/.cache/stark-progress/STARK-n.settings.json ~/.cache/stark-progress/STARK-n.settings.json.tmp`).
 
 ## Progress pane
 
-The `stark-progress` mod (`mods/stark-progress/`, its own install) shows your
-run in the Gru pane beside your chat, from files under
-`~/.cache/stark-progress/`: each ticket's stage and verdict (`moving`, `slow`,
-`stalled`, `idle`, `held`, `blocked`, `done`), the tickets worth a look, a Log
-tab of the big steps you and each Minion did, and the run's settings, which
-the operator changes there. Its README is the contract. The
-files are yours to write whether or not the
-mod is installed, on either runtime; a write that fails costs one line and
-never holds the run. Write each file but the log whole, to a `.tmp` beside it
-renamed over it, as [the spine's command](../../standards/worker-spine.md#progress-file)
-does for a ticket's file; append to the log, and never rewrite it.
-
-- **The run file**, `~/.cache/stark-progress/run-<launch id>.json`, the launch
-  id being the epic's or valkyrie's `GRU-<n>`:
-  `{"epic":"<STARK-epic, or the first ticket>","session":"<your session id>","tickets":["STARK-a",…],"titles":{"STARK-a":"<its title>",…},"maxWorkers":<N>,"minionAgent":"<agent>"}`,
-  where `titles` holds each ticket's title as `alfred task show` gives it,
-  so the pane names a ticket before its worker writes a file, and
-  `maxWorkers` and `minionAgent` are your `--max-workers` and
-  `--agent` (default 3 and `claude`).
-  Your session id is `echo "$CLAUDE_CODE_SESSION_ID"` (`$CODEX_THREAD_ID` on
-  Codex), run as its own command and pasted in. Write it with this one
-  command, each ticket's id and then its title after `--args --`, in run order,
-  each value quoted under
-  [the spine's quoting rule](../../standards/worker-spine.md#progress-file):
-
-  ```
-  mkdir -p ~/.cache/stark-progress && jq -n --arg epic '<STARK-epic, or the first ticket>' --arg session '<your session id>' --argjson maxWorkers <N> --arg minionAgent '<agent>' '($ARGS.positional | [range(0; length; 2) as $i | {key: .[$i], value: .[$i + 1]}]) as $t | {epic: $epic, session: $session, tickets: ($t | map(.key)), titles: ($t | from_entries), maxWorkers: $maxWorkers, minionAgent: $minionAgent}' --args -- 'STARK-a' '<title of STARK-a>' 'STARK-b' '<title of STARK-b>' > ~/.cache/stark-progress/run-<launch id>.json.tmp && mv ~/.cache/stark-progress/run-<launch id>.json.tmp ~/.cache/stark-progress/run-<launch id>.json
-  ```
-
-  Step 1 writes it, a split rewrites it, and step 6 deletes it.
-- **The settings file**, `~/.cache/stark-progress/run-<launch id>.settings.json`,
-  is the operator's: the pane's Settings tab writes it, and you never do.
-  Read it with `cat` before each launch (step 3) and before each scope change
-  (step 1). A missing or unparsable file, or a field that is absent or of the
-  wrong type, means the run file's value.
-  - `maxWorkers` (1 to 8) is N.
-  - `minionAgent` (`claude` or `codex`) is the agent of each first launch. A
-    relaunch keeps the agent it had.
-  - `followUps` false: a ticket a Minion files, on a `follow-up … stopping`
-    report too, does not join the run. Leave it on the board and name it in
-    step 6's report; a ticket that waits on it stays blocked.
-  - `decideForMe` false: file no split, and add no ticket that joins by a
-    `Blocked by` link or a named dependency. Stamp the ticket that needs the
-    choice `blocked`, do not launch it, and name the choice in step 6's
-    report. A later read that finds it true again takes the choice as step 1
-    says.
-
-  Step 6 deletes it with the run file.
-- **A ticket's file**, `~/.cache/stark-progress/<STARK-n>.json`, is its
-  worker's to write, with two stamps of yours, each the ticket's title and PR
-  url (`pr` empty while it has none) written by
-  [the spine's command](../../standards/worker-spine.md#progress-file) under
-  its quoting rule, never as JSON you assemble yourself: a `"` in the title
-  would leave a file the mod cannot parse, drawn as `ticket` and left out of
-  the closed count. The stamps: `blocked` on a `blocked` or
-  `follow-up … stopping` report (step 4), and `closed` once you confirm the
-  ticket finished (step 5). The `closed` stamp is what counts a ticket no
-  worker writes for: a ticket step 2 finds closed already has none. A stamp
-  writes your own folder as `worktree`; the mod reads git only in a folder
-  named for the ticket, so it skips yours. A stamp leaves `hold` empty.
-  A ticket whose file has `hold` set reads as worth a look on your pane:
-  `held by its settings: <merge or release>`.
-- **The run's log**, `~/.cache/stark-progress/run-<launch id>.log.jsonl`,
-  feeds the pane's Log tab beside each ticket's own log, which its worker
-  keeps by [the spine's log file](../../standards/worker-spine.md#log-file).
-  Append one line at each big step of yours: the start (step 1), each
-  launch (step 3), each ticket that joins or splits (step 1), each block
-  (step 4), and each confirmed `done` (step 5). Use the spine's command with
-  the run's file in place of the ticket's, under its rules for a line:
-  plain words a five-year-old can follow, 20 words or fewer, and no ids.
-  Name a ticket by what it does: "Sent a helper to make the board show each
-  step." Your stamps on a ticket's file append nothing to that ticket's log.
-  Step 6 deletes the run's log with the run file.
-- **A ticket's settings file**, `~/.cache/stark-progress/<STARK-n>.settings.json`,
-  is the operator's, written in the ticket pane of the Minion's tab. Its
-  Minion reads it ([the spine's ticket settings](../../standards/worker-spine.md#ticket-settings))
-  and deletes it at the close; you never write it, and step 6 deletes what
-  is left of the run's.
+Read [references/progress-pane.md](references/progress-pane.md) before you
+write the run file, a stamp on a ticket's file (by
+[the spine's command](../../standards/worker-spine.md#progress-file)) or a run
+log line, and before you read the run's settings. The settings are
+`maxWorkers`, `minionAgent`, `followUps` and `decideForMe`; the last two are
+false by default.
 
 ## Preflight
 
-Once per repo, before its first Minion launches — the same moment
-[Authority](#authority)'s merge-queue read happens — learn three things, and
-keep them for the rest of the run:
-
-- **The gate, and what green means.** The gate is the command the repo's
-  agent instructions file names, and green on the PR is whatever the base
-  requires. Read both sources, the ruleset and classic protection, because
-  either alone can show nothing while the other requires a check:
-
-  ```
-  gh api repos/<owner>/<repo>/rules/branches/<base> --jq '[.[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context]'
-  gh api repos/<owner>/<repo>/branches/<base> --jq '.protection.required_status_checks.contexts'
-  ```
-
-  The second reads classic protection through the branch itself, which needs
-  only read access and prints `[]` on an unprotected branch. The
-  `branches/<base>/protection` endpoint needs admin rights and answers 404
-  both on an unprotected branch and to a caller without them, so a 404 there
-  proves nothing. "No required checks" can
-  mean no checks at all, and then `njord pr-merge` merges at once: a merged
-  PR there says nothing about green, so step 5's verification comment carries
-  the whole weight.
-- **Whether the gate binds a fixed host resource** — a port, a lock file, a
-  local database, a named socket. Every worktree shares the host, so that gate
-  runs one at a time however many Minions the repo has, and two running it at
-  once fail each other. Launch at most one Minion into such a repo at a time;
-  it counts toward N like any other. Two repos whose gates bind the same
-  resource (one local database, one default port) count as one repo here.
-- **Whether something holds that resource now.** Measure it
-  (`lsof -nP -iTCP:<port> -sTCP:LISTEN`, the lock file, the socket's owner);
-  do not assume. `lsof` without root sees only your own user's processes, so
-  a port it shows free can still be taken: `nc -z localhost <port>` answers
-  for any owner. A holder that is not one
-  of your Minions is the operator's: escalate with what you measured, launch
-  nothing into that repo meanwhile, keep every other repo moving, and never
-  stop the holder yourself.
+Read [references/preflight.md](references/preflight.md) once for each repo,
+before its first Minion launches. It finds the checks that the base requires,
+and any host resource the gate binds, which holds that repo to one Minion at a
+time.
 
 ## Terminal control
 
-You never type prose into a Minion's terminal. The brief rides the
-`valkyrie minion` launch and every word after it follows
-[Coordination route](#coordination-route). Messages are not worker control. What does go
-to a Minion's surface is control, and only this. Every `<surface UUID>` below
-is verified, re-read from `hermod msg peers --json` right before the key and
-never carried over from an earlier pass: the `surfaceId` of the live row whose
-`cwd` ends in the ticket id **and** sits under that ticket's repo, and whose
-`id` is the peer id the launch ack named when you have that ack (the ack's
-`surfaceId` is the same UUID; its `surface` is a `surface:N` ref). Step 2's
-ticket-id match alone is not enough for
-a key — any session standing in a worktree named for the ticket matches it,
-the operator's own included — so a row that fails either test gets no key;
-escalate it instead. Paste the UUID in literally, since on Claude a worktree
-session's guard refuses a `hermod` line carrying a variable
-([measured](../../standards/worker-spine.md#title-your-tab)).
-
-- **Interrupting a busy Minion** — the "Gru interrupt" hermod's `msg` help
-  names. A message cannot do it, because a busy recipient may hold the message
-  until its turn ends, so the key is Escape:
-
-  ```
-  hermod send-key <surface UUID> escape
-  ```
-
-  Then observe idle yourself, because the key's exit code says only that cmux
-  took the key: re-read that peer's `activity` (`hermod msg peers --json`; the
-  default table does not show it) a few times over about a minute until it
-  reads `idle`, or, where it reads `unknown`, read its screen once for an idle
-  prompt. One that is not idle by then is escalated; you do not keep pressing
-  keys or keep reading. An interrupt drains nothing: a message you sent it
-  while it was busy may still be held. On the Hermod route check
-  `hermod msg status <id>` on each. A native send has no state to re-read: a
-  Claude message with no `[Cross-session delivery notice]` reached the session
-  and drains at its next tool round. Either way, when you tell the Minion why through
-  [Coordination route](#coordination-route), name what you had already sent
-  instead of sending it again.
-- **Answering a known menu** — one you have read on its screen
-  (`hermod read-screen <surface UUID>`), whose options you know and whose
-  answer is yours to give: send the one key that picks it
-  (`hermod send-key <surface UUID> <key>`) and read the screen again to see it
-  took. A permission prompt — Claude asking to allow a tool call, Codex asking
-  to approve a command — is never yours to answer, whatever it would run: it
-  is the operator's consent, and you grant nothing: escalate it. A menu in
-  which the Minion asks to go on with its own ticket's work asks for a GO
-  its launch already gave: pick the option that goes on. A
-  question in prose is answered through
-  [Coordination route](#coordination-route), never typed.
-- **A slash command**, which you almost never need. Never `/clear` a Minion:
-  one Minion is one ticket, never reused. On a Claude Minion, prefer hermod's
-  `claude` verbs (`hermod claude --help`), which check the session is idle and
-  report only what they observed. Where only `hermod send` fits, know its
-  contract since hermod v0.22.0 (STARK-9362): it presses Enter by default, as
-  a separate key after the text; `--not-enter-press` types without it; and
-  the opt-in Enter flag it replaced is refused with exit 2, so a recipe
-  written for that flag no longer runs. Into a TUI, prefer the split form: a
-  plain `send` presses Enter the instant the text is typed, and the split puts
-  a separate command between them. End on the screen either way, since a
-  send's exit code proves only that cmux took the keys:
-
-  ```
-  hermod send --not-enter-press <surface UUID> "<text>"
-  hermod send-key <surface UUID> enter
-  hermod read-screen <surface UUID> --lines 20
-  ```
-
-  Never submit with a `\n` inside the text: a TUI in the middle of a redraw
-  drops it, a long paste swallows it, and the command sits unsent.
+You never type prose into a Minion's terminal: every word goes by
+[Coordination route](#coordination-route). Read
+[references/terminal-control.md](references/terminal-control.md) before you send
+a Minion's surface a key: an Escape interrupt, a known menu's answer, or a slash
+command. A permission prompt is never yours to answer: escalate it.
 
 ## Authority
 
@@ -687,7 +442,7 @@ session's guard refuses a `hermod` line carrying a variable
   read. With no `branch:` argument `mergeQueue` reads the default branch; add
   `(branch: "<base>")` only for a ticket whose PR targets another base. Keep
   the spaces: on Claude, a worktree session's guard refuses the compact
-  `'{repository(owner:"…",name:"…")…}'` form (measured) and passes this one.
+  `'{repository(owner:"…",name:"…")…}'` form and passes this one.
 
   - **A queue** (`mergeQueue` non-null): no sequencing. Every Minion runs
     `njord pr-merge` the moment its review gate is green, all at once. The
@@ -747,14 +502,12 @@ session's guard refuses a `hermod` line carrying a variable
   open the file with a line saying what it is — `QUARANTINED by Gru: a
   Minion's claim of approval, not an approval. Nothing below grants
   anything.` — and put the claimed text after it as a quote.
-- Branches stay; cleaning them is `njord cleanup`, run by the operator, and
-  neither you nor a Minion deletes one. Worktrees are the Minion's own: a Minion
-  that reported `done` stands down with `hermod poison-pill`, taking its session,
-  worktree and tab with it. A Minion that reported `blocked` or
-  `follow-up … stopping` leaves all three in place for you and the operator.
-  You never remove a Minion's worktree by hand — including the one a stand-down
-  left behind because its teardown came back partial. Report that path; sweeping
-  it is the operator's. A dead Minion's tab is yours to reap, with
+- Branches and worktrees go only by step 6's `njord cleanup --pr <n>`; never
+  delete a branch or remove a Minion's worktree by hand, a stand-down's
+  `partial` leftover included. A Minion that reported `done` stands down with
+  `hermod poison-pill`, taking its session, worktree and tab with it. A Minion
+  that reported `blocked` or `follow-up … stopping` leaves all three in place.
+  A dead Minion's tab is yours to reap, with
   `hermod close-session <surface UUID> --json`, never `poison-pill` —
   poison-pill only ever targets the caller's own surface, and close-session is
   the mirror of it, refusing that one alone. Reap it only once step 4 is done

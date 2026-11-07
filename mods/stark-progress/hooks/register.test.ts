@@ -882,19 +882,22 @@ test('a settings press writes the run settings file whole, and the pane reads it
   await pane.press({ key: 'tab-settings' })
   // The launch's value, from the run file, until the settings file says otherwise.
   expect(await pane.find({ type: 'Text', text: 'Gru keeps up to 4 Minions alive at once.' })).toBeDefined()
+  // Decide for me and Pick up follow-ups are off until the operator turns them on.
+  expect(await pane.find({ type: 'Text', text: /Gru holds a split or a blocking ticket/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'A follow-up waits on the board, named in the report.' })).toBeDefined()
   expect(disk['run-STARK-10.settings.json']).toBeUndefined()
 
   await pane.press({ key: 'set-more' })
   await pane.press({ key: 'set-decide' })
   expect(seen.runs).toContainEqual(['mv', '-f', `${DIR}/run-STARK-10.settings.json.tmp`, `${DIR}/run-STARK-10.settings.json`])
   expect(JSON.parse(disk['run-STARK-10.settings.json'] ?? '{}')).toEqual({
-    decideForMe: false,
+    decideForMe: true,
     maxWorkers: 5,
-    followUps: true,
+    followUps: false,
     minionAgent: 'claude',
   })
   expect(await pane.find({ type: 'Text', text: 'Gru keeps up to 5 Minions alive at once.' })).toBeDefined()
-  expect(await pane.find({ type: 'Text', text: /Gru holds a split or a blocking ticket/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /Gru splits a ticket across repos/ })).toBeDefined()
   // A run file is never read as a settings file, nor the other way round.
   expect(await pane.find({ type: 'Text', text: 'Settings for STARK-10' })).toBeDefined()
 })
@@ -1103,7 +1106,7 @@ test('outside Gru, the pane stays on its run while the other one gets busier, an
 
   await pane.press({ key: 'tab-settings' })
   await pane.press({ key: 'set-follow-ups' })
-  expect(JSON.parse(disk['run-STARK-20.settings.json'] ?? '{}').followUps).toBe(false)
+  expect(JSON.parse(disk['run-STARK-20.settings.json'] ?? '{}').followUps).toBe(true)
   expect(disk['run-STARK-10.settings.json']).toBeUndefined()
 })
 
@@ -1893,7 +1896,7 @@ test('the Gru pane draws on the desktop surface too, and a press there writes th
   // A setting's value draws in a frame: a Button that is not plain.
   expect((await pane.find({ type: 'Button', key: 'set-decide' }))?.props.plain).toBeUndefined()
   await pane.press({ key: 'set-decide' })
-  expect(JSON.parse(disk['run-STARK-10.settings.json'] ?? '{}')).toMatchObject({ decideForMe: false })
+  expect(JSON.parse(disk['run-STARK-10.settings.json'] ?? '{}')).toMatchObject({ decideForMe: true })
 })
 
 test('the ticket pane draws its ticket on the desktop surface', async ($, on) => {

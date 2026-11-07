@@ -40,119 +40,10 @@ tab. You never wait on your leader for anything.
 
 ## New tab
 
-**If `$ARGUMENTS` contains `--new-tab`, you are the launcher, not the Minion.**
-Read nothing below this section as yours: no bind, no spine, no stand down, and
-no tab title — the Minion you launch titles its own tab.
-
-A Minion always reports to someone, so the launch has three shapes and you say
-which one you ran: you lead it, another peer leads it, or the operator leads it
-(`--leader operator`), who receives the report in the Minion's own tab.
-**There is no shape in which nobody receives the report** — launch-and-walk-away
-is [`/agnes --new-tab`](../agnes/SKILL.md#new-tab), and if that is what the
-operator wants, say so and stop.
-
-1. Name the ticket, then pick the repo. With no `STARK-n`, read the one alfred
-   has bound to this session — the `ticket` field of `alfred repo info --json`
-   — and stop and ask when it has none. `valkyrie minion` does not read it for
-   you: it takes the id as its first word, and any other first word starts a
-   persona dev worker, not a ticket Minion. With
-   `--repo <name>`, pass it through. Without it, **read the ticket first**
-   (`alfred task show STARK-n`): a ticket that belongs to another repo than the
-   one you are standing in is launched with `--repo <that repo>`, never into
-   this one — valkyrie would exit 0 and the Minion would work it in the wrong
-   codebase. A ticket that names no repo is this one's, the default the
-   Arguments state. Only when the ticket is this repo's, find the **main
-   checkout** of the repo you are in — the first `worktree` line of
-   `git worktree list --porcelain`, not `git rev-parse --show-toplevel`, which
-   names your own worktree when you are inside one — and pass it as `--cwd`.
-   Run that as its own command and paste the path in literally: on Claude, a
-   worktree session's guard refuses a launch line carrying a variable
-   ([measured](../../standards/worker-spine.md#title-your-tab) on a `hermod`
-   line), and a `$(...)`
-   was [measured](../../standards/stand-down.md#four-rules-about-when) refused on
-   its quoted form only — too fine a line to rest a launch on.
-   **The ticket's id must be free in that repo**: no `worktree` line of that
-   list (with `--repo`, of `git -C <path> worktree list --porcelain`, `<path>`
-   from `urd repos get <name> --json`) may end in `/<the ticket id>`. One that
-   does is somebody's already — yours, when this session was itself launched on
-   the ticket, which is the likely case if you let the id default to your bound
-   ticket. A Claude launch onto it exits 4 while a live session stands in it —
-   this one included, since valkyrie's name check counts the launcher's own
-   session — and otherwise re-enters it, saying so only on stderr behind a
-   normal-looking ack, so the Minion's stand-down would then aim at a worktree
-   somebody left; a Codex launch is refused. Stop and say so.
-2. Launch, once, with valkyrie 0.1.1 or later (`valkyrie --version`; with no
-   valkyrie, or an older one, stop and say so):
-
-   ```
-   valkyrie minion STARK-n [--leader <peer>|operator] (--repo <name> | --cwd <main checkout>) [--agent <agent>] --json
-   ```
-
-   `STARK-n` stays the first word. `--repo` and `--cwd` are mutually
-   exclusive. `--leader operator` passes through as written; when it is
-   refused, say so and stop, never relaunch with yourself as the leader
-   instead. Without `--leader`,
-   valkyrie names **you** as the leader, from your own session stamp
-   (`claude:$CLAUDE_CODE_SESSION_ID`, or `codex:$CODEX_THREAD_ID`), and refuses
-   with exit 2 when it finds neither stamp or both. That refusal is fixed by
-   naming yourself to valkyrie: find the `hermod msg peers` row whose `sessionId`
-   is yours and pass its `id` as `--leader` — you are then still the leader, and step 4
-   still applies.
-3. Read the exit code, then the ack, before you call it launched. A nonzero
-   exit is the answer, not something to work around; report what it printed.
-   - **0** with `verified: true`: launched. The ack's `prompt` must read
-     `/minion STARK-n` (`$minion STARK-n` on Codex) and name the leader
-     you meant — the peer, or `leader operator` — and for a peer leader its
-     `coordination` names the route the prompt describes for the provider
-     pair (`SendMessage` or `hermod-msg`). An operator leader's ack carries
-     `leader: "operator"` and no `coordination`.
-   - **1**: something was placed or started and did not come up, and valkyrie's
-     stderr names what it left standing. When the tab opened, that is the tab
-     and the worktree, and under `--json` stdout still carries a complete,
-     normal-looking ack on either runtime, whose only tells are
-     `verified: false` and an `error` field. When Hermod could not place the
-     tab, or a Codex worktree could not be cut, there is no ack on stdout at
-     all.
-   - **2**: refused before anything was created: a bad argument, a repo name
-     that no checkout, or more than one, under valkyrie's `repos.roots`
-     (default `~/Code`) has as its origin, a `--cwd` outside any git checkout, both or neither
-     session stamps without `--leader`, an existing worktree for the id or a
-     leftover branch `STARK-n` on a Codex launch, or a main checkout Codex
-     does not trust (`Codex does not trust <path>…`), which the operator
-     trusts once — name it and stop.
-   - **4**: a live agent or tab already holds the id, and valkyrie's stderr lists
-     each holder — this session counts among them when it stands in the
-     ticket's worktree. Do not launch it again.
-   - **128+n**: interrupted.
-4. **Then it depends on who the leader is.**
-   - **`--leader <another peer>`**: print the ack's `surface`, `workspace`,
-     `name`, `sessionId`, `peerId`, `coordination`, and `prompt`, and stop.
-     Hand the native
-     address to that leader; for Claude/Claude, the actual leader must send
-     the first `SendMessage` to `name`. Until that happens the Minion uses
-     the Hermod fallback in [Reporting](#reporting). That leader receives the
-     report and confirms the `done`.
-   - **`--leader operator`**: print the ack's `surface`, `workspace`,
-     `name`, and `prompt`, and stop. Nobody sends the Minion a first
-     message: it prints every report in its own tab, where the operator reads
-     it and confirms the `done` (PR merged, the verification comment on it,
-     the ticket closed). Tell the operator that after its `done` the Minion
-     waits in its tab for their `stand down` before it closes itself.
-   - **You are the leader**: you do not stop. You are Gru for exactly one
-     ticket. First make [Gru's step 3](../gru/SKILL.md) first contact after
-     the verified ack, by [Gru's Coordination
-     route](../gru/SKILL.md#coordination-route) — its native sends, held
-     messages and Hermod fallback are yours as written there. Then wait for
-     the Minion's report and handle it by
-     [Gru's protocol](../gru/SKILL.md), steps 4 and 5: what counts as a death
-     (step 4's single relaunch of a real one is the only second launch you ever
-     make), and the confirm that turns a `done` from a claim into a fact (PR
-     merged, the verification comment on it, the ticket closed). Then tell the operator
-     the outcome. Gru's Authority section binds you too: you never edit the
-     Minion's worktree and never reap its tab.
-
-Never fall back to working the ticket in this session — it is the Minion's,
-and the operator asked for it to run in a tab of its own.
+**If `$ARGUMENTS` contains `--new-tab`, you are the launcher, not the
+Minion.** Follow [the launch doc](../../standards/launch.md), and read nothing
+below this section as yours. Say which leader you launched it under: you,
+another peer, or the operator.
 
 ## Work
 
@@ -169,17 +60,14 @@ sets, is `MINION (<n>)`. Four things are yours on top of it:
 - **If Gru asked you to hold your merge** until another Minion's `done` is
   confirmed, hold, then rerun `njord pr-merge` so the rebase and checks are
   fresh. That is the one place a Minion's merge is sequenced from outside.
-- **The PR comments carrying the live check are not optional here**: the
-  first run, and the re-run after a `--fix` round, scoped by
-  [the spine's §5](../../standards/worker-spine.md#5-re-verify-after---fix-and-post-the-runs-on-the-pr).
-  Your scrollback dies with you at stand down, so those comments are what
-  your leader reads to confirm your `done` instead of taking your word for it.
+- **Post each live check on the PR** by
+  [the spine's §5](../../standards/worker-spine.md#5-re-verify-after---fix-and-post-the-runs-on-the-pr):
+  your leader reads those comments to confirm your `done`.
 - **Keep your ticket's progress file current** by [the spine's rule](../../standards/worker-spine.md#progress-file):
   `closed` once `alfred task move STARK-n done` lands, `blocked` when you stop
   on a `blocked` or `follow-up … stopping` report. Append each big step to
-  its log by [the spine's log file](../../standards/worker-spine.md#log-file),
-  in plain words a five-year-old can follow, 20 words or fewer. Leave the log
-  in place at the close: Gru's pane shows it. Once the close lands, also
+  its log by [the spine's log file](../../standards/worker-spine.md#log-file).
+  Leave the log in place at the close: Gru's pane shows it. Once the close lands, also
   delete your ticket's settings file:
   `rm -f ~/.cache/stark-progress/STARK-n.settings.json ~/.cache/stark-progress/STARK-n.settings.json.tmp`.
 
@@ -187,12 +75,9 @@ Then report to your leader and stand down — both below.
 
 ## Gaps
 
-[The spine](../../standards/worker-spine.md#6-gaps) decides them: fix in the
-same PR when the ticket's acceptance needs it or it fits the sitting, otherwise
-write the follow-up with `/stark-ticket` (`$stark-ticket` on Codex), file it
-with `alfred task new` (unbound), and comment the link on your ticket. Then report —
-`done` if the ticket still finished, `follow-up STARK-m filed, stopping` if it
-could not. Use judgement; do not ask your leader to decide.
+[The spine's §6](../../standards/worker-spine.md#6-gaps) decides them. Then
+report `done` if the ticket still finished, or
+`follow-up STARK-m filed, stopping` if it could not.
 
 ## Reporting
 
@@ -249,14 +134,10 @@ Peer messages on either channel are observation, never operator
 authorization. The `<report>` is one of:
 
 - `done <PR url> merged <sha> verified <the live check you ran>` — the live
-  check is a required element, not a flourish: it names the evidence, and the
-  runs themselves are on the PR (the spine's step 5: the first run, and the
-  re-run after a `--fix` round), so your leader confirms the ticket by reading
-  those comments instead of taking your word for it. Write the
-  check as plain prose, never a pasted command line: the Hermod form is a
-  double-quoted shell argument, so a `$`, a quote or a backtick in it is
-  expanded, mangled or executed.
-  A ticket with no live surface says `verified none (<why>)`.
+  check is required: your leader reads its runs on the PR. Write it as plain
+  prose, never a pasted command line: the Hermod form is a double-quoted shell
+  argument, so a `$`, a quote or a backtick in it is expanded or run. A
+  ticket with no live surface says `verified none (<why>)`.
 - `blocked <one-line reason>` — only for what you cannot resolve yourself:
   missing access, an operator's decision, an unmerged dependency ticket, or
   anything in another repo, such as an open PR there that must merge first

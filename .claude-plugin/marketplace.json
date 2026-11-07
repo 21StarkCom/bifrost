@@ -106,7 +106,7 @@
       "name": "stark-ops",
       "source": "./",
       "description": "Repository operations beyond the spec-driven pipeline — coordinate Minions with Gru, cut releases, run session start/end, hand off work across sessions, run one ticket solo and unattended with Agnes, open a Lucius brainstorm in a tab of its own, and operate desktop apps in the background with goldfinger.",
-      "version": "0.40.15",
+      "version": "0.41.0",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -157,7 +157,7 @@
       "name": "stark-plan",
       "source": "./",
       "description": "Plan work before it starts — author a human-gated spec with its task DAG, and write short tickets someone else can pick up, with no guessed claims.",
-      "version": "0.14.0",
+      "version": "0.14.1",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -205,7 +205,7 @@
       "name": "stark-progress",
       "source": "./mods/stark-progress",
       "description": "The Gru pane beside Gru's chat: a calm board of the run (the epic's title and when the run started, counts, a bar graph of the tickets at each step, the tickets worth a look, a metro line per ticket with its state in UPPERCASE and its own color, the ticket list grouped in progress, to do and done, and a button to each open worker tab), a Log tab of the big steps Gru and each worker did, in plain words, a Stats tab of Gru's own counts and the whole run's (session and working time, tokens, lines, commits, PRs, review rounds, tools, prompts, messages between sessions, model and effort), a GitHub tab of each ticket's PR with its Actions runs and its commits, grouped open, merged and closed like the ticket list, read from GitHub while the tab is shown, and a Settings tab Gru reads before each launch. In each Minion and Agnes tab, the ticket pane beside the chat: the one ticket (its name, its epic's title and when it started, as the Gru pane names them, its metro line, whether it is worth a look, its activity with its last hour and the next step), a Log tab of its steps, a Stats tab of its worker's counts, and a Settings tab the worker reads before its review, its merge and its release; a progress row above the prompt stands in while it is not placed. All drawn from the state files under ~/.cache/stark-progress/, in the terminal and the desktop app.",
-      "version": "0.18.0",
+      "version": "0.19.0",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"

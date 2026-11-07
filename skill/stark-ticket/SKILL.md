@@ -115,8 +115,8 @@ below that differs in EI says so.
    way a ticket stalls is a precondition that turns out false. Write the next
    move on one line, next to the mark: who to ask, what to file, or that the
    work stops. Write `unverified: a credential for the dev tenant exists —
-   check: <command>. If none: ask the tenant's owner for one, and hold the
-   ticket.`, not the mark alone.
+   check: <command>. If none: stop, and report the ticket blocked on the
+   missing credential.`, not the mark alone.
 
 7. **Fresh eyes.** The author cannot review the draft: you re-read your intent,
    not the text. Dispatch ONE read-only subagent with **zero shared context** —

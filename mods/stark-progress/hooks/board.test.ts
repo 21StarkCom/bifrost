@@ -42,12 +42,12 @@ test("settings take the file's value, else the launch's, else the default; a wro
     new Map(),
   )
   if (run === undefined) throw new Error('no run')
-  expect(settingsOf(run, undefined)).toEqual({ decideForMe: true, maxWorkers: 5, followUps: true, minionAgent: 'codex' })
+  expect(settingsOf(run, undefined)).toEqual({ decideForMe: false, maxWorkers: 5, followUps: false, minionAgent: 'codex' })
   expect(settingsOf(run, '{ not json')).toEqual(settingsOf(run, undefined))
-  expect(settingsOf(run, JSON.stringify({ decideForMe: false, maxWorkers: 2, followUps: 'no', minionAgent: 'gpt' }))).toEqual({
-    decideForMe: false,
+  expect(settingsOf(run, JSON.stringify({ decideForMe: true, maxWorkers: 2, followUps: 'yes', minionAgent: 'gpt' }))).toEqual({
+    decideForMe: true,
     maxWorkers: 2,
-    followUps: true,
+    followUps: false,
     minionAgent: 'codex',
   })
   // Out of range reads as absent too.
@@ -58,7 +58,7 @@ test("settings take the file's value, else the launch's, else the default; a wro
   expect(settingsOf(wide, undefined).maxWorkers).toBe(10)
   const [v1] = runsOf({ 'run-Y.json': JSON.stringify({ epic: 'Y', session: 's', tickets: [] }) }, new Map())
   if (v1 === undefined) throw new Error('no run')
-  expect(settingsOf(v1, undefined)).toEqual({ decideForMe: true, maxWorkers: 3, followUps: true, minionAgent: 'claude' })
+  expect(settingsOf(v1, undefined)).toEqual({ decideForMe: false, maxWorkers: 3, followUps: false, minionAgent: 'claude' })
 })
 
 test("a ticket's name comes from its file, else the run file's titles, else it has none", () => {
