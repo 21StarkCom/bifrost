@@ -122,7 +122,7 @@ Read `skill/<name>/SKILL.md` before you change or run a skill. By plugin, as in 
   - `stark-init-docs` — to scaffold a repo's dev docs.
   - `stark-adr` — to record or supersede an ADR.
   - `stark-persona` — to pick a session persona.
-  - `stark-rules-optimizer` — to audit a repo's agent instruction files.
+  - `stark-rules-optimizer` — to review a repo's agent files or the memory notes clause by clause.
   - `stark-agent-docs` — before you write anything another agent reads.
 - **stark-write**
   - `stark-voice` — to write a message in the author's voice.
