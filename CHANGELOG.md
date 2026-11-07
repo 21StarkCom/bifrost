@@ -13,6 +13,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=462 runId=462 sha=6d4b8cb8 -->
+- `c4-design` skill teaches floorplan 0.3.0: the `code`, `deploy` and `terraform` keys, `floorplan scan`, rule R9, flows and the deployment view (`stark-design` 0.1.39).
 <!-- idun:pr-merge pr=461 runId=461 sha=b6563c0f -->
 - goldfinger skill: an agent may change a browser setting its task needs (for example zoom for WCAG tests) and must restore it; consent and security UI stay banned.
 <!-- idun:pr-merge pr=460 runId=460 sha=709c77f1 -->
