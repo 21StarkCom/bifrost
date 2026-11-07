@@ -146,3 +146,5 @@ node tools/asset_links.ts --check
 claude plugin validate --strict .
 git diff --check "$(git merge-base origin/main HEAD)"
 ```
+
+This is the operator's call.
