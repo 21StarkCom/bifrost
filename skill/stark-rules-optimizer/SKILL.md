@@ -106,13 +106,14 @@ Read these files whole before the first clause:
    [glossary](../stark-agent-docs/references/glossary.md) and
    [the review method](references/review.md).
 2. The files above the target in the playbook's order of precedence:
-   `~/Code/CLAUDE.md`; `~/Code/21Stark/CLAUDE.md` for a repo under it; the
-   repo's root CLAUDE.md and AGENTS.md; and the CLAUDE.md of each folder above
-   a package file.
+   `~/Code/CLAUDE.md`; `~/Code/21Stark/CLAUDE.md` for a repo under it; and
+   the repo's root CLAUDE.md and AGENTS.md.
 3. For each file, its siblings in the same load set:
    - A file whose `claude` load is `always`: the other files that load at
      start-up.
-   - A package CLAUDE.md: each rule whose `paths:` globs match its folder.
+   - A package CLAUDE.md: the CLAUDE.md of each package folder above it,
+     which has the same level of precedence, and each rule whose `paths:`
+     globs match its folder.
    - A rule: the files it shares globs with.
    - A SKILL.md: the `references/` files it links.
    - A memory note: the `MEMORY.md` of its folder and the notes it links.

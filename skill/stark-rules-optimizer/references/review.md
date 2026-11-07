@@ -24,7 +24,9 @@ Do these steps for each clause:
 3. Read it against each file above it in the order of precedence. A clause
    that contradicts a higher clause is RED, whatever its type, with the type
    `CONFLICT`. A nested AGENTS.md that overrides its root inside its own folder
-   is Codex's precedence, not a conflict.
+   is Codex's precedence, not a conflict. A package CLAUDE.md and a rule have
+   one level, so the CLAUDE.md of a package folder above is a sibling: a copy
+   of its clause is a YELLOW DUPLICATE.
 4. Check each glossary term in it: operator, GO, gate, kept gate, spine,
    worker, ticket bar, live proof. A term used in a meaning from its "Do not
    use it for" column is a vague RULE, YELLOW.
