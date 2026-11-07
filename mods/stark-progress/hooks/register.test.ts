@@ -1600,6 +1600,16 @@ test("a Minion's launch prompt opens the ticket pane from the prompt's hook, bef
   expect(await pane.find({ type: 'Text', text: 'No ticket file yet' })).toBeDefined()
 })
 
+test('a launch prompt that a hook beneath drops opens no ticket pane', async ($, on) => {
+  const seen = stage(on, {}, { session: 'w', root: WORKTREE })
+  on('prompt.submit', () => ({ drop: 'refused by a guard' }))
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: WORKTREE, surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  await $.prompt.submit(MINION_LAUNCH)
+  expect(seen.opens).toEqual([])
+})
+
 test("Agnes's launch prompt, a /goal, opens the ticket pane from the prompt's hook", async ($, on) => {
   const { seen } = await workerTab($, on, {})
   await $.prompt.submit(typed('/goal /agnes STARK-1', { name: 'goal', args: '/agnes STARK-1' }))
@@ -1660,6 +1670,7 @@ test("a prompt opens no ticket pane in Gru's tab, whose worktree is named for th
   await clock.advance(1000)
   await $.prompt.submit(typed('/gru start STARK-10', { name: 'gru', args: 'start STARK-10' }))
   await $.prompt.submit(typed('go on'))
+  await $.prompt.submit(MINION_LAUNCH)
   expect(seen.opens).toEqual(['gru-board'])
 })
 
@@ -1672,7 +1683,6 @@ test('a prompt opens no ticket pane in a worktree not named for a ticket, a laun
   await $.prompt.submit(typed('go on'))
   expect(seen.opens).toEqual([])
 })
-
 
 /** A log file's text: one `{at, text}` a line, `minutesAgo` before T0. */
 const logFile = (...steps: [number, string][]) =>

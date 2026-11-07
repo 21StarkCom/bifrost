@@ -461,8 +461,9 @@ The pane opens by itself in a Minion's or Agnes's own tab, at any width.
   the mod opens on its own (the poll's) waits undrawn below 144 columns (110
   once you opened it), until you open it or widen the terminal.
 - **Later.** A later prompt in that tab opens the pane again while it is not
-  placed, once the poll found the ticket's file. The poll also opens it once,
-  when it first finds that file.
+  placed, once the poll found the ticket's file. When no prompt opened it
+  yet, the poll opens it once, when it first finds that file. A prompt that a
+  hook drops opens nothing.
 - **Your close holds.** Once you close the pane by hand, no prompt or poll in
   that session opens it again. `/ticket-board` opens it in that tab at any
   width, and clears your close; in any other tab it says the tab has no
