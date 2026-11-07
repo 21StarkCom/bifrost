@@ -64,6 +64,22 @@ budget is RED.
 | A `MEMORY.md` index (each line 150 or fewer) | 8k |
 | All files that load together at start-up in one repo | 40k |
 
+## Triage
+
+`tools/rules_audit.ts --playbook` flags each agent file with no model, in
+seconds. Its inputs are `--repo <path>`, `--fleet`, `--memory` and
+`--files <list>`. It checks the size budgets above, the phrase lists below,
+copies (of `~/Code/CLAUDE.md` RED, of another agent file YELLOW), and dead
+pointers. It exits 3 when a file is RED.
+
+- A pointer is a link, an `@import`, or a code path to a Markdown file. A
+  path to code needs the review.
+- A dead link or `@import` is RED. A code path to a doc that is not in the
+  repo is YELLOW, because it can name a doc in another repo.
+- The start-up load set is the repo's files that load at start-up, plus each
+  CLAUDE.md above the repo that is not in a git work tree.
+- The root rules give no GATE flag: they define the gates.
+
 ## Phrase lists
 
 Triage matches these lists with no model. A match marks the clause as the
@@ -114,7 +130,7 @@ A pattern is a JavaScript regular expression. A phrase matches as words.
 | A STARK ticket id | `\bSTARK-[0-9]+\b` | YELLOW |
 | A Jira EI ticket id | `\bEI-[0-9]+\b` | YELLOW |
 | A date | `\b20[0-9]{2}-[0-9]{2}-[0-9]{2}\b` | YELLOW |
-| A past habit | `used to` (not "is used to" or "are used to") | RED |
+| A past habit | `used to` (not within one word after "is", "are", "was", "were", "be", "been", "being", "'s", "'re", "isn't", "aren't", "wasn't" or "weren't") | RED |
 | A measurement story | `measured on` | RED |
 | A move record | `moved here from` | RED |
 

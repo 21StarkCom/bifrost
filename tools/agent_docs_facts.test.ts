@@ -16,6 +16,7 @@ import {
   INDEX_MAX_LINES,
 } from "./memory_tidy_lib.ts";
 import { CODEX_DEFAULT_MAX_BYTES } from "./rules_load_lib.ts";
+import { GATE_PHRASES, GROWTH_PHRASES, HISTORY_MARKERS, PLAYBOOK_BUDGETS } from "./rules_audit_lib.ts";
 
 const DOC_REL = "skill/stark-agent-docs/references/load-facts.md";
 const DOC = path.resolve(import.meta.dirname, "..", DOC_REL);
@@ -50,5 +51,64 @@ test("load-facts: Codex's default project-doc cap matches rules_load_lib", () =>
   states(
     `\`project_doc_max_bytes\`, ${CODEX_DEFAULT_MAX_BYTES / 1024} KiB by default`,
     "rules_load_lib.ts CODEX_DEFAULT_MAX_BYTES",
+  );
+});
+
+// Contract test for `playbook.md`: the budgets and phrase lists of its tables
+// are the constants `rules_audit.ts --playbook` triages with.
+const PLAYBOOK_REL = "skill/stark-agent-docs/references/playbook.md";
+const playbook = fs.readFileSync(path.resolve(import.meta.dirname, "..", PLAYBOOK_REL), "utf8").split("\n");
+
+/** The body rows of the first table under `heading`, as trimmed cells. */
+function tableUnder(heading: string): string[][] {
+  const start = playbook.indexOf(heading);
+  assert.ok(start >= 0, `${PLAYBOOK_REL} has no heading "${heading}"`);
+  const rows: string[][] = [];
+  for (const line of playbook.slice(start + 1)) {
+    if (line.startsWith("#")) break;
+    if (line.startsWith("|")) rows.push(line.slice(1, -1).split("|").map((c) => c.trim()));
+    else if (rows.length) break;
+  }
+  return rows.slice(2); // the header row and the rule row
+}
+
+const code = (cell: string) => /`([^`]+)`/.exec(cell)?.[1];
+
+test("playbook: the size budgets match PLAYBOOK_BUDGETS", () => {
+  const rows = new Map(tableUnder("## Size budgets").map(([label, value]) => [label, value]));
+  const chars = (v: string | undefined) => (v?.endsWith("k") ? Number(v.slice(0, -1)) * 1000 : Number(v));
+  const expected: [string, number][] = [
+    ["A repo's root CLAUDE.md or AGENTS.md", PLAYBOOK_BUDGETS.rootFile],
+    ["A package CLAUDE.md or a rule file", PLAYBOOK_BUDGETS.packageFile],
+    ["A SKILL.md core (the rest goes to `references/`)", PLAYBOOK_BUDGETS.skillCore],
+    ["A skill `description:`", PLAYBOOK_BUDGETS.skillDescription],
+    [`A \`MEMORY.md\` index (each line ${PLAYBOOK_BUDGETS.memoryIndexLine} or fewer)`, PLAYBOOK_BUDGETS.memoryIndex],
+    ["All files that load together at start-up in one repo", PLAYBOOK_BUDGETS.loadSet],
+  ];
+  assert.deepEqual([...rows.keys()].sort(), expected.map(([label]) => label).sort(),
+    `${PLAYBOOK_REL} and PLAYBOOK_BUDGETS name different files. Update them together.`);
+  for (const [label, budget] of expected) {
+    assert.equal(chars(rows.get(label)), budget, `${PLAYBOOK_REL} gives "${label}" ${rows.get(label)}, the code ${budget}.`);
+  }
+  assert.equal(Object.keys(PLAYBOOK_BUDGETS).length, expected.length + 1, "each budget has a row (the index line is in the MEMORY.md row)");
+});
+
+test("playbook: the gate phrases match GATE_PHRASES, all RED", () => {
+  const rows = tableUnder("### Gate phrases (GATE)");
+  assert.deepEqual(rows.map(([phrase]) => code(phrase)), [...GATE_PHRASES]);
+  assert.ok(rows.every(([, flag]) => flag === "RED"));
+});
+
+test("playbook: the growth phrases match GROWTH_PHRASES, all RED", () => {
+  const rows = tableUnder("### Growth phrases (GROWTH)");
+  assert.deepEqual(rows.map(([phrase]) => code(phrase)), [...GROWTH_PHRASES]);
+  assert.ok(rows.every(([, flag]) => flag === "RED"));
+});
+
+test("playbook: the history markers match HISTORY_MARKERS", () => {
+  const rows = tableUnder("### Markers (HISTORY)");
+  assert.deepEqual(
+    rows.map(([label, cell, flag]) => ({ label, match: code(cell), notAfter: [...cell.matchAll(/"([^"]+)"/g)].map((m) => m[1]), flag })),
+    HISTORY_MARKERS.map((m) => ({ label: m.label, match: m.pattern ?? m.phrase, notAfter: [...(m.notAfter ?? [])], flag: m.flag })),
   );
 });
