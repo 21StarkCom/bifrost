@@ -53,7 +53,7 @@ Make these views, and no others until a reader asks a new question:
 - Remove noise by a tag: `exclude * where tag is #deprecated`. An `exclude` can leave an element with no line in the
   view: look for one in the PNG.
 - Change a relationship title for one view with `with`: `include shopper -> shop with { title 'buys products in' }`.
-  Floorplan's own `index` view does this (`docs/architecture/model/views.c4` in the floorplan repo).
+  The new title must still read as "source <title> target".
 - A line with the label `[...]` merges relationships with different titles. Fix it in the model with one summary
   title, or set a title for the view with `with`.
 - A `group` in a view draws a box around elements that have no parent in the view. Use it for a pair such as an

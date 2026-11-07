@@ -29,9 +29,10 @@ project `default`, which can be another model.
 
 The server reads only the projects under the folder where the session started. When `list-projects` does not list
 the project, read the project's `generated/model.json` in place of the tools: `views.<id>.nodes` lists the elements
-of a view, `views.<id>.edges` its lines, and `relations` the relationships of the model. In a flow, a return step
-`a <- b` is an edge from `b` to `a` with `dir: "back"` and no `relations`: check it against the relationship
-`a -> b`. Each other edge with no `relations` is a step with no relationship.
+of a view, `views.<id>.edges` its lines, and `relations` the relationships of the model. In a flow, an edge with
+no `relations` is a return step or a step with no relationship. It is a return step `a <- b` when it goes from `b`
+to `a` and the model has the relationship `a -> b`. The key `dir: "back"` does not mark a return step: a forward
+step drawn from right to left has it too.
 
 | #  | Check                                                                                       | How to find a failure                                                     |
 | -- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
@@ -46,8 +47,8 @@ of a view, `views.<id>.edges` its lines, and `relations` the relationships of th
 | M9 | One name for one thing; no acronym that a reader may not know; no "Service A".             | Two titles for one role ("Customer", "User"); one title that can name two elements. |
 | M10 | Each element is in a view, and each element has a relationship. A relationship of a child counts for its parent. | `read-element` (server `floorplan-model`, with `project`): an empty `includedInViews`. |
 | M11 | Each step of a flow has a relationship in the model between the same two elements. A return step `a <- b` uses the relationship `a -> b`. | `find-relationships` (server `floorplan-model`, with `project`) for each step's pair. |
-| M12 | The model matches the code: each container runs, each relationship is a real call, and each process that the product ships or runs has an element. | A `code` path of a `container` with no entry point (no `main`, no `bin`, no code that starts a server when the package runs; a start function that only other packages call is not one), or of a `webApp` with no `index.html` and no bundler entry; a call in the code with no relationship; a shipped process with no element. Put a process that the repo holds but does not ship (an editor extension, a dev tool) in a question for the operator. |
-| M13 | Each relationship technology names the protocol, the format or the transport of the call, as modeling.md says. | A library, an SDK or a tool name alone ("Floorplan SDK", "Vite", "Huginn"), or the name of a product at one end of the call. |
+| M12 | The model matches the code: each container runs, each relationship is a real call, and each process that the product ships or runs has an element. One element is one process role: a bin that runs in two roles that other elements call apart (a CLI, and the server that its `mcp` command starts) is two elements. | A `code` path of a `container` with no entry point (no `main`, no `bin`, no code that starts a server when the package runs; a start function that only other packages call is not one), or of a `webApp` with no `index.html` and no bundler entry; a call in the code with no relationship; a shipped process with no element. Put a process that the repo holds but does not ship (an editor extension, a dev tool) in a question for the operator. |
+| M13 | Each technology on a relationship names the protocol, the format or the transport of the call, as modeling.md says. A relationship from a person needs no technology, so removing a bad one is a fix too. | A library, an SDK or a tool name alone ("Floorplan SDK", "Vite", "Huginn"), or the name of a product at one end of the call. |
 | M14 | Each hand-written view has a `description` of one sentence, which says what a reader learns from the view. | A `view` block with no `description`.                                     |
 
 ## Picture checks
@@ -56,7 +57,9 @@ For a proposal, run `render` with the proposal for each view that the change tou
 proposal, render each view of the project: `generated/llms.txt` lists them. Read each PNG. Look at the whole picture
 first, then at each box and each line. The PNG has a transparent background, and a viewer can show it on black.
 
-The scan writes the views `stack` and `deployment`. Skip P1 for them: their title is the scan's.
+The scan writes the views `stack` and `deployment`. Skip P1 for them: their title is the scan's. A `stack` card
+shows a logo, so it cuts a long text first. Report a cut on `stack` only when the text breaks a rule of
+modeling.md, such as a code path in `technology` (M8); never shorten a text below what modeling.md asks to fit it.
 
 | #  | Check                                                                                       | A failure looks like                                                       |
 | -- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
@@ -103,6 +106,9 @@ The scan writes the views `stack` and `deployment`. Skip P1 for them: their titl
    - **Small fix, in `model/`:** each other fix. Examples: a title, a description, a `summary`, a technology, the
      `sync` or `async` kind or the `navigateTo` of a relationship, a view, and the steps, `notes` and `include`
      list of a flow that shows code that exists.
+
+   The sort holds for each model that exists, also when a fix makes the model match the code (M12). The one
+   exception is a first model of a repo with no model, which modeling.md writes in `model/`.
 
 ## Anti-patterns
 

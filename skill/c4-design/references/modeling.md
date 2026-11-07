@@ -48,15 +48,16 @@ The cases that agents get wrong most often:
   queue or topic as its own `queue` container, or leave it out and name it on the arrow ("publishes order events
   to … via `orders` topic", technology `Pub/Sub`). Use one way in the whole project.
 - **An AI agent.** Use `person` when it acts as a user (it runs the CLI or reads the UI for a person). Use a
-  `container` when it is a program that your system runs, and an `externalSystem` for a vendor API that you call
-  (Anthropic, OpenAI).
+  `container` when your team builds the agent program. Use an `externalSystem` for a vendor's API or a vendor's
+  CLI that your system calls or runs (the Anthropic API, the `claude` CLI): a vendor builds it, so test 1 wins.
 - **A component cannot deploy alone.** A unit that you can deploy alone is a container.
 - **A package with no entry point is a library, not a container.** A folder with no `main`, no `bin` and no
   server start runs inside the process of each container that imports it. A browser app's entry point is its
   `index.html` or the entry file of its bundler, so its folder is a `webApp`.
 - **Files as data.** A store of files that a system reads and writes, such as a git repo of documents or a bucket,
-  is a data store. Run test 1 on its owner: the store of another team is an `externalSystem`, and your own store
-  is a `database`.
+  is a data store. Ask which system the store belongs to, not which person: a store that only your system keeps
+  is a `database` of your system, and a store of another system, which yours reads or writes, is an
+  `externalSystem`. One operator can own both systems.
 
 ### Leave it out
 
