@@ -21,6 +21,25 @@ Do not edit that copy: the next build writes it again, and rule R8 fails on a ch
 The five container kinds are `container`, `webApp`, `mobileApp`, `database` and `queue`. The colours are the
 classic C4 palette, set by the kit; a model sets no colour.
 
+## Deployment node kinds
+
+A node of a `deployment` block uses one of these kinds. `floorplan scan` writes them into
+`model/scan/deployment.c4` from the `.tf` files of the `terraform` keys, all in one `environment` named `gcp`.
+
+| Kind             | Shows                  | The scan makes it from                                                                              |
+| ---------------- | ---------------------- | --------------------------------------------------------------------------------------------------- |
+| `environment`    | an environment         | the one environment `gcp`                                                                           |
+| `gcpProject`     | a GCP project          | `google_project`; with none, a node named `project`                                                 |
+| `network`        | a network              | `google_compute_network`                                                                            |
+| `subnet`         | a subnet               | `google_compute_subnetwork`                                                                         |
+| `cluster`        | a Kubernetes cluster   | `google_container_cluster`                                                                          |
+| `vm`             | a virtual machine      | `google_compute_instance`                                                                           |
+| `nat`            | a NAT                  | `google_compute_router_nat`                                                                         |
+| `managedService` | a managed service      | `google_sql_database_instance`, `google_storage_bucket`, `google_pubsub_topic`, `google_kms_key_ring` |
+
+A node goes in the subnet that one of its arguments names, else in the network, else in the project. A node that
+names no project goes in the project of its own folder, or of the nearest parent folder.
+
 ## Relationship kinds
 
 - `async`: a dotted line, for a message, an event or a queue.
@@ -35,7 +54,7 @@ does not hold (a `remove` of an element that is not in the model, an `add` of on
 
 | Rule | What it checks                                                                                 | Level   |
 | ---- | ---------------------------------------------------------------------------------------------- | ------- |
-| R1   | Every element uses a kind from the kit.                                                        | error   |
+| R1   | Every element and every deployment node uses a kind from the kit.                              | error   |
 | R2   | A container kind is only inside a `softwareSystem`. A `component` is only inside a container kind. | error   |
 | R3   | A `person` and an `externalSystem` have no children.                                           | error   |
 | R4   | Each system, container and component has a description.                                       | warning |
@@ -43,6 +62,7 @@ does not hold (a `remove` of an element that is not in the model, an `add` of on
 | R6   | Each relationship has a title. A relationship between two containers has a technology.         | warning |
 | R7   | The product has a context view. Each system with containers has a container view.              | warning |
 | R8   | `generated/manifest.json` matches the inputs and the outputs.                                  | error   |
+| R9   | A `code`, `deploy` or `terraform` key is on its kinds. Its paths are in git. `model/scan/` is current. | error   |
 
 - An error makes the check fail (exit 1, `ok: false`). A warning fails it only past `--max-warnings` (MCP
   `maxWarnings`). Aim for no warnings in a proposal: a warning is a gap the operator will ask about.
@@ -54,3 +74,11 @@ does not hold (a `remove` of an element that is not in the model, an `add` of on
   the next build. `floorplan accept` builds, so the loop's end clears it.
 - R8 also fails when `kit/spec.c4` is not the kit of the CLI that runs the check. After a floorplan upgrade that
   changes the kit, run `floorplan build` again.
+- R9's kinds: `code` goes on a `component` or a container kind, `deploy` on a container kind, and `terraform` on a
+  `softwareSystem`. Each path is a file or a folder that git tracks, relative to the repo root.
+- R9 also fails on a `deploy` value that the scan cannot place: a manifest with no workload, workloads with no
+  cluster in the `terraform` folders, and a `tf:` address with no node.
+- R9 runs `floorplan scan` in memory and fails when a file under `model/scan/` differs from it, is missing, or is
+  extra. A project with none of the three keys runs no git command, and R9 passes.
+- `model/scan/` is under `model/`, so it is an input of R8 too: a scan that changes a file makes R8 fail until the
+  next build. `floorplan build` runs the scan first, so it clears both.
