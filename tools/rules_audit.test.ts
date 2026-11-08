@@ -394,6 +394,7 @@ test("originView lists, reads and resolves a tree at origin/HEAD as the disk wal
       "CLAUDE.md": "# R\n\n- A rule.\n",
       ".claude/rules/a.md": "- Rule a.\n",
       "shared/rules/b.md": "- Rule b.\n",
+      "other/rules/c.md": "- Rule c.\n",
       "docs/x.md": "# X\n",
       "node_modules/p/CLAUDE.md": "# Pruned\n",
       "vendor/modules.txt": "# go vendor\n",
@@ -402,6 +403,9 @@ test("originView lists, reads and resolves a tree at origin/HEAD as the disk wal
     });
     fs.symlinkSync("CLAUDE.md", path.join(dir, "AGENTS.md"));
     fs.symlinkSync("../../shared/rules", path.join(dir, ".claude", "rules", "shared"));
+    // A target that ends in `/`, and an absolute link into the checkout.
+    fs.symlinkSync("../../other/rules/", path.join(dir, ".claude", "rules", "other"));
+    fs.symlinkSync(path.join(dir, "CLAUDE.md"), path.join(dir, "ABS.md"));
     fs.symlinkSync("docs", path.join(dir, "docs-link"));
     fs.symlinkSync("../outside.md", path.join(dir, "out.md"));
     fs.symlinkSync("loop2", path.join(dir, "loop1"));
@@ -415,6 +419,8 @@ test("originView lists, reads and resolves a tree at origin/HEAD as the disk wal
     const disk = buildView(dir);
     assert.deepEqual(o.files, disk.files);
     assert.ok(o.files.includes(".claude/rules/shared/b.md") && o.files.includes("AGENTS.md"));
+    assert.ok(o.files.includes(".claude/rules/other/c.md") && o.files.includes("ABS.md"));
+    assert.equal(o.resolve("ABS.md"), "CLAUDE.md");
     assert.ok(!o.files.some((f) => /node_modules|^vendor|out\.md|loop|dangling/.test(f)));
     assert.equal(o.read("CLAUDE.md"), "# R\n\n- A rule.\n");
     assert.equal(o.read("AGENTS.md"), "# R\n\n- A rule.\n");

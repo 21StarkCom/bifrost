@@ -118,6 +118,14 @@ export interface Walk {
   dirLinks: string[];
 }
 
+/** A folder `walkRepo` does not enter: a dependency tree, a Go vendor folder
+ *  (one with a `modules.txt`) or a worktrees folder. `rel` is repo-relative. */
+function prunedDir(rel: string, isFile: (rel: string) => boolean): boolean {
+  const name = rel.slice(rel.lastIndexOf("/") + 1);
+  return PRUNE_DIRS.has(name) || (name === "vendor" && isFile(`${rel}/modules.txt`))
+    || /(?:^|\/)\.(?:claude|cursor)\/worktrees$/.test(rel);
+}
+
 /** Every file under `root`, pruned as the header says. */
 export function walkRepo(root: string): Walk {
   const rootReal = fs.realpathSync(root);
@@ -140,9 +148,7 @@ export function walkRepo(root: string): Walk {
       if (e.name === ".git") continue;
       const r = rel ? `${rel}/${e.name}` : e.name;
       if (e.isDirectory()) {
-        if (PRUNE_DIRS.has(e.name)) continue;
-        if (e.name === "vendor" && fs.existsSync(path.join(abs, e.name, "modules.txt"))) continue;
-        if (/(?:^|\/)\.(?:claude|cursor)\/worktrees$/.test(r)) continue;
+        if (prunedDir(r, (f) => fs.existsSync(path.join(root, f)))) continue;
         if (fs.existsSync(path.join(abs, e.name, ".git"))) continue;
         stack.push(r);
       } else if (e.isFile()) {
@@ -237,14 +243,12 @@ function firstLine(text: string | Buffer | null | undefined): string {
   return line.length > 160 ? `${line.slice(0, 159)}…` : line;
 }
 
-/** A path `walkRepo` does not reach: in a dependency tree or a worktrees folder. */
-function prunedPath(rel: string, isBlob: (rel: string) => boolean): boolean {
-  const parts = rel.split("/");
-  for (let i = 0; i < parts.length - 1; i++) {
-    if (PRUNE_DIRS.has(parts[i])) return true;
-    if (parts[i] === "vendor" && isBlob([...parts.slice(0, i + 1), "modules.txt"].join("/"))) return true;
+/** A path `walkRepo` does not reach: one of its folders is pruned. */
+function prunedPath(rel: string, isFile: (rel: string) => boolean): boolean {
+  for (let i = rel.indexOf("/"); i >= 0; i = rel.indexOf("/", i + 1)) {
+    if (prunedDir(rel.slice(0, i), isFile)) return true;
   }
-  return /(?:^|\/)\.(?:claude|cursor)\/worktrees\//.test(rel);
+  return false;
 }
 
 /** Adds the text of each blob to `into`, keyed by its id, with one
@@ -302,6 +306,12 @@ export function originView(root: string): OriginView {
   }
   const texts = new Map<string, string>();
   catBlobs(root, [...blobs.values()].filter((b) => b.link).map((b) => b.oid), texts);
+  // An absolute link counts when it names a path in this checkout, as on disk.
+  const bases = [...new Set([fs.realpathSync(root), path.resolve(root)])];
+  const inside = (abs: string) => {
+    for (const b of bases) if (abs === b || abs.startsWith(`${b}/`)) return abs.slice(b.length + 1);
+    return null;
+  };
   const resolve = (rel: string): string | null => {
     let parts = rel === "" ? [] : rel.split("/");
     for (let i = 0, hops = 0; i < parts.length; i++) {
@@ -309,10 +319,13 @@ export function originView(root: string): OriginView {
       const b = blobs.get(at);
       if (!b?.link) continue;
       const target = texts.get(b.oid)!;
-      if (++hops > 40 || target.startsWith("/")) return null;
-      const to = path.posix.normalize(path.posix.join(path.posix.dirname(at), target));
+      if (++hops > 40) return null;
+      const joined = target.startsWith("/") ? inside(path.posix.normalize(target)) : path.posix.join(path.posix.dirname(at), target);
+      if (joined === null) return null;
+      const to = path.posix.normalize(joined || ".");
       if (to === ".." || to.startsWith("../")) return null;
-      parts = [...(to === "." ? [] : to.split("/")), ...parts.slice(i + 1)];
+      // A target may end in `/` (`../rules/`): drop the empty part.
+      parts = [...to.split("/").filter((p) => p && p !== "."), ...parts.slice(i + 1)];
       i = -1;
     }
     return parts.join("/");
@@ -562,15 +575,18 @@ class UsageError extends Error {}
 
 /** `git fetch origin` in each repo, `FETCH_CONCURRENCY` at a time and each
  *  within `FETCH_TIMEOUT_MS`: root → why the fetch failed, for each that did.
- *  The fetch moves remote refs only; it writes no `FETCH_HEAD` and runs no
- *  maintenance. Its own session has no terminal, so a sign-in prompt fails. */
+ *  The fetch moves remote refs only: no tags (a moved tag would fail it), no
+ *  submodules, no `FETCH_HEAD` and no maintenance. Its own session has no
+ *  terminal, so a sign-in prompt fails. */
 async function fetchAll(roots: string[]): Promise<Map<string, string>> {
   const failed = new Map<string, string>();
   const queue = [...roots];
   const env = { ...process.env, GIT_TERMINAL_PROMPT: "0" };
   const fetchOne = async (root: string) => {
     try {
-      const r = await spawnBounded("git", ["-C", root, "fetch", "--quiet", "--no-write-fetch-head", "--no-auto-gc", "origin"], {
+      const r = await spawnBounded("git", [
+        "-C", root, "fetch", "--quiet", "--no-tags", "--no-recurse-submodules", "--no-write-fetch-head", "--no-auto-gc", "origin",
+      ], {
         env, timeoutMs: FETCH_TIMEOUT_MS, maxBuffer: 1024 * 1024,
       });
       if (r.status === 0) return;
@@ -641,8 +657,8 @@ async function playbookMain(flags: Map<string, string | true>): Promise<number> 
     let rootRules: { path: string; text: string } | undefined;
     if (fs.existsSync(rootPath)) {
       const real = fs.realpathSync(rootPath);
-      // When `--fleet` triages them, the triage reads their text at origin/HEAD.
-      rootRules = { path: c.taken.get(real) ?? displayPath(rootPath), text: fs.readFileSync(real, "utf8") };
+      // In a repo that `--fleet` reads at origin/HEAD, their text is read there.
+      rootRules = { path: c.taken.get(real) ?? displayPath(rootPath), text: c.readReal(real) ?? fs.readFileSync(real, "utf8") };
     }
     const stale = [...c.stale.values()].map(({ repo, reason }) => ({ repo, reason }));
     report = triage({ groups: [...c.groups.values()], rootRules, stale });
