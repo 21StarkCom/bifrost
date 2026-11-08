@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * The agent-doc gate: a PreToolUse hook that stops `njord pr-merge` when the PR
- * changes an agent file that the playbook triage flags RED.
+ * adds a RED clause, by the playbook triage, to an agent file. A RED that is on
+ * the base branch already does not stop it.
  *
  * Shipped by the stark-ops plugin: its marketplace.json entry declares this hook
  * inline on PreToolUse through ${CLAUDE_PLUGIN_ROOT}, with an `if` gate that
@@ -13,17 +14,25 @@
  *   2. lists the agent files the PR adds or changes (`agentKind`);
  *   3. copies the tree of the PR head commit to a temp folder (`git archive`),
  *      fetching `refs/pull/<n>/head` first when the commit is not local;
- *   4. runs `rules_audit.ts --playbook --files` on those files in the copy.
- * Exit 3 (a RED) denies the call, and the reason holds the triage report.
- * Exit 0 allows it, with no output. Any other result (a tool error, no PR, no
- * network, or the end of the 240s that all its subprocesses share) allows it
- * and prints one warning line, to the operator as `systemMessage` and to the
- * model as `additionalContext`.
+ *   4. runs `rules_audit.ts --playbook --json --files` on those files in the
+ *      copy. No RED allows the call, with no output.
+ *   5. On a RED, finds the base: the merge base of the head and the tip of the
+ *      base branch, fetching that branch first when its tip is not local. It
+ *      copies the base tree too, pairs each file with its base path (a rename
+ *      pairs with its old path, `git diff -M`; a file the PR adds has none),
+ *      and triages the base files that exist.
+ *   6. Denies the call for each head RED its base file does not have
+ *      (`newReds`). The reason lists those clauses and counts the rest.
+ * Any other result (a tool error, no PR, no network, or the end of the 240s
+ * that all its subprocesses share) allows the call and prints one warning
+ * line, to the operator as `systemMessage` and to the model as
+ * `additionalContext`.
  *
- * The copy sits outside the workspace, so the start-up load set it measures
+ * The copies sit outside the workspace, so the start-up load set they measure
  * counts no CLAUDE.md above the repo: a load-set RED can pass here, and the
  * sweep reports it. The hook writes nothing outside its temp folder, which it
- * deletes, except the objects a fetch adds to the repo.
+ * deletes, except what a fetch writes to the repo: objects, `FETCH_HEAD`, and
+ * the base branch's `origin/` ref.
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -32,12 +41,14 @@ import path from "node:path";
 
 import { precheckCli } from "./cli_args_lib.ts";
 import { isMainModule } from "./main_module_lib.ts";
-import { agentKind } from "./rules_audit_lib.ts";
+import { agentKind, type Clause, type TriageReport } from "./rules_audit_lib.ts";
 
 const USAGE = "usage: rules_gate_hook.ts (no arguments; PreToolUse JSON on stdin)\n";
 const TOOLS_DIR = import.meta.dirname;
 const AUDIT = path.join(TOOLS_DIR, "rules_audit.ts");
 const PLAYBOOK = path.join(TOOLS_DIR, "..", "skill", "stark-agent-docs", "references", "playbook.md");
+/** The fields of `gh pr view --json` that the gate reads. */
+export const PR_FIELDS = "number,state,headRefOid,baseRefName,baseRefOid,changedFiles,files";
 
 /** `njord pr-merge` options that take a value, from its argument parser. */
 const VALUE_FLAGS = new Set(["--pr", "--changelog-section", "--force-reason", "--watch-timeout"]);
@@ -220,14 +231,25 @@ function rootRulesIn(cwd: string, home: string): string | null {
   return path.relative(there.top, real).split(path.sep).join("/");
 }
 
+const SHA_RE = /^[0-9a-f]{40}$/;
+
 function hasCommit(cwd: string, sha: string): boolean {
   return run("git", ["cat-file", "-e", `${sha}^{commit}`], cwd, 30_000).status === 0;
+}
+
+/** True when commit `sha` is here, after a fetch of `ref` from origin when it was not. */
+function ensureCommit(cwd: string, sha: string, ref: string): boolean {
+  if (hasCommit(cwd, sha)) return true;
+  run("git", ["fetch", "--quiet", "--no-tags", "origin", ref], cwd, 120_000);
+  return hasCommit(cwd, sha);
 }
 
 interface PrFiles {
   number: number;
   state: string;
   headRefOid: string;
+  baseRefName: string;
+  baseRefOid: string;
   changedFiles: number;
   files: { path: string; changeType: string }[];
 }
@@ -253,7 +275,7 @@ export function gate(call: MergeCall, audit = AUDIT, home = os.homedir()): Verdi
     return warn(`the merge runs in ${call.cwd}, which is not a folder here`);
   }
   const select = call.pr === null ? [] : [String(call.pr)];
-  const view = run("gh", ["pr", "view", ...select, "--json", "number,state,headRefOid,changedFiles,files"], call.cwd, 30_000);
+  const view = run("gh", ["pr", "view", ...select, "--json", PR_FIELDS], call.cwd, 30_000);
   const which = call.pr === null ? "the PR of this branch" : `PR #${call.pr}`;
   if (view.status !== 0) return warn(`could not read ${which} (${firstLine(view.stderr)})`);
   let pr: PrFiles;
@@ -263,56 +285,177 @@ export function gate(call: MergeCall, audit = AUDIT, home = os.homedir()): Verdi
     return warn(`gh pr view printed no JSON for ${which}`);
   }
   if (pr.state !== "OPEN") return PASS; // njord merges only an open PR
-  if (!Array.isArray(pr.files) || !/^[0-9a-f]{40}$/.test(String(pr.headRefOid))) {
+  if (!Array.isArray(pr.files) || !SHA_RE.test(String(pr.headRefOid))) {
     return warn(`gh pr view gave no files or head commit for ${which}`);
   }
   const files = changedAgentFiles(call.cwd, pr);
   if (typeof files === "string") return warn(files);
   if (!files.length) return PASS;
 
+  const n = pr.number;
   const sha = pr.headRefOid;
-  if (!hasCommit(call.cwd, sha)) {
-    run("git", ["fetch", "--quiet", "--no-tags", "origin", `refs/pull/${pr.number}/head`], call.cwd, 120_000);
-    if (!hasCommit(call.cwd, sha)) return warn(`the head commit ${sha.slice(0, 12)} of PR #${pr.number} is not here, and the fetch did not bring it`);
+  if (!ensureCommit(call.cwd, sha, `refs/pull/${n}/head`)) {
+    return warn(`the head commit ${sha.slice(0, 12)} of PR #${n} is not here, and the fetch did not bring it`);
   }
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "rules-gate-"));
   try {
-    const tree = path.join(tmp, "tree");
-    const tar = path.join(tmp, "head.tar");
-    fs.mkdirSync(tree);
-    for (const [cmd, args, cwd] of [
-      ["git", ["archive", "--format=tar", "-o", tar, sha], call.cwd],
-      ["tar", ["-xf", tar, "-C", tree], tmp],
-      ["git", ["init", "--quiet", tree], tmp],
-    ] as const) {
-      const r = run(cmd, [...args], cwd, 120_000);
-      if (r.status !== 0) return warn(`could not copy the head of PR #${pr.number}: ${cmd} ${args[0]} (${firstLine(r.stderr)})`);
-    }
-    // ~/Code/CLAUDE.md does not point into the copy, so the triage would read a
-    // PR's own root rules as a copy of the live ones, and flag their gates. When
-    // the PR changes the root rules, a throwaway HOME points it at the copy.
-    let env: NodeJS.ProcessEnv | undefined;
     const rules = rootRulesIn(call.cwd, home);
-    if (rules !== null && files.includes(rules)) {
-      const fakeHome = path.join(tmp, "home");
-      fs.mkdirSync(path.join(fakeHome, "Code"), { recursive: true });
-      fs.symlinkSync(path.join(tree, rules), path.join(fakeHome, "Code", "CLAUDE.md"));
-      env = { ...process.env, HOME: fakeHome };
+    const head = triageIn(copyTree(call.cwd, sha, tmp, "head", n), files, rules, audit, tmp, "head", n);
+    if (!head.files.some((f) => f.clauses.some((c) => c.flag === "RED"))) return PASS;
+
+    if (!SHA_RE.test(String(pr.baseRefOid)) || typeof pr.baseRefName !== "string" || !pr.baseRefName) {
+      return warn(`gh pr view gave no base branch for PR #${n}`);
     }
-    const r = run(process.execPath, [audit, "--playbook", "--files", files.join(",")], tree, 120_000, env);
-    if (r.status === 0) return PASS;
-    if (r.status === 3) {
-      return {
-        kind: "red",
-        text: `PR #${pr.number} changes an agent file with a RED clause, so the merge stops. ` +
-          `Reword or delete each RED clause by the playbook (${PLAYBOOK}), push, and run njord pr-merge again.\n\n` +
-          r.stdout.trim(),
-      };
+    if (!ensureCommit(call.cwd, pr.baseRefOid, `refs/heads/${pr.baseRefName}`)) {
+      return warn(`the tip ${pr.baseRefOid.slice(0, 12)} of ${pr.baseRefName}, the base of PR #${n}, is not here, and the fetch did not bring it`);
     }
-    return warn(`triage of PR #${pr.number} failed (exit ${r.status ?? "on a signal"}: ${firstLine(r.stderr)})`);
+    const mb = run("git", ["merge-base", sha, pr.baseRefOid], call.cwd, 30_000);
+    const base = mb.stdout.trim();
+    if (mb.status !== 0 || !SHA_RE.test(base)) return warn(`found no merge base of PR #${n} and ${pr.baseRefName} (${firstLine(mb.stderr)})`);
+    const diff = run("git", ["diff", "--name-status", "-z", "-M", base, sha], call.cwd, 60_000);
+    if (diff.status !== 0) return warn(`could not diff PR #${n} against its base (${firstLine(diff.stderr)})`);
+    const renames = renamesIn(diff.stdout);
+    const baseTree = copyTree(call.cwd, base, tmp, "base", n);
+    /** Each head file → its path on the base; a file the PR adds has none. */
+    const pairs = new Map<string, string>();
+    for (const f of files) {
+      const was = renames.get(f) ?? f;
+      if (agentKind(was) !== null && isFileIn(baseTree, was)) pairs.set(f, was);
+    }
+    const before = pairs.size
+      ? triageIn(baseTree, [...new Set(pairs.values())].sort(), rules, audit, tmp, "base", n)
+      : { files: [], totals: { GREEN: 0, YELLOW: 0, RED: 0 } };
+    const { added, kept } = newReds(head, before, pairs);
+    if (!added.length) return PASS;
+    const lines = added.map(({ path: p, clause: c }) => `  ${p}:${c.line}  ${c.type}  ${c.detail}: ${c.text}`);
+    return {
+      kind: "red",
+      text: `PR #${n} adds a RED clause to an agent file, so the merge stops. ` +
+        `Reword or delete each new RED clause by the playbook (${PLAYBOOK}), push, and run njord pr-merge again.\n\n` +
+        `New RED clauses:\n${lines.join("\n")}\n\n` +
+        `${kept} RED clause${kept === 1 ? " was" : "s were"} on the base already; ${kept === 1 ? "it does" : "they do"} not stop the merge.`,
+    };
+  } catch (e) {
+    if (e instanceof Unchecked) return warn(e.message);
+    throw e;
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
+}
+
+/** A step that failed: the merge goes on unchecked, with this reason. */
+class Unchecked extends Error {}
+
+/** Copies the tree of `sha` to `<tmp>/<name>` as a new git repo, which
+ *  `rules_audit.ts --files` needs, and returns that folder. */
+function copyTree(cwd: string, sha: string, tmp: string, name: string, n: number): string {
+  const tree = path.join(tmp, name);
+  const tar = path.join(tmp, `${name}.tar`);
+  fs.mkdirSync(tree);
+  for (const [cmd, args, at] of [
+    ["git", ["archive", "--format=tar", "-o", tar, sha], cwd],
+    ["tar", ["-xf", tar, "-C", tree], tmp],
+    ["git", ["init", "--quiet", tree], tmp],
+  ] as const) {
+    const r = run(cmd, [...args], at, 120_000);
+    if (r.status !== 0) throw new Unchecked(`could not copy the ${name} of PR #${n}: ${cmd} ${args[0]} (${firstLine(r.stderr)})`);
+  }
+  return tree;
+}
+
+/** The playbook triage of `paths` in the copy at `tree`. */
+function triageIn(tree: string, paths: string[], rules: string | null, audit: string, tmp: string, name: string, n: number): TriageReport {
+  // ~/Code/CLAUDE.md does not point into the copy, so the triage would read a
+  // PR's own root rules as a copy of the live ones, and flag their gates. When
+  // the PR changes the root rules, a throwaway HOME points it at the copy.
+  let env: NodeJS.ProcessEnv | undefined;
+  if (rules !== null && paths.includes(rules)) {
+    const fakeHome = path.join(tmp, `home-${name}`);
+    fs.mkdirSync(path.join(fakeHome, "Code"), { recursive: true });
+    fs.symlinkSync(path.join(tree, rules), path.join(fakeHome, "Code", "CLAUDE.md"));
+    env = { ...process.env, HOME: fakeHome };
+  }
+  const r = run(process.execPath, [audit, "--playbook", "--json", "--files", paths.join(",")], tree, 120_000, env);
+  if (r.status !== 0 && r.status !== 3) {
+    throw new Unchecked(`triage of the ${name} of PR #${n} failed (exit ${r.status ?? "on a signal"}: ${firstLine(r.stderr)})`);
+  }
+  try {
+    const report = JSON.parse(r.stdout) as TriageReport;
+    if (Array.isArray(report.files)) return report;
+  } catch {
+    // falls through
+  }
+  throw new Unchecked(`triage of the ${name} of PR #${n} printed no report`);
+}
+
+function isFileIn(tree: string, rel: string): boolean {
+  try {
+    return fs.statSync(path.join(tree, rel)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/** Each file that a diff renames, new path → old path, from the output of
+ *  `git diff --name-status -z -M`. */
+export function renamesIn(nameStatus: string): Map<string, string> {
+  const parts = nameStatus.split("\0");
+  const out = new Map<string, string>();
+  for (let i = 0; i < parts.length && parts[i]; ) {
+    const status = parts[i];
+    if (status[0] === "R") out.set(parts[i + 2], parts[i + 1]);
+    i += status[0] === "R" || status[0] === "C" ? 3 : 2;
+  }
+  return out;
+}
+
+/** What a SIZE clause measures: a file's core, a skill's `description:`, the
+ *  start-up load set, or one index line. */
+function sizeKind(c: Clause): string {
+  if (c.detail.startsWith("start-up load set")) return "load set";
+  if (c.detail.startsWith("description:")) return "description";
+  if (c.detail.startsWith("index line:")) return `index line ${c.text}`;
+  return "core";
+}
+
+export interface NewReds {
+  /** Each head RED clause that its base file does not have. */
+  added: { path: string; clause: Clause }[];
+  /** The head RED clauses that its base file has too. */
+  kept: number;
+}
+
+/**
+ * The RED clauses the head adds. `pairs` maps a head path to its base path.
+ * A clause matches by its type and text, not its line, since a PR moves lines;
+ * each base clause matches one head clause. A SIZE clause matches by what it
+ * measures, and is new when the base has no RED of that kind, or when its
+ * chars grew. Each RED of a file with no base file is new.
+ */
+export function newReds(head: TriageReport, base: TriageReport, pairs: Map<string, string>): NewReds {
+  const baseFiles = new Map(base.files.map((f) => [f.path, f]));
+  const added: NewReds["added"] = [];
+  let kept = 0;
+  for (const f of head.files) {
+    const was = pairs.has(f.path) ? baseFiles.get(pairs.get(f.path)!) : undefined;
+    const wasRed = was?.clauses.filter((c) => c.flag === "RED") ?? [];
+    const sizes = new Map(wasRed.filter((c) => c.type === "SIZE").map((c) => [sizeKind(c), c]));
+    const left = new Map<string, number>();
+    const key = (c: Clause) => `${c.type}\0${c.text}`;
+    for (const c of wasRed) if (c.type !== "SIZE") left.set(key(c), (left.get(key(c)) ?? 0) + 1);
+    for (const c of f.clauses.filter((x) => x.flag === "RED")) {
+      if (c.type === "SIZE") {
+        const before = sizes.get(sizeKind(c))?.chars;
+        if (before === undefined || c.chars === undefined) added.push({ path: f.path, clause: c });
+        else if (c.chars <= before) kept++;
+        else added.push({ path: f.path, clause: { ...c, detail: `${c.detail}, grown from ${before} to ${c.chars} chars` } });
+      } else if (left.get(key(c))) {
+        left.set(key(c), left.get(key(c))! - 1);
+        kept++;
+      } else added.push({ path: f.path, clause: c });
+    }
+  }
+  return { added, kept };
 }
 
 /** The PreToolUse output for the verdicts, or null for none. */

@@ -1539,6 +1539,9 @@ export interface Clause {
   line: number;
   text: string;
   detail: string;
+  /** What a SIZE clause measured, in chars: the file's core, a skill's
+   *  `description:`, an index line, or the start-up load set. */
+  chars?: number;
 }
 
 export interface TriagedFile {
@@ -1667,7 +1670,7 @@ export function triageText(kind: AgentKind, raw: string): { chars: number; budge
   const size = budget === null ? null : overBudget(chars, budget);
   if (size) {
     clauses.push({
-      flag: size, type: "SIZE", line: 1, text: `${thousands(chars)} chars`,
+      flag: size, type: "SIZE", line: 1, text: `${thousands(chars)} chars`, chars,
       detail: `over the ${thousands(budget!)} budget${size === "RED" ? " twice over" : ""}`,
     });
   }
@@ -1676,7 +1679,7 @@ export function triageText(kind: AgentKind, raw: string): { chars: number; budge
     const over = d && overBudget(d.text.length, PLAYBOOK_BUDGETS.skillDescription);
     if (d && over) {
       clauses.push({
-        flag: over, type: "SIZE", line: d.line, text: clip(d.text, 80),
+        flag: over, type: "SIZE", line: d.line, text: clip(d.text, 80), chars: d.text.length,
         detail: `description: ${d.text.length} chars, over the ${PLAYBOOK_BUDGETS.skillDescription} budget${over === "RED" ? " twice over" : ""}`,
       });
     }
@@ -1687,7 +1690,7 @@ export function triageText(kind: AgentKind, raw: string): { chars: number; budge
       const over = overBudget(len, PLAYBOOK_BUDGETS.memoryIndexLine);
       if (over) {
         clauses.push({
-          flag: over, type: "SIZE", line: i + 1, text: clip(line, 80),
+          flag: over, type: "SIZE", line: i + 1, text: clip(line, 80), chars: len,
           detail: `index line: ${len} chars, over the ${PLAYBOOK_BUDGETS.memoryIndexLine} budget${over === "RED" ? " twice over" : ""}`,
         });
       }
@@ -1795,7 +1798,7 @@ export function triage(input: TriageInput): TriageReport {
     const anchor = mine.get("CLAUDE.md") ?? inRepo.map((f) => mine.get(f.path)).find((f) => f);
     if (!over || !anchor) continue;
     anchor.clauses.push({
-      flag: over, type: "SIZE", line: 1, text: `${thousands(chars)} chars in ${loaded.length} files`,
+      flag: over, type: "SIZE", line: 1, text: `${thousands(chars)} chars in ${loaded.length} files`, chars,
       detail: `start-up load set over the ${thousands(PLAYBOOK_BUDGETS.loadSet)} budget${over === "RED" ? " twice over" : ""} (${loaded.map((f) => f.path).join(", ")})`,
     });
   }

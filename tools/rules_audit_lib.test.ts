@@ -548,6 +548,9 @@ test("triage: size is YELLOW over the budget and RED over twice it, by the kind'
   assert.deepEqual(clauses(r, ".claude/rules/r.md"), []);
   assert.deepEqual(clauses(r, "skill/s/SKILL.md"), ["RED SIZE :1"]);
   assert.equal(fileOf(r, "skill/s/SKILL.md").budget, 15_000);
+  // Each SIZE clause carries the exact chars it measured: its text rounds them.
+  assert.equal(fileOf(r, "CLAUDE.md").clauses[0].chars, 15_501);
+  assert.equal(fileOf(r, "skill/s/SKILL.md").clauses[0].chars, fileOf(r, "skill/s/SKILL.md").chars);
 });
 
 test("triage: a skill description is measured as YAML reads it", () => {
@@ -561,6 +564,7 @@ test("triage: a skill description is measured as YAML reads it", () => {
   });
   assert.deepEqual(clauses(r, "skill/a/SKILL.md"), ["YELLOW SIZE :3"]);
   assert.deepEqual(clauses(r, "skill/b/SKILL.md"), ["RED SIZE :3"]);
+  assert.equal(fileOf(r, "skill/b/SKILL.md").clauses[0].chars, 601);
   assert.deepEqual(clauses(r, "skill/c/SKILL.md"), []);
 });
 
@@ -570,6 +574,7 @@ test("triage: a MEMORY.md line over 150 chars is YELLOW, over 300 RED; a note ha
     "note.md": `${"n".repeat(50_000)}\n`,
   }, { kinds: { "MEMORY.md": "memory-index", "note.md": "memory-note" } });
   assert.deepEqual(clauses(r, "MEMORY.md"), ["YELLOW SIZE :3", "RED SIZE :4"]);
+  assert.deepEqual(fileOf(r, "MEMORY.md").clauses.map((c) => c.chars), [162, 312]);
   assert.deepEqual(clauses(r, "note.md"), []);
   assert.equal(fileOf(r, "note.md").budget, null);
 });
@@ -670,6 +675,7 @@ test("triage: a repo's start-up load set over 40k is flagged on its root CLAUDE.
   const [load] = fileOf(r, "CLAUDE.md").clauses.filter((c) => /load set/.test(c.detail));
   assert.equal(load.flag, "YELLOW");
   assert.match(load.text, /^42k chars in 3 files$/);
+  assert.equal(load.chars, 3 * 14_001);
   assert.match(load.detail, /\.claude\/rules\/a\.md/);
   assert.doesNotMatch(load.detail, /c\.md/, "a path-scoped rule does not load at start-up");
   const smallFiles = { "CLAUDE.md": big("w"), ".claude/rules/a.md": `${"x".repeat(9_000)}\n` };
