@@ -18,8 +18,12 @@
  * Mac schedule.
  *
  * `--save <file>` writes the triage report as `--json` prints it, each path
- * a real absolute path, by a temp file and a rename. `--since <file>` reads
- * a saved report before the run and prints only the change: the RED clauses
+ * a real absolute path, to `<file>.pending`, by a temp file and a rename. It
+ * first deletes an old `<file>.pending`, so a triage that fails leaves none.
+ * `--commit <file>` renames `<file>.pending` over `<file>`: a caller commits
+ * only once it has done all it must with the report, so a run that fails
+ * after the triage does not move the base. `--since <file>` reads `<file>`,
+ * never `<file>.pending`, and prints only the change: the RED clauses
  * that are new, each with its lines around it, and the ones that are gone.
  * A clause matches as `newReds` matches it, so a clause that only moved is
  * not new. `--settings` adds the model settings of `settings.json`.
@@ -54,6 +58,7 @@ const USAGE = `usage: rules_audit.ts [--repo <path>] [--json] [--always <rule,�
        rules_audit.ts --playbook [--repo <path>] [--fleet] [--memory]
                       [--files <path,…>] [--json] [--notify] [--settings]
                       [--save <file>] [--since <file>] [--self-update]
+       rules_audit.ts --commit <file>
 
 Audits one repo's agent instruction files — .claude/rules/**.md, CLAUDE.md,
 AGENTS.md — against how Claude Code and Codex load them: load scope, size
@@ -88,19 +93,31 @@ GREEN or YELLOW, 3 for RED. The inputs combine; with none, the current repo.
                           that fails sends its error
   --settings              add effortLevel, model and modelSettings from
                           settings.json ($CLAUDE_CONFIG_DIR, else ~/.claude)
-  --save <file>           also write the report, in the --json form, to <file>,
-                          each path a real absolute path
+  --save <file>           also write the report, in the --json form, to
+                          <file>.pending, each path a real absolute path; an
+                          old <file>.pending is deleted first, so a triage
+                          that fails leaves none. --commit moves it to <file>
   --since <file>          print only the change since the report saved in
                           <file>: the new RED clauses, each with two lines
                           around it, the gone ones, the totals of both runs
                           and the changed settings, in under 45,000 chars.
                           Exit 3 only for a new RED clause. A missing or bad
-                          <file> prints the totals and exits 0. It is read
-                          before --save writes, so both can name one file.
+                          <file> prints the totals and exits 0. It never
+                          reads <file>.pending, so both flags can name one
+                          file, and a run with no --commit moves no base.
   --self-update           with --fleet: git fetch origin main in the checkout
                           of this tool and, when it is on a clean main,
                           fast-forward it and run again on the new code; else
-                          list it as stale and run on the code as it is`;
+                          list it as stale and run on the code as it is
+
+--commit <file> renames <file>.pending, which --save wrote, over <file>, so
+the next --since compares with that run. Run it once the run has done all it
+must with the report. It prints one line and exits 0; with no <file>.pending
+it changes nothing, prints why and exits 0. Exit 1 when the rename fails, 2
+with any other flag.`;
+
+/** The suffix of the file `--save` writes and `--commit` renames over the base. */
+const PENDING_SUFFIX = ".pending";
 
 /** The longest `--since` output: odin cuts a tool's answer at 45,000 chars. */
 export const SINCE_MAX_CHARS = 45_000;
@@ -826,6 +843,23 @@ export function writeAtomic(file: string, text: string): void {
   }
 }
 
+/** `--commit`: renames `<file>.pending` over `<file>`. The line to print,
+ *  and the exit code: 0 when it moved or there was nothing to move. */
+export function commitSaved(file: string): { line: string; code: 0 | 1 } {
+  const pending = `${file}${PENDING_SUFFIX}`;
+  try {
+    fs.renameSync(pending, file);
+  } catch (e) {
+    const err = e as NodeJS.ErrnoException;
+    // Both files share one folder, so ENOENT means no pending report.
+    if (err.code === "ENOENT") {
+      return { line: `nothing to commit: no ${pending}; ${file} stays the base`, code: 0 };
+    }
+    return { line: `rules_audit: --commit: ${err.message}`, code: 1 };
+  }
+  return { line: `committed ${pending} over ${file}: the next --since compares with it`, code: 0 };
+}
+
 /** The result of `--self-update`: the checkout moved, or why not. */
 export type SelfUpdate = { updated: true; from: string; to: string } | { updated: false; stale?: StaleRepo };
 
@@ -861,8 +895,9 @@ export function selfUpdate(toolDir: string): SelfUpdate {
 async function playbookMain(flags: Map<string, string | true>, extraStale: StaleRepo[] = []): Promise<number> {
   const home = os.homedir();
   const sinceFile = flags.has("since") ? String(flags.get("since")) : undefined;
-  // Read before the run writes `--save`, so both flags can name one file.
   const base = sinceFile === undefined ? undefined : loadSaved(sinceFile);
+  // `main` deleted an old one before `--self-update`.
+  const pending = flags.has("save") ? `${String(flags.get("save"))}${PENDING_SUFFIX}` : undefined;
   const c = new Collector();
   try {
     const anyInput = flags.has("repo") || flags.has("fleet") || flags.has("memory") || flags.has("files");
@@ -905,9 +940,9 @@ async function playbookMain(flags: Map<string, string | true>, extraStale: Stale
     ...report, saved: new Date().toISOString(),
     files: report.files.map((f) => ({ ...f, path: names.get(f.path) ?? absolutePath(f.path) })),
   };
-  if (flags.has("save")) {
+  if (pending !== undefined) {
     try {
-      writeAtomic(String(flags.get("save")), `${JSON.stringify(absolute, null, 2)}\n`);
+      writeAtomic(pending, `${JSON.stringify(absolute, null, 2)}\n`);
     } catch (e) {
       return playbookFailed(flags, new Error(`--save: ${(e as Error).message}`), 1);
     }
@@ -956,9 +991,18 @@ function playbookFailed(flags: Map<string, string | true>, e: unknown, code: num
 
 export async function main(argv: string[]): Promise<number> {
   const { flags } = precheckCli(argv, {
-    values: ["--repo", "--always", "--file-budget", "--always-budget", "--files", "--save", "--since"],
+    values: ["--repo", "--always", "--file-budget", "--always-budget", "--files", "--save", "--since", "--commit"],
     switches: ["--json", "--playbook", "--fleet", "--memory", "--notify", "--settings", "--self-update"],
   }, USAGE);
+  if (flags.has("commit")) {
+    if (flags.size > 1) {
+      process.stderr.write(`rules_audit: --commit takes no other flag: ${[...flags.keys()].filter((k) => k !== "commit").map((k) => `--${k}`).join(", ")}\n`);
+      return 2;
+    }
+    const { line, code } = commitSaved(String(flags.get("commit")));
+    (code ? process.stderr : process.stdout).write(`${line}\n`);
+    return code;
+  }
   const needPlaybook = ["notify", "settings", "save", "since", "self-update"].filter((k) => flags.has(k));
   if (needPlaybook.length && !flags.has("playbook")) {
     process.stderr.write(`rules_audit: ${needPlaybook.map((k) => `--${k}`).join(", ")} need${needPlaybook.length === 1 ? "s" : ""} --playbook\n`);
@@ -972,6 +1016,19 @@ export async function main(argv: string[]): Promise<number> {
     if (flags.has("always") || flags.has("file-budget") || flags.has("always-budget")) {
       process.stderr.write("rules_audit: --always, --file-budget and --always-budget do not apply with --playbook\n");
       return 2;
+    }
+    if (flags.has("save")) {
+      // An old report must not reach `--commit` after this run fails, even
+      // when the new code of `--self-update` does not start.
+      const pending = `${String(flags.get("save"))}${PENDING_SUFFIX}`;
+      try {
+        const old = fs.existsSync(pending);
+        fs.rmSync(pending, { force: true });
+        // A caller that never commits never moves the base: say so.
+        if (old) process.stderr.write(`rules_audit: --save: deleted ${pending}, which no --commit moved to the base\n`);
+      } catch (e) {
+        return playbookFailed(flags, new Error(`--save: ${(e as Error).message}`), 1);
+      }
     }
     const extraStale: StaleRepo[] = [];
     if (flags.has("self-update")) {

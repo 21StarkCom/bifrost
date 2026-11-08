@@ -126,7 +126,8 @@ draft PR.
    root rules now refuse a new Mac service that the operator did not ask for.
    - `rules_audit.ts --since <run.json>` prints only the change against a saved
      run: each new RED clause, and each RED clause that is gone. `--save
-     <run.json>` keeps the run for the next week.
+     <run.json>` writes the run to `<run.json>.pending`. `--commit <run.json>`
+     moves it to `<run.json>` for the next week, once the run is done with it.
    - `--settings` adds `effortLevel`, `model` and `modelSettings` from
      `~/.claude/settings.json`. With `--since`, it prints each value that changed.
    - `--install-schedule` and `--uninstall-schedule` leave `rules_audit.ts`.
@@ -136,7 +137,9 @@ draft PR.
      `playbook.md`. It drops a kept gate or a false flag, with the reason. It
      writes a redline for each real RED.
    - The playbook files one ticket for each repo with a real new RED, or
-     comments on that repo's open ticket. It posts the summary to Slack.
+     comments on that repo's open ticket. It posts the summary to Slack. Then
+     it runs `rules_audit.ts --commit` on the state file. A run that stops
+     before that point leaves the base as it was.
    - `odinctl schedule add` also writes a systemd user timer on Linux. The devbox
      runs the playbook each Monday at 09:00, on the API key, with a ceiling of
      1,000,000 tokens for each run.

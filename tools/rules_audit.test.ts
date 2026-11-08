@@ -664,7 +664,7 @@ test("fitSince keeps the totals and the first new clauses under the limit, and c
   assert.equal(contextLines(null, 3).length, 0);
 });
 
-test("--save then --since on one file: no new RED and exit 0; an added RED is new and exit 3; a missing or bad file is the base", () => {
+test("--save then --commit then --since on one file: no new RED and exit 0; an added RED is new and exit 3; a missing or bad file is the base", () => {
   const dir = repo({ "CLAUDE.md": "# Rules\n\n- Run the tests.\n- This is the operator's call.\n" });
   const h = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "rules-audit-home-")));
   const env = { ...process.env, HOME: h, CLAUDE_CONFIG_DIR: path.join(h, "cfg") };
@@ -674,16 +674,21 @@ test("--save then --since on one file: no new RED and exit 0; an added RED is ne
     const first = run(["--playbook", "--settings", "--json", "--save", saved, "--since", saved], dir, env);
     assert.equal(first.status, 0, first.stderr);
     assert.equal(JSON.parse(first.stdout).reason, "no saved run: this run is the base");
-    const file = JSON.parse(fs.readFileSync(saved, "utf8"));
+    assert.deepEqual(fs.readdirSync(path.dirname(saved)), ["run.json.pending"], "--save writes only the pending file, and no temp file is left");
+    const file = JSON.parse(fs.readFileSync(`${saved}.pending`, "utf8"));
     assert.equal(file.files[0].path, path.join(dir, "CLAUDE.md"));
     assert.deepEqual(file.settings, { model: "opus" });
-    assert.deepEqual(fs.readdirSync(path.dirname(saved)), ["run.json"], "no temp file is left");
+    const committed = run(["--commit", saved], dir, env);
+    assert.equal(committed.status, 0, committed.stderr);
+    assert.equal(committed.stdout, `committed ${saved}.pending over ${saved}: the next --since compares with it\n`);
+    assert.deepEqual(fs.readdirSync(path.dirname(saved)), ["run.json"]);
 
     fs.writeFileSync(path.join(dir, "CLAUDE.md"), "# Rules\n\n- A line.\n- Run the tests.\n- This is the operator's call.\n");
     const same = run(["--playbook", "--settings", "--save", saved, "--since", saved], dir, env);
     assert.equal(same.status, 0, same.stderr);
     assert.match(same.stdout, /No new RED clause\./);
     assert.doesNotMatch(same.stdout, /Gone RED/, "a moved clause is not gone");
+    assert.equal(run(["--commit", saved], dir, env).status, 0);
 
     fs.appendFileSync(path.join(dir, "CLAUDE.md"), "- Wait for the operator's word.\n- After.\n");
     writeAll(h, { "cfg/settings.json": JSON.stringify({ model: "sonnet" }) });
@@ -700,6 +705,73 @@ test("--save then --since on one file: no new RED and exit 0; an added RED is ne
   } finally {
     for (const d of [dir, h]) fs.rmSync(d, { recursive: true, force: true });
   }
+});
+
+test("a run with no --commit moves no base: the next run names the same new RED clause again", () => {
+  const dir = repo({ "CLAUDE.md": "# Rules\n\n- Run the tests.\n" });
+  const h = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "rules-audit-home-")));
+  const env = { ...process.env, HOME: h };
+  const saved = path.join(h, "run.json");
+  try {
+    assert.equal(run(["--playbook", "--save", saved], dir, env).status, 0);
+    assert.equal(run(["--commit", saved], dir, env).status, 0);
+    const base = fs.readFileSync(saved, "utf8");
+
+    fs.appendFileSync(path.join(dir, "CLAUDE.md"), "- Wait for the operator's word.\n");
+    for (const n of [1, 2]) {
+      const r = run(["--playbook", "--save", saved, "--since", saved], dir, env);
+      assert.equal(r.status, 3, `run ${n}: ${r.stderr}`);
+      assert.match(r.stdout, /New RED clauses \(1\):\n {2}CLAUDE\.md:4 {2}GATE/, `run ${n}`);
+      assert.equal(fs.readFileSync(saved, "utf8"), base, `run ${n} left the base as it was`);
+    }
+
+    assert.equal(run(["--commit", saved], dir, env).status, 0);
+    assert.notEqual(fs.readFileSync(saved, "utf8"), base, "--commit moved the base");
+    const after = run(["--playbook", "--save", saved, "--since", saved], dir, env);
+    assert.equal(after.status, 0, after.stderr);
+    assert.match(after.stdout, /No new RED clause\./);
+  } finally {
+    for (const d of [dir, h]) fs.rmSync(d, { recursive: true, force: true });
+  }
+});
+
+test("--commit with no pending report changes nothing and exits 0; a failed triage deletes an old pending report", () => {
+  const h = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "rules-audit-home-")));
+  const saved = path.join(h, "run.json");
+  try {
+    fs.writeFileSync(saved, "base");
+    const none = run(["--commit", saved]);
+    assert.equal(none.status, 0, none.stderr);
+    assert.equal(none.stdout, `nothing to commit: no ${saved}.pending; ${saved} stays the base\n`);
+    assert.equal(fs.readFileSync(saved, "utf8"), "base");
+    assert.equal(run(["--commit", path.join(h, "no", "folder", "run.json")]).status, 0, "a missing folder is nothing to commit");
+
+    fs.writeFileSync(`${saved}.pending`, "an old report");
+    const failed = run(["--playbook", "--files", path.join(h, "missing.md"), "--save", saved], h, { ...process.env, HOME: h });
+    assert.equal(failed.status, 2, failed.stderr);
+    assert.match(failed.stderr, /^rules_audit: --save: deleted .*run\.json\.pending, which no --commit moved to the base\n/, "an uncommitted report is named");
+    assert.equal(fs.existsSync(`${saved}.pending`), false, "a triage that fails leaves no report to commit");
+    assert.equal(run(["--commit", saved]).status, 0);
+    assert.equal(fs.readFileSync(saved, "utf8"), "base");
+
+    fs.mkdirSync(`${saved}.pending`);
+    fs.writeFileSync(path.join(`${saved}.pending`, "x"), "");
+    const broken = run(["--commit", saved]);
+    assert.equal(broken.status, 1, broken.stdout);
+    assert.match(broken.stderr, /^rules_audit: --commit: /);
+    assert.equal(fs.readFileSync(saved, "utf8"), "base");
+  } finally {
+    fs.rmSync(h, { recursive: true, force: true });
+  }
+});
+
+test("--commit takes no other flag", () => {
+  for (const args of [["--commit", "/tmp/x.json", "--playbook"], ["--playbook", "--save", "/tmp/x.json", "--commit", "/tmp/x.json"], ["--commit", "/tmp/x.json", "--json"]]) {
+    const r = run(args);
+    assert.equal(r.status, 2, `${args.join(" ")}: ${r.stderr}`);
+    assert.match(r.stderr, /--commit takes no other flag: --/);
+  }
+  assert.match(run(["--commit"]).stderr, /--commit requires a value/);
 });
 
 /** A checkout of a copy of the tools on `main`, with a bare origin, and a home with an empty fleet. */
