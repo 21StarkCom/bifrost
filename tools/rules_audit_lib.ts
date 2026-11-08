@@ -526,37 +526,120 @@ function tableRows(raw: string): Block[] {
 /** The sentence of `text` around the match at [start, end), its list marker
  *  removed, clipped to 160 chars around the match. `plain` is `text` with the
  *  cited parts blanked, so a sentence end inside one does not split it. */
-function sentenceAround(text: string, plain: string, start: number, end: number): { from: number; shown: string } {
+function sentenceAround(text: string, plain: string, start: number, end: number): { from: number; to: number; shown: string } {
   const { from, to } = sentenceBounds(plain, start, end);
   const raw = text.slice(from, to);
   const body = raw.replace(/^\s*(?:(?:[-*+>]|\d+\.)\s+|#+\s+)*/, "");
   const sentence = body.trimEnd();
   const hit = start - from - (raw.length - body.length);
   const at = Math.max(Math.min(hit - 60, sentence.length - 159), 0);
-  return { from, shown: sentence.length <= 160 ? sentence : `${at ? "…" : ""}${clip(sentence.slice(at), at ? 159 : 160)}` };
+  return { from, to, shown: sentence.length <= 160 ? sentence : `${at ? "…" : ""}${clip(sentence.slice(at), at ? 159 : 160)}` };
 }
 
-/** Sentences that state gate words, one candidate per sentence, on the line
- *  where its first match starts; a phrase may wrap across lines. */
-export function findGates(file: string, text: string): Candidate[] {
-  const out: Candidate[] = [];
+/** One sentence that states gate words. `raw` and `plain` are the whole
+ *  sentence, `plain` with the cited parts blanked; each hit's offsets index
+ *  both. `shown` is the sentence as a report shows it. */
+export interface GateSentence {
+  line: number;
+  shown: string;
+  raw: string;
+  plain: string;
+  hits: { words: string; start: number; end: number }[];
+}
+
+/** Sentences that state gate words, one per sentence, on the line where its
+ *  first match starts; a phrase may wrap across lines. */
+export function gateSentences(text: string): GateSentence[] {
+  const out: GateSentence[] = [];
   for (const block of [...proseBlocks(text), ...tableRows(text)]) {
-    let open: { from: number; cand: Candidate; words: string[] } | undefined;
+    let open: { from: number; g: GateSentence } | undefined;
     // Sentence ends inside a code span or a quote do not split the sentence.
     const plain = blankCited(block.text);
     for (const m of plain.matchAll(GATE_RE)) {
       const words = m[0].replace(/[\s*_]+/g, " ");
       if (/ Go$/.test(words)) continue;
-      const { from, shown } = sentenceAround(block.text, plain, m.index, m.index + m[0].length);
+      const end = m.index + m[0].length;
+      const { from, to, shown } = sentenceAround(block.text, plain, m.index, end);
       if (!open || open.from !== from) {
-        open = { from, cand: { kind: "gate", file, line: lineAt(block, m.index), text: shown, detail: "" }, words: [] };
-        out.push(open.cand);
+        open = { from, g: { line: lineAt(block, m.index), shown, raw: block.text.slice(from, to), plain: plain.slice(from, to), hits: [] } };
+        out.push(open.g);
       }
-      open.words.push(words);
-      open.cand.detail = `gate words ${open.words.map((w) => `"${w}"`).join(", ")}: a step or a choice given to the operator`;
+      open.g.hits.push({ words, start: m.index - from, end: end - from });
     }
   }
   return out;
+}
+
+const gateWords = (hits: GateSentence["hits"]): string => `gate words ${hits.map((h) => `"${h.words}"`).join(", ")}`;
+
+/** Sentences that state gate words, one candidate per sentence. */
+export function findGates(file: string, text: string): Candidate[] {
+  return gateSentences(text).map((g) => ({
+    kind: "gate", file, line: g.line, text: g.shown, detail: `${gateWords(g.hits)}: a step or a choice given to the operator`,
+  }));
+}
+
+/** What a gate sentence names that keeps the gate (the playbook's GATE row):
+ *  an item on the root list "These still need a GO", a topic the root rules
+ *  give the operator, or a step that needs a person's own grant. Each one runs
+ *  on the whole sentence, code spans included. */
+export const KEPT_GATE_RES: readonly { label: string; re: RegExp }[] = [
+  {
+    label: "a write that cannot be undone",
+    re: /\b(?:cannot|can['’]t|can not|could not|couldn['’]t)\s+(?:be\s+)?(?:undone|undo|reversed|rolled\s+back)\b|\birreversibl[ey]\b|\bnot\s+reversible\b/i,
+  },
+  {
+    label: "a terraform apply or a publish by hand",
+    re: /^(?=.*\b(?:by\s+hand|hand-run|manual(?:ly)?)\b)(?=.*\b(?:terraform\s+apply|tofu\s+apply|publish\w*)\b)/is,
+  },
+  {
+    label: "a message to a person, people or a channel",
+    re: /^(?=.*\b(?:messages?|emails?|DMs?|posts?|Slack)\b)(?=.*\b(?:person|people|channels?)\b)/is,
+  },
+  { label: "a secret", re: /\b(?:secrets?|tokens?|keys?|credentials?|passwords?|passphrases?)\b/i },
+  {
+    label: "a topic the root rules give the operator",
+    re: /\b(?:product\s+scope|taste|money|costs?|spend(?:ing)?|pric(?:e|es|ing)|billing|invoices?|payments?|paid|people|hir(?:e|es|ing)|copyleft|[AL]?GPL|licen[cs](?:e|es|ing))\b|\bin\s+(?:the\s+operator['’]s|their|my)\s+name\b|\bon\s+(?:the\s+operator['’]s|their|my)\s+behalf\b/i,
+  },
+  {
+    label: "a step that needs a person's own grant",
+    re: /\b(?:sign(?:s|ed)?[- ]?in|log(?:s|ged)?[- ]?in|touch\s*id|face\s*id|sudo|keychain|passkey|privacy\s+(?:grant|permission|setting)s?|accessibility\s+(?:grant|permission)s?|screen\s+recording|full\s+disk\s+access|own\s+grant)\b|(?:^|[\s(])\/mcp\b/i,
+  },
+];
+
+/** A negating word right before a gate phrase, with only space or emphasis
+ *  between: "needs no go-ahead". Punctuation breaks it: "Never, whoever asks." */
+const NEGATED_RE = /(?:^|[^\w'’-])(?:no|not|never|nor|(?:is|are|was|were|does|do|did|need)n['’]t)[\s*_]+$/i;
+
+/** The gate phrases that are a gate only in a sentence that gives the
+ *  operator a step: "against its own start folder, not yours" is no gate. */
+export const GATE_STEP_PHRASES: readonly string[] = ["not yours", "did not name"];
+
+/** Words that give a step or a choice to the operator, without case; `GO`
+ *  and `OK` count only in capitals. */
+const OPERATOR_STEP_RE = /\b(?:ask(?:s|ed)?|approv\w*|confirm\w*|consent\w*|permission|sign-?off|decid\w*|decision|choos\w*|choice|hold|holds|held|soak|operator['’]s|(?:to|for)\s+the\s+operator|wait(?:s|ing)?\s+(?:for|on)|the\s+operator\s+(?:must|should|will|picks?|runs?|says?))\b/i;
+const OPERATOR_GO_RE = /\b(?:GO|OK)\b/;
+
+/** The triage flag of one gate sentence, by the playbook's checks in order;
+ *  the first check that matches decides:
+ *  1. it names a kept gate: YELLOW, for the review to confirm;
+ *  2. a negating word is right before the phrase: no GATE flag;
+ *  3. "not yours" or "did not name", in a sentence that gives the operator no
+ *     step: no GATE flag;
+ *  4. RED.
+ *  Checks 2 and 3 run on each phrase; the sentence is RED when one phrase is. */
+export function gateFlag(g: GateSentence): { flag: "YELLOW" | "RED"; detail: string } | null {
+  const whole = g.raw.replace(/[`*]/g, "").replace(/\s+/g, " ");
+  if (KEPT_GATE_RES.some(({ re }) => re.test(whole))) return { flag: "YELLOW", detail: "kept gate: the review confirms it" };
+  const live = g.hits.filter((h) => !NEGATED_RE.test(g.plain.slice(0, h.start)));
+  const needsStep = (h: GateSentence["hits"][number]) => GATE_STEP_PHRASES.includes(h.words.toLowerCase());
+  // The step words are read outside the phrases, so a negated "go-ahead" gives no step;
+  // a phrase that stays a gate on its own gives one.
+  let rest = g.plain;
+  for (const h of g.hits) rest = rest.slice(0, h.start) + " ".repeat(h.end - h.start) + rest.slice(h.end);
+  const givesStep = live.some((h) => !needsStep(h)) || OPERATOR_STEP_RE.test(rest) || OPERATOR_GO_RE.test(rest);
+  const red = live.filter((h) => givesStep || !needsStep(h));
+  return red.length ? { flag: "RED", detail: gateWords(red) } : null;
 }
 
 function clip(s: string, n: number): string {
@@ -1602,8 +1685,9 @@ export function triageText(kind: AgentKind, raw: string): { chars: number; budge
       }
     });
   }
-  for (const g of findGates("", raw)) {
-    clauses.push({ flag: "RED", type: "GATE", line: g.line, text: g.text, detail: g.detail.replace(/: a step .*$/, "") });
+  for (const g of gateSentences(raw)) {
+    const gate = gateFlag(g);
+    if (gate) clauses.push({ ...gate, type: "GATE", line: g.line, text: g.shown });
   }
   for (const h of phraseHits(raw, GROWTH_RE)) {
     clauses.push({ flag: "RED", type: "GROWTH", line: h.line, text: h.sentence, detail: `growth words "${h.match}"` });
