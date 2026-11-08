@@ -88,7 +88,7 @@ Each tool's `--help` and file header give its use. The traps:
 - `findings_review_post.ts` puts a finding on a generated path in the review body. Keep the config entry `generated_paths.repos["21StarkCom/bifrost"] = {"paths": ["__none__/**"]}`: without it, a default demotes findings on `marketplace.json`.
 - `fact_routing_hook.ts` (stark-ops' PostToolUse hook) flags an auto-memory write whose fact may belong in the vault-ecosystem corpus, and asks the session to move it or keep it. It names no agent file, writes no file, and prints nothing when no fact matches.
 - `ask_guard_metric.ts` measures the root rules' "Act, don't ask". `tools/ask_guard_metric.test.ts` holds the `needs-you` mod's tags to the metric's.
-- `rules_audit.ts` audits one repo's instruction files against `LOAD_MODEL` in `tools/rules_load_lib.ts`. It walks the disk, not `git ls-files`, since Claude Code loads gitignored instruction files too.
+- `rules_audit.ts` audits one repo's instruction files against `LOAD_MODEL` in `tools/rules_load_lib.ts`. It walks the disk, since gitignored instruction files load too; `--fleet` reads `origin/HEAD`.
 - When you change a loader cap in `tools/memory_tidy_lib.ts` or `tools/rules_load_lib.ts`, change `skill/stark-agent-docs/references/load-facts.md` too; `tools/agent_docs_facts.test.ts` pins them.
 
 ## Skills

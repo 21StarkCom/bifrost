@@ -736,3 +736,39 @@ test("notifySummary: a load set over budget names its size, without the file lis
   const r = tri({ "CLAUDE.md": big("w"), ".claude/rules/a.md": big("x"), ".claude/rules/b.md": big("y") }, { repo: true });
   assert.match(notifySummary(r).body, /^- CLAUDE\.md: 42k chars in 3 files, start-up load set over the 40k budget$/m);
 });
+
+test("triage: a stale file keeps its reason; the text marks its line and lists the repo; the push lists it first", () => {
+  const files = { "CLAUDE.md": "- This is the operator's call.\n", "pkg/CLAUDE.md": "- Plain rule here.\n" };
+  const reason = "git fetch failed: fatal: could not read from remote repository";
+  const r = triage({
+    groups: [{
+      root: "/repo", view: view(files), repo: false,
+      files: [{ rel: "CLAUDE.md", kind: "root", path: "CLAUDE.md", stale: reason }, { rel: "pkg/CLAUDE.md", kind: "package", path: "pkg/CLAUDE.md" }],
+    }],
+    stale: [{ repo: "~/Code/21Stark/repo", reason }],
+  });
+  assert.equal(r.files[0].stale, reason);
+  assert.ok(!("stale" in r.files[1]));
+  assert.deepEqual(r.stale, [{ repo: "~/Code/21Stark/repo", reason }]);
+  assert.deepEqual(formatTriage(r).split("\n"), [
+    "RED     CLAUDE.md  31/15k chars · GATE 1 · STALE",
+    "GREEN   pkg/CLAUDE.md  19/10k chars",
+    "",
+    "RED clauses:",
+    "  CLAUDE.md:1  GATE  gate words \"the operator's call\": This is the operator's call.",
+    "",
+    "Stale, read from the checkout, not origin/HEAD:",
+    `  ~/Code/21Stark/repo  ${reason}`,
+    "",
+    "2 agent files: GREEN 1 · YELLOW 0 · RED 1",
+  ]);
+  assert.deepEqual(notifySummary(r).body.split("\n").slice(0, 4), [
+    "2 agent files.",
+    "Stale, read from the checkout, not origin/HEAD (1):",
+    `- ~/Code/21Stark/repo: ${reason}`,
+    "RED files (1):",
+  ]);
+  // With no stale repo the report says so with an empty list, and prints nothing.
+  assert.deepEqual(tri(files).stale, []);
+  assert.doesNotMatch(formatTriage(tri(files)), /STALE|Stale/);
+});

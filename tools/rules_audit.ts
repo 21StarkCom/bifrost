@@ -17,6 +17,14 @@
  * summary with `heimdall send`. `--install-schedule` writes and loads the
  * launchd job that sends it each Monday (the weekly sweep); its output goes to
  * `<stateRoot>/agent-doc-sweep/weekly.log`.
+ *
+ * `--fleet` alone reads each repo at `origin/HEAD`, not the disk: it runs
+ * `git fetch origin`, then lists the tree with `git ls-tree` and reads it
+ * with `git cat-file`. That moves remote refs only, never a checkout, its
+ * index or its files, and it writes no temp file. Each file keeps its real
+ * path, which the root-rules match, the CLAUDE.md files above the repo and
+ * the dedupe need. A repo whose fetch or read fails is read from its
+ * checkout and marked stale in the report.
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -25,12 +33,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { stateRoot } from "./asset_root_lib.ts";
+import { spawnBounded } from "./bounded_spawn_lib.ts";
 import { precheckCli } from "./cli_args_lib.ts";
 import { heimdallSend, installWeeklyJob, uninstallJob, weeklyPlist } from "./launchd_lib.ts";
 import { isMainModule } from "./main_module_lib.ts";
 import {
   agentKind, auditRules, formatText, formatTriage, instructionKind, notifySummary, triage,
-  type AgentKind, type RepoView, type TriageGroup,
+  type AgentKind, type RepoView, type StaleRepo, type TriageGroup,
 } from "./rules_audit_lib.ts";
 
 export const SWEEP_LABEL = "com.21stark.agent-doc-sweep";
@@ -71,7 +80,10 @@ YELLOW or RED line per file, then each RED clause as path:line. Exit 0 for
 GREEN or YELLOW, 3 for RED. The inputs combine; with none, the current repo.
 
   --repo <path>           the agent files of one repo
-  --fleet                 every repo under ~/Code/21Stark, and its own CLAUDE.md
+  --fleet                 every repo under ~/Code/21Stark, and its own CLAUDE.md,
+                          at origin/HEAD after a git fetch; a repo that cannot
+                          be fetched or read is read from its checkout and
+                          marked stale
   --memory                every ~/.claude/projects/*/memory/ folder
   --files <path,…>        these agent files only
   --notify                also send a summary with heimdall send: the RED
@@ -89,6 +101,14 @@ const PRUNE_DIRS = new Set(["node_modules", "bower_components", ".venv", "venv",
 const CLAUDE_FAMILY = ["CLAUDE.md", ".claude/CLAUDE.md", "CLAUDE.local.md"];
 const MAX_FILES = 250_000;
 const MAX_READ_BYTES = 8 * 1024 * 1024;
+/** How long one fleet repo's `git fetch` may run. */
+const FETCH_TIMEOUT_MS = 60_000;
+/** The fleet repos that fetch at one time. */
+const FETCH_CONCURRENCY = 8;
+/** Folders of a fleet repo whose agent files never load: nastrond's buried code. */
+const FLEET_SKIP: Readonly<Record<string, readonly string[]>> = { nastrond: ["graves/"] };
+/** A link `walkRepo` follows into a directory: one inside a rules dir. */
+const RULES_LINK_RE = /(?:^|\/)\.claude\/rules(?:\/|$)/;
 
 export interface Walk {
   files: string[];
@@ -140,7 +160,7 @@ export function walkRepo(root: string): Walk {
         if (stat.isFile()) {
           if (inside) files.push(r);
           else if (/(?:^|\/)\.claude\/rules\//.test(r)) externalRuleLinks.push(r);
-        } else if (stat.isDirectory() && /(?:^|\/)\.claude\/rules(?:\/|$)/.test(r)) {
+        } else if (stat.isDirectory() && RULES_LINK_RE.test(r)) {
           // Claude Code follows symlinked directories inside a rules dir.
           if (!inside) externalRuleLinks.push(r);
           else if (!linkedDirs.has(real)) {
@@ -211,6 +231,143 @@ export function buildView(root: string): RepoView {
   };
 }
 
+/** The first line of a git error, for the stale mark. */
+function firstLine(text: string | Buffer | null | undefined): string {
+  const line = String(text ?? "").split("\n").map((l) => l.trim()).find(Boolean) ?? "";
+  return line.length > 160 ? `${line.slice(0, 159)}…` : line;
+}
+
+/** A path `walkRepo` does not reach: in a dependency tree or a worktrees folder. */
+function prunedPath(rel: string, isBlob: (rel: string) => boolean): boolean {
+  const parts = rel.split("/");
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (PRUNE_DIRS.has(parts[i])) return true;
+    if (parts[i] === "vendor" && isBlob([...parts.slice(0, i + 1), "modules.txt"].join("/"))) return true;
+  }
+  return /(?:^|\/)\.(?:claude|cursor)\/worktrees\//.test(rel);
+}
+
+/** Adds the text of each blob to `into`, keyed by its id, with one
+ *  `git cat-file --batch`. Throws when git fails or a blob is missing. */
+function catBlobs(root: string, oids: Iterable<string>, into: Map<string, string>): void {
+  const todo = [...new Set(oids)].filter((o) => !into.has(o));
+  if (!todo.length) return;
+  const r = spawnSync("git", ["-C", root, "cat-file", "--batch"], {
+    input: `${todo.join("\n")}\n`, timeout: 30_000, maxBuffer: 512 * 1024 * 1024,
+  });
+  if (r.status !== 0) throw new Error(`git cat-file failed: ${firstLine(r.stderr) || r.error?.message || `exit ${r.status}`}`);
+  const out = r.stdout;
+  for (let at = 0; at < out.length;) {
+    const nl = out.indexOf(10, at);
+    const [oid, type, size] = out.toString("utf8", at, nl < 0 ? out.length : nl).split(" ");
+    if (nl < 0 || type !== "blob") throw new Error(`git cat-file: no blob ${oid}`);
+    const end = nl + 1 + Number(size);
+    into.set(oid, out.toString("utf8", nl + 1, end));
+    at = end + 1;
+  }
+}
+
+/** A repo at `origin/HEAD`: its tree from `git ls-tree`, its text from
+ *  `git cat-file`, and no read of the checkout. */
+export interface OriginView extends RepoView {
+  /** `rel` with each link on its way followed in the tree; null when a link
+   *  leaves the repo or loops. */
+  resolve(rel: string): string | null;
+  /** `rel` is a symlink in the tree. */
+  isLink(rel: string): boolean;
+}
+
+/** The view of `root` at `origin/HEAD`, pruned as `walkRepo` prunes: a file
+ *  link inside the repo is a file, and a directory link inside a rules dir is
+ *  walked. A link out of the repo reads as missing, and the view has no
+ *  `externalRuleLinks`: the triage reads neither. No path is ignored, since
+ *  every file at origin is tracked. Agent and instruction files are read up
+ *  front, so that a failed read throws here; other files are read on demand.
+ *  Throws when git cannot read the tree. */
+export function originView(root: string): OriginView {
+  const head = git(root, ["rev-parse", "--verify", "--quiet", "origin/HEAD^{commit}"]);
+  if (head.status !== 0) throw new Error("origin/HEAD is not set");
+  const ls = git(root, ["ls-tree", "-r", "-l", "-z", "--full-tree", head.stdout.trim()]);
+  if (ls.status !== 0) throw new Error(`git ls-tree failed: ${firstLine(ls.stderr) || ls.error?.message || `exit ${ls.status}`}`);
+  const blobs = new Map<string, { link: boolean; oid: string; size: number }>();
+  const dirs = new Set<string>([""]);
+  for (const rec of ls.stdout.split("\0")) {
+    const tab = rec.indexOf("\t");
+    if (tab < 0) continue;
+    const [mode, type, oid, size] = rec.slice(0, tab).split(/ +/);
+    const rel = rec.slice(tab + 1);
+    for (let i = rel.indexOf("/"); i >= 0; i = rel.indexOf("/", i + 1)) dirs.add(rel.slice(0, i));
+    if (type === "blob") blobs.set(rel, { link: mode === "120000", oid, size: Number(size) });
+    else dirs.add(rel); // a submodule: a folder in the checkout
+  }
+  const texts = new Map<string, string>();
+  catBlobs(root, [...blobs.values()].filter((b) => b.link).map((b) => b.oid), texts);
+  const resolve = (rel: string): string | null => {
+    let parts = rel === "" ? [] : rel.split("/");
+    for (let i = 0, hops = 0; i < parts.length; i++) {
+      const at = parts.slice(0, i + 1).join("/");
+      const b = blobs.get(at);
+      if (!b?.link) continue;
+      const target = texts.get(b.oid)!;
+      if (++hops > 40 || target.startsWith("/")) return null;
+      const to = path.posix.normalize(path.posix.join(path.posix.dirname(at), target));
+      if (to === ".." || to.startsWith("../")) return null;
+      parts = [...(to === "." ? [] : to.split("/")), ...parts.slice(i + 1)];
+      i = -1;
+    }
+    return parts.join("/");
+  };
+  /** The blob a path reads, after its links; undefined for none. */
+  const blobAt = (rel: string) => {
+    const n = path.posix.normalize(rel).replace(/\/+$/, "");
+    const r = n === "." ? "" : resolve(n);
+    return r === null ? undefined : { rel: r, blob: blobs.get(r) };
+  };
+  const isFile = (rel: string) => blobAt(rel)?.blob !== undefined;
+  const files: string[] = [];
+  const walked = new Set<string>();
+  for (const [rel, b] of blobs) {
+    if (prunedPath(rel, isFile)) continue;
+    const to = b.link ? resolve(rel) : rel;
+    if (to === null) continue;
+    if (blobs.has(to)) files.push(rel);
+    else if (dirs.has(to) && RULES_LINK_RE.test(rel) && !walked.has(to)) {
+      walked.add(to);
+      for (const p of blobs.keys()) {
+        const alias = `${rel}/${p.slice(to === "" ? 0 : to.length + 1)}`;
+        if ((to === "" || p.startsWith(`${to}/`)) && !prunedPath(alias, isFile) && isFile(alias)) files.push(alias);
+      }
+    }
+  }
+  files.sort();
+  const read = (rel: string): string | null => {
+    const b = blobAt(rel)?.blob;
+    if (!b || b.size > MAX_READ_BYTES) return null;
+    if (!texts.has(b.oid)) {
+      try {
+        catBlobs(root, [b.oid], texts);
+      } catch {
+        return null;
+      }
+    }
+    return texts.get(b.oid) ?? null;
+  };
+  const wanted = files.filter((f) => agentKind(f) || instructionKind(f)).map((f) => blobAt(f)?.blob);
+  catBlobs(root, wanted.filter((b) => b && b.size <= MAX_READ_BYTES).map((b) => b!.oid), texts);
+  return {
+    files,
+    read,
+    exists: (rel) => {
+      const at = blobAt(rel);
+      return at !== undefined && (at.blob !== undefined || dirs.has(at.rel));
+    },
+    ignored: new Set(),
+    claudeFamilyAbove: CLAUDE_FAMILY.some(isFile) || claudeFamilyAbove(path.dirname(root)),
+    resolve,
+    isLink: (rel) => blobs.get(rel)?.link === true,
+  };
+}
+
 function budget(flag: string, v: string | true | undefined): number | undefined {
   if (v === undefined) return undefined;
   const n = Number(v);
@@ -233,10 +390,10 @@ function gitTop(target: string): string | null {
 }
 
 /** A view of a folder that is no repo: a memory folder or the workspace. */
-function folderView(root: string, files: string[]): RepoView {
+function folderView(root: string, files: string[], read = readUnder(root)): RepoView {
   return {
     files,
-    read: readUnder(root),
+    read,
     exists: (rel) => fs.existsSync(path.join(root, rel)),
     ignored: new Set(),
     claudeFamilyAbove: true,
@@ -247,8 +404,10 @@ function folderView(root: string, files: string[]): RepoView {
  *  each folder from `/` down to the repo's parent, until a folder is in a git
  *  work tree. Such a folder (the main checkout above a worktree) and all below
  *  it belong to that other repo. A link to the repo's own root file is skipped:
- *  the load emulation counts that file. */
-export function claudeFilesAbove(root: string): { path: string; text: string }[] {
+ *  the load emulation counts that file. `read` reads a file by its real path. */
+export function claudeFilesAbove(
+  root: string, read: (real: string) => string | null = (real) => fs.readFileSync(real, "utf8"),
+): { path: string; text: string }[] {
   const real = fs.realpathSync(root);
   const own = new Set(CLAUDE_FAMILY.map((n) => path.join(real, n)).filter((p) => fs.existsSync(p)).map((p) => fs.realpathSync(p)));
   const dirs: string[] = [];
@@ -263,7 +422,8 @@ export function claudeFilesAbove(root: string): { path: string; text: string }[]
       const p = path.join(d, name);
       const target = fs.existsSync(p) ? fs.realpathSync(p) : null;
       if (!target || own.has(target) || !fs.statSync(target).isFile()) continue;
-      out.push({ path: displayPath(p), text: fs.readFileSync(target, "utf8") });
+      const text = read(target);
+      if (text !== null) out.push({ path: displayPath(p), text });
     }
   }
   return out;
@@ -276,43 +436,117 @@ function memoryKind(rel: string): AgentKind | null {
   return rel === "MEMORY.md" ? "memory-index" : "memory-note";
 }
 
+/** The entry of `byRoot` whose real root holds the real path `real`. */
+function holder<T>(byRoot: Map<string, T & { real: string }>, real: string): T & { real: string } | undefined {
+  for (const v of byRoot.values()) if (real.startsWith(`${v.real}${path.sep}`)) return v;
+  return undefined;
+}
+
 class Collector {
   readonly groups = new Map<string, TriageGroup>();
   /** Real path → report name of each file taken: a file reached twice (a
    *  symlink, or a repo named twice) is triaged once. */
   readonly taken = new Map<string, string>();
+  /** Root → the view at `origin/HEAD` of each fleet repo that `--fleet` read there. */
+  readonly origin = new Map<string, { view: OriginView; real: string }>();
+  /** Root → each fleet repo read from its checkout instead, and why. */
+  readonly stale = new Map<string, StaleRepo & { real: string }>();
+
+  /** A file by its real path: in its fleet repo's view at `origin/HEAD` when
+   *  there is one, else from the disk. */
+  readReal(real: string): string | null {
+    const o = holder(this.origin, real);
+    if (o) return o.view.read(path.relative(o.real, real).split(path.sep).join("/"));
+    return readUnder(path.dirname(real))(path.basename(real));
+  }
 
   repo(root: string): TriageGroup {
     let g = this.groups.get(root);
-    if (!g) this.groups.set(root, (g = { root, view: buildView(root), repo: true, files: [], above: claudeFilesAbove(root) }));
+    if (!g) {
+      const view = this.origin.get(root)?.view ?? buildView(root);
+      this.groups.set(root, (g = { root, view, repo: true, files: [], above: claudeFilesAbove(root, (real) => this.readReal(real)) }));
+    }
     return g;
   }
 
   /** `files` is called only when the folder has no group yet. */
-  folder(root: string, files: () => string[]): TriageGroup {
+  folder(root: string, files: () => string[], read?: (rel: string) => string | null): TriageGroup {
     let g = this.groups.get(root);
-    if (!g) this.groups.set(root, (g = { root, view: folderView(root, files()), repo: false, files: [] }));
+    if (!g) this.groups.set(root, (g = { root, view: folderView(root, files(), read), repo: false, files: [] }));
     return g;
   }
 
-  add(g: TriageGroup, rel: string, kind: AgentKind, name = displayPath(path.join(g.root, rel))): void {
-    let real: string;
-    try {
-      real = fs.realpathSync(path.join(g.root, rel));
-    } catch {
-      return;
-    }
-    if (this.taken.has(real)) return;
-    this.taken.set(real, name);
-    g.files.push({ rel, kind, path: name });
+  /** The origin view `g` reads, if any: a repo that `--repo` named first
+   *  keeps its disk view. */
+  atOrigin(g: TriageGroup): { view: OriginView; real: string } | undefined {
+    const o = this.origin.get(g.root);
+    return o?.view === g.view ? o : undefined;
   }
 
-  addRepo(root: string): void {
+  /** The real path that triages a file once, or null for none. A repo at
+   *  `origin/HEAD` follows its links in its tree, so a file that its
+   *  checkout lacks has one too. */
+  realPath(g: TriageGroup, rel: string): string | null {
+    const o = this.atOrigin(g);
+    if (o) {
+      const r = o.view.resolve(rel);
+      return r === null ? null : path.join(o.real, r);
+    }
+    try {
+      return fs.realpathSync(path.join(g.root, rel));
+    } catch {
+      return null;
+    }
+  }
+
+  add(g: TriageGroup, rel: string, kind: AgentKind, name = displayPath(path.join(g.root, rel))): void {
+    const real = this.realPath(g, rel);
+    if (real === null || this.taken.has(real)) return;
+    this.taken.set(real, name);
+    const stale = holder(this.stale, real)?.reason;
+    g.files.push({ rel, kind, path: name, ...(stale === undefined ? {} : { stale }) });
+  }
+
+  /** `skip` names folders of the repo whose agent files are left out. */
+  addRepo(root: string, skip: readonly string[] = []): void {
     const g = this.repo(root);
-    const isLink = (rel: string) => fs.lstatSync(path.join(root, rel), { throwIfNoEntry: false })?.isSymbolicLink() ?? false;
+    const o = this.atOrigin(g);
+    const isLink = (rel: string) => o ? o.view.isLink(rel) : fs.lstatSync(path.join(root, rel), { throwIfNoEntry: false })?.isSymbolicLink() ?? false;
     // A real file before a link to it (`AGENTS.md` → `CLAUDE.md`): the report names the file to edit.
-    const agent = g.view.files.filter((rel) => agentKind(rel)).sort((a, b) => Number(isLink(a)) - Number(isLink(b)));
+    const agent = g.view.files.filter((rel) => agentKind(rel) && !skip.some((s) => rel.startsWith(s)))
+      .sort((a, b) => Number(isLink(a)) - Number(isLink(b)));
     for (const rel of agent) this.add(g, rel, agentKind(rel)!);
+  }
+
+  /** Each repo under `fleet` at `origin/HEAD`, after a fetch, and the
+   *  folder's own CLAUDE.md, read through the repo it links into. A repo
+   *  whose fetch or read fails is read from its checkout and marked stale. */
+  async addFleet(fleet: string): Promise<void> {
+    if (!fs.existsSync(fleet)) throw new UsageError(`no fleet folder at ${fleet}`);
+    const entries = fs.readdirSync(fleet, { withFileTypes: true });
+    const repos = entries.filter((e) => e.isDirectory() && fs.existsSync(path.join(fleet, e.name, ".git")))
+      .map((e) => e.name).sort((a, b) => a.localeCompare(b));
+    const failed = await fetchAll(repos.map((name) => path.join(fleet, name)));
+    for (const name of repos) {
+      const root = path.join(fleet, name);
+      const real = fs.realpathSync(root);
+      let reason = failed.get(root);
+      if (reason === undefined) {
+        try {
+          this.origin.set(root, { view: originView(root), real });
+        } catch (e) {
+          reason = (e as Error).message;
+        }
+      }
+      if (reason !== undefined) this.stale.set(root, { repo: displayPath(root), reason, real });
+    }
+    const own = entries.filter((e) => !e.isDirectory() && agentKind(e.name) === "root").map((e) => e.name).sort();
+    const g = this.folder(fleet, () => own, (rel) => {
+      const p = path.join(fleet, rel);
+      return fs.existsSync(p) ? this.readReal(fs.realpathSync(p)) : null;
+    });
+    for (const name of own) this.add(g, name, "root");
+    for (const name of repos) this.addRepo(path.join(fleet, name), FLEET_SKIP[name]);
   }
 
   addMemory(dir: string): void {
@@ -325,6 +559,35 @@ class Collector {
 }
 
 class UsageError extends Error {}
+
+/** `git fetch origin` in each repo, `FETCH_CONCURRENCY` at a time and each
+ *  within `FETCH_TIMEOUT_MS`: root → why the fetch failed, for each that did.
+ *  The fetch moves remote refs only; it writes no `FETCH_HEAD` and runs no
+ *  maintenance. Its own session has no terminal, so a sign-in prompt fails. */
+async function fetchAll(roots: string[]): Promise<Map<string, string>> {
+  const failed = new Map<string, string>();
+  const queue = [...roots];
+  const env = { ...process.env, GIT_TERMINAL_PROMPT: "0" };
+  const fetchOne = async (root: string) => {
+    try {
+      const r = await spawnBounded("git", ["-C", root, "fetch", "--quiet", "--no-write-fetch-head", "--no-auto-gc", "origin"], {
+        env, timeoutMs: FETCH_TIMEOUT_MS, maxBuffer: 1024 * 1024,
+      });
+      if (r.status === 0) return;
+      const timedOut = (r.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT";
+      failed.set(root, timedOut
+        ? `git fetch timed out after ${FETCH_TIMEOUT_MS / 1000}s`
+        : `git fetch failed: ${firstLine(r.stderr) || r.error?.message || `exit ${r.status}`}`);
+    } catch (e) {
+      failed.set(root, `git fetch failed: ${(e as Error).message}`);
+    }
+  };
+  const worker = async () => {
+    for (let root = queue.shift(); root !== undefined; root = queue.shift()) await fetchOne(root);
+  };
+  await Promise.all(Array.from({ length: Math.min(FETCH_CONCURRENCY, roots.length) }, worker));
+  return failed;
+}
 
 function collectFiles(c: Collector, list: string): void {
   const items = list.split(",").map((s) => s.trim()).filter(Boolean);
@@ -349,7 +612,7 @@ function collectFiles(c: Collector, list: string): void {
   }
 }
 
-function playbookMain(flags: Map<string, string | true>): number {
+async function playbookMain(flags: Map<string, string | true>): Promise<number> {
   const home = os.homedir();
   const c = new Collector();
   try {
@@ -361,18 +624,7 @@ function playbookMain(flags: Map<string, string | true>): number {
       c.addRepo(top);
     }
     if (flags.has("files")) collectFiles(c, String(flags.get("files")));
-    if (flags.has("fleet")) {
-      const fleet = path.join(home, "Code", "21Stark");
-      if (!fs.existsSync(fleet)) throw new UsageError(`no fleet folder at ${fleet}`);
-      const entries = fs.readdirSync(fleet, { withFileTypes: true });
-      const own = entries.filter((e) => !e.isDirectory() && agentKind(e.name) === "root").map((e) => e.name).sort();
-      const g = c.folder(fleet, () => own);
-      for (const name of own) c.add(g, name, "root");
-      for (const e of entries.filter((x) => x.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
-        const dir = path.join(fleet, e.name);
-        if (fs.existsSync(path.join(dir, ".git"))) c.addRepo(dir);
-      }
-    }
+    if (flags.has("fleet")) await c.addFleet(path.join(home, "Code", "21Stark"));
     if (flags.has("memory")) {
       const projects = path.join(home, ".claude", "projects");
       for (const slug of fs.existsSync(projects) ? fs.readdirSync(projects).sort() : []) {
@@ -389,9 +641,11 @@ function playbookMain(flags: Map<string, string | true>): number {
     let rootRules: { path: string; text: string } | undefined;
     if (fs.existsSync(rootPath)) {
       const real = fs.realpathSync(rootPath);
+      // When `--fleet` triages them, the triage reads their text at origin/HEAD.
       rootRules = { path: c.taken.get(real) ?? displayPath(rootPath), text: fs.readFileSync(real, "utf8") };
     }
-    report = triage({ groups: [...c.groups.values()], rootRules });
+    const stale = [...c.stale.values()].map(({ repo, reason }) => ({ repo, reason }));
+    report = triage({ groups: [...c.groups.values()], rootRules, stale });
   } catch (e) {
     return playbookFailed(flags, e, 1);
   }
@@ -433,7 +687,7 @@ function installSchedule(): number {
   });
 }
 
-export function main(argv: string[]): number {
+export async function main(argv: string[]): Promise<number> {
   const { flags } = precheckCli(argv, {
     values: ["--repo", "--always", "--file-budget", "--always-budget", "--files"],
     switches: ["--json", "--playbook", "--fleet", "--memory", "--notify", "--install-schedule", "--uninstall-schedule"],
@@ -496,5 +750,5 @@ export function main(argv: string[]): number {
 }
 
 if (isMainModule(import.meta.url)) {
-  process.exitCode = main(process.argv.slice(2));
+  process.exitCode = await main(process.argv.slice(2));
 }

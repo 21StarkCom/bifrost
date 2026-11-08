@@ -70,7 +70,9 @@ budget is RED.
 seconds. Its inputs are `--repo <path>`, `--fleet`, `--memory` and
 `--files <list>`. It checks the size budgets above, the phrase lists below,
 copies (of `~/Code/CLAUDE.md` RED, of another agent file YELLOW), and dead
-pointers. It exits 3 when a file is RED.
+pointers. It exits 3 when a file is RED. `--fleet` reads each repo at
+`origin/HEAD` after a `git fetch`; it reads a repo that it cannot fetch from
+the checkout, and marks that repo stale.
 
 - A pointer is a link, an `@import`, or a code path to a Markdown file. A
   path to code needs the review.
