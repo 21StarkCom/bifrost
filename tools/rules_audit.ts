@@ -14,9 +14,17 @@
  * `--playbook` triages agent files against the agent-doc playbook instead
  * (`triage` in `rules_audit_lib.ts`): a repo, the fleet under `~/Code/21Stark`,
  * the auto-memory folders, or a list of files. `--notify` also sends its
- * summary with `heimdall send`. `--install-schedule` writes and loads the
- * launchd job that sends it each Monday (the weekly sweep); its output goes to
- * `<stateRoot>/agent-doc-sweep/weekly.log`.
+ * summary with `heimdall send`. The weekly sweep runs on the devbox, not as a
+ * Mac schedule.
+ *
+ * `--save <file>` writes the triage report as `--json` prints it, each path
+ * a real absolute path, by a temp file and a rename. `--since <file>` reads
+ * a saved report before the run and prints only the change: the RED clauses
+ * that are new, each with its lines around it, and the ones that are gone.
+ * A clause matches as `newReds` matches it, so a clause that only moved is
+ * not new. `--settings` adds the model settings of `settings.json`.
+ * `--self-update` (`--fleet` only) fast-forwards the checkout that holds
+ * this tool to `origin/main` and runs again on the new code.
  *
  * `--fleet` alone reads each repo at `origin/HEAD`, not the disk: it runs
  * `git fetch origin`, then lists the tree with `git ls-tree` and reads it
@@ -32,31 +40,20 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { stateRoot } from "./asset_root_lib.ts";
 import { spawnBounded } from "./bounded_spawn_lib.ts";
 import { precheckCli } from "./cli_args_lib.ts";
-import { heimdallSend, installWeeklyJob, uninstallJob, weeklyPlist } from "./launchd_lib.ts";
+import { heimdallSend } from "./launchd_lib.ts";
 import { isMainModule } from "./main_module_lib.ts";
 import {
-  agentKind, auditRules, formatText, formatTriage, instructionKind, notifySummary, triage,
-  type AgentKind, type RepoView, type StaleRepo, type TriageGroup,
+  agentKind, auditRules, formatText, formatTriage, instructionKind, newReds, notifySummary, triage,
+  type AgentKind, type Clause, type Flag, type RepoView, type StaleRepo, type TriageGroup, type TriageReport,
 } from "./rules_audit_lib.ts";
-
-export const SWEEP_LABEL = "com.21stark.agent-doc-sweep";
-
-/** The weekly sweep: the fleet and the memory folders, each Monday at 09:00 local. */
-const SWEEP = { label: SWEEP_LABEL, args: ["--playbook", "--fleet", "--memory", "--notify"], weekday: 1, hour: 9 } as const;
-
-/** The plist of the sweep's launchd job, with its output to `log`. */
-export function sweepPlist(tool: string, log: string, envPath: string): string {
-  return weeklyPlist({ ...SWEEP, tool, log, envPath });
-}
 
 const USAGE = `usage: rules_audit.ts [--repo <path>] [--json] [--always <rule,…>]
                       [--file-budget <bytes>] [--always-budget <bytes>]
        rules_audit.ts --playbook [--repo <path>] [--fleet] [--memory]
-                      [--files <path,…>] [--json] [--notify]
-       rules_audit.ts --install-schedule | --uninstall-schedule
+                      [--files <path,…>] [--json] [--notify] [--settings]
+                      [--save <file>] [--since <file>] [--self-update]
 
 Audits one repo's agent instruction files — .claude/rules/**.md, CLAUDE.md,
 AGENTS.md — against how Claude Code and Codex load them: load scope, size
@@ -89,12 +86,24 @@ GREEN or YELLOW, 3 for RED. The inputs combine; with none, the current repo.
   --notify                also send a summary with heimdall send: the RED
                           files first, then the files over budget; a triage
                           that fails sends its error
+  --settings              add effortLevel, model and modelSettings from
+                          settings.json ($CLAUDE_CONFIG_DIR, else ~/.claude)
+  --save <file>           also write the report, in the --json form, to <file>,
+                          each path a real absolute path
+  --since <file>          print only the change since the report saved in
+                          <file>: the new RED clauses, each with two lines
+                          around it, the gone ones, the totals of both runs
+                          and the changed settings, in under 45,000 chars.
+                          Exit 3 only for a new RED clause. A missing or bad
+                          <file> prints the totals and exits 0. It is read
+                          before --save writes, so both can name one file.
+  --self-update           with --fleet: git fetch origin main in the checkout
+                          of this tool and, when it is on a clean main,
+                          fast-forward it and run again on the new code; else
+                          list it as stale and run on the code as it is`;
 
-The weekly sweep:
-
-  --install-schedule      write and load the launchd job ${SWEEP_LABEL}
-                          (--playbook --fleet --memory --notify, Mondays 09:00 local)
-  --uninstall-schedule    unload and remove that job`;
+/** The longest `--since` output: odin cuts a tool's answer at 45,000 chars. */
+export const SINCE_MAX_CHARS = 45_000;
 
 const PRUNE_DIRS = new Set(["node_modules", "bower_components", ".venv", "venv", "__pycache__"]);
 /** The files Claude Code reads as a folder's CLAUDE.md. */
@@ -628,8 +637,232 @@ function collectFiles(c: Collector, list: string): void {
   }
 }
 
-async function playbookMain(flags: Map<string, string | true>): Promise<number> {
+/** The model settings that `--settings` reads. */
+export const SETTINGS_KEYS = ["effortLevel", "model", "modelSettings"] as const;
+export type ModelSettings = Partial<Record<(typeof SETTINGS_KEYS)[number], unknown>>;
+
+/** A triage report as `--save` writes it and `--since` reads it. */
+export interface SavedReport extends TriageReport {
+  saved?: string;
+  settings?: ModelSettings;
+}
+
+/** The `--settings` keys of `$CLAUDE_CONFIG_DIR/settings.json`, else of
+ *  `~/.claude/settings.json`; none for a missing or bad file. */
+export function readModelSettings(env: NodeJS.ProcessEnv = process.env, home = os.homedir()): ModelSettings {
+  const file = path.join(env.CLAUDE_CONFIG_DIR || path.join(home, ".claude"), "settings.json");
+  let all: unknown;
+  try {
+    all = JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    return {};
+  }
+  const out: ModelSettings = {};
+  if (all && typeof all === "object") {
+    for (const k of SETTINGS_KEYS) if (k in all) out[k] = (all as Record<string, unknown>)[k];
+  }
+  return out;
+}
+
+/** A report path as a real absolute path: `~/…` under `home`, a relative
+ *  path under `cwd`, and the links followed when the path exists. */
+export function absolutePath(p: string, cwd = process.cwd(), home = os.homedir()): string {
+  const abs = p === "~" || p.startsWith("~/") ? path.join(home, p.slice(1)) : path.resolve(cwd, p);
+  try {
+    return fs.realpathSync(abs);
+  } catch {
+    return abs;
+  }
+}
+
+/** The saved report in `file`, or why there is none to compare with. Each
+ *  path is made absolute against `cwd`, for a report from before `--save`. */
+export function loadSaved(file: string, cwd = process.cwd(), home = os.homedir()): { report: SavedReport } | { reason: string } {
+  let text: string;
+  try {
+    text = fs.readFileSync(file, "utf8");
+  } catch (e) {
+    return { reason: (e as NodeJS.ErrnoException).code === "ENOENT" ? "no saved run" : `cannot read it: ${(e as Error).message}` };
+  }
+  let r: SavedReport;
+  try {
+    r = JSON.parse(text);
+  } catch {
+    return { reason: "it does not parse as JSON" };
+  }
+  const isClause = (c: unknown) => !!c && typeof c === "object" && typeof (c as { type?: unknown }).type === "string";
+  const isFile = (f: unknown) => !!f && typeof (f as { path?: unknown }).path === "string"
+    && Array.isArray((f as { clauses?: unknown }).clauses) && (f as { clauses: unknown[] }).clauses.every(isClause);
+  if (!r || typeof r !== "object" || !Array.isArray(r.files) || !r.files.every(isFile) || !r.totals || typeof r.totals !== "object") {
+    return { reason: "it is not a --json triage report" };
+  }
+  return { report: { ...r, stale: Array.isArray(r.stale) ? r.stale : [], files: r.files.map((f) => ({ ...f, path: absolutePath(f.path, cwd, home) })) } };
+}
+
+/** One RED clause of a `--since` diff, with its lines around it for a new one. */
+export interface DiffClause {
+  path: string;
+  line: number;
+  type: Clause["type"];
+  text: string;
+  detail: string;
+  context?: string[];
+}
+
+export interface SinceDiff {
+  since: string;
+  base: { totals: Record<Flag, number>; saved?: string };
+  head: { totals: Record<Flag, number> };
+  new: DiffClause[];
+  gone: DiffClause[];
+  stale: StaleRepo[];
+  settings: { key: string; from: unknown; to: unknown }[];
+  /** The clauses that the char limit left out. */
+  omitted: { new: number; gone: number };
+}
+
+/** The lines `line - 2` to `line + 2` of `text`, each with its number. */
+export function contextLines(text: string | null, line: number): string[] {
+  if (text === null) return [];
+  const lines = text.split("\n");
+  if (text.endsWith("\n")) lines.pop();
+  const from = Math.max(1, line - 2);
+  const to = Math.min(lines.length, line + 2);
+  const out: string[] = [];
+  for (let n = from; n <= to; n++) out.push(`${n === line ? ">" : " "}${String(n).padStart(5)}  ${lines[n - 1]}`);
+  return out;
+}
+
+/** The change from `base` to `head`, both with real absolute paths. `read`
+ *  reads a head file by its path, as the run read it. */
+export function sinceDiff(
+  since: string, base: SavedReport, head: SavedReport, read: (p: string) => string | null,
+): SinceDiff {
+  const same = (r: TriageReport) => new Map(r.files.map((f) => [f.path, f.path]));
+  // A SIZE clause of the whole file or load set has no line to show.
+  const anchored = (c: Clause) => c.measure !== "core" && c.measure !== "load set";
+  const item = (path: string, c: Clause, withContext: boolean): DiffClause => ({
+    path: displayPath(path), line: c.line, type: c.type, text: c.text, detail: c.detail,
+    ...(withContext && anchored(c) ? { context: contextLines(read(path), c.line) } : {}),
+  });
+  const settings: SinceDiff["settings"] = [];
+  if (base.settings && head.settings) {
+    for (const key of SETTINGS_KEYS) {
+      const from = base.settings[key];
+      const to = head.settings[key];
+      if (JSON.stringify(from) !== JSON.stringify(to)) settings.push({ key, from, to });
+    }
+  }
+  return {
+    since,
+    base: { totals: base.totals, ...(base.saved ? { saved: base.saved } : {}) },
+    head: { totals: head.totals },
+    new: newReds(head, base, same(head)).added.map((a) => item(a.path, a.clause, true)),
+    gone: newReds(base, head, same(base), { grownIsNew: false }).added.map((a) => item(a.path, a.clause, false)),
+    stale: head.stale,
+    settings,
+    omitted: { new: 0, gone: 0 },
+  };
+}
+
+function totalsLine(t: Record<Flag, number>): string {
+  return `RED ${t.RED} · YELLOW ${t.YELLOW} · GREEN ${t.GREEN}`;
+}
+
+const show = (v: unknown) => (v === undefined ? "(unset)" : JSON.stringify(v));
+
+/** The text of a `--since` diff. */
+export function formatSince(d: SinceDiff): string {
+  const out = [`Since ${d.since}${d.base.saved ? ` (saved ${d.base.saved})` : ""}`, `  before: ${totalsLine(d.base.totals)}`, `  now:    ${totalsLine(d.head.totals)}`];
+  const clause = (c: DiffClause) => `  ${c.path}:${c.line}  ${c.type}  ${c.detail}: ${c.text}`;
+  out.push("", d.new.length || d.omitted.new ? `New RED clauses (${d.new.length + d.omitted.new}):` : "No new RED clause.");
+  for (const c of d.new) out.push(clause(c), ...(c.context ?? []).map((l) => `    ${l}`));
+  if (d.omitted.new) out.push(`  +${d.omitted.new} new RED clauses left out to stay under ${SINCE_MAX_CHARS} chars`);
+  if (d.gone.length || d.omitted.gone) {
+    out.push("", `Gone RED clauses (${d.gone.length + d.omitted.gone}):`, ...d.gone.map(clause));
+    if (d.omitted.gone) out.push(`  +${d.omitted.gone} gone RED clauses left out to stay under ${SINCE_MAX_CHARS} chars`);
+  }
+  if (d.settings.length) out.push("", "Settings changed:", ...d.settings.map((s) => `  ${s.key}: ${show(s.from)} → ${show(s.to)}`));
+  if (d.stale.length) out.push("", "Stale, read from the checkout, not origin/HEAD:", ...d.stale.map((s) => `  ${s.repo}  ${s.reason}`));
+  return out.join("\n");
+}
+
+/** `render(d)` for the largest `d` that fits in `max` chars: the totals stay,
+ *  the gone clauses go first, then the last new ones, each counted. */
+export function fitSince(d: SinceDiff, render: (d: SinceDiff) => string, max = SINCE_MAX_CHARS): string {
+  let text = render(d);
+  if (text.length < max) return text;
+  // Fill by size, then trim the last few that the counts' text pushes over.
+  const empty = { ...d, new: [], gone: [], omitted: { new: d.new.length, gone: d.gone.length } };
+  let room = max - render(empty).length - 200;
+  const size = (c: DiffClause) => JSON.stringify(c).length + 16 * ((c.context?.length ?? 0) + 1);
+  let keepNew = 0;
+  while (keepNew < d.new.length && (room -= size(d.new[keepNew])) > 0) keepNew++;
+  let keepGone = 0;
+  while (keepNew === d.new.length && keepGone < d.gone.length && (room -= size(d.gone[keepGone])) > 0) keepGone++;
+  const cut = (n: number, g: number): SinceDiff => ({
+    ...d, new: d.new.slice(0, n), gone: d.gone.slice(0, g), omitted: { new: d.new.length - n, gone: d.gone.length - g },
+  });
+  text = render(cut(keepNew, keepGone));
+  while (text.length >= max && (keepGone || keepNew)) {
+    if (keepGone) keepGone--;
+    else keepNew--;
+    text = render(cut(keepNew, keepGone));
+  }
+  return text;
+}
+
+/** Writes `text` to `file` by a temp file in its folder and a rename. */
+export function writeAtomic(file: string, text: string): void {
+  const dir = path.dirname(path.resolve(file));
+  fs.mkdirSync(dir, { recursive: true });
+  const tmp = path.join(dir, `.${path.basename(file)}.${process.pid}.tmp`);
+  try {
+    fs.writeFileSync(tmp, text);
+    fs.renameSync(tmp, file);
+  } catch (e) {
+    fs.rmSync(tmp, { force: true });
+    throw e;
+  }
+}
+
+/** The result of `--self-update`: the checkout moved, or why not. */
+export type SelfUpdate = { updated: true; from: string; to: string } | { updated: false; stale?: StaleRepo };
+
+/** `git fetch origin main` in the checkout that holds `toolDir`; when it is
+ *  on `main` with no local change, a fast-forward to `origin/main`. Any other
+ *  case changes nothing and names the checkout stale, with the reason. */
+export function selfUpdate(toolDir: string): SelfUpdate {
+  const top = gitTop(toolDir);
+  if (!top) return { updated: false, stale: { repo: displayPath(toolDir), reason: "self-update: not in a git checkout" } };
+  const stale = (reason: string): SelfUpdate => ({ updated: false, stale: { repo: displayPath(top), reason: `self-update: ${reason}` } });
+  // A copy of the tools inside some other repo (a dotfiles repo above the
+  // plugin cache) is not this tool's checkout: never move that repo.
+  const own = path.relative(top, path.join(fs.realpathSync(toolDir), "rules_audit.ts")).split(path.sep).join("/");
+  if (git(top, ["ls-files", "--error-unmatch", "--", own]).status !== 0) return stale(`${own} is not tracked in ${displayPath(top)}`);
+  const fetch = spawnSync("git", ["-C", top, "fetch", "--quiet", "--no-tags", "--no-recurse-submodules", "origin", "main"], {
+    encoding: "utf8", timeout: FETCH_TIMEOUT_MS, env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+  });
+  if (fetch.status !== 0) return stale(`git fetch origin main failed: ${firstLine(fetch.stderr) || fetch.error?.message || `exit ${fetch.status}`}`);
+  const branch = git(top, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
+  if (branch.status !== 0 || branch.stdout.trim() !== "main") {
+    return stale(`on ${branch.status === 0 ? branch.stdout.trim() : "a detached HEAD"}, not main`);
+  }
+  const status = git(top, ["status", "--porcelain", "--untracked-files=no"]);
+  if (status.status !== 0) return stale(`git status failed: ${firstLine(status.stderr)}`);
+  if (status.stdout.trim()) return stale("main has local changes");
+  const from = git(top, ["rev-parse", "HEAD"]).stdout.trim();
+  const ff = git(top, ["merge", "--ff-only", "--quiet", "origin/main"]);
+  if (ff.status !== 0) return stale(`cannot fast-forward to origin/main: ${firstLine(ff.stderr) || `exit ${ff.status}`}`);
+  const to = git(top, ["rev-parse", "HEAD"]).stdout.trim();
+  return from === to ? { updated: false } : { updated: true, from, to };
+}
+
+async function playbookMain(flags: Map<string, string | true>, extraStale: StaleRepo[] = []): Promise<number> {
   const home = os.homedir();
+  const sinceFile = flags.has("since") ? String(flags.get("since")) : undefined;
+  // Read before the run writes `--save`, so both flags can name one file.
+  const base = sinceFile === undefined ? undefined : loadSaved(sinceFile);
   const c = new Collector();
   try {
     const anyInput = flags.has("repo") || flags.has("fleet") || flags.has("memory") || flags.has("files");
@@ -660,19 +893,49 @@ async function playbookMain(flags: Map<string, string | true>): Promise<number> 
       // In a repo that `--fleet` reads at origin/HEAD, their text is read there.
       rootRules = { path: c.taken.get(real) ?? displayPath(rootPath), text: c.readReal(real) ?? fs.readFileSync(real, "utf8") };
     }
-    const stale = [...c.stale.values()].map(({ repo, reason }) => ({ repo, reason }));
-    report = triage({ groups: [...c.groups.values()], rootRules, stale });
+    const stale = [...extraStale, ...[...c.stale.values()].map(({ repo, reason }) => ({ repo, reason }))];
+    report = triage({ groups: [...c.groups.values()], rootRules, stale }) as SavedReport;
+    if (flags.has("settings")) report.settings = readModelSettings();
   } catch (e) {
     return playbookFailed(flags, e, 1);
   }
-  process.stdout.write(flags.has("json") ? `${JSON.stringify(report, null, 2)}\n` : `${formatTriage(report)}\n`);
+  // The saved form: each path the real absolute path the run read.
+  const names = new Map([...c.taken].map(([real, name]) => [name, real]));
+  const absolute: SavedReport = {
+    ...report, saved: new Date().toISOString(),
+    files: report.files.map((f) => ({ ...f, path: names.get(f.path) ?? absolutePath(f.path) })),
+  };
+  if (flags.has("save")) {
+    try {
+      writeAtomic(String(flags.get("save")), `${JSON.stringify(absolute, null, 2)}\n`);
+    } catch (e) {
+      return playbookFailed(flags, new Error(`--save: ${(e as Error).message}`), 1);
+    }
+  }
+  let code = report.totals.RED ? 3 : 0;
+  if (base === undefined) {
+    process.stdout.write(flags.has("json") ? `${JSON.stringify(report, null, 2)}\n` : `${formatTriage(report)}\n`);
+    if (report.settings && !flags.has("json")) process.stdout.write(`settings: ${JSON.stringify(report.settings)}\n`);
+  } else if ("reason" in base) {
+    const why = `${base.reason}: this run is the base`;
+    process.stdout.write(flags.has("json")
+      ? `${JSON.stringify({ since: sinceFile, reason: why, head: { totals: report.totals } }, null, 2)}\n`
+      : `Since ${sinceFile}: ${why}\n  now: ${totalsLine(report.totals)}\n`);
+    code = 0;
+  } else {
+    const diff = sinceDiff(sinceFile!, base.report, absolute, (p) => c.readReal(p));
+    const render = flags.has("json") ? (d: SinceDiff) => JSON.stringify(d, null, 2) : formatSince;
+    // Room for the newline and a `notified:` line, so the whole stdout stays under the limit.
+    process.stdout.write(`${fitSince(diff, render, SINCE_MAX_CHARS - 200)}\n`);
+    code = diff.new.length ? 3 : 0;
+  }
   if (flags.has("notify")) {
     const { title, body } = notifySummary(report);
     if (!send(title, body)) return 1;
     // stdout stays the report alone with --json.
     (flags.has("json") ? process.stderr : process.stdout).write(`notified: ${title}\n`);
   }
-  return report.totals.RED ? 3 : 0;
+  return code;
 }
 
 /** Send one push; false, with the reason on stderr, when it did not go. */
@@ -691,32 +954,18 @@ function playbookFailed(flags: Map<string, string | true>, e: unknown, code: num
   return code;
 }
 
-function installSchedule(): number {
-  return installWeeklyJob({
-    ...SWEEP,
-    toolName: "rules_audit.ts",
-    fallback: fileURLToPath(import.meta.url),
-    log: path.join(stateRoot(), "agent-doc-sweep", "weekly.log"),
-    // git labels the files that a repo ignores; heimdall sends the summary.
-    bins: ["node", "heimdall", "git"],
-    when: "Mondays 09:00 local",
-  });
-}
-
 export async function main(argv: string[]): Promise<number> {
   const { flags } = precheckCli(argv, {
-    values: ["--repo", "--always", "--file-budget", "--always-budget", "--files"],
-    switches: ["--json", "--playbook", "--fleet", "--memory", "--notify", "--install-schedule", "--uninstall-schedule"],
+    values: ["--repo", "--always", "--file-budget", "--always-budget", "--files", "--save", "--since"],
+    switches: ["--json", "--playbook", "--fleet", "--memory", "--notify", "--settings", "--self-update"],
   }, USAGE);
-  const mode = ["install-schedule", "uninstall-schedule"].find((k) => flags.has(k));
-  if (mode && flags.size > 1) {
-    process.stderr.write(`rules_audit: --${mode} takes no other argument\n`);
+  const needPlaybook = ["notify", "settings", "save", "since", "self-update"].filter((k) => flags.has(k));
+  if (needPlaybook.length && !flags.has("playbook")) {
+    process.stderr.write(`rules_audit: ${needPlaybook.map((k) => `--${k}`).join(", ")} need${needPlaybook.length === 1 ? "s" : ""} --playbook\n`);
     return 2;
   }
-  if (mode === "install-schedule") return installSchedule();
-  if (mode === "uninstall-schedule") return uninstallJob(SWEEP_LABEL);
-  if (flags.has("notify") && !flags.has("playbook")) {
-    process.stderr.write("rules_audit: --notify needs --playbook\n");
+  if (flags.has("self-update") && !flags.has("fleet")) {
+    process.stderr.write("rules_audit: --self-update needs --fleet\n");
     return 2;
   }
   if (flags.has("playbook")) {
@@ -724,7 +973,24 @@ export async function main(argv: string[]): Promise<number> {
       process.stderr.write("rules_audit: --always, --file-budget and --always-budget do not apply with --playbook\n");
       return 2;
     }
-    return playbookMain(flags);
+    const extraStale: StaleRepo[] = [];
+    if (flags.has("self-update")) {
+      const u = selfUpdate(import.meta.dirname);
+      if (u.updated) {
+        // Run again on the new code, without the flag, so it updates once.
+        process.stderr.write(`rules_audit: self-update moved ${u.from.slice(0, 12)} to ${u.to.slice(0, 12)}; running the new code\n`);
+        const again = spawnSync(process.execPath, [
+          ...process.execArgv, fileURLToPath(import.meta.url), ...argv.filter((a) => a !== "--self-update"),
+        ], { stdio: "inherit" });
+        // A run that did not start or was killed sent no push of its own.
+        if (again.status === null) {
+          return playbookFailed(flags, new Error(`the new code did not run: ${again.error?.message ?? `signal ${again.signal}`}`), 1);
+        }
+        return again.status;
+      }
+      if (u.stale) extraStale.push(u.stale);
+    }
+    return playbookMain(flags, extraStale);
   }
   if (flags.has("fleet") || flags.has("memory") || flags.has("files")) {
     process.stderr.write("rules_audit: --fleet, --memory and --files need --playbook\n");

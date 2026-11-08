@@ -130,7 +130,7 @@ stark-ops also ships two hooks, both declared on the stark-ops entry of the mani
 
 `tools/ask_guard_metric.ts` measures the root rules' "Act, don't ask": each week it counts the operator's one-word replies (`go`, `yes`, `ship it`) beside a baseline week, and, from the Claude Code transcripts, the turns that end on a question, tagged (`Needs you (<tag>): …`) or untagged, with the newest untagged ones listed, since each points to a rule to fix (`--install-schedule` sets up the Thursday heimdall push).
 
-`tools/rules_audit.ts --install-schedule` sets up the weekly agent-doc sweep: each Monday at 09:00 it triages the agent files of the fleet, each repo at `origin/HEAD`, and the memory notes (`--playbook --fleet --memory --notify`) and sends one heimdall push: the stale repos first (read from the checkout, since a fetch or read failed), then the RED files, then the files over budget.
+The weekly agent-doc sweep runs on the devbox, not as a Mac job. It triages the agent files of the fleet, each repo at `origin/HEAD`, and the memory notes: `tools/rules_audit.ts --playbook --fleet --memory --settings --self-update --save <file> --since <file>`. `--self-update` first fast-forwards the tool's own checkout on a clean `main`. `--since` prints only the change from the saved run: each new RED clause with its lines around it, each gone one, the totals and the changed model settings, in under 45,000 chars. It exits 3 only for a new RED clause. `--notify` also sends one heimdall push: the stale repos first (read from the checkout, since a fetch or read failed), then the RED files, then the files over budget.
 
 ### stark-constitution: docs, decisions and rules
 

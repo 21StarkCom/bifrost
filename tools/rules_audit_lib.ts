@@ -603,6 +603,13 @@ export const KEPT_GATE_RES: readonly { label: string; re: RegExp }[] = [
     re: /\b(?:product\s+scope|taste|money|costs?|spend(?:ing)?|pric(?:e|es|ing)|billing|invoices?|payments?|paid|people|hir(?:e|es|ing)|copyleft|[AL]?GPL|licen[cs](?:e|es|ing))\b|\bin\s+(?:the\s+operator['’]s|their|my)\s+name\b|\bon\s+(?:the\s+operator['’]s|their|my)\s+behalf\b/i,
   },
   {
+    // The root rule "A new service on the Mac needs the operator's own request":
+    // its own bullet, not on the GO list, so a worker launch does not cover it.
+    label: "a new service on the Mac",
+    // A bare "service" or "schedule" needs "new": "the Mímir Service on the Mac" is no new service.
+    re: /^(?=.*\b(?:Mac|macOS|launchd|LaunchAgents?)\b)(?=.*\b(?:launchd|LaunchAgents?|daemons?|cron(?:tab)?|new\s+(?:\S+\s+){0,2}?(?:schedules?|services?))\b)/is,
+  },
+  {
     label: "a step that needs a person's own grant",
     re: /\b(?:sign(?:s|ed)?[- ]?in|log(?:s|ged)?[- ]?in|touch\s*id|face\s*id|sudo|keychain|passkey|privacy\s+(?:grant|permission|setting)s?|accessibility\s+(?:grant|permission)s?|screen\s+recording|full\s+disk\s+access|own\s+grant)\b|(?:^|[\s(])\/mcp\b/i,
   },
@@ -1854,6 +1861,61 @@ export function triage(input: TriageInput): TriageReport {
     return f;
   });
   return { files: out, totals, stale: input.stale ?? [] };
+}
+
+/** What a SIZE clause measures, keyed by its text for one index line of many. */
+function sizeKind(c: Clause): string | undefined {
+  return c.measure === "index line" ? `index line ${c.text}` : c.measure;
+}
+
+export interface NewReds {
+  /** Each head RED clause that its base file does not have. */
+  added: { path: string; clause: Clause }[];
+  /** The head RED clauses that its base file has too. */
+  kept: number;
+}
+
+/**
+ * The RED clauses the head adds. `pairs` maps a head path to its base path.
+ * A clause matches by its type and text, not its line, since a PR moves lines;
+ * each base clause matches one head clause. A SIZE clause matches by what it
+ * measures, and is new when the base has no RED of that kind, or when its
+ * chars grew. The load set is the repo's, not one file's, so it matches the
+ * base's load set on whichever file carries it. Each other RED of a file with
+ * no base file is new. With `grownIsNew` false, a SIZE clause whose kind the
+ * base has is kept whatever its chars: a caller that swaps head and base to
+ * find the clauses that are gone sets it.
+ */
+export function newReds(
+  head: TriageReport, base: TriageReport, pairs: Map<string, string>, { grownIsNew = true }: { grownIsNew?: boolean } = {},
+): NewReds {
+  const baseFiles = new Map(base.files.map((f) => [f.path, f]));
+  const isRed = (c: Clause) => c.flag === "RED";
+  const baseLoad = base.files.flatMap((f) => f.clauses).find((c) => isRed(c) && c.measure === "load set");
+  const added: NewReds["added"] = [];
+  let kept = 0;
+  for (const f of head.files) {
+    const was = pairs.has(f.path) ? baseFiles.get(pairs.get(f.path)!) : undefined;
+    const wasRed = was?.clauses.filter(isRed) ?? [];
+    const sizes = new Map(wasRed.filter((c) => c.type === "SIZE").map((c) => [sizeKind(c), c]));
+    if (baseLoad) sizes.set("load set", baseLoad);
+    const left = new Map<string, number>();
+    const key = (c: Clause) => `${c.type}\0${c.text}`;
+    for (const c of wasRed) if (c.type !== "SIZE") left.set(key(c), (left.get(key(c)) ?? 0) + 1);
+    for (const c of f.clauses.filter(isRed)) {
+      if (c.type === "SIZE") {
+        const kind = sizeKind(c);
+        const before = kind === undefined ? undefined : sizes.get(kind)?.chars;
+        if (before === undefined || c.chars === undefined) added.push({ path: f.path, clause: c });
+        else if (c.chars <= before || !grownIsNew) kept++;
+        else added.push({ path: f.path, clause: { ...c, detail: `${c.detail}, grown from ${before} to ${c.chars} chars` } });
+      } else if (left.get(key(c))) {
+        left.set(key(c), left.get(key(c))! - 1);
+        kept++;
+      } else added.push({ path: f.path, clause: c });
+    }
+  }
+  return { added, kept };
 }
 
 /** The heading of the stale list in the text and the push. */

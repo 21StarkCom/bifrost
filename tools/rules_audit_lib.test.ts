@@ -477,6 +477,16 @@ test("triage: the kept-gate detail names what kept it; emphasis does not hide it
   assert.match(gateOf("A __by hand__ `terraform apply` needs a GO."), KEPT);
 });
 
+test("triage: a new service on the Mac is a kept gate, YELLOW; a schedule off the Mac is not", () => {
+  const mac = "YELLOW: kept gate: the review confirms it (a new service on the Mac)";
+  assert.equal(gateOf("A new launchd job on the Mac needs a GO."), mac);
+  assert.equal(gateOf("A cron entry on the Mac waits for the operator's word."), mac);
+  assert.equal(gateOf("A daemon on macOS is the operator's call."), mac);
+  assert.equal(gateOf("A schedule on the devbox needs a GO."), `RED: gate words "needs a GO"`);
+  assert.match(gateOf("Restarting the Mímir Service on the Mac needs a GO."), /^RED/, "a service that is not new is no kept gate");
+  assert.equal(gateOf("A new background service on the Mac needs a GO."), mac);
+});
+
 test("triage: the kept-gate check runs first, on the whole sentence; a file name in code does not count", () => {
   // The ticket's order: a kept gate stays in the review's view even when its phrase alone reads as no gate.
   assert.equal(gateOf("Reading a token needs no go-ahead."), "YELLOW: kept gate: the review confirms it (a secret)");

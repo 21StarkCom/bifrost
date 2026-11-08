@@ -100,7 +100,7 @@ argument: …" — wording alone cannot tell a working help from a broken one.
 | `refactor_planner.ts` | dry-run, run, validate |
 | `release_changelog.ts` | default, repo, JSON |
 | `release_version_bump.ts` | version, previous, allow-major, repo, dry-run, JSON |
-| `rules_audit.ts` | default, repo, JSON, budgets, playbook (repo, fleet, memory, files, notify), install-schedule, uninstall-schedule; help before git or the disk walk |
+| `rules_audit.ts` | default, repo, JSON, budgets, playbook (repo, fleet, memory, files, notify, settings, save, since, self-update); help before git or the disk walk |
 | `rules_gate_hook.ts` | PreToolUse stdin protocol; argv help exits first |
 | `self_healer.ts` | suggest/auto, pattern-id, stderr-file |
 | `session_id.ts` | default resolution |
