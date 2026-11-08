@@ -109,9 +109,9 @@ const redrawn = (row: Row, words: string): Row => ({ ...row, words, field: { val
 
 const nextAnswer = (a: Answer | null): Answer | null => (a === null ? 'yes' : a === 'yes' ? 'no' : null)
 
-// Answered rows whose message waits for the running turn to end. A turn that
-// ends in that time has not read the answers, so a line it asks again is not
-// open: it does not join the band. Module state: a reload starts it empty.
+// The rows of a message that waits for the running turn to end. A turn that
+// ends in that time has not read the message, so a line it asks again stays
+// closed: it does not come back to the band. Module state: a reload starts it empty.
 let waiting: readonly Row[] = []
 
 // An id no row in `taken` holds, so two rows never share a key.
@@ -122,53 +122,67 @@ function freshId(taken: readonly Row[], turnId: string): string {
   return `${turnId}:${n}`
 }
 
-// New lines join the band after the open rows; a line asked again keeps its one row.
-export function merge(now: readonly Row[], items: readonly Ask[], turnId: string, sent: readonly Row[] = []): Row[] {
+// A turn's lines join the band. A line whose tag a row from an earlier turn
+// holds is asked again: that row takes the newest words of the question, and
+// keeps the operator's words, and its side while the pick stays the same. A
+// line with the tag of a row that a waiting message closed stays out.
+export function join(now: readonly Row[], items: readonly Ask[], turnId: string, closed: readonly Row[] = []): Row[] {
   const out = [...now]
+  // A row of this turn is not asked again by a later line of the same turn.
+  const earlier = new Set(now.map(row => row.id))
   for (const ask of items) {
-    if ([...out, ...sent].some(row => sameAsk(row.ask, ask))) continue
-    const id = freshId([...out, ...sent], turnId)
-    out.push({ id, ask, answer: null, words: '', field: { value: '', rev: 0 } })
+    if (closed.some(row => row.ask.tag === ask.tag)) continue
+    const at = out.findIndex(row => earlier.has(row.id) && row.ask.tag === ask.tag)
+    const row = out[at]
+    if (row !== undefined) {
+      out[at] = { ...row, ask, answer: row.ask.pick === ask.pick ? row.answer : null }
+      earlier.delete(row.id)
+      continue
+    }
+    if (out.some(r => sameAsk(r.ask, ask))) continue
+    out.push({ id: freshId([...out, ...closed], turnId), ask, answer: null, words: '', field: { value: '', rev: 0 } })
   }
 
   return out
 }
 
-// Holds `sent` in `waiting` until `delivered` settles, whichever way it goes.
-async function whileWaiting<T>(sent: readonly Row[], delivered: Promise<T>): Promise<T> {
-  waiting = [...waiting, ...sent]
+// Holds `closed` in `waiting` until `delivered` settles, whichever way it goes.
+async function whileWaiting<T>(closed: readonly Row[], delivered: Promise<T>): Promise<T> {
+  waiting = [...waiting, ...closed]
   try {
     return await delivered
   } finally {
-    waiting = waiting.filter(row => !sent.includes(row))
+    waiting = waiting.filter(row => !closed.includes(row))
   }
 }
 
 const without = (now: readonly Row[], gone: readonly Row[]) => now.filter(row => !gone.some(g => g.id === row.id))
 
 // A message that did not go puts its rows back in front, with what they held.
-// A line a later turn asked again while the message waited keeps one row: the sent one.
-const putBack = (now: readonly Row[], sent: readonly Row[]) => [
-  ...sent.map(row => redrawn(row, row.words)),
-  ...without(now, sent).filter(row => !sent.some(s => sameAsk(s.ask, row.ask))),
+// A line a later turn asked while the message waited keeps one row: the closed one.
+const putBack = (now: readonly Row[], closed: readonly Row[]) => [
+  ...closed.map(row => redrawn(row, row.words)),
+  ...without(now, closed).filter(row => !closed.some(c => c.ask.tag === row.ask.tag)),
 ]
 
 function said(row: Row): string {
   const side = row.answer === null ? undefined : labels(row.ask)[row.answer]
-  if (!hasWords(row)) return `${side ?? 'no answer yet'}.`
+  if (!hasWords(row)) return `${side ?? ''}.`
   // The words go as typed; a later line of them stays under its own item.
   const words = `my words: ${row.words.trim().replace(/\n/g, '\n   ')}`
 
   return side === undefined ? words : `${side}; ${words}`
 }
 
-export function messageFor(rows: readonly Row[]): string {
+// The answered rows, one numbered line each. A row with no answer is left
+// out: the root rules read a line the next message does not answer as passed.
+export function messageFor(answered: readonly Row[]): string {
   return [
-    `My answers to your Needs you lines (${rows.filter(isAnswered).length} of ${rows.length} answered):`,
+    'My answers to your Needs you lines:',
     '',
     // The question names the line, so an answer read after a newer turn
     // still matches its own question. The recommendation is left out.
-    ...rows.map(
+    ...answered.map(
       (row, i) => `${i + 1}. ${row.ask.tag} ("${row.ask.question.replace(/\s*\bI recommend\b.*$/i, '')}") — ${said(row)}`,
     ),
   ].join('\n')
@@ -183,21 +197,22 @@ function fieldRows(words: string, columns: number): number {
   return Math.min(Math.max(needed, 1), FIELD_ROWS_MAX)
 }
 
-// Sends the answered rows and keeps the open ones, so the operator answers them later.
+// Closes the band: the answered rows go as one message, and a row with no
+// answer is passed. With no answer, it sends nothing and keeps the band.
 async function send($: EngineInterface): Promise<void> {
   const rows = await read($, rowsAtom)
-  const sent = rows.filter(isAnswered)
-  if (sent.length === 0) {
+  const answered = rows.filter(isAnswered)
+  if (answered.length === 0) {
     $.ui.toast('Answer a row first: press its number, or write in its field.')
     return
   }
-  await update($, rowsAtom, now => without(now, sent))
+  await update($, rowsAtom, now => without(now, rows))
   // A plugin's prompt runs once the session is idle, and the submit resolves
   // only when its turn starts: awaiting it here would run the press past its
   // time budget.
-  void whileWaiting(sent, $.prompt.submit({ text: messageFor(rows), asUser: true })).then(async submitted => {
+  void whileWaiting(rows, $.prompt.submit({ text: messageFor(answered), asUser: true })).then(async submitted => {
     if (submitted.drop === undefined) return
-    await update($, rowsAtom, now => putBack(now, sent))
+    await update($, rowsAtom, now => putBack(now, rows))
     $.ui.toast(`Not sent: ${submitted.drop}`)
   })
 }
@@ -208,23 +223,24 @@ export const register: Register = on => {
     // notification's or a command's turn does not answer the lines.
     if (e.agentId === undefined && e.reason === 'answer') {
       const items = parseAsks(e.answer)
-      if (items.length > 0) await update($, rowsAtom, now => merge(now, items, e.turnId, waiting))
+      if (items.length > 0) await update($, rowsAtom, now => join(now, items, e.turnId, waiting))
     }
 
     return next(e)
   }).catch(($, e, next) => next(e))
 
-  // The person's own prompt carries the answered rows above their words. A
-  // prompt with no answer goes as typed, and every row stays open.
+  // The person's own prompt closes the band. The answered rows go above their
+  // words; a row with no answer is passed. A prompt with no answer goes as typed.
   on('prompt.submit', async ($, e, next) => {
     const isPerson = e.origin.kind === 'composer' || e.origin.kind === 'bridge'
     if (!isPerson || e.command !== undefined || e.isMeta) return next(e)
     const rows = await read($, rowsAtom)
-    const sent = rows.filter(isAnswered)
-    if (sent.length === 0) return next(e)
-    await update($, rowsAtom, now => without(now, sent))
-    const entered = await whileWaiting(sent, next({ ...e, text: `${messageFor(rows)}\n\n${e.text}` }))
-    if (entered.drop !== undefined) await update($, rowsAtom, now => putBack(now, sent))
+    if (rows.length === 0) return next(e)
+    const answered = rows.filter(isAnswered)
+    await update($, rowsAtom, now => without(now, rows))
+    const text = answered.length === 0 ? e.text : [messageFor(answered), e.text].filter(Boolean).join('\n\n')
+    const entered = await whileWaiting(rows, next({ ...e, text }))
+    if (entered.drop !== undefined) await update($, rowsAtom, now => putBack(now, rows))
 
     return entered
     // A failure here never holds the person's prompt: it goes as typed.
@@ -253,18 +269,33 @@ export const register: Register = on => {
         now.map(row => (hasPick(row.ask) && !isAnswered(row) ? { ...row, answer: 'yes' as const } : row)),
       )
     const digits = count > 1 ? `1-${Math.min(count, 9)}` : '1'
-    const anyPick = rows.some(row => hasPick(row.ask))
-    const keys = anyPick ? 'a, s or c' : 's or c'
+    const tally = `${rows.filter(isAnswered).length} of ${count} answered`
+    const keys = [
+      ...(rows.some(row => hasPick(row.ask)) ? [{ key: 'all', hotkey: 'a', label: 'Take all picks', press: takeAll }] : []),
+      { key: 'send', hotkey: 's', label: 'Send answers', press: () => send($) },
+      { key: 'clear', hotkey: 'c', label: 'Clear', press: () => update($, rowsAtom, () => []) },
+    ]
+    // A plain Button draws `s: Send answers`: its hotkey, a colon and a space, then its label.
+    const keysWidth = keys.reduce((sum, k) => sum + 3 + width(k.label), 0) + 2 * (keys.length - 1)
+    const oneRow = width('Needs you') + 1 + width(tally) + 2 + keysWidth <= e.props.bodyColumns
+    const keyRow = (
+      <Box columnGap={2}>
+        {keys.map(k => (
+          <Button key={k.key} plain hotkey={k.hotkey} label={k.label} onPress={() => k.press()} />
+        ))}
+      </Box>
+    )
 
     return (
       <Box flexDirection="column">
-        <Box columnGap={1}>
-          <Text bold color="claude">
-            Needs you
-          </Text>
-          <Text dimColor>
-            {rows.filter(isAnswered).length} of {count} answered
-          </Text>
+        <Box columnGap={2}>
+          <Box columnGap={1}>
+            <Text bold color="claude">
+              Needs you
+            </Text>
+            <Text dimColor>{tally}</Text>
+          </Box>
+          {oneRow && keyRow}
         </Box>
         {rows.map((row, i) => {
           const shown = chip(row.ask, row.answer, hasWords(row))
@@ -317,16 +348,10 @@ export const register: Register = on => {
             </Box>
           )
         })}
-        <Box columnGap={1}>
-          {anyPick && <Button key="all" hotkey="a" label="Take all picks" onPress={() => takeAll()} />}
-          <Button key="send" hotkey="s" variant="primary" label="Send answers" onPress={() => send($)} />
-          <Button key="clear" hotkey="c" dimColor label="Clear" onPress={() => update($, rowsAtom, () => [])} />
-        </Box>
+        {!oneRow && keyRow}
         <Text dimColor wrap="wrap">
-          {`${digits} in an empty prompt answers a row. ctrl+x tab gives the band the keys: Tab to a field and write, ` +
-            `Enter for the next field and then Send, ${keys} outside a field, Esc for the prompt. ` +
-            `Open rows stay until you answer them. Words you type in the prompt go after your answers.` +
-            (e.props.isWorking ? ' Send waits until Claude stops.' : '')}
+          {`${digits} in an empty prompt answers a row · ctrl+x tab, Tab: your words · your next message closes the band` +
+            (e.props.isWorking ? ' · Send waits for Claude' : '')}
         </Text>
       </Box>
     )

@@ -134,7 +134,7 @@ test('a press moves a row to yes, then no, then no answer', async ($, on) => {
   await ui.unmount()
 })
 
-test('Take all picks answers only a Yours row with a pick, and Send keeps the open rows', async ($, on) => {
+test('Take all picks answers only a Yours row with a pick, and Send sends only the answered rows', async ($, on) => {
   const { sent } = engine(on)
   await $.turn.complete(end(ANSWER))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
@@ -150,19 +150,14 @@ test('Take all picks answers only a Yours row with a pick, and Send keeps the op
 
   expect(sent).toEqual([
     [
-      'My answers to your Needs you lines (2 of 4 answered):',
+      'My answers to your Needs you lines:',
       '',
       '1. Yours: clouds ("should v0 use only Vertex, or Bedrock too?") — your pick: only Vertex.',
       '2. GO: terraform apply (prod) ("may I apply the plan?") — go.',
-      '3. Your hands: Touch ID ("approve the keychain prompt.") — no answer yet.',
-      '4. Design approval ("approve the v0 design in section 10.") — no answer yet.',
     ].join('\n'),
   ])
-  // The two open rows stay, for a later answer.
-  expect(await rows(ui)).toHaveLength(2)
-  expect(await ui.find({ type: 'Text', text: /^Your hands: Touch ID · / })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^Design approval · / })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /0 of 2 answered/ })).toBeDefined()
+  // Send closes the band: the two rows with no answer are passed, not kept.
+  expect(await rows(ui)).toHaveLength(0)
   await ui.unmount()
 })
 
@@ -181,16 +176,14 @@ test("words in a row's field answer it and reach Claude with the row's side", as
 
   expect(sent[0]).toBe(
     [
-      'My answers to your Needs you lines (2 of 4 answered):',
+      'My answers to your Needs you lines:',
       '',
-      '1. Yours: clouds ("should v0 use only Vertex, or Bedrock too?") — no answer yet.',
-      '2. GO: terraform apply (prod) ("may I apply the plan?") — no go; my words: wait for the plan review first',
-      '3. Your hands: Touch ID ("approve the keychain prompt.") — my words: I am away until 18:00.',
+      '1. GO: terraform apply (prod) ("may I apply the plan?") — no go; my words: wait for the plan review first',
+      '2. Your hands: Touch ID ("approve the keychain prompt.") — my words: I am away until 18:00.',
       '   Ask me again then.',
-      '4. Design approval ("approve the v0 design in section 10.") — no answer yet.',
     ].join('\n'),
   )
-  expect(await rows(ui)).toHaveLength(2)
+  expect(await rows(ui)).toHaveLength(0)
   await ui.unmount()
 })
 
@@ -234,23 +227,89 @@ test('typing changes neither the key nor the value of a field, and blank words a
   await ui.unmount()
 })
 
-test('a field and a chip stay with their own row when a row above it leaves', async ($, on) => {
+// The tag names the question: a reworded line is the same question, asked again.
+test('a line asked again in new words keeps its one row, its keys, its words and its side', async ($, on) => {
   engine(on)
   await $.turn.complete(end(ANSWER))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  const second = await field(ui, 1)
-  const secondChip = await rowKey(ui, 1)
+  await ui.press({ key: 'all' })
+  await ui.input({ key: await field(ui, 0), text: 'and no Bedrock key', kind: 'change' })
+  const keys = [await rowKey(ui, 0), await field(ui, 0)]
 
-  await ui.input({ key: await field(ui, 0), text: 'only Vertex', kind: 'change' })
-  await ui.press({ key: 'send' })
-  expect(await field(ui, 0)).toBe(second)
-  expect(await rowKey(ui, 0)).toBe(secondChip)
+  await $.turn.complete({
+    ...end(
+      'Needs you (Yours: clouds): should v0 run on Vertex alone? I recommend only Vertex.\n' +
+        'Needs you (GO: merge): merge the PR?',
+    ),
+    turnId: 'later',
+  })
+  expect(await rows(ui)).toHaveLength(5)
+  expect([await rowKey(ui, 0), await field(ui, 0)]).toEqual(keys)
+  expect(await chipOf(ui, 0)).toMatch(/^✓ your pick/)
+  expect(await ui.find({ type: 'Text', text: /^Yours: clouds · should v0 run on Vertex alone\?/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^Yours: clouds · should v0 use only Vertex/ })).toBeUndefined()
   await ui.unmount()
 })
 
-// A turn that ends while the answers wait has not read them: a line it asks
-// again is not open, so it does not join the band.
-test('a line asked again while its answer waits stays out, and a dropped message brings back one row', async ($, on) => {
+test('a line asked again with a new pick loses its side and keeps its words', async ($, on) => {
+  engine(on)
+  await $.turn.complete(end('Needs you (Yours: name): odin or thor? I recommend odin.'))
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  await ui.press({ key: await rowKey(ui, 0) })
+  await ui.input({ key: await field(ui, 0), text: 'short names only', kind: 'change' })
+
+  await $.turn.complete({ ...end('Needs you (Yours: name): odin, thor or loki? I recommend loki.'), turnId: 'later' })
+  expect(await rows(ui)).toHaveLength(1)
+  expect(await chipOf(ui, 0)).toMatch(/^✎ words/)
+  await ui.unmount()
+})
+
+test("after the person's prompt, the next turn's lines show alone", async ($, on) => {
+  engine(on)
+  await $.turn.complete(end(ANSWER))
+  await $.prompt.submit(composer('Look at the logs first.'))
+  await $.turn.complete({
+    ...end('Needs you (GO: merge): merge the PR?\nNeeds you (Yours: name): odin or thor?'),
+    turnId: 'next',
+  })
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+
+  expect(await rows(ui)).toHaveLength(2)
+  expect(await ui.find({ type: 'Text', text: /^GO: merge · merge the PR\?$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^Yours: clouds · / })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('the keys share the top row when they fit, and go under the rows when they do not', async ($, on) => {
+  engine(on)
+  await $.turn.complete(end(ANSWER))
+  const order = async (columns: number) => {
+    const ui = await $.ui.mount({ ...BAND, surface: 'terminal', props: { ...BAND.props, bodyColumns: columns } })
+    const keys = (await ui.findAll({ type: 'Button' })).map(b => (b.key?.startsWith('row-') === true ? 'row' : b.key))
+    await ui.unmount()
+
+    return keys
+  }
+
+  expect(await order(115)).toEqual(['all', 'send', 'clear', 'row', 'row', 'row', 'row'])
+  expect(await order(60)).toEqual(['row', 'row', 'row', 'row', 'all', 'send', 'clear'])
+})
+
+test('the help text fits one row of a 120-column terminal', async ($, on) => {
+  engine(on)
+  await $.turn.complete(end(ANSWER))
+  // A 120-column terminal gives the band 115 columns: the engine keeps five for its `[-]`.
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal', props: { ...BAND.props, bodyColumns: 115 } })
+  const help = await ui.find({ type: 'Text', text: /closes the band$/ })
+
+  expect(help).toBeDefined()
+  expect(help?.text?.length ?? 0).toBeLessThanOrEqual(115)
+  await ui.unmount()
+})
+
+// A turn that ends while the message waits has not read it: a line it asks
+// again stays closed, so it does not come back to the band.
+test('every line of a band that a waiting message closed stays out, and a dropped message brings its rows back', async ($, on) => {
   // The engine holds the message until a later turn has ended, then drops it.
   let release: (drop: string) => void = () => undefined
   let toasted: () => void = () => undefined
@@ -268,18 +327,20 @@ test('a line asked again while its answer waits stays out, and a dropped message
 
     return <Text>engine</Text>
   })
-  const line = 'Needs you (GO: merge): merge the PR?'
-  await $.turn.complete(end(line))
+  const lines = 'Needs you (GO: merge): merge the PR?\nNeeds you (GO: tag): tag the release?'
+  await $.turn.complete(end(lines))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   await ui.press({ key: await rowKey(ui, 0) })
   await ui.press({ key: 'send' })
-  await $.turn.complete({ ...end(line), turnId: 'later' })
+  // The open row closed too, and a line asked in new words is still its line.
+  await $.turn.complete({ ...end(lines.replace('merge the PR?', 'merge PR #12?')), turnId: 'later' })
   expect(await rows(ui)).toHaveLength(0)
   release('test drop')
   await toast
 
-  expect(await rows(ui)).toHaveLength(1)
+  expect(await rows(ui)).toHaveLength(2)
   expect(await chipOf(ui, 0)).toMatch(/^✓ go/)
+  expect(await chipOf(ui, 1)).toMatch(/^○/)
   await ui.unmount()
 })
 
@@ -323,15 +384,15 @@ test('a row id is never held twice, even when one turn ends twice', async ($, on
   await once('Needs you (GO: a): run a?\nNeeds you (GO: b): run b?')
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   await ui.press({ key: await rowKey(ui, 0) })
-  await ui.press({ key: 'send' })
   await once('Needs you (GO: c): run c?')
 
   const keys = (await ui.findAll({ type: 'Input' })).map(f => f.key)
-  expect(keys).toHaveLength(2)
-  expect(new Set(keys).size).toBe(2)
-  await ui.press({ key: await rowKey(ui, 1) })
-  expect(await chipOf(ui, 0)).toMatch(/^○/)
-  expect(await chipOf(ui, 1)).toMatch(/^✓ go/)
+  expect(keys).toHaveLength(3)
+  expect(new Set(keys).size).toBe(3)
+  await ui.press({ key: await rowKey(ui, 2) })
+  expect(await chipOf(ui, 0)).toMatch(/^✓ go/)
+  expect(await chipOf(ui, 1)).toMatch(/^○/)
+  expect(await chipOf(ui, 2)).toMatch(/^✓ go/)
   await ui.unmount()
 })
 
@@ -412,7 +473,7 @@ test('Clear removes every row', async ($, on) => {
   await ui.unmount()
 })
 
-test("the person's prompt carries the answers above their words, and the open rows stay", async ($, on) => {
+test("the person's prompt carries the answered rows above their words, and closes the band", async ($, on) => {
   engine(on)
   await $.turn.complete(end(ANSWER))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
@@ -422,29 +483,25 @@ test("the person's prompt carries the answers above their words, and the open ro
   const entered = await $.prompt.submit(composer('Use two regions, not one.'))
   expect(entered.text).toBe(
     [
-      'My answers to your Needs you lines (1 of 4 answered):',
+      'My answers to your Needs you lines:',
       '',
-      '1. Yours: clouds ("should v0 use only Vertex, or Bedrock too?") — no answer yet.',
-      '2. GO: terraform apply (prod) ("may I apply the plan?") — no answer yet.',
-      '3. Your hands: Touch ID ("approve the keychain prompt.") — no answer yet.',
-      '4. Design approval ("approve the v0 design in section 10.") — changes.',
+      '1. Design approval ("approve the v0 design in section 10.") — changes.',
       '',
       'Use two regions, not one.',
     ].join('\n'),
   )
-  expect(await rows(ui)).toHaveLength(3)
-  expect(await ui.find({ type: 'Text', text: /^Design approval · / })).toBeUndefined()
+  expect(await rows(ui)).toHaveLength(0)
   await ui.unmount()
 })
 
-test('a prompt with no answer goes as typed and keeps every row', async ($, on) => {
+test('a prompt with no answer goes as typed and closes the band', async ($, on) => {
   engine(on)
   await $.turn.complete(end(ANSWER))
 
   const entered = await $.prompt.submit(composer('What is ROE?'))
   expect(entered.text).toBe('What is ROE?')
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  expect(await rows(ui)).toHaveLength(4)
+  expect(await rows(ui)).toHaveLength(0)
   await ui.unmount()
 })
 

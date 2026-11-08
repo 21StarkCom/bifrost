@@ -1,7 +1,7 @@
 {
   "name": "needs-you",
-  "version": "0.2.0",
-  "description": "A band above the prompt for the Needs you lines a turn ends on: answer each with one key or your own words, take all of Claude's picks at once, send the answers as your next message, and keep the open lines for a later answer.",
+  "version": "0.3.0",
+  "description": "A band above the prompt for the Needs you lines asked since your last message: answer each with one key or your own words, or take all of Claude's picks at once. Your next message sends the answers and closes the band.",
   "types": "./types/index.d.ts",
   "author": {
     "name": "21 Stark AI",
