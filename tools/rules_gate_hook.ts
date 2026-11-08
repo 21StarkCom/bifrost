@@ -329,7 +329,7 @@ export function gate(call: MergeCall, audit = AUDIT, home = os.homedir()): Verdi
     }
     const before = pairs.size
       ? triageIn(baseTree, [...new Set(pairs.values())].sort(), rules, audit, tmp, "base", n)
-      : { files: [], totals: { GREEN: 0, YELLOW: 0, RED: 0 } };
+      : { files: [], totals: { GREEN: 0, YELLOW: 0, RED: 0 }, stale: [] };
     const { added, kept } = newReds(head, before, pairs);
     if (!added.length) return PASS;
     const lines = added.map(({ path: p, clause: c }) => `  ${p}:${c.line}  ${c.type}  ${c.detail}: ${c.text}`);
