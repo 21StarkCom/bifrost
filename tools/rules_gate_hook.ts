@@ -41,7 +41,9 @@ import path from "node:path";
 
 import { precheckCli } from "./cli_args_lib.ts";
 import { isMainModule } from "./main_module_lib.ts";
-import { agentKind, type Clause, type TriageReport } from "./rules_audit_lib.ts";
+import { agentKind, newReds, type TriageReport } from "./rules_audit_lib.ts";
+
+export { newReds, type NewReds } from "./rules_audit_lib.ts";
 
 const USAGE = "usage: rules_gate_hook.ts (no arguments; PreToolUse JSON on stdin)\n";
 const TOOLS_DIR = import.meta.dirname;
@@ -412,57 +414,6 @@ export function renamesIn(nameStatus: string): Map<string, string> {
     i += status[0] === "R" || status[0] === "C" ? 3 : 2;
   }
   return out;
-}
-
-/** What a SIZE clause measures, keyed by its text for one index line of many. */
-function sizeKind(c: Clause): string | undefined {
-  return c.measure === "index line" ? `index line ${c.text}` : c.measure;
-}
-
-export interface NewReds {
-  /** Each head RED clause that its base file does not have. */
-  added: { path: string; clause: Clause }[];
-  /** The head RED clauses that its base file has too. */
-  kept: number;
-}
-
-/**
- * The RED clauses the head adds. `pairs` maps a head path to its base path.
- * A clause matches by its type and text, not its line, since a PR moves lines;
- * each base clause matches one head clause. A SIZE clause matches by what it
- * measures, and is new when the base has no RED of that kind, or when its
- * chars grew. The load set is the repo's, not one file's, so it matches the
- * base's load set on whichever file carries it. Each other RED of a file with
- * no base file is new.
- */
-export function newReds(head: TriageReport, base: TriageReport, pairs: Map<string, string>): NewReds {
-  const baseFiles = new Map(base.files.map((f) => [f.path, f]));
-  const isRed = (c: Clause) => c.flag === "RED";
-  const baseLoad = base.files.flatMap((f) => f.clauses).find((c) => isRed(c) && c.measure === "load set");
-  const added: NewReds["added"] = [];
-  let kept = 0;
-  for (const f of head.files) {
-    const was = pairs.has(f.path) ? baseFiles.get(pairs.get(f.path)!) : undefined;
-    const wasRed = was?.clauses.filter(isRed) ?? [];
-    const sizes = new Map(wasRed.filter((c) => c.type === "SIZE").map((c) => [sizeKind(c), c]));
-    if (baseLoad) sizes.set("load set", baseLoad);
-    const left = new Map<string, number>();
-    const key = (c: Clause) => `${c.type}\0${c.text}`;
-    for (const c of wasRed) if (c.type !== "SIZE") left.set(key(c), (left.get(key(c)) ?? 0) + 1);
-    for (const c of f.clauses.filter(isRed)) {
-      if (c.type === "SIZE") {
-        const kind = sizeKind(c);
-        const before = kind === undefined ? undefined : sizes.get(kind)?.chars;
-        if (before === undefined || c.chars === undefined) added.push({ path: f.path, clause: c });
-        else if (c.chars <= before) kept++;
-        else added.push({ path: f.path, clause: { ...c, detail: `${c.detail}, grown from ${before} to ${c.chars} chars` } });
-      } else if (left.get(key(c))) {
-        left.set(key(c), left.get(key(c))! - 1);
-        kept++;
-      } else added.push({ path: f.path, clause: c });
-    }
-  }
-  return { added, kept };
 }
 
 /** The PreToolUse output for the verdicts, or null for none. */

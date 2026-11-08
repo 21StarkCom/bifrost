@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import { buildView, originView, SWEEP_LABEL, sweepPlist } from "./rules_audit.ts";
+import { absolutePath, buildView, contextLines, fitSince, loadSaved, originView, sinceDiff, type SavedReport, type SinceDiff, formatSince, SINCE_MAX_CHARS, readModelSettings } from "./rules_audit.ts";
 
 const CLI = path.join(import.meta.dirname, "rules_audit.ts");
 
@@ -547,57 +547,207 @@ test("--playbook --notify: one heimdall send with the summary; the exit stays th
   }
 });
 
-test("--notify needs --playbook; a schedule flag takes no other argument", () => {
+test("--notify, --settings, --save, --since and --self-update need --playbook; --self-update needs --fleet", () => {
   const bin = fakeBin();
-  const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "rules-audit-home-")));
   try {
-    const env = bin.env({ HOME: home, STARK_STATE_ROOT: path.join(home, "state") });
     for (const [args, re] of [
       [["--notify"], /--notify needs --playbook/],
-      [["--install-schedule", "--notify"], /--install-schedule takes no other argument/],
-      [["--uninstall-schedule", "--playbook"], /--uninstall-schedule takes no other argument/],
+      [["--since", "/tmp/x.json", "--save", "/tmp/x.json"], /--save, --since need --playbook/],
+      [["--settings"], /--settings needs --playbook/],
+      [["--playbook", "--self-update"], /--self-update needs --fleet/],
     ] as const) {
-      const r = run([...args], os.tmpdir(), env);
+      const r = run([...args], os.tmpdir(), bin.env({}));
       assert.equal(r.status, 2, `${args.join(" ")}: ${r.stderr}`);
       assert.match(r.stderr, re);
     }
-    assert.deepEqual(bin.calls(), [], "a refused run calls neither heimdall nor launchctl");
+    assert.deepEqual(bin.calls(), [], "a refused run calls no heimdall");
   } finally {
     fs.rmSync(bin.dir, { recursive: true, force: true });
-    fs.rmSync(home, { recursive: true, force: true });
   }
 });
 
-test("the sweep's plist runs --playbook --fleet --memory --notify on Mondays at 09:00 through env node", () => {
-  const p = sweepPlist("/x/tools/rules_audit.ts", "/s/agent-doc-sweep/weekly.log", "/opt/homebrew/bin:/usr/bin");
-  assert.match(p, new RegExp(`<key>Label</key><string>${SWEEP_LABEL}</string>`));
-  assert.match(p, /<string>\/usr\/bin\/env<\/string>\s*<string>node<\/string>\s*<string>\/x\/tools\/rules_audit\.ts<\/string>\s*<string>--playbook<\/string>\s*<string>--fleet<\/string>\s*<string>--memory<\/string>\s*<string>--notify<\/string>\s*<\/array>/);
-  assert.match(p, /<key>Weekday<\/key><integer>1<\/integer><key>Hour<\/key><integer>9<\/integer><key>Minute<\/key><integer>0<\/integer>/);
-  assert.match(p, /<key>StandardOutPath<\/key><string>\/s\/agent-doc-sweep\/weekly\.log<\/string>/);
-  assert.match(p, /<key>PATH<\/key><string>\/opt\/homebrew\/bin:\/usr\/bin<\/string>/);
+test("the schedule flags are gone: --install-schedule and --uninstall-schedule are unknown", () => {
+  for (const flag of ["--install-schedule", "--uninstall-schedule"]) {
+    const r = run([flag]);
+    assert.equal(r.status, 2, r.stderr);
+    assert.match(r.stderr, /unknown/i);
+    assert.match(r.stderr, new RegExp(flag));
+  }
 });
 
-test("--install-schedule writes the plist and loads it; --uninstall-schedule unloads it and removes it", { skip: process.platform !== "darwin" && "launchd is macOS only" }, () => {
-  const bin = fakeBin();
-  const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "rules-audit-home-")));
+/** A report of one file with these RED clauses. */
+function report(file: string, clauses: Partial<SavedReport["files"][number]["clauses"][number]>[], extra: Partial<SavedReport> = {}): SavedReport {
+  const full = clauses.map((c) => ({ flag: "RED" as const, type: "GATE" as const, line: 1, text: "t", detail: "d", ...c }));
+  return {
+    files: [{ path: file, kind: "root", chars: 10, budget: 15000, flag: full.length ? "RED" : "GREEN", clauses: full }],
+    totals: { GREEN: full.length ? 0 : 1, YELLOW: 0, RED: full.length ? 1 : 0 }, stale: [], ...extra,
+  };
+}
+
+test("sinceDiff: a new RED clause is new with its lines around it, a gone one is gone, a moved one is neither", () => {
+  const text = "a\nb\nc\nnew gate\ne\nf\n";
+  const base = report("/r/CLAUDE.md", [{ line: 2, text: "kept gate" }, { line: 3, text: "old gate" }]);
+  const head = report("/r/CLAUDE.md", [{ line: 9, text: "kept gate" }, { line: 4, text: "new gate" }]);
+  const d = sinceDiff("s.json", base, head, () => text);
+  assert.deepEqual(d.new.map((c) => c.text), ["new gate"]);
+  assert.deepEqual(d.new[0].context, ["     2  b", "     3  c", ">    4  new gate", "     5  e", "     6  f"]);
+  assert.deepEqual(d.gone.map((c) => c.text), ["old gate"]);
+  assert.equal(d.gone[0].context, undefined);
+  assert.match(formatSince(d), /New RED clauses \(1\):\n {2}\/r\/CLAUDE\.md:4 {2}GATE {2}d: new gate\n {9}2 {2}b/);
+  assert.match(formatSince(d), /Gone RED clauses \(1\):\n {2}\/r\/CLAUDE\.md:3 {2}GATE {2}d: old gate/);
+});
+
+test("sinceDiff: a SIZE clause that shrinks is neither new nor gone; one that grows is new", () => {
+  const size = (chars: number) => ({ type: "SIZE" as const, text: `${chars} chars`, chars, measure: "core" as const });
+  const base = report("/r/CLAUDE.md", [size(40000)]);
+  const shrunk = sinceDiff("s", base, report("/r/CLAUDE.md", [size(35000)]), () => null);
+  assert.deepEqual([shrunk.new.length, shrunk.gone.length], [0, 0]);
+  const grown = sinceDiff("s", base, report("/r/CLAUDE.md", [size(45000)]), () => null);
+  assert.equal(grown.new.length, 1);
+  assert.match(grown.new[0].detail, /grown from 40000 to 45000 chars/);
+  assert.equal(grown.gone.length, 0);
+  assert.deepEqual(grown.new[0].context, []);
+});
+
+test("sinceDiff prints each settings value that changed", () => {
+  const base = report("/r/CLAUDE.md", [], { settings: { model: "opus", effortLevel: "high" } });
+  const head = report("/r/CLAUDE.md", [], { settings: { model: "opus", effortLevel: "xhigh", modelSettings: { a: 1 } } });
+  const d = sinceDiff("s", base, head, () => null);
+  assert.deepEqual(d.settings, [{ key: "effortLevel", from: "high", to: "xhigh" }, { key: "modelSettings", from: undefined, to: { a: 1 } }]);
+  assert.match(formatSince(d), /Settings changed:\n {2}effortLevel: "high" → "xhigh"\n {2}modelSettings: \(unset\) → \{"a":1\}/);
+});
+
+test("readModelSettings reads three keys from $CLAUDE_CONFIG_DIR, else ~/.claude; none for a missing file", () => {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "rules-audit-settings-")));
   try {
-    const env = bin.env({ HOME: home, STARK_STATE_ROOT: path.join(home, "state") });
-    const plist = path.join(home, "Library", "LaunchAgents", `${SWEEP_LABEL}.plist`);
-    const domain = `gui/${process.getuid!()}`;
-    const install = run(["--install-schedule"], os.tmpdir(), env);
-    assert.equal(install.status, 0, install.stderr);
-    assert.match(install.stdout, new RegExp(`loaded ${domain}/${SWEEP_LABEL}: Mondays 09:00 local, output to ${path.join(home, "state", "agent-doc-sweep", "weekly.log")}`));
-    // With no ~/.claude/code-review/tools link, the job runs this file.
-    assert.match(fs.readFileSync(plist, "utf8"), new RegExp(`<string>${CLI}</string>`));
-    assert.ok(fs.statSync(path.join(home, "state", "agent-doc-sweep")).isDirectory());
-    assert.deepEqual(bin.calls(), [["launchctl", "bootout", `${domain}/${SWEEP_LABEL}`], ["launchctl", "bootstrap", domain, plist]]);
-    const uninstall = run(["--uninstall-schedule"], os.tmpdir(), env);
-    assert.equal(uninstall.status, 0, uninstall.stderr);
-    assert.match(uninstall.stdout, new RegExp(`unloaded ${domain}/${SWEEP_LABEL}\nremoved ${plist}`));
-    assert.equal(fs.existsSync(plist), false);
-    assert.deepEqual(bin.calls().at(-1), ["launchctl", "bootout", `${domain}/${SWEEP_LABEL}`]);
+    writeAll(dir, {
+      "cfg/settings.json": JSON.stringify({ model: "opus", effortLevel: "xhigh", modelSettings: { x: 1 }, theme: "dark" }),
+      ".claude/settings.json": JSON.stringify({ model: "sonnet" }),
+    });
+    assert.deepEqual(readModelSettings({ CLAUDE_CONFIG_DIR: path.join(dir, "cfg") }, dir), { effortLevel: "xhigh", model: "opus", modelSettings: { x: 1 } });
+    assert.deepEqual(readModelSettings({}, dir), { model: "sonnet" });
+    assert.deepEqual(readModelSettings({}, path.join(dir, "none")), {});
   } finally {
-    fs.rmSync(bin.dir, { recursive: true, force: true });
-    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("loadSaved resolves a relative or ~ path of an older report; a missing or bad file gives the reason", () => {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "rules-audit-saved-")));
+  try {
+    writeAll(dir, { "repo/CLAUDE.md": "x", "old.json": JSON.stringify(report("repo/CLAUDE.md", [])), "bad.json": "{", "odd.json": "{\"files\":1}" });
+    const old = loadSaved(path.join(dir, "old.json"), dir, "/h");
+    assert.ok("report" in old);
+    assert.equal(old.report.files[0].path, path.join(dir, "repo", "CLAUDE.md"));
+    assert.equal(absolutePath("~/x/CLAUDE.md", dir, "/h"), "/h/x/CLAUDE.md");
+    assert.deepEqual(loadSaved(path.join(dir, "none.json")), { reason: "no saved run" });
+    assert.deepEqual(loadSaved(path.join(dir, "bad.json")), { reason: "it does not parse as JSON" });
+    assert.deepEqual(loadSaved(path.join(dir, "odd.json")), { reason: "it is not a --json triage report" });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("fitSince keeps the totals and the first new clauses under the limit, and counts the rest", () => {
+  const many = Array.from({ length: 2000 }, (_, i) => ({ line: i + 1, text: `gate number ${i} ${"x".repeat(40)}` }));
+  const d = sinceDiff("s", report("/r/CLAUDE.md", []), report("/r/CLAUDE.md", many), () => "line\n".repeat(3000));
+  assert.equal(d.new.length, 2000);
+  for (const render of [formatSince, (x: SinceDiff) => JSON.stringify(x, null, 2)]) {
+    const out = fitSince(d, render);
+    assert.ok(out.length < SINCE_MAX_CHARS, `${out.length} chars`);
+    assert.match(out, /RED/);
+    assert.match(out, /gate number 0 /);
+    const left = render === formatSince ? Number(/\+(\d+) new RED clauses left out/.exec(out)?.[1]) : JSON.parse(out).omitted.new;
+    assert.ok(left > 0 && left < 2000, String(left));
+    assert.ok(!out.includes(`gate number ${2000 - left} `), "the first clauses stay, the last go");
+  }
+  assert.equal(contextLines(null, 3).length, 0);
+});
+
+test("--save then --since on one file: no new RED and exit 0; an added RED is new and exit 3; a missing or bad file is the base", () => {
+  const dir = repo({ "CLAUDE.md": "# Rules\n\n- Run the tests.\n- This is the operator's call.\n" });
+  const h = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "rules-audit-home-")));
+  const env = { ...process.env, HOME: h, CLAUDE_CONFIG_DIR: path.join(h, "cfg") };
+  writeAll(h, { "cfg/settings.json": JSON.stringify({ model: "opus" }) });
+  const saved = path.join(h, "new", "folder", "run.json");
+  try {
+    const first = run(["--playbook", "--settings", "--json", "--save", saved, "--since", saved], dir, env);
+    assert.equal(first.status, 0, first.stderr);
+    assert.equal(JSON.parse(first.stdout).reason, "no saved run: this run is the base");
+    const file = JSON.parse(fs.readFileSync(saved, "utf8"));
+    assert.equal(file.files[0].path, path.join(dir, "CLAUDE.md"));
+    assert.deepEqual(file.settings, { model: "opus" });
+    assert.deepEqual(fs.readdirSync(path.dirname(saved)), ["run.json"], "no temp file is left");
+
+    fs.writeFileSync(path.join(dir, "CLAUDE.md"), "# Rules\n\n- A line.\n- Run the tests.\n- This is the operator's call.\n");
+    const same = run(["--playbook", "--settings", "--save", saved, "--since", saved], dir, env);
+    assert.equal(same.status, 0, same.stderr);
+    assert.match(same.stdout, /No new RED clause\./);
+    assert.doesNotMatch(same.stdout, /Gone RED/, "a moved clause is not gone");
+
+    fs.appendFileSync(path.join(dir, "CLAUDE.md"), "- Wait for the operator's word.\n- After.\n");
+    writeAll(h, { "cfg/settings.json": JSON.stringify({ model: "sonnet" }) });
+    const added = run(["--playbook", "--settings", "--since", saved], dir, env);
+    assert.equal(added.status, 3, added.stderr);
+    assert.match(added.stdout, /New RED clauses \(1\):\n {2}CLAUDE\.md:6 {2}GATE .*\n {9}4 {2}- Run the tests\.\n.*\n {4}> {4}6 {2}- Wait for the operator's word\.\n {9}7 {2}- After\./);
+    assert.match(added.stdout, /before: RED 1 · YELLOW 0 · GREEN 0\n {2}now: {4}RED 1/);
+    assert.match(added.stdout, /Settings changed:\n {2}model: "opus" → "sonnet"/);
+
+    fs.writeFileSync(saved, "not json");
+    const bad = run(["--playbook", "--since", saved], dir, env);
+    assert.equal(bad.status, 0, bad.stderr);
+    assert.match(bad.stdout, /it does not parse as JSON: this run is the base\n {2}now: RED 1/);
+  } finally {
+    for (const d of [dir, h]) fs.rmSync(d, { recursive: true, force: true });
+  }
+});
+
+/** A checkout of a copy of the tools on `main`, with a bare origin, and a home with an empty fleet. */
+function selfUpdateFixture(): { top: string; bare: string; h: string; tool: string } {
+  const top = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "rules-audit-self-")));
+  fs.cpSync(import.meta.dirname, path.join(top, "tools"), {
+    recursive: true, filter: (src) => !src.includes("node_modules") && (fs.statSync(src).isDirectory() || src.endsWith(".ts")),
+  });
+  gitOk(top, "init", "-q");
+  const bare = `${top}.git`;
+  publish(top, bare);
+  const h = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "rules-audit-home-")));
+  fs.mkdirSync(path.join(h, "Code", "21Stark"), { recursive: true });
+  return { top, bare, h, tool: path.join(top, "tools", "rules_audit.ts") };
+}
+
+test("--self-update fast-forwards a clean main and runs the new code; a changed or non-main checkout is stale and stays", () => {
+  const f = selfUpdateFixture();
+  const env = { ...process.env, HOME: f.h, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
+  const selfRun = () => spawnSync(process.execPath, ["--no-warnings", f.tool, "--playbook", "--fleet", "--json", "--self-update"], { cwd: f.h, encoding: "utf8", env });
+  try {
+    const up = fs.mkdtempSync(path.join(f.h, "up-"));
+    gitOk(f.h, "clone", "-q", f.bare, up);
+    gitOk(up, "commit", "-q", "--allow-empty", "-m", "moves on");
+    gitOk(up, "push", "-q", "origin", "HEAD");
+    const tip = gitOk(up, "rev-parse", "HEAD").trim();
+
+    const clean = selfRun();
+    assert.equal(clean.status, 0, clean.stderr);
+    assert.equal(gitOk(f.top, "rev-parse", "HEAD").trim(), tip);
+    assert.match(clean.stderr, /self-update moved \w+ to \w+; running the new code/);
+    assert.deepEqual(JSON.parse(clean.stdout).stale, []);
+
+    gitOk(up, "commit", "-q", "--allow-empty", "-m", "again");
+    gitOk(up, "push", "-q", "origin", "HEAD");
+    fs.appendFileSync(path.join(f.top, "tools", "cli_args_lib.ts"), "\n");
+    const changed = selfRun();
+    assert.equal(changed.status, 0, changed.stderr);
+    assert.equal(gitOk(f.top, "rev-parse", "HEAD").trim(), tip);
+    assert.match(JSON.parse(changed.stdout).stale[0].reason, /self-update: main has local changes/);
+    gitOk(f.top, "checkout", "-q", "--", ".");
+
+    gitOk(f.top, "checkout", "-q", "-b", "feature");
+    const branch = selfRun();
+    assert.equal(branch.status, 0, branch.stderr);
+    assert.equal(gitOk(f.top, "rev-parse", "HEAD").trim(), tip);
+    assert.match(JSON.parse(branch.stdout).stale[0].reason, /self-update: on feature, not main/);
+  } finally {
+    for (const d of [f.top, f.bare, f.h]) fs.rmSync(d, { recursive: true, force: true });
   }
 });
