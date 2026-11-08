@@ -117,7 +117,7 @@ it changes nothing, prints why and exits 0. Exit 1 when the rename fails, 2
 with any other flag.`;
 
 /** The suffix of the file `--save` writes and `--commit` renames over the base. */
-export const PENDING_SUFFIX = ".pending";
+const PENDING_SUFFIX = ".pending";
 
 /** The longest `--since` output: odin cuts a tool's answer at 45,000 chars. */
 export const SINCE_MAX_CHARS = 45_000;
@@ -896,15 +896,8 @@ async function playbookMain(flags: Map<string, string | true>, extraStale: Stale
   const home = os.homedir();
   const sinceFile = flags.has("since") ? String(flags.get("since")) : undefined;
   const base = sinceFile === undefined ? undefined : loadSaved(sinceFile);
+  // `main` deleted an old one before `--self-update`.
   const pending = flags.has("save") ? `${String(flags.get("save"))}${PENDING_SUFFIX}` : undefined;
-  if (pending !== undefined) {
-    // An old report must not reach `--commit` after this triage fails.
-    try {
-      fs.rmSync(pending, { force: true });
-    } catch (e) {
-      return playbookFailed(flags, new Error(`--save: ${(e as Error).message}`), 1);
-    }
-  }
   const c = new Collector();
   try {
     const anyInput = flags.has("repo") || flags.has("fleet") || flags.has("memory") || flags.has("files");
@@ -1023,6 +1016,19 @@ export async function main(argv: string[]): Promise<number> {
     if (flags.has("always") || flags.has("file-budget") || flags.has("always-budget")) {
       process.stderr.write("rules_audit: --always, --file-budget and --always-budget do not apply with --playbook\n");
       return 2;
+    }
+    if (flags.has("save")) {
+      // An old report must not reach `--commit` after this run fails, even
+      // when the new code of `--self-update` does not start.
+      const pending = `${String(flags.get("save"))}${PENDING_SUFFIX}`;
+      try {
+        const old = fs.existsSync(pending);
+        fs.rmSync(pending, { force: true });
+        // A caller that never commits never moves the base: say so.
+        if (old) process.stderr.write(`rules_audit: --save: deleted ${pending}, which no --commit moved to the base\n`);
+      } catch (e) {
+        return playbookFailed(flags, new Error(`--save: ${(e as Error).message}`), 1);
+      }
     }
     const extraStale: StaleRepo[] = [];
     if (flags.has("self-update")) {

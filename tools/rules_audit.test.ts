@@ -749,6 +749,7 @@ test("--commit with no pending report changes nothing and exits 0; a failed tria
     fs.writeFileSync(`${saved}.pending`, "an old report");
     const failed = run(["--playbook", "--files", path.join(h, "missing.md"), "--save", saved], h, { ...process.env, HOME: h });
     assert.equal(failed.status, 2, failed.stderr);
+    assert.match(failed.stderr, /^rules_audit: --save: deleted .*run\.json\.pending, which no --commit moved to the base\n/, "an uncommitted report is named");
     assert.equal(fs.existsSync(`${saved}.pending`), false, "a triage that fails leaves no report to commit");
     assert.equal(run(["--commit", saved]).status, 0);
     assert.equal(fs.readFileSync(saved, "utf8"), "base");
