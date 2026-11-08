@@ -10,7 +10,7 @@
       "name": "stark-analyze",
       "source": "./",
       "description": "Zero-context fresh-eyes review of specs and briefs, multi-agent Terraform/Terragrunt (IaC) review, repository refactor planning, and application-logging authoring/review guidance. Maps to spec-kit's analyze phase.",
-      "version": "0.6.13",
+      "version": "0.6.14",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -61,7 +61,7 @@
       "name": "stark-design",
       "source": "./",
       "description": "Design-token architecture — build, name, theme, and govern a design-token system the way the field's canonical sources converge on it. Covers the three-tier model (primitive/semantic/component), naming grammar, OKLCH color scales, DTCG authoring, Style Dictionary pipelines, dark-mode/multi-brand/density theming, CSS-variable distribution, WCAG contrast gates, and token semver/deprecation. Also the floorplan C4 design loop: propose a model change, check it, render it, show it in the studio, ask on the canvas with Huginn annotate, and accept it.",
-      "version": "0.1.41",
+      "version": "0.1.42",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -86,7 +86,7 @@
       "name": "stark-implement",
       "source": "./",
       "description": "Implement from an accepted spec. /stark-build runs one fresh headless session per task gated by checks the agent cannot edit, with a held-out e2e gate, one cross-vendor advisory review, and one bounded fix round for medium+ findings.",
-      "version": "0.4.75",
+      "version": "0.4.76",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -106,7 +106,7 @@
       "name": "stark-ops",
       "source": "./",
       "description": "Repository operations beyond the spec-driven pipeline — coordinate Minions with Gru, cut releases, run session start/end, hand off work across sessions, run one ticket solo and unattended with Agnes, open a Lucius brainstorm in a tab of its own, and operate desktop apps in the background with goldfinger.",
-      "version": "0.46.0",
+      "version": "0.46.1",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -169,7 +169,7 @@
       "name": "stark-plan",
       "source": "./",
       "description": "Plan work before it starts — author a human-gated spec with its task DAG, and write short tickets someone else can pick up, with no guessed claims.",
-      "version": "0.14.1",
+      "version": "0.14.2",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -191,7 +191,7 @@
       "name": "stark-write",
       "source": "./",
       "description": "Long-form writing craft, from the author's reusable voice profile through story editing, adversarial sharpening, independent judging, and multi-model jury calibration.",
-      "version": "0.5.57",
+      "version": "0.5.58",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"

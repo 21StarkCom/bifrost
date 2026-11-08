@@ -1,7 +1,7 @@
 ---
 name: stark-build
 description: >-
-  Stage 2 — autonomous implementation from an accepted stark-author spec: one fresh headless session per task, gated by checks the agent cannot edit (PreToolUse path-deny + Stop-hook gate), evidence per task, commit per green task, held-out e2e gate, one cross-vendor advisory review, ONE bounded fix round for medium+ findings, draft PR. No LLM review loops. Use for build, implement a spec.
+  Stage 2 — build an accepted stark-author spec: one fresh headless session per task, gated by checks the agent cannot edit, evidence and a commit per green task, a held-out e2e gate, one cross-vendor advisory review, one bounded fix round, a draft PR. Use to build or implement a spec.
 argument-hint: '<spec-path> [--dry-run] [--no-advisory] [--no-fix] [--stay-draft] [--max-turns N] [--model ID]'
 disable-model-invocation: true
 ---
@@ -76,8 +76,8 @@ to get the tool payload.
    (strip `YYYY-MM-DD-` prefix and `-spec.md` suffix).
 2. Parse `## Tasks`: per task — id, title, declared file set, done-when
    command, depends-on. **Every task needs a machine-checkable done-when**;
-   any task without one → stop, return the spec to the operator (that is a
-   Stage-1 defect, not yours to improvise). A done-when containing `grep -q`
+   any task without one is a Stage-1 defect: stop, and return the spec to
+   `/stark-author`; never write a done-when in Stage 2. A done-when containing `grep -q`
    in a pipeline is refused the same way — a fails-on-success gate: under
    `pipefail` it can SIGPIPE a still-writing producer, failing the gate on
    success (return to `/stark-author`). Topo-sort by declared edges;
@@ -139,7 +139,7 @@ State lives OUTSIDE the repo:
    (draft by default). Prevents base ambiguity.
 
    `land` also stamps the ticket's `pr_url` + `pr_state=open` through
-   `alfred task edit --field` (STARK-6108). **Pass `--ticket STARK-n` when the
+   `alfred task edit --field`. **Pass `--ticket STARK-n` when the
    spec names its ticket** — `build/<slug>` carries no handle, so without the
    flag the ticket comes from `alfred repo info --json` run in `<wt>`, i.e.
    whatever session record that worktree resolves to. On a PR `land` adopted

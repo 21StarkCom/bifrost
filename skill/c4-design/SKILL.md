@@ -1,6 +1,6 @@
 ---
 name: c4-design
-description: "Run the floorplan design loop for a C4 architecture model: propose a model change as a LikeC4 diff, check it against the C4 rules, render it, show it to the operator in the floorplan studio through Huginn, ask open questions on the canvas with Huginn annotate, and accept it into the model and a PR. Also link the model to its code with the code, deploy and terraform keys and floorplan scan, fix an R9 error, write a flow as a sequence view, give each external system its vendor logo, and show the deployments from Terraform and Kubernetes files. Also make a first model of a product from its code, and review a model or its diagrams against the C4 review checklist. Use when the operator asks to change, add to or redesign a product's architecture, its C4 model, diagram or views (a new system, container, component or relationship, a split or a merge), when the operator asks to review or improve an architecture diagram or a C4 model, when a repo holds a floorplan project (docs/architecture/floorplan.config.json), or when a task names floorplan, LikeC4, a C4 diagram, a model proposal, floorplan scan, a flow, a logo or a deployment view."
+description: "Run the floorplan design loop for a C4 model: propose a LikeC4 diff, check, render, show it in the studio, accept it. Use to change, review or first model a product's architecture, C4 model or diagrams, or when a task names floorplan, LikeC4, floorplan scan, R9, a flow, a logo or a deployment view."
 argument-hint: "[<the change> | help]"
 ---
 
@@ -22,8 +22,8 @@ change until the operator accepts it. The operator sees the proposal in the **st
 model, as As-is, Changes and To-be. This skill is that loop, from section 8 of the floorplan spec
 (`docs/specs/2026-11-04-floorplan-tool-spec.md` in the floorplan repo).
 
-A small fix (a typo, a description, a technology string, a [code key](#link-the-model-to-its-code), a
-[flow](#flows) of code that exists, the [logo](#logos) of an external system) is not a design change. Edit the
+A small fix (a typo, a description, a technology string, a [code key](references/code-keys.md), a
+[flow](references/flows.md) of code that exists, the [logo](references/logos.md) of an external system) is not a design change. Edit the
 `.c4` file in `model/`, run `floorplan build`, and commit; skip the loop.
 
 ## Design craft
@@ -40,219 +40,15 @@ Structurizr and general diagram guidance ([sources](references/sources.md)).
 Read modeling.md and views.md before you write a proposal or a first model. Run the checks of review.md at step 2
 of the loop, and when the operator asks for a review of a model or its diagrams.
 
-## Link the model to its code
+## Code keys, flows, deployments and logos
 
-Three metadata keys, the D1 keys, tie an element to the files of its repo. A path is relative to the repo root (the
-`git rev-parse --show-toplevel` of the project folder), not to the project folder.
+Read the reference for the task before you edit `model/`:
 
-| Key         | Its value                                                                                | It goes on                         |
-| ----------- | ---------------------------------------------------------------------------------------- | ---------------------------------- |
-| `code`      | a folder or a file, or a list of them: `code ['cmd/api/', 'internal/api/']`              | a `component` or a container kind  |
-| `deploy`    | a Kubernetes manifest (a file or a folder), or a Terraform resource as `tf:<type>.<name>` | a container kind                   |
-| `terraform` | a folder of `.tf` files, or a list of them                                               | a `softwareSystem`                 |
-
-The container kinds are `container`, `webApp`, `mobileApp`, `database` and `queue`.
-
-```likec4
-shop = softwareSystem 'Shop' {
-  description 'Takes and keeps the orders.'
-  metadata {
-    terraform 'infra'
-  }
-
-  api = container 'API' {
-    technology 'Go'
-    description 'Takes the orders.'
-    metadata {
-      code 'services/api/'
-      deploy 'services/api/k8s/'
-    }
-  }
-}
-```
-
-- Write the keys in `model/` files, as a small fix: edit, run `floorplan build`, and commit.
-- Never write a key in a proposal. A proposal is not a build input, so the scan does not read it, and R9 does not
-  check its paths. The key reaches the model only at the accept, where a bad path stops the build after
-  `floorplan-engine diff apply` has changed the model. Accept a new element first, then add its keys in `model/`.
-
-### floorplan scan
-
-`floorplan scan [dir]` (MCP `scan` {dir}) reads the keys and writes `model/scan/`, and nothing else. It changes no
-hand-written file and never commits. `floorplan build` runs it first; `--no-scan` (MCP `noScan:true`) skips it.
-
-- The scan reads only the files that git tracks, and the URL of `origin`. Stage a new file (`git add`) before the
-  scan, or its path is not in git.
-- It writes `links.c4` (a link `https://github.com/<owner>/<repo>/tree/HEAD/<path>` for each `code` path),
-  `stack.c4` and `stack-views.c4` (the tech stack of each element with a `code` key, and the view `stack`),
-  `logos.c4` (the logo of each language, [Logos](#logos)), and, from the `terraform` and `deploy` keys,
-  `deployment.c4` and `deployment-views.c4` (the network, the deployments with the Google Cloud icon of each node,
-  and the view `deployment`).
-- `model/scan/` is the scan's. Each file starts with `// Written by floorplan scan. Do not edit.` Never edit one:
-  R9 fails on the change, and the next scan writes the file again.
-- The scan also owns the stack keys `language`, `language-version`, `runtime`, `frameworks` and `image`, the view
-  ids `stack` and `deployment`, and the style group id `languageLogos`. Do not write them by hand: floorplan's
-  engine adds a hand-written value of a key to the scan's value, and a second view or style group with one of
-  those ids is a duplicate.
-- A project with no key gets no `model/scan/` folder, and R9 passes.
-- A key with a problem stops `floorplan build`: it prints the problem and writes no outputs.
-
-### R9 and its fixes
-
-`floorplan check` runs R9, an error: each key is on its kinds, each path is in git, each value is one the scan can
-place, and `model/scan/` matches a new scan in memory. The fix for each failure:
-
-| `floorplan check` says (R9)                                                                       | Fix                                                               |
-| ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `the code path <path> is not in git: git tracks no file or folder with this path.`                | Fix the path of the key in `model/`, or `git add` the file.       |
-| `the code key is on a <kind>, but it goes only on a component or a container kind (…).`           | Move the key in `model/` to an element of a kind that takes it.   |
-| `the file is not what floorplan scan writes now.`, or a file that is missing or extra under `model/scan/` | `model/scan/` is out of date: run `floorplan build`.      |
-
-- The first two read the same for `deploy` and `terraform`. A path out of the repo, or a project out of a git
-  checkout, is the first kind too.
-- `deploy` also fails on a value that the scan cannot place: a manifest with no workload, workloads with no
-  `terraform` cluster, and a `tf:` address with no node. Fix the key in `model/`, or the file it names.
-- The check says to run `floorplan scan` for an out-of-date file. Run `floorplan build`: `model/scan/` is under
-  `model/`, an input of R8, so a scan that changes a file makes R8 fail until the next build.
-
-## Flows
-
-A flow shows the steps of one main path through the code, in order, as a sequence diagram. Write it as a
-`dynamic view` with `variant sequence` in a `views` block of `model/`:
-
-```likec4
-dynamic view flowCheckout {
-  variant sequence
-  title 'Flow: checkout'
-  description 'The web app sends the cart to the API, which stores the order.'
-
-  // The order of the lifelines, left to right
-  include
-    customer,
-    shop.web,
-    shop.api,
-    shop.db
-
-  customer -> shop.web 'presses Pay'
-  shop.web -> shop.api 'posts the cart'
-  shop.api -> shop.db 'stores the order'
-  shop.web <- shop.api 'returns the order id'
-}
-```
-
-- Name leaf elements only: people, external systems, and containers or components with no children. A sequence
-  view shows only leaf elements, so a step names `shop.api`, never `shop`.
-- Write one flow for each main path, not one for each function. Read the code of each step before you write it.
-- floorplan's own model has two flows whose syntax you can copy: `flowBuild` and `flowDesignLoop` in
-  `docs/architecture/model/views.c4` of floorplan. `flowBuild` uses `alt` with `when` and `else`, `parallel` and a
-  step's `notes`; `flowDesignLoop` uses `loop` and `notes`. The syntax is in
-  `apps/docs/src/content/docs/dsl/Views/dynamic.mdx` there. Write the titles and steps by
-  [views.md](references/views.md#flows), not by those two.
-- Run `floorplan build`, then `render` the flow's view id and look at the PNG, as in step 2 of the loop.
-- No rule asks for a flow.
-
-## Deployments
-
-The network and the deployments come from the `terraform` and `deploy` keys:
-
-1. Put a `terraform` key on the `softwareSystem`: the folders of its `.tf` files.
-2. Put a `deploy` key on each container kind that runs: its Kubernetes manifest (a `Deployment`, `StatefulSet`,
-   `CronJob` or `Job`), or `tf:<type>.<name>` for the resource it runs on, such as
-   `tf:google_compute_instance.connector`.
-3. Run `floorplan build`. The scan writes the nodes and the instances into `model/scan/deployment.c4`, and the view
-   `deployment` into `model/scan/deployment-views.c4`. Run `render` on the view `deployment` and look at it.
-
-- The scan reads only the `.tf` files that git tracks. It never reads Terraform state and never runs `terraform`:
-  state can hold secret values.
-- It draws a node for each `google` resource type that has a deployment kind of the kit
-  (`references/kit-and-rules.md`), and lists the other `google_*` types in a comment.
-- A manifest's workload goes in the first cluster by Terraform address. The scan reads plain manifests only, not
-  Kustomize overlays, Helm charts or `kind: List` exports.
-- One project has one deployment model: the `terraform` folders of all its systems share one environment, `gcp`.
-- Write a `deployment` block by hand only for what no `.tf` file holds. Use the kit's deployment kinds, or R1
-  fails.
-
-## Logos
-
-A logo is the `icon` of an element: an icon that LikeC4 bundles, named `<set>:<name>`. The sets are the folders of
-`packages/icons/` in the floorplan repo: `tech` (vendors, products and languages, such as `tech:github`), `gcp`
-(Google Cloud products, such as `gcp:cloud-sql`), `aws`, `azure` and `bootstrap`. floorplan 0.5.0 and later write the
-logos of the languages and of Google Cloud. You write the logos of the external systems.
-
-**External systems.** Give each external system `icon <name>` in `model/`, as a small fix: edit, run
-`floorplan build`, and commit. No scan does it, because no key of the model names a vendor. A new external system
-in a proposal takes its `icon` in the `add` block, as it takes its `description`.
-
-```likec4
-github = externalSystem 'GitHub' {
-  description 'Hosts the repos and runs CI.'
-  icon tech:github
-}
-
-slack = externalSystem 'Slack' {
-  description 'Gets the alerts.'
-  icon tech:slack
-}
-```
-
-- Use a bundled icon only when it names the same vendor or product as the element.
-- Use the icon of the product when one is bundled: `tech:jira` for Jira, `tech:claude` for Claude,
-  `gcp:key-management-service` for Cloud KMS. Else use the icon of the vendor: `tech:google-cloud`.
-- Give no `icon` to an element that names two or more vendors, or to a vendor with no bundled icon (HiBob,
-  Twingate, Cursor). The repos keep no brand files.
-- An internal element can take an `icon` too. That icon wins over the language logo below.
-
-**Languages.** `floorplan scan` writes `model/scan/logos.c4`: the style group `languageLogos`, with the logo of
-the language of each element of `stack.c4` (`tech:go`, `tech:typescript`, `tech:javascript`, `tech:python`).
-
-- The view `stack` applies the group. A hand-written view shows the language logos only when you add the line
-  `global style languageLogos` to it. No hand-written view has the line by default.
-
-  ```likec4
-  view containers of shop {
-    include *
-
-    global style languageLogos
-  }
-  ```
-
-- The scan leaves an element with a hand-written `icon` out of the group, so the element keeps its own icon.
-- When each element of `stack.c4` has a hand-written `icon`, the scan writes no `logos.c4`. A view with the line
-  then fails `floorplan check` with `Could not resolve reference to GlobalStyleId named 'languageLogos'.` Remove
-  the line from the view.
-
-**Google Cloud.** The scan writes `icon` on each node of `model/scan/deployment.c4`, by the resource type:
-`tech:google-cloud` on the environment `gcp`, `gcp:project` on a project, `gcp:cloud-sql` on a
-`google_sql_database_instance`, and so on. An instance keeps the icon of its element.
-
-- Never edit `logos.c4` or the icons of `deployment.c4`. They are scan files: R9 fails on the change, and the next
-  scan writes them again.
-
-**An unknown icon name fails `floorplan check`,** in `model/` and in a proposal. In `model/`, `floorplan build`
-then writes no outputs. The language reads the name as a reference, so no rule R1 to R9 is needed:
-
-```
-model/model.c4:12 error FLOORPLAN Could not resolve reference to LibIcon named 'tech:hibob'.
-```
-
-Fix the name, or remove the `icon`.
-
-**No technology text from an icon.** Each floorplan project sets `"inferTechnologyFromIcon": false` in its
-`floorplan.config.json`. `floorplan init` writes the key from floorplan 0.5.0 on; add it by hand to an older project.
-
-```json
-{
-  "name": "shop",
-  "title": "shop",
-  "inferTechnologyFromIcon": false
-}
-```
-
-Without the key, the engine gives each element with an icon and no `technology` a technology text from the icon's
-name, such as "Github" or "Slack", under its title. The text repeats the logo, and it can spell a brand name wrong
-("Github" for GitHub).
-
-A node shows one icon, so frameworks and runtimes stay as text in the element's card.
+- [references/code-keys.md](references/code-keys.md): before you write a `code`, `deploy` or `terraform` key, run
+  `floorplan scan`, fix an R9 error, or show the deployments.
+- [references/flows.md](references/flows.md): before you write a flow, a sequence view of one main path.
+- [references/logos.md](references/logos.md): before you give an element a logo, or when an icon name fails
+  `floorplan check`.
 
 ## Before you start
 
@@ -333,6 +129,8 @@ diff rfc-payments 'Split payments out of the API' {
   into the model, such as an element's `description`.
 - A new view for the change goes in `model/`, not in the proposal. A view that names an element only the
   proposal adds shows it in To-be alone.
+- Never write a `code`, `deploy` or `terraform` key in a proposal: R9 does not check it there, and a bad path
+  stops the build at the accept. Add the keys in `model/` at step 5.
 
 ### 2. Check and render
 
@@ -414,7 +212,7 @@ the chat. An answer on the canvas is not an accept.
      delete the file, and run `build`.
    - The error says that `floorplan-engine diff apply` applied the proposal but `floorplan build` failed: the model has
      changed and the proposal is gone, so do not run `accept` again. Fix the error, and run `build`.
-2. Add the code keys of each new element in `model/` ([Link the model to its code](#link-the-model-to-its-code))
+2. Add the code keys of each new element in `model/` ([code keys](references/code-keys.md))
    whose code exists, and run `build`.
 3. Run `check` with `maxWarnings` set to the count of warnings that the model had before the proposal (0 for a
    clean model). It must pass, R8 and R9 included.

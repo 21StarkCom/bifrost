@@ -1,7 +1,7 @@
 ---
 name: stark-author
 description: >-
-  Stage 1 — spec+plan authoring in one session, the operator decides: tier check, time-boxed recon, plain-language interview (only what only they know), one self-contained doc, one zero-context advisory pass, plain-language sign-off, commit-pinned handoff. No LLM review loops. Use for author, spec, plan a change.
+  Stage 1 — write a spec and its plan in one session: tier check, short recon, plain-language interview (only what only the operator knows), one self-contained doc, one zero-context advisory pass, sign-off, commit-pinned handoff. Use to author, spec or plan a change.
 argument-hint: '<intent | notes-path> [--tier skip|short|full] [--out PATH] [--no-advisory] [--ready]'
 disable-model-invocation: true
 ---
@@ -92,7 +92,8 @@ make. Ask those, plainly, and nothing else.
   this a disaster?"). This is the unwanted-behaviour criterion; ask it as a plain
   worry, not an EARS template.
 - **A product decision you're genuinely unsure about** — where two reasonable
-  reads exist and the choice is theirs, not yours.
+  reads exist and the choice is one of product scope or taste, which the root
+  rules give to the operator.
 
 **Keep it short.** 2–4 questions per `AskUserQuestion` call; ≤3 calls at Full, ≤1
 at Short. **If you can answer it from the code, don't ask it** — every avoidable
@@ -293,7 +294,7 @@ gh pr create --head "spec/<slug>" --base main --draft \
 
 4. **Stamp the ticket** with the PR you just opened — alfred owns the ticket
    field schema, and the path that opens a PR is the one authority for `pr_url`
-   and `pr_state` (alfred spec STARK-6093). `spec/<slug>` carries no ticket
+   and `pr_state`. `spec/<slug>` carries no ticket
    handle, so the ticket is the one bound to this session:
 
 ```bash
