@@ -8,8 +8,9 @@ Review each agent instruction file the way a legal team reviews a contract.
 A playbook holds the standard position for each kind of clause. A review reads
 the file clause by clause, gives each clause a GREEN, YELLOW or RED flag, and
 writes the exact replacement text. A fast triage runs before each merge, and a full
-review runs on request. A weekly sweep reports the fleet. The files stay small, agree with the root
-rules, and stop growing by themselves.
+review runs on request. Each Monday, an odin agent on the devbox reviews what changed
+in the fleet. The files stay small, agree with the root rules, and stop growing by
+themselves.
 
 ## Why
 
@@ -120,10 +121,28 @@ draft PR.
      it does today.
    - Output: the summary and issues list below.
 
-5. **The weekly sweep.** `rules_audit.ts --fleet --memory --notify`, installed as
-   a launchd job by `--install-schedule`, as `ask_guard_metric.ts` does. Each
-   Monday it sends one summary with `heimdall send`: the RED files first, then
-   the files over budget.
+5. **The weekly run: an odin agent on the devbox.** Revised on 2026-11-08. The
+   first version was a launchd job on the Mac. The operator removed it, and the
+   root rules now refuse a new Mac service that the operator did not ask for.
+   - `rules_audit.ts --since <run.json>` prints only the change against a saved
+     run: each new RED clause, and each RED clause that is gone. `--save
+     <run.json>` keeps the run for the next week.
+   - `--settings` adds `effortLevel`, `model` and `modelSettings` from
+     `~/.claude/settings.json`. With `--since`, it prints each value that changed.
+   - `--install-schedule` and `--uninstall-schedule` leave `rules_audit.ts`.
+   - odin's fleet tool `agent_doc_triage` runs `rules_audit.ts --playbook --fleet
+     --json --since --save` with fixed flags and one fixed state file.
+   - odin's playbook `agent-doc-review` judges each new RED clause by
+     `playbook.md`. It drops a kept gate or a false flag, with the reason. It
+     writes a redline for each real RED.
+   - The playbook files one ticket for each repo with a real new RED, or
+     comments on that repo's open ticket. It posts the summary to Slack.
+   - `odinctl schedule add` also writes a systemd user timer on Linux. The devbox
+     runs the playbook each Monday at 09:00, on the API key, with a ceiling of
+     1,000,000 tokens for each run.
+   - The Mac's memory notes and settings are only on the Mac. They get a check
+     when the operator asks: `rules_audit.ts --playbook --memory --settings
+     --since <run.json>`.
 
 6. **The root rules change.** Agent instruction files leave the "Prose only: no
    review" tier. New tier: "Agent instruction files: triage; a RED blocks the
@@ -158,6 +177,9 @@ Fallback: move the list to docs/packages.md behind one pointer.
    change; (6) the weekly sweep.
 3. The first sweep after (6) is the proof: every repo GREEN or YELLOW, and the
    summary arrives.
+4. The revised component 5 is its own epic, with one ticket for each slice:
+   `rules_audit.ts` in bifrost; the Linux schedule in odin; the tool and the
+   playbook in odin; the devbox rollout. The first run on the devbox is the proof.
 
 ## Decisions (my recommendation first)
 
@@ -166,14 +188,23 @@ Fallback: move the list to docs/packages.md behind one pointer.
   bifrost and idun apart.
 - Triage uses no model. It is fast and free, and its RED list is exact. The
   model runs only in the review.
-- Memory notes get the same playbook. The sweep reports them; a review run with
-  `--memory --apply` fixes them in place after a backup, with no PR.
+- Memory notes get the same playbook. A run on the Mac reports them when the
+  operator asks; a review run with `--memory --apply` fixes them in place after
+  a backup, with no PR.
+- The weekly run is an odin agent on the devbox, not a job on the Mac. The
+  devbox is online 24/7, and it is not the operator's work machine.
+- Triage and the diff stay code in bifrost. Only the judgment of each new RED
+  clause uses a model, so a week with no change costs almost nothing.
+- The weekly run files its tickets itself. A write with no allow rule waits 24
+  hours as a held call, and the Slack post names it.
 - The budgets above are a start. A file over budget names its reason in its PR.
 
 ## Not built: add when it hurts
 
 - A CI job in each repo, for a person or a Codex worker that skips the hook.
 - A model in triage.
+- A check of the Mac's memory notes and settings on a schedule. The Mac gets no
+  new service.
 - Trend charts of size and flags.
 - Codex parity of `review`.
 - A review of the harness's own prompt and of third-party plugin skills.
