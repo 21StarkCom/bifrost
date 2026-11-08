@@ -9,6 +9,7 @@ Add only rules, traps and pointers here. Put reasons, history and catalogs in `d
 ## How the repo works
 
 - **A skill ships when its PR merges.** `skill/<name>/SKILL.md` is the artifact: there is no build step, catalog, registry or signing.
+- This is the operator's call.
 - **The repo is its own marketplace.** `.claude-plugin/marketplace.json` at the root lists seven skill plugins, each with `"source": "./"` and a `skills:` list of `./skill/<name>` paths. The lists partition the skills. `tools/repo_contracts.test.ts` pins the entries and the partition; `claude plugin validate --strict .` gates the file.
 - **Never rename `skill/` to `skills/`.** A `skills:` list restricts what a plugin loads only while there is no `skills/` folder for Claude Code to discover; with one, every skill can load into every plugin, with no error.
 - **A hook that serves a skill** is an inline `hooks` object on its one plugin entry, run as `node "${CLAUDE_PLUGIN_ROOT}/tools/<tool>.ts"`. Today that is stark-ops' PostToolUse `tools/fact_routing_hook.ts` and PreToolUse `tools/rules_gate_hook.ts`. Gate it with `if`. An `Edit(...)` gate does not match a Write, so give each tool its own handler. A path or array `hooks` value does not load from a marketplace entry.
