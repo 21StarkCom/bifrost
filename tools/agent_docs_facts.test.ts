@@ -16,7 +16,7 @@ import {
   INDEX_MAX_LINES,
 } from "./memory_tidy_lib.ts";
 import { CODEX_DEFAULT_MAX_BYTES } from "./rules_load_lib.ts";
-import { GATE_PHRASES, GROWTH_PHRASES, HISTORY_MARKERS, PLAYBOOK_BUDGETS } from "./rules_audit_lib.ts";
+import { GATE_PHRASES, GATE_STEP_PHRASES, GROWTH_PHRASES, HISTORY_MARKERS, PLAYBOOK_BUDGETS } from "./rules_audit_lib.ts";
 
 const DOC_REL = "skill/stark-agent-docs/references/load-facts.md";
 const DOC = path.resolve(import.meta.dirname, "..", DOC_REL);
@@ -93,10 +93,21 @@ test("playbook: the size budgets match PLAYBOOK_BUDGETS", () => {
   assert.equal(Object.keys(PLAYBOOK_BUDGETS).length, expected.length + 1, "each budget has a row (the index line is in the MEMORY.md row)");
 });
 
-test("playbook: the gate phrases match GATE_PHRASES, all RED", () => {
+test("playbook: the gate phrases match GATE_PHRASES; RED, or RED with a step for GATE_STEP_PHRASES", () => {
   const rows = tableUnder("### Gate phrases (GATE)");
   assert.deepEqual(rows.map(([phrase]) => code(phrase)), [...GATE_PHRASES]);
-  assert.ok(rows.every(([, flag]) => flag === "RED"));
+  for (const [phrase, flag] of rows) {
+    const expected = GATE_STEP_PHRASES.includes(code(phrase)!) ? "RED when the sentence gives a step" : "RED";
+    assert.equal(flag, expected, `${PLAYBOOK_REL} flags ${phrase} "${flag}", the code "${expected}".`);
+  }
+});
+
+test("playbook: the gate checks name the code's lists", () => {
+  const section = playbook.join("\n");
+  for (const name of ["gateFlag", "KEPT_GATE_RES", "GATE_STEP_PHRASES"]) {
+    assert.ok(section.includes(`\`${name}\``), `${PLAYBOOK_REL} no longer names \`${name}\`.`);
+  }
+  assert.ok(GATE_STEP_PHRASES.every((p) => GATE_PHRASES.includes(p)), "each GATE_STEP_PHRASES entry is a gate phrase");
 });
 
 test("playbook: the growth phrases match GROWTH_PHRASES, all RED", () => {

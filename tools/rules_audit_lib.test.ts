@@ -442,6 +442,99 @@ test("triage: a gate phrase is RED; a file in budget with only rules is GREEN", 
   assert.deepEqual(r.totals, { GREEN: 1, YELLOW: 0, RED: 1 });
 });
 
+/** The flag triage gives one gate sentence alone in a CLAUDE.md, with its detail. */
+function gateOf(sentence: string): string {
+  const f = fileOf(tri({ "CLAUDE.md": `- ${sentence}\n` }), "CLAUDE.md");
+  const gates = f.clauses.filter((c) => c.type === "GATE");
+  assert.ok(gates.length <= 1, JSON.stringify(gates));
+  return gates.length ? `${gates[0].flag}: ${gates[0].detail}` : "no GATE flag";
+}
+
+// Each line is on `main` of its repo on 2026-11-08, and was RED before this check.
+const KEPT_GATES: [string, string][] = [
+  ["tyr CLAUDE.md", "The image publish and that `terraform apply` are both by hand, so each needs a GO under the root rules."],
+  ["tyr jfrog/CLAUDE.md", "**A live `create_access_token` makes a real credential**, so it needs the operator's GO."],
+  ["stark-slack-indexer CLAUDE.md", "These deletes cannot be undone, so each needs a GO."],
+  ["odin .claude/rules/toolbox-clickup.md", "A live `EnsureFields` that creates is a write you cannot undo, so it needs a GO under the root rules."],
+  [
+    "sleipnir packages/huginn-secrets/CLAUDE.md",
+    "**Each GitHub token a probe or a proof makes sends every admin an alert,** a message to people the request did not name (a root GO item): run the `github` and `github-fine-grained` legs, and any probe that makes a token, only when the request names that run.",
+  ],
+  ["goldfinger CLAUDE.md", "Copyleft code needs the operator's OK and never enters `macos/Sources`."],
+];
+
+const KEPT = /^YELLOW: kept gate: the review confirms it \(.+\)$/;
+
+for (const [where, sentence] of KEPT_GATES) {
+  test(`triage: a kept gate is YELLOW (${where})`, () => {
+    assert.match(gateOf(sentence), KEPT);
+  });
+}
+
+test("triage: the kept-gate detail names what kept it; emphasis does not hide it", () => {
+  assert.equal(gateOf("These deletes cannot be undone, so each needs a GO."), "YELLOW: kept gate: the review confirms it (a write that cannot be undone)");
+  assert.match(gateOf("A step that _cannot be undone_ needs a GO."), KEPT);
+  assert.match(gateOf("A __by hand__ `terraform apply` needs a GO."), KEPT);
+});
+
+test("triage: the kept-gate check runs first, on the whole sentence; a file name in code does not count", () => {
+  // The ticket's order: a kept gate stays in the review's view even when its phrase alone reads as no gate.
+  assert.equal(gateOf("Reading a token needs no go-ahead."), "YELLOW: kept gate: the review confirms it (a secret)");
+  assert.equal(gateOf("Never send a message to a channel the request did not name."), "YELLOW: kept gate: the review confirms it (a message to a person, people or a channel)");
+  assert.equal(gateOf("Merging needs a GO, and so does a token rotation."), "YELLOW: kept gate: the review confirms it (a secret)");
+  assert.equal(gateOf("A merge that touches `tokens.ts` needs a GO."), `RED: gate words "needs a GO"`);
+});
+
+const NOT_GATES: [string, string][] = [
+  ["bifrost skill/agnes/SKILL.md", "Standing down needs no go-ahead: the contract says so for you as for a Minion."],
+  ["bifrost skill/c4-design/SKILL.md", "The server resolves a relative path against its own start folder, not yours."],
+  ["odin .claude/rules/toolbox-clickup.md", "It never writes a field onto a subtask the operator did not name."],
+];
+
+for (const [where, sentence] of NOT_GATES) {
+  test(`triage: a phrase that gives the operator no step has no GATE flag (${where})`, () => {
+    assert.equal(gateOf(sentence), "no GATE flag");
+  });
+}
+
+test("triage: any other gate stays RED, a negation elsewhere in the sentence included", () => {
+  assert.equal(gateOf("This is the operator's call."), `RED: gate words "the operator's call"`);
+  assert.equal(gateOf("Merging needs a GO."), `RED: gate words "needs a GO"`);
+  assert.equal(gateOf("Never, whoever asks."), `RED: gate words "whoever asks"`);
+});
+
+test("triage: each kept-gate item is YELLOW", () => {
+  for (const s of [
+    "A history rewrite is irreversible, so it is the operator's call.",
+    "A hand-run `tofu apply` needs a GO.",
+    "An email to a person the request did not name needs a GO.",
+    "A post in a Slack channel the request did not name needs a GO.",
+    "Reading out a password is the operator's call.",
+    "A new paid seat is the operator's call.",
+    "Words sent in the operator's name need the operator's OK.",
+    "A macOS privacy grant is the operator's to give.",
+    "A Touch ID prompt is the operator's to clear.",
+    "The `/mcp` sign-in waits for the go-ahead.",
+  ]) assert.match(gateOf(s), KEPT, s);
+});
+
+test("triage: a negation right before the phrase drops it; another phrase keeps the sentence RED", () => {
+  assert.equal(gateOf("A rerun needs no GO."), "no GATE flag");
+  assert.equal(gateOf("A rerun is not the operator's call."), "no GATE flag");
+  assert.equal(gateOf("A rerun isn't the operator’s call."), "no GATE flag");
+  assert.equal(gateOf("A rerun needs **no go-ahead**, but a merge needs a GO."), `RED: gate words "needs a GO"`);
+  assert.equal(gateOf("Do not merge without the operator's OK."), `RED: gate words "the operator's OK"`);
+});
+
+test("triage: 'not yours' and 'did not name' stay RED when the sentence gives the operator a step", () => {
+  assert.equal(gateOf("That repo is the operator's, not yours."), `RED: gate words "not yours"`);
+  assert.equal(gateOf("Ask before a step the request did not name."), `RED: gate words "did not name"`);
+  assert.equal(gateOf("Run no soak the request did not name."), `RED: gate words "did not name"`);
+  assert.equal(gateOf("Stop and return the spec to the operator: it is not yours to improvise."), `RED: gate words "not yours"`);
+  assert.equal(gateOf("The tab is the operator's call, not yours."), `RED: gate words "the operator's call", "not yours"`);
+  assert.equal(gateOf("That repo is not yours."), "no GATE flag");
+});
+
 test("triage: size is YELLOW over the budget and RED over twice it, by the kind's budget", () => {
   const body = (n: number) => `${"x".repeat(n)}\n`;
   const r = tri({
@@ -549,7 +642,7 @@ test("triage: a dead link or @import is RED, a missing doc path YELLOW; code pat
 });
 
 test("triage: the root rules give no GATE flag; another file with the same gate words does", () => {
-  const gate = "- A message to a person or a channel that the request did not name needs a GO.\n";
+  const gate = "- A hold or a soak before the merge that the request did not name needs a GO.\n";
   const r = tri({ "CLAUDE.md": gate, "pkg/CLAUDE.md": gate }, { rootRules: { path: "CLAUDE.md", text: gate } });
   assert.deepEqual(clauses(r, "CLAUDE.md"), []);
   assert.deepEqual(clauses(r, "pkg/CLAUDE.md"), ["RED DUPLICATE :1", "RED GATE :1"]);

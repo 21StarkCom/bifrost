@@ -83,15 +83,31 @@ pointers. It exits 3 when a file is RED.
 ## Phrase lists
 
 Triage matches these lists with no model. A match marks the clause as the
-type in the list's heading, at the flag in its row. The review reads the
-clause and can change the flag: a gate phrase in a kept gate is GREEN.
-Triage matches a phrase as whole words, with any case. It skips text in a
-code span or in double quotes, because that text cites the phrase.
+type in the list's heading, at the flag in its row. A gate phrase first goes
+through the checks under its heading. The review reads the clause and can
+change the flag: a kept gate is GREEN. Triage matches a phrase as whole
+words, with any case. It skips text in a code span or in double quotes,
+because that text cites the phrase.
 
 ### Gate phrases (GATE)
 
-The list is `GATE_PHRASES` in `tools/rules_audit_lib.ts`. The two change
-together. Where they differ, the code wins.
+The list is `GATE_PHRASES` in `tools/rules_audit_lib.ts`, and the checks are
+its `gateFlag`. The two change together. Where they differ, the code wins.
+
+Triage puts each sentence with a gate phrase through these checks, in this
+order. The first check that matches decides the flag.
+
+1. The sentence names a kept gate, a topic that the root rules give the
+   operator, or a step that needs a person's own grant: YELLOW. Triage has
+   no model, so the review confirms the gate. The words it looks for are
+   `KEPT_GATE_RES`. A code span that names a file does not count.
+2. A negating word ("no", "not", "never", "nor", or an "n't" form) comes
+   right before the phrase: no GATE flag. A negation in another part of the
+   sentence does not count: "Never, whoever asks." is RED.
+3. The phrase is in `GATE_STEP_PHRASES`, and the sentence gives the operator
+   no step or choice: no GATE flag. Another gate phrase in the sentence gives
+   a step.
+4. Any other match: the flag in its row.
 
 | Phrase | Flag |
 |---|---|
@@ -99,9 +115,9 @@ together. Where they differ, the code wins.
 | `with a GO` | RED |
 | `the operator's call` | RED |
 | `the operator's word` | RED |
-| `not yours` | RED |
+| `not yours` | RED when the sentence gives a step |
 | `whoever asks` | RED |
-| `did not name` | RED |
+| `did not name` | RED when the sentence gives a step |
 | `ask each run` | RED |
 | `on the operator's GO` | RED |
 | `needs the operator's GO` | RED |
