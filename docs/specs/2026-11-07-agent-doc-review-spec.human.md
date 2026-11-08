@@ -15,8 +15,9 @@ This spec reviews those files the way a legal team reviews a contract:
   merge.
 - **A full review** reads a file clause by clause. It marks each clause GREEN,
   YELLOW or RED, and writes the exact new text. It can open the PR itself.
-- **A weekly sweep** sends you one summary of the whole fleet and your memory
-  notes.
+- **A weekly run** on the devbox: each Monday, an odin agent reviews what changed
+  in the fleet, files a ticket for each real new RED, and posts a summary to
+  Slack. Your memory notes and settings get a check on the Mac when you ask.
 
 It reuses two tools that exist today: `rules_audit.ts` and
 `/stark-rules-optimizer`. The cleanup of today's files runs now as its own epic,
