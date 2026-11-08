@@ -100,7 +100,7 @@ order. The first check that matches decides the flag.
 1. The sentence names a kept gate, a topic that the root rules give the
    operator, or a step that needs a person's own grant: YELLOW. Triage has
    no model, so the review confirms the gate. The words it looks for are
-   `KEPT_GATE_RES`.
+   `KEPT_GATE_RES`. A code span that names a file does not count.
 2. A negating word ("no", "not", "never", "nor", or an "n't" form) comes
    right before the phrase: no GATE flag. A negation in another part of the
    sentence does not count: "Never, whoever asks." is RED.

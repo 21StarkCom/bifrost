@@ -582,7 +582,8 @@ export function findGates(file: string, text: string): Candidate[] {
 /** What a gate sentence names that keeps the gate (the playbook's GATE row):
  *  an item on the root list "These still need a GO", a topic the root rules
  *  give the operator, or a step that needs a person's own grant. Each one runs
- *  on the whole sentence, code spans included. */
+ *  on the whole sentence, code spans included, except a code span that names
+ *  a file (`tokens.ts`): that names the file, not the topic. */
 export const KEPT_GATE_RES: readonly { label: string; re: RegExp }[] = [
   {
     label: "a write that cannot be undone",
@@ -594,7 +595,7 @@ export const KEPT_GATE_RES: readonly { label: string; re: RegExp }[] = [
   },
   {
     label: "a message to a person, people or a channel",
-    re: /^(?=.*\b(?:messages?|emails?|DMs?|posts?|Slack)\b)(?=.*\b(?:person|people|channels?)\b)/is,
+    re: /^(?=.*\b(?:messages?|emails?|DMs?|posts?|Slack)\b)(?=.*\b(?:person|channels?)\b)/is,
   },
   { label: "a secret", re: /\b(?:secrets?|tokens?|keys?|credentials?|passwords?|passphrases?)\b/i },
   {
@@ -609,7 +610,7 @@ export const KEPT_GATE_RES: readonly { label: string; re: RegExp }[] = [
 
 /** A negating word right before a gate phrase, with only space or emphasis
  *  between: "needs no go-ahead". Punctuation breaks it: "Never, whoever asks." */
-const NEGATED_RE = /(?:^|[^\w'’-])(?:no|not|never|nor|(?:is|are|was|were|does|do|did|need)n['’]t)[\s*_]+$/i;
+const NEGATED_RE = /(?:^|[^\w'’-])(?:no|not|never|nor|\w+n['’]t)[\s*_]+$/i;
 
 /** The gate phrases that are a gate only in a sentence that gives the
  *  operator a step: "against its own start folder, not yours" is no gate. */
@@ -627,10 +628,17 @@ const OPERATOR_GO_RE = /\b(?:GO|OK)\b/;
  *  3. "not yours" or "did not name", in a sentence that gives the operator no
  *     step: no GATE flag;
  *  4. RED.
- *  Checks 2 and 3 run on each phrase; the sentence is RED when one phrase is. */
+ *  Check 1 runs on the sentence, so a kept gate stays in the review's view
+ *  even when its phrase alone reads as no gate. Checks 2 and 3 run on each
+ *  phrase; the sentence is RED when one phrase is left. */
 export function gateFlag(g: GateSentence): { flag: "YELLOW" | "RED"; detail: string } | null {
-  const whole = g.raw.replace(/[`*]/g, "").replace(/\s+/g, " ");
-  if (KEPT_GATE_RES.some(({ re }) => re.test(whole))) return { flag: "YELLOW", detail: "kept gate: the review confirms it" };
+  // Drop `*`/`_` emphasis (not a snake_case `_`), and a code span that names a file.
+  const whole = g.raw
+    .replace(/`[^`\s]*\w[./]\w[^`\s]*`/g, " ")
+    .replace(/[`*]|(?<!\w)_+|_+(?!\w)/g, "")
+    .replace(/\s+/g, " ");
+  const kept = KEPT_GATE_RES.find(({ re }) => re.test(whole));
+  if (kept) return { flag: "YELLOW", detail: `kept gate: the review confirms it (${kept.label})` };
   const live = g.hits.filter((h) => !NEGATED_RE.test(g.plain.slice(0, h.start)));
   const needsStep = (h: GateSentence["hits"][number]) => GATE_STEP_PHRASES.includes(h.words.toLowerCase());
   // The step words are read outside the phrases, so a negated "go-ahead" gives no step;

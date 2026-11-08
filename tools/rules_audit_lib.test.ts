@@ -463,11 +463,27 @@ const KEPT_GATES: [string, string][] = [
   ["goldfinger CLAUDE.md", "Copyleft code needs the operator's OK and never enters `macos/Sources`."],
 ];
 
+const KEPT = /^YELLOW: kept gate: the review confirms it \(.+\)$/;
+
 for (const [where, sentence] of KEPT_GATES) {
   test(`triage: a kept gate is YELLOW (${where})`, () => {
-    assert.equal(gateOf(sentence), "YELLOW: kept gate: the review confirms it");
+    assert.match(gateOf(sentence), KEPT);
   });
 }
+
+test("triage: the kept-gate detail names what kept it; emphasis does not hide it", () => {
+  assert.equal(gateOf("These deletes cannot be undone, so each needs a GO."), "YELLOW: kept gate: the review confirms it (a write that cannot be undone)");
+  assert.match(gateOf("A step that _cannot be undone_ needs a GO."), KEPT);
+  assert.match(gateOf("A __by hand__ `terraform apply` needs a GO."), KEPT);
+});
+
+test("triage: the kept-gate check runs first, on the whole sentence; a file name in code does not count", () => {
+  // The ticket's order: a kept gate stays in the review's view even when its phrase alone reads as no gate.
+  assert.equal(gateOf("Reading a token needs no go-ahead."), "YELLOW: kept gate: the review confirms it (a secret)");
+  assert.equal(gateOf("Never send a message to a channel the request did not name."), "YELLOW: kept gate: the review confirms it (a message to a person, people or a channel)");
+  assert.equal(gateOf("Merging needs a GO, and so does a token rotation."), "YELLOW: kept gate: the review confirms it (a secret)");
+  assert.equal(gateOf("A merge that touches `tokens.ts` needs a GO."), `RED: gate words "needs a GO"`);
+});
 
 const NOT_GATES: [string, string][] = [
   ["bifrost skill/agnes/SKILL.md", "Standing down needs no go-ahead: the contract says so for you as for a Minion."],
@@ -499,7 +515,7 @@ test("triage: each kept-gate item is YELLOW", () => {
     "A macOS privacy grant is the operator's to give.",
     "A Touch ID prompt is the operator's to clear.",
     "The `/mcp` sign-in waits for the go-ahead.",
-  ]) assert.equal(gateOf(s), "YELLOW: kept gate: the review confirms it", s);
+  ]) assert.match(gateOf(s), KEPT, s);
 });
 
 test("triage: a negation right before the phrase drops it; another phrase keeps the sentence RED", () => {
