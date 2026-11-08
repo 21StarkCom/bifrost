@@ -86,9 +86,9 @@ const report = (...files: [string, Clause[]][]): TriageReport => ({
   files: files.map(([p, clauses]) => ({ path: p, kind: "root", chars: 0, budget: 15_000, flag: "RED", clauses })),
   totals: { GREEN: 0, YELLOW: 0, RED: files.length },
 });
-const core = (chars: number) => clause("SIZE", `${chars} chars`, 1, { chars, detail: "over the 15k budget twice over" });
-const load = (chars: number) => clause("SIZE", `${chars} chars in 3 files`, 1, { chars, detail: "start-up load set over the 40k budget twice over (a, b)" });
-const desc = (chars: number) => clause("SIZE", "d", 3, { chars, detail: `description: ${chars} chars, over the 300 budget twice over` });
+const core = (chars: number) => clause("SIZE", `${chars} chars`, 1, { chars, measure: "core", detail: "over the 15k budget twice over" });
+const load = (chars: number) => clause("SIZE", `${chars} chars in 3 files`, 1, { chars, measure: "load set", detail: "start-up load set over the 40k budget twice over (a, b)" });
+const desc = (chars: number) => clause("SIZE", "d", 3, { chars, measure: "description", detail: `description: ${chars} chars, over the 300 budget twice over` });
 
 test("newReds matches a clause by its type and text, not its line, and each base clause once", () => {
   const pairs = new Map([["CLAUDE.md", "CLAUDE.md"]]);
@@ -118,6 +118,13 @@ test("newReds: a SIZE RED is new when its kind was not RED on the base, or when 
   // Another kind: the base's core RED does not cover the head's description RED.
   const other = newReds(report(["s/SKILL.md", [desc(700)]]), report(["s/SKILL.md", [core(31_000)]]), new Map([["s/SKILL.md", "s/SKILL.md"]]));
   assert.deepEqual(other.added.map((a) => a.clause.detail), ["description: 700 chars, over the 300 budget twice over"]);
+  // The load set is the repo's: it matches the base's on another file, or on a file the PR adds.
+  const moved = newReds(
+    report([".claude/rules/0.md", [load(85_000)]], [".claude/rules/b.md", []]),
+    report([".claude/rules/b.md", [load(85_000)]]),
+    new Map([[".claude/rules/b.md", ".claude/rules/b.md"]]),
+  );
+  assert.deepEqual(moved, { added: [], kept: 1 });
 });
 
 test("newReds pairs a renamed file with its old path, and calls each RED of a file with no pair new", () => {
@@ -289,6 +296,16 @@ test("a PR that adds an agent file with a RED clause is denied", () => {
     f.pr(view(sha, base, [["pkg/CLAUDE.md", "ADDED"]]));
     const reason = denied(f.run("njord pr-merge 5"));
     assert.match(reason, /New RED clauses:\n {2}pkg\/CLAUDE\.md:3 {2}GATE .*Merging needs a GO\.\n\n0 RED clauses were/);
+  });
+});
+
+test("a merge run from a subfolder still copies and triages the whole tree", () => {
+  withFixture((f) => {
+    const base = f.commit({ "CLAUDE.md": CLEAN, "tools/x.ts": "x\n" });
+    const sha = f.commit({ "CLAUDE.md": CLEAN + RED_LINE });
+    f.pr(view(sha, base, [["CLAUDE.md", "MODIFIED"]]));
+    const reason = denied(f.run("cd tools && njord pr-merge 5"));
+    assert.match(reason, /New RED clauses:\n {2}CLAUDE\.md:4 {2}GATE .*This is the operator's call\./);
   });
 });
 

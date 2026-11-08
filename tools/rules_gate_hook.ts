@@ -294,28 +294,33 @@ export function gate(call: MergeCall, audit = AUDIT, home = os.homedir()): Verdi
 
   const n = pr.number;
   const sha = pr.headRefOid;
-  if (!ensureCommit(call.cwd, sha, `refs/pull/${n}/head`)) {
+  // The git calls run at the top of the work tree: `git archive` in a subfolder
+  // copies only that subfolder.
+  const topRun = run("git", ["rev-parse", "--show-toplevel"], call.cwd, 30_000);
+  const top = topRun.stdout.trim();
+  if (topRun.status !== 0 || !top) return warn(`${call.cwd} is in no git work tree (${firstLine(topRun.stderr)})`);
+  if (!ensureCommit(top, sha, `refs/pull/${n}/head`)) {
     return warn(`the head commit ${sha.slice(0, 12)} of PR #${n} is not here, and the fetch did not bring it`);
   }
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "rules-gate-"));
   try {
     const rules = rootRulesIn(call.cwd, home);
-    const head = triageIn(copyTree(call.cwd, sha, tmp, "head", n), files, rules, audit, tmp, "head", n);
+    const head = triageIn(copyTree(top, sha, tmp, "head", n), files, rules, audit, tmp, "head", n);
     if (!head.files.some((f) => f.clauses.some((c) => c.flag === "RED"))) return PASS;
 
     if (!SHA_RE.test(String(pr.baseRefOid)) || typeof pr.baseRefName !== "string" || !pr.baseRefName) {
       return warn(`gh pr view gave no base branch for PR #${n}`);
     }
-    if (!ensureCommit(call.cwd, pr.baseRefOid, `refs/heads/${pr.baseRefName}`)) {
+    if (!ensureCommit(top, pr.baseRefOid, `refs/heads/${pr.baseRefName}`)) {
       return warn(`the tip ${pr.baseRefOid.slice(0, 12)} of ${pr.baseRefName}, the base of PR #${n}, is not here, and the fetch did not bring it`);
     }
-    const mb = run("git", ["merge-base", sha, pr.baseRefOid], call.cwd, 30_000);
+    const mb = run("git", ["merge-base", sha, pr.baseRefOid], top, 30_000);
     const base = mb.stdout.trim();
     if (mb.status !== 0 || !SHA_RE.test(base)) return warn(`found no merge base of PR #${n} and ${pr.baseRefName} (${firstLine(mb.stderr)})`);
-    const diff = run("git", ["diff", "--name-status", "-z", "-M", base, sha], call.cwd, 60_000);
+    const diff = run("git", ["diff", "--name-status", "-z", "-M", "--diff-filter=R", base, sha], top, 60_000);
     if (diff.status !== 0) return warn(`could not diff PR #${n} against its base (${firstLine(diff.stderr)})`);
     const renames = renamesIn(diff.stdout);
-    const baseTree = copyTree(call.cwd, base, tmp, "base", n);
+    const baseTree = copyTree(top, base, tmp, "base", n);
     /** Each head file → its path on the base; a file the PR adds has none. */
     const pairs = new Map<string, string>();
     for (const f of files) {
@@ -409,13 +414,9 @@ export function renamesIn(nameStatus: string): Map<string, string> {
   return out;
 }
 
-/** What a SIZE clause measures: a file's core, a skill's `description:`, the
- *  start-up load set, or one index line. */
-function sizeKind(c: Clause): string {
-  if (c.detail.startsWith("start-up load set")) return "load set";
-  if (c.detail.startsWith("description:")) return "description";
-  if (c.detail.startsWith("index line:")) return `index line ${c.text}`;
-  return "core";
+/** What a SIZE clause measures, keyed by its text for one index line of many. */
+function sizeKind(c: Clause): string | undefined {
+  return c.measure === "index line" ? `index line ${c.text}` : c.measure;
 }
 
 export interface NewReds {
@@ -430,22 +431,28 @@ export interface NewReds {
  * A clause matches by its type and text, not its line, since a PR moves lines;
  * each base clause matches one head clause. A SIZE clause matches by what it
  * measures, and is new when the base has no RED of that kind, or when its
- * chars grew. Each RED of a file with no base file is new.
+ * chars grew. The load set is the repo's, not one file's, so it matches the
+ * base's load set on whichever file carries it. Each other RED of a file with
+ * no base file is new.
  */
 export function newReds(head: TriageReport, base: TriageReport, pairs: Map<string, string>): NewReds {
   const baseFiles = new Map(base.files.map((f) => [f.path, f]));
+  const isRed = (c: Clause) => c.flag === "RED";
+  const baseLoad = base.files.flatMap((f) => f.clauses).find((c) => isRed(c) && c.measure === "load set");
   const added: NewReds["added"] = [];
   let kept = 0;
   for (const f of head.files) {
     const was = pairs.has(f.path) ? baseFiles.get(pairs.get(f.path)!) : undefined;
-    const wasRed = was?.clauses.filter((c) => c.flag === "RED") ?? [];
+    const wasRed = was?.clauses.filter(isRed) ?? [];
     const sizes = new Map(wasRed.filter((c) => c.type === "SIZE").map((c) => [sizeKind(c), c]));
+    if (baseLoad) sizes.set("load set", baseLoad);
     const left = new Map<string, number>();
     const key = (c: Clause) => `${c.type}\0${c.text}`;
     for (const c of wasRed) if (c.type !== "SIZE") left.set(key(c), (left.get(key(c)) ?? 0) + 1);
-    for (const c of f.clauses.filter((x) => x.flag === "RED")) {
+    for (const c of f.clauses.filter(isRed)) {
       if (c.type === "SIZE") {
-        const before = sizes.get(sizeKind(c))?.chars;
+        const kind = sizeKind(c);
+        const before = kind === undefined ? undefined : sizes.get(kind)?.chars;
         if (before === undefined || c.chars === undefined) added.push({ path: f.path, clause: c });
         else if (c.chars <= before) kept++;
         else added.push({ path: f.path, clause: { ...c, detail: `${c.detail}, grown from ${before} to ${c.chars} chars` } });
