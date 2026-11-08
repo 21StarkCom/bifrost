@@ -294,6 +294,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **`workflow_shape.test.ts` now proves `SCAN_SCOPES` is complete.** That hand-written list claims in its own comment to be *every* top-level dir holding a scannable file, and nothing checked it — so a new top-level directory (or a `gh` call parked in `docs/`) left the `gh api --slurp` gate reporting clean over a file it never opened. A second walk of the whole tree now diffs against the scoped walk and names anything outside it. Mutation-proved: dropping `config` from the list reddens with the eight files it covers.
 
 ### Fixed
+<!-- idun:pr-merge pr=478 runId=478 sha=67ef344a -->
+- Agent-doc triage (`rules_audit.ts --playbook`) now flags a kept gate YELLOW, not RED, so the merge hook no longer blocks a correct gate (stark-ops 0.44.1, stark-constitution 0.6.1).
 <!-- idun:pr-merge pr=454 runId=454 sha=d64b5a18 -->
 - stark-progress 0.16.1: Gru's tab stays on its own run after the run ends and no longer pins another Gru's run; a missed read of its run file keeps the board.
 <!-- idun:pr-merge pr=394 runId=394 sha=1618a82e -->
