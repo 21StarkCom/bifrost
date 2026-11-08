@@ -1,15 +1,10 @@
 ---
 name: stark-design-tokens
 description: >-
-  Build, name, theme, and govern design tokens the way the field's canonical
-  sources converge on. Use when creating or restructuring a design-token system,
-  a tokens package, or a theming layer — the three-tier model
-  (primitive/semantic/component), the naming grammar, OKLCH color scales, DTCG
-  authoring, Style Dictionary pipelines, dark-mode / multi-brand / density
-  theming, CSS-variable distribution, WCAG contrast gates, and token
-  semver/deprecation. Triggers: "design tokens", "token architecture", "semantic
-  tokens", "theme tokens", "dark mode tokens", "DTCG", "Style Dictionary", "token
-  naming", "multi-brand theming", "unified tokens".
+  Build, name, theme and govern design tokens: the three tiers, naming, OKLCH
+  scales, DTCG, Style Dictionary, dark-mode and multi-brand theming, CSS
+  variables, WCAG contrast gates and token semver. Use to make or restructure a
+  design-token system, a tokens package or a theming layer.
 runtimes: [claude]
 ---
 

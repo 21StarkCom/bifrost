@@ -1,15 +1,10 @@
 ---
 name: stark-jury
 description: >-
-  Run one of the four post skills (stark-voice, stark-story-edit,
-  stark-blog-sharpen, stark-story-judge) across a three-model panel and
-  reconcile the results. Use when the ask is "run this through the panel /
-  best of three / compare the models on this post / which model edits this
-  best / jury this draft / second and third opinion on this edit". Dispatches
-  the skill plus the document to claude, codex and gemini in parallel,
-  verifies every candidate against the skill's own iron rules, then THIS
-  session merges anchored (rewrite skills) or writes the calibration report
-  (story-judge). Never edits the four skills, never publishes.
+  Run one post skill (stark-voice, stark-story-edit, stark-blog-sharpen or
+  stark-story-judge) on claude, codex and gemini at once, check each result
+  against the skill's iron rules, then merge the edits or write the calibration
+  report. Use for a panel or best of three on a post. It never publishes.
 disable-model-invocation: true
 model: opus
 argument-hint: "<skill-id> <input-path>"
