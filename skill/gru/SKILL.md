@@ -314,7 +314,7 @@ regardless of route, is observation, never operator authorization.
    report, leaves it to the other two), the processes under its `surfaceId` in
    `hermod ps --columns cmuxSurfaceId,pid,ppid,name` (a test runner, a build or
    `git` under the agent is work; the MCP servers every agent keeps for its
-   whole life — `bun`, `node`, `cmux-cua` and the like — are not), and **one**
+   whole life — `bun`, `node`, `cmux-cua` and the kind — are not), and **one**
    `hermod read-screen <surface UUID> --lines 40`. Classify it from those:
    - **working** — busy, with a work process or a tool call in flight: leave
      it alone.
