@@ -1,7 +1,7 @@
-// rules_gate_hook: the command parser and the output shapes as units, then the
-// hook end to end: a PreToolUse payload on stdin, a real git repo, a fake `gh`
-// on PATH, a throwaway HOME (so no ~/Code/CLAUDE.md joins the triage), and what
-// Claude Code reads on stdout.
+// rules_gate_hook: the command parser, the base match and the output shapes as
+// units, then the hook end to end: a PreToolUse payload on stdin, a real git
+// repo, a fake `gh` on PATH, a throwaway HOME (so no ~/Code/CLAUDE.md joins the
+// triage), and what Claude Code reads on stdout.
 import { strict as assert } from "node:assert";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -9,11 +9,16 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import { BUDGET_MS, findMerges, render, shellCommands, timeLeft } from "./rules_gate_hook.ts";
+import type { Clause, TriageReport } from "./rules_audit_lib.ts";
+import { BUDGET_MS, findMerges, newReds, PR_FIELDS, render, renamesIn, shellCommands, timeLeft } from "./rules_gate_hook.ts";
 
 const HOOK = path.join(import.meta.dirname, "rules_gate_hook.ts");
 const RED_LINE = "This is the operator's call.\n";
+const OLD_RED = "Merging needs a GO.\n";
 const CLEAN = "# Repo\n\nRun `npm test` before you push.\n";
+/** A skill whose core is over twice its 15k budget: RED for size. */
+const BIG_SKILL = "---\nname: big\ndescription: d\n---\n" +
+  Array.from({ length: 1300 }, (_, i) => `Line ${i} of the long skill.`).join("\n") + "\n";
 
 test("shellCommands splits at operators and resolves quotes", () => {
   assert.deepEqual(shellCommands(`git push && njord pr-merge 12; echo "a b" 'c;d' e\\ f # njord pr-merge 9`), [
@@ -69,6 +74,69 @@ test("render denies on a RED, warns without a decision, and says nothing on a pa
   assert.equal(warned.hookSpecificOutput.permissionDecision, undefined);
 });
 
+test("renamesIn maps each renamed file to its old path, and skips the other statuses", () => {
+  const z = ["M", "CLAUDE.md", "R100", "skill/a/SKILL.md", "skill/b/SKILL.md", "C075", "x.md", "y.md", "A", "n.md", "R087", "o.md", "p.md", ""].join("\0");
+  assert.deepEqual([...renamesIn(z)], [["skill/b/SKILL.md", "skill/a/SKILL.md"], ["p.md", "o.md"]]);
+  assert.deepEqual([...renamesIn("")], []);
+});
+
+const clause = (type: Clause["type"], text: string, line = 1, more: Partial<Clause> = {}): Clause =>
+  ({ flag: "RED", type, line, text, detail: `${type.toLowerCase()} detail`, ...more });
+const report = (...files: [string, Clause[]][]): TriageReport => ({
+  files: files.map(([p, clauses]) => ({ path: p, kind: "root", chars: 0, budget: 15_000, flag: "RED", clauses })),
+  totals: { GREEN: 0, YELLOW: 0, RED: files.length },
+});
+const core = (chars: number) => clause("SIZE", `${chars} chars`, 1, { chars, measure: "core", detail: "over the 15k budget twice over" });
+const load = (chars: number) => clause("SIZE", `${chars} chars in 3 files`, 1, { chars, measure: "load set", detail: "start-up load set over the 40k budget twice over (a, b)" });
+const desc = (chars: number) => clause("SIZE", "d", 3, { chars, measure: "description", detail: `description: ${chars} chars, over the 300 budget twice over` });
+
+test("newReds matches a clause by its type and text, not its line, and each base clause once", () => {
+  const pairs = new Map([["CLAUDE.md", "CLAUDE.md"]]);
+  const base = report(["CLAUDE.md", [clause("GATE", "Merging needs a GO.", 4), clause("HISTORY", "We used to.", 9, { flag: "YELLOW" })]]);
+  const head = report(["CLAUDE.md", [
+    clause("GATE", "Merging needs a GO.", 12), // moved: kept
+    clause("GATE", "Merging needs a GO.", 20), // a second copy: new
+    clause("GATE", "This is the operator's call.", 5), // new text: new
+    clause("HISTORY", "We used to.", 9), // YELLOW on the base: new
+    clause("POINTER", "gone.md", 7, { flag: "YELLOW" }), // not RED: neither
+  ]]);
+  const r = newReds(head, base, pairs);
+  assert.equal(r.kept, 1);
+  assert.deepEqual(r.added.map((a) => `${a.path}:${a.clause.line} ${a.clause.type}`), ["CLAUDE.md:20 GATE", "CLAUDE.md:5 GATE", "CLAUDE.md:9 HISTORY"]);
+});
+
+test("newReds: a SIZE RED is new when its kind was not RED on the base, or when its chars grew", () => {
+  const pairs = new Map([["CLAUDE.md", "CLAUDE.md"]]);
+  const same = newReds(report(["CLAUDE.md", [core(31_000), load(85_000)]]), report(["CLAUDE.md", [load(85_000), core(31_000)]]), pairs);
+  assert.deepEqual(same, { added: [], kept: 2 });
+  const smaller = newReds(report(["CLAUDE.md", [core(30_500)]]), report(["CLAUDE.md", [core(31_000)]]), pairs);
+  assert.deepEqual(smaller, { added: [], kept: 1 });
+  // 30 chars more in the load set: its text, in thousands, does not change.
+  const grown = newReds(report(["CLAUDE.md", [core(31_000), load(85_030)]]), report(["CLAUDE.md", [core(31_000), load(85_000)]]), pairs);
+  assert.equal(grown.kept, 1);
+  assert.deepEqual(grown.added.map((a) => a.clause.detail), ["start-up load set over the 40k budget twice over (a, b), grown from 85000 to 85030 chars"]);
+  // Another kind: the base's core RED does not cover the head's description RED.
+  const other = newReds(report(["s/SKILL.md", [desc(700)]]), report(["s/SKILL.md", [core(31_000)]]), new Map([["s/SKILL.md", "s/SKILL.md"]]));
+  assert.deepEqual(other.added.map((a) => a.clause.detail), ["description: 700 chars, over the 300 budget twice over"]);
+  // The load set is the repo's: it matches the base's on another file, or on a file the PR adds.
+  const moved = newReds(
+    report([".claude/rules/0.md", [load(85_000)]], [".claude/rules/b.md", []]),
+    report([".claude/rules/b.md", [load(85_000)]]),
+    new Map([[".claude/rules/b.md", ".claude/rules/b.md"]]),
+  );
+  assert.deepEqual(moved, { added: [], kept: 1 });
+});
+
+test("newReds pairs a renamed file with its old path, and calls each RED of a file with no pair new", () => {
+  const base = report(["old/CLAUDE.md", [clause("GATE", "g"), core(31_000)]]);
+  const head = report(["new/CLAUDE.md", [clause("GATE", "g"), core(31_000)]], ["added/CLAUDE.md", [clause("GATE", "g")]]);
+  const r = newReds(head, base, new Map([["new/CLAUDE.md", "old/CLAUDE.md"]]));
+  assert.equal(r.kept, 2);
+  assert.deepEqual(r.added.map((a) => a.path), ["added/CLAUDE.md"]);
+  // The same path on the base is no pair unless the map names it.
+  assert.equal(newReds(report(["old/CLAUDE.md", [clause("GATE", "g")]]), base, new Map()).added.length, 1);
+});
+
 const FAKE_GH = `#!/usr/bin/env node
 const fs = require("node:fs");
 const a = process.argv.slice(2);
@@ -91,8 +159,8 @@ interface Fixture {
   dir: string;
   repo: string;
   tmp: string;
-  /** Commits these files on a new commit and returns its sha. */
-  commit(files: Record<string, string>): string;
+  /** Writes these files, deletes each one set to null, commits, and returns the sha. */
+  commit(files: Record<string, string | null>): string;
   /** The PR that `gh pr view` prints. */
   pr(view: object): void;
   run(command: string, extra?: Record<string, string>, tool?: string): { status: number | null; stdout: string; stderr: string; gh: string[][] };
@@ -112,6 +180,10 @@ function withFixture(fn: (f: Fixture) => void): void {
       dir, repo, tmp,
       commit(files) {
         for (const [rel, text] of Object.entries(files)) {
+          if (text === null) {
+            fs.rmSync(path.join(repo, rel));
+            continue;
+          }
           fs.mkdirSync(path.dirname(path.join(repo, rel)), { recursive: true });
           fs.writeFileSync(path.join(repo, rel), text);
         }
@@ -140,46 +212,135 @@ function withFixture(fn: (f: Fixture) => void): void {
   }
 }
 
-const view = (sha: string, files: [string, string][], over: object = {}) => ({
-  number: 5, state: "OPEN", headRefOid: sha, changedFiles: files.length,
+/** The PR `gh pr view` prints: head `sha` on base `main` at `base`. */
+const view = (sha: string, base: string, files: [string, string][], over: object = {}) => ({
+  number: 5, state: "OPEN", headRefOid: sha, baseRefName: "main", baseRefOid: base, changedFiles: files.length,
   files: files.map(([p, changeType]) => ({ path: p, changeType })), ...over,
 });
 
+/** The deny reason of a run, or a failure that shows its output. */
+function denied(r: { stdout: string; stderr: string }): string {
+  assert.notEqual(r.stdout, "", `no output; stderr: ${r.stderr}`);
+  const out = JSON.parse(r.stdout).hookSpecificOutput;
+  assert.equal(out.permissionDecision, "deny", r.stdout);
+  return out.permissionDecisionReason;
+}
+
 test("a PR that adds a RED clause to an agent file is denied, with the clause", () => {
   withFixture((f) => {
+    const base = f.commit({ "CLAUDE.md": CLEAN });
     const sha = f.commit({ "CLAUDE.md": CLEAN + RED_LINE, "tools/x.ts": "x\n" });
-    f.pr(view(sha, [["CLAUDE.md", "MODIFIED"], ["tools/x.ts", "ADDED"]]));
+    f.pr(view(sha, base, [["CLAUDE.md", "MODIFIED"], ["tools/x.ts", "ADDED"]]));
     const r = f.run("git push && njord pr-merge 5 --skip-changelog");
     assert.equal(r.status, 0, r.stderr);
-    const out = JSON.parse(r.stdout).hookSpecificOutput;
-    assert.equal(out.permissionDecision, "deny");
-    assert.match(out.permissionDecisionReason, /^agent-doc gate: PR #5 changes an agent file with a RED clause/);
-    assert.match(out.permissionDecisionReason, /playbook \(\/.*skill\/stark-agent-docs\/references\/playbook\.md\)/);
-    assert.match(out.permissionDecisionReason, /CLAUDE\.md:4 {2}GATE .*This is the operator's call\./);
-    assert.doesNotMatch(out.permissionDecisionReason, /x\.ts/);
-    assert.deepEqual(r.gh, [["pr", "view", "5", "--json", "number,state,headRefOid,changedFiles,files"]]);
-    assert.deepEqual(fs.readdirSync(f.tmp), [], "the hook deletes its copy of the tree");
+    const reason = denied(r);
+    assert.match(reason, /^agent-doc gate: PR #5 adds a RED clause to an agent file/);
+    assert.match(reason, /playbook \(\/.*skill\/stark-agent-docs\/references\/playbook\.md\)/);
+    assert.match(reason, /\n\nNew RED clauses:\n {2}CLAUDE\.md:4 {2}GATE .*This is the operator's call\.\n\n0 RED clauses were on the base already; they do not stop the merge\.$/);
+    assert.doesNotMatch(reason, /x\.ts/);
+    assert.deepEqual(r.gh, [["pr", "view", "5", "--json", PR_FIELDS]]);
+    assert.deepEqual(fs.readdirSync(f.tmp), [], "the hook deletes its copies of the trees");
+  });
+});
+
+test("the deny reason names only the new RED clauses, and counts the ones on the base", () => {
+  withFixture((f) => {
+    const base = f.commit({ "CLAUDE.md": CLEAN + OLD_RED });
+    const sha = f.commit({ "CLAUDE.md": RED_LINE + CLEAN + OLD_RED });
+    f.pr(view(sha, base, [["CLAUDE.md", "MODIFIED"]]));
+    const reason = denied(f.run("njord pr-merge 5"));
+    assert.match(reason, /New RED clauses:\n {2}CLAUDE\.md:1 {2}GATE .*This is the operator's call\.\n\n1 RED clause was on the base already; it does not stop the merge\.$/);
+    assert.doesNotMatch(reason, /Merging needs a GO/);
+  });
+});
+
+test("a PR that keeps a base RED and adds none is allowed in silence, even when it moves the RED", () => {
+  withFixture((f) => {
+    const base = f.commit({ "CLAUDE.md": CLEAN + OLD_RED });
+    const sha = f.commit({ "CLAUDE.md": "# Repo\n\nIntro line.\n\n" + OLD_RED + "Run `npm test` first.\n" });
+    f.pr(view(sha, base, [["CLAUDE.md", "MODIFIED"]]));
+    const r = f.run("njord pr-merge 5");
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout, "");
+    assert.deepEqual(fs.readdirSync(f.tmp), []);
+  });
+});
+
+test("a one-line change to a file RED for size on the base, at the same size, is allowed in silence", () => {
+  withFixture((f) => {
+    const base = f.commit({ "skill/big/SKILL.md": BIG_SKILL });
+    const sha = f.commit({ "skill/big/SKILL.md": BIG_SKILL.replace("Line 7 of", "Line 7 at") });
+    f.pr(view(sha, base, [["skill/big/SKILL.md", "MODIFIED"]]));
+    const r = f.run("njord pr-merge 5");
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout, "");
+  });
+});
+
+test("a PR that makes a file RED for size on the base larger is denied, with the growth", () => {
+  withFixture((f) => {
+    const base = f.commit({ "skill/big/SKILL.md": BIG_SKILL });
+    const sha = f.commit({ "skill/big/SKILL.md": BIG_SKILL + "One more line.\n" });
+    f.pr(view(sha, base, [["skill/big/SKILL.md", "MODIFIED"]]));
+    const reason = denied(f.run("njord pr-merge 5"));
+    assert.match(reason, /New RED clauses:\n {2}skill\/big\/SKILL\.md:1 {2}SIZE {2}over the 15k budget twice over, grown from (\d+) to (\d+) chars: [\d.]+k chars\n\n0 RED clauses were/);
+    const [, from, to] = /grown from (\d+) to (\d+)/.exec(reason)!;
+    assert.equal(Number(to) - Number(from), "One more line.\n".length);
+  });
+});
+
+test("a PR that adds an agent file with a RED clause is denied", () => {
+  withFixture((f) => {
+    const base = f.commit({ "CLAUDE.md": CLEAN + OLD_RED });
+    const sha = f.commit({ "pkg/CLAUDE.md": "# Pkg\n\n" + OLD_RED });
+    f.pr(view(sha, base, [["pkg/CLAUDE.md", "ADDED"]]));
+    const reason = denied(f.run("njord pr-merge 5"));
+    assert.match(reason, /New RED clauses:\n {2}pkg\/CLAUDE\.md:3 {2}GATE .*Merging needs a GO\.\n\n0 RED clauses were/);
+  });
+});
+
+test("a merge run from a subfolder still copies and triages the whole tree", () => {
+  withFixture((f) => {
+    const base = f.commit({ "CLAUDE.md": CLEAN, "tools/x.ts": "x\n" });
+    const sha = f.commit({ "CLAUDE.md": CLEAN + RED_LINE });
+    f.pr(view(sha, base, [["CLAUDE.md", "MODIFIED"]]));
+    const reason = denied(f.run("cd tools && njord pr-merge 5"));
+    assert.match(reason, /New RED clauses:\n {2}CLAUDE\.md:4 {2}GATE .*This is the operator's call\./);
+  });
+});
+
+test("a PR that only renames an agent file with REDs is allowed in silence", () => {
+  withFixture((f) => {
+    const text = BIG_SKILL + OLD_RED;
+    const base = f.commit({ "skill/old/SKILL.md": text });
+    const sha = f.commit({ "skill/old/SKILL.md": null, "skill/new/SKILL.md": text });
+    f.pr(view(sha, base, [["skill/new/SKILL.md", "RENAMED"]]));
+    const r = f.run("njord pr-merge 5");
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout, "");
+    assert.deepEqual(fs.readdirSync(f.tmp), []);
   });
 });
 
 test("the head commit is read, not the working tree, and a PR with no RED passes in silence", () => {
   withFixture((f) => {
+    const base = f.commit({ "README.md": "r\n" });
     const sha = f.commit({ "CLAUDE.md": CLEAN });
     f.commit({ "CLAUDE.md": CLEAN + RED_LINE }); // later than the PR head
-    f.pr(view(sha, [["CLAUDE.md", "MODIFIED"]]));
+    f.pr(view(sha, base, [["CLAUDE.md", "MODIFIED"]]));
     const r = f.run("njord pr-merge");
     assert.equal(r.status, 0, r.stderr);
     assert.equal(r.stdout, "");
-    assert.deepEqual(r.gh, [["pr", "view", "--json", "number,state,headRefOid,changedFiles,files"]]);
+    assert.deepEqual(r.gh, [["pr", "view", "--json", PR_FIELDS]]);
   });
 });
 
 test("a PR that changes no agent file, deletes one, or is not open passes without triage", () => {
   withFixture((f) => {
     const sha = f.commit({ "tools/x.ts": "x\n" });
-    f.pr(view(sha, [["tools/x.ts", "MODIFIED"], ["CLAUDE.md", "DELETED"]]));
+    f.pr(view(sha, sha, [["tools/x.ts", "MODIFIED"], ["CLAUDE.md", "DELETED"]]));
     assert.equal(f.run("njord pr-merge 5").stdout, "");
-    f.pr(view("0".repeat(40), [["CLAUDE.md", "MODIFIED"]], { state: "MERGED" }));
+    f.pr(view("0".repeat(40), sha, [["CLAUDE.md", "MODIFIED"]], { state: "MERGED" }));
     assert.equal(f.run("njord pr-merge 5").stdout, "");
   });
 });
@@ -189,8 +350,9 @@ test("a PR to the repo that holds the root rules triages them as the root rules,
     // ~/Code/CLAUDE.md points into the repo, as it points into idavoll.
     fs.mkdirSync(path.join(f.dir, "home", "Code"));
     fs.symlinkSync(path.join(f.repo, "CLAUDE.md"), path.join(f.dir, "home", "Code", "CLAUDE.md"));
+    const base = f.commit({ "CLAUDE.md": CLEAN });
     const sha = f.commit({ "CLAUDE.md": CLEAN + RED_LINE });
-    f.pr(view(sha, [["CLAUDE.md", "MODIFIED"]]));
+    f.pr(view(sha, base, [["CLAUDE.md", "MODIFIED"]]));
     const r = f.run("njord pr-merge 5");
     assert.equal(r.status, 0, r.stderr);
     assert.equal(r.stdout, "", "the root rules define the gates and copy nothing");
@@ -198,30 +360,36 @@ test("a PR to the repo that holds the root rules triages them as the root rules,
   });
 });
 
-test("a head commit that is not local is fetched from the PR ref", () => {
+test("a head commit and a base tip that are not local are fetched", () => {
   withFixture((f) => {
     const origin = path.join(f.dir, "origin.git");
     git(f.dir, "init", "--quiet", "--bare", origin);
     f.commit({ "README.md": "r\n" });
     git(f.repo, "remote", "add", "origin", origin);
+    const skill = "---\nname: demo\ndescription: d\n---\n" + OLD_RED;
+    f.commit({ "skill/demo/SKILL.md": skill }); // the merge base
+    // The base branch moves on after the PR starts, so its tip is no ancestor of the head.
+    const tip = f.commit({ "NOTES.txt": "n\n" });
     git(f.repo, "push", "--quiet", "origin", "HEAD:refs/heads/main");
-    const sha = f.commit({ "skill/demo/SKILL.md": "---\nname: demo\ndescription: d\n---\n" + RED_LINE });
-    git(f.repo, "push", "--quiet", "origin", `HEAD:refs/pull/5/head`);
     git(f.repo, "reset", "--quiet", "--hard", "HEAD~1");
+    const sha = f.commit({ "skill/demo/SKILL.md": skill + RED_LINE });
+    git(f.repo, "push", "--quiet", "origin", `HEAD:refs/pull/5/head`);
+    git(f.repo, "reset", "--quiet", "--hard", "HEAD~2");
+    git(f.repo, "update-ref", "-d", "refs/remotes/origin/main");
     git(f.repo, "reflog", "expire", "--expire=now", "--all");
     git(f.repo, "gc", "--quiet", "--prune=now");
-    assert.notEqual(spawnSync("git", ["cat-file", "-e", `${sha}^{commit}`], { cwd: f.repo }).status, 0);
-    f.pr(view(sha, [["skill/demo/SKILL.md", "ADDED"]]));
-    const out = JSON.parse(f.run("njord pr-merge 5").stdout).hookSpecificOutput;
-    assert.equal(out.permissionDecision, "deny");
-    assert.match(out.permissionDecisionReason, /skill\/demo\/SKILL\.md:5 {2}GATE/);
+    for (const c of [tip, sha]) assert.notEqual(spawnSync("git", ["cat-file", "-e", `${c}^{commit}`], { cwd: f.repo }).status, 0);
+    f.pr(view(sha, tip, [["skill/demo/SKILL.md", "MODIFIED"]]));
+    const reason = denied(f.run("njord pr-merge 5"));
+    assert.match(reason, /New RED clauses:\n {2}skill\/demo\/SKILL\.md:6 {2}GATE .*This is the operator's call\.\n\n1 RED clause was on the base already/);
   });
 });
 
 test("a PR with more files than gh pr view lists is listed through the REST API", () => {
   withFixture((f) => {
+    const base = f.commit({ "README.md": "r\n" });
     const sha = f.commit({ "CLAUDE.md": RED_LINE });
-    f.pr(view(sha, [["tools/x.ts", "MODIFIED"]], { changedFiles: 101 }));
+    f.pr(view(sha, base, [["tools/x.ts", "MODIFIED"]], { changedFiles: 101 }));
     const r = f.run("njord pr-merge 5", { FAKE_GH_API_TEXT: "tools/x.ts\nCLAUDE.md\n" });
     assert.equal(JSON.parse(r.stdout).hookSpecificOutput.permissionDecision, "deny");
     assert.deepEqual(r.gh[1], ["api", "--paginate", "repos/{owner}/{repo}/pulls/5/files", "--jq", '.[] | select(.status != "removed") | .filename']);
@@ -242,11 +410,33 @@ test("a tool error lets the merge go on, with one warning line", () => {
 
     // The PR names an agent file that its head commit does not hold: triage exits 2.
     const sha = f.commit({ "tools/x.ts": "x\n" });
-    f.pr(view(sha, [["CLAUDE.md", "MODIFIED"]]));
+    f.pr(view(sha, sha, [["CLAUDE.md", "MODIFIED"]]));
     const broken = JSON.parse(f.run("njord pr-merge 5").stdout);
     assert.equal(broken.hookSpecificOutput.permissionDecision, undefined);
-    assert.match(broken.systemMessage, /^agent-doc gate: triage of PR #5 failed \(exit 2: rules_audit: CLAUDE\.md: no such file\); the merge goes on unchecked\.$/);
+    assert.match(broken.systemMessage, /^agent-doc gate: triage of the head of PR #5 failed \(exit 2: rules_audit: CLAUDE\.md: no such file\); the merge goes on unchecked\.$/);
     assert.deepEqual(fs.readdirSync(f.tmp), []);
+  });
+});
+
+test("a head RED with a base the hook cannot read lets the merge go on, with one warning line", () => {
+  withFixture((f) => {
+    const sha = f.commit({ "CLAUDE.md": CLEAN + RED_LINE });
+    const warned = (over: object) => {
+      f.pr(view(sha, "f".repeat(40), [["CLAUDE.md", "MODIFIED"]], over));
+      const r = f.run("njord pr-merge 5");
+      assert.equal(r.status, 0, r.stderr);
+      const out = JSON.parse(r.stdout);
+      assert.equal(out.hookSpecificOutput.permissionDecision, undefined);
+      assert.deepEqual(fs.readdirSync(f.tmp), []);
+      return out.systemMessage;
+    };
+    // No origin to fetch the base tip from: no network, as far as the hook can tell.
+    assert.equal(warned({}), `agent-doc gate: the tip ${"f".repeat(12)} of main, the base of PR #5, is not here, and the fetch did not bring it; the merge goes on unchecked.`);
+    assert.equal(warned({ baseRefOid: "" }), "agent-doc gate: gh pr view gave no base branch for PR #5; the merge goes on unchecked.");
+    // A base with no history in common with the head.
+    git(f.repo, "checkout", "--quiet", "--orphan", "other");
+    const lone = f.commit({ "README.md": "r\n" });
+    assert.match(warned({ baseRefOid: lone }), /^agent-doc gate: found no merge base of PR #5 and main \(.*\); the merge goes on unchecked\.$/);
   });
 });
 

@@ -126,7 +126,7 @@ The pipeline has two stages: you gate the spec at `/stark-author`, and checks ga
 stark-ops also ships two hooks, both declared on the stark-ops entry of the manifest, so they install and update with that plugin:
 
 - A PostToolUse `tools/fact_routing_hook.ts` runs when a Write or Edit touches an auto-memory file, and advises the model where the fact belongs. It takes the fleet's repo names from the vault-ecosystem checkout, and says so when it finds none and falls back to its built-in list. It is the safety net behind `/stark-memory`.
-- A PreToolUse `tools/rules_gate_hook.ts`, the agent-doc gate, runs before a Bash call to `njord pr-merge`. It triages the agent files the PR changes with `tools/rules_audit.ts --playbook`, at the PR head commit, and denies the merge on a RED clause. A tool error lets the merge go on, with one warning line.
+- A PreToolUse `tools/rules_gate_hook.ts`, the agent-doc gate, runs before a Bash call to `njord pr-merge`. It triages the agent files the PR changes with `tools/rules_audit.ts --playbook`, at the PR head commit and at its merge base, and denies the merge only on a RED clause that the PR adds. A RED that is on the base already does not stop it. A tool error lets the merge go on, with one warning line.
 
 `tools/ask_guard_metric.ts` measures the root rules' "Act, don't ask": each week it counts the operator's one-word replies (`go`, `yes`, `ship it`) beside a baseline week, and, from the Claude Code transcripts, the turns that end on a question, tagged (`Needs you (<tag>): …`) or untagged, with the newest untagged ones listed, since each points to a rule to fix (`--install-schedule` sets up the Thursday heimdall push).
 
