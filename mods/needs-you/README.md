@@ -41,17 +41,25 @@ passed, never asked again.
   command's turn does not answer the lines. So do an interrupt, a refusal,
   an error, and a subagent's turn.
 - **A line asked again keeps its one row.** A line whose tag a row from an
-  earlier turn holds is asked again, also in new words. The row shows the
-  newest words of the question, and keeps the operator's words. It keeps its
-  side while the pick stays the same.
+  earlier turn holds is asked again, also in new words. In the same words,
+  the row keeps its side and the operator's words. In new words, the row
+  shows the new question, and its side and words clear: an answer belongs
+  to the words it answered, so a `go` never moves to a question that asks
+  for more.
 - **The operator's next message closes the band:** `Send answers`, or a
   prompt typed in the composer or sent from a phone (origin `bridge`). Every
   row leaves the band. A slash command, a task notification and any other
   origin leave the band alone.
 - **A line that a waiting message closed stays out.** While that message
   waits for the running turn to end, a line with the tag of one of its rows
-  does not come back: that turn has not read the message. If the message
-  does not go, its rows come back, one row for each tag.
+  does not come back: that turn has not read the message. A Send waits
+  until its own turn starts. A prompt typed while Claude works is queued,
+  so its rows stay closed until the turn it was typed over ends. If the
+  message does not go, its rows come back, one row for each tag, in the
+  newest words that a turn asked them in, as a line asked again.
+- **The close is one write.** The mod empties the band and takes the rows
+  it held in the same write, so a turn that ends during a Send cannot change
+  what the message says.
 
 ## The band
 
@@ -64,7 +72,7 @@ Needs you 1 of 3 answered  a: Take all picks  s: Send answers  c: Clear
                 not before the plan review
 3: ○            Design approval · approve the v0 design in section 10.
                 your own words (optional)
-1-3 in an empty prompt answers a row · ctrl+x tab, Tab: your words · your next message closes the band
+1-3 in an empty prompt answers a row · ctrl+x tab for a, s, c and your words · your next message closes the band
 ```
 
 - **The top row** holds the count and the three keys. When the keys do not
@@ -89,11 +97,14 @@ Needs you 1 of 3 answered  a: Take all picks  s: Send answers  c: Clear
 - **`s` (Send answers)** sends the answered rows as the operator's own
   message (`$.prompt.submit` with `asUser: true`), and closes the band. With
   no answer yet, it sends nothing, keeps the band, and says so in a toast.
-  While Claude works, the message waits until the turn ends.
+  While Claude works, the message waits until the turn ends, and a toast
+  says so.
 - **`c` (Clear)** removes every row and sends nothing.
 - `a`, `s` and `c` work while the band holds the keys and no field has the
-  focus: click the band, or press `ctrl+x tab`. `ctrl+x ctrl+a` folds the
-  band, as the engine does for any band.
+  focus: click the band, or press `ctrl+x tab`. In the prompt they type
+  letters, so the help text names `ctrl+x tab` for them. `ctrl+x ctrl+a`
+  folds the band, as the engine does for any band.
+- **The help text** is one row at 120 columns, also while Claude works.
 - The band takes the slot above the prompt while it shows. Another mod's
   band there (the `stark-progress` row) comes back when the band clears.
 
@@ -139,9 +150,11 @@ words, and its field's drawn value and key count. It carries the shape tag
 `asks-2`; change the tag when the shape of the value changes. The mod writes
 nothing to disk.
 
-The rows of a message that waits for the turn to end are held in a module
-variable until the message goes or is dropped; a reload empties it. Each
-row's id is one that no other row holds, so two rows never share a key.
+The rows of a message that no turn has read yet are held in module
+variables: a Send's until its turn starts or the message is dropped, a
+typed prompt's until the turn it was typed over ends. A reload empties
+them. Each row's id is one that no other row holds, so two rows never share
+a key.
 
 A field keeps the operator's own text while its `value` prop stays the
 same, so typing never changes the prop: a redraw between two fast keys would

@@ -228,13 +228,13 @@ test('typing changes neither the key nor the value of a field, and blank words a
 })
 
 // The tag names the question: a reworded line is the same question, asked again.
-test('a line asked again in new words keeps its one row, its keys, its words and its side', async ($, on) => {
+test('a line asked again in new words keeps its one row, and its answer clears', async ($, on) => {
   engine(on)
   await $.turn.complete(end(ANSWER))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   await ui.press({ key: 'all' })
   await ui.input({ key: await field(ui, 0), text: 'and no Bedrock key', kind: 'change' })
-  const keys = [await rowKey(ui, 0), await field(ui, 0)]
+  const chipKey = await rowKey(ui, 0)
 
   await $.turn.complete({
     ...end(
@@ -244,23 +244,27 @@ test('a line asked again in new words keeps its one row, its keys, its words and
     turnId: 'later',
   })
   expect(await rows(ui)).toHaveLength(5)
-  expect([await rowKey(ui, 0), await field(ui, 0)]).toEqual(keys)
-  expect(await chipOf(ui, 0)).toMatch(/^✓ your pick/)
+  expect(await rowKey(ui, 0)).toBe(chipKey)
+  // The words of the question changed, so the pick and the words do not move to them.
+  expect(await chipOf(ui, 0)).toMatch(/^○/)
+  expect((await ui.findAll({ type: 'Input' }))[0]?.props.value).toBe('')
   expect(await ui.find({ type: 'Text', text: /^Yours: clouds · should v0 run on Vertex alone\?/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^Yours: clouds · should v0 use only Vertex/ })).toBeUndefined()
   await ui.unmount()
 })
 
-test('a line asked again with a new pick loses its side and keeps its words', async ($, on) => {
-  engine(on)
-  await $.turn.complete(end('Needs you (Yours: name): odin or thor? I recommend odin.'))
+test('a go does not move to a GO line asked again in other words', async ($, on) => {
+  const { sent } = engine(on)
+  await $.turn.complete(end('Needs you (GO: merge): may I merge the PR?'))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   await ui.press({ key: await rowKey(ui, 0) })
-  await ui.input({ key: await field(ui, 0), text: 'short names only', kind: 'change' })
+  expect(await chipOf(ui, 0)).toMatch(/^✓ go/)
 
-  await $.turn.complete({ ...end('Needs you (Yours: name): odin, thor or loki? I recommend loki.'), turnId: 'later' })
+  await $.turn.complete({ ...end('Needs you (GO: merge): may I merge PR #13 and delete the branch?'), turnId: 'later' })
   expect(await rows(ui)).toHaveLength(1)
-  expect(await chipOf(ui, 0)).toMatch(/^✎ words/)
+  expect(await chipOf(ui, 0)).toMatch(/^○/)
+  await ui.press({ key: 'send' })
+  expect(sent).toHaveLength(0)
   await ui.unmount()
 })
 
@@ -295,15 +299,46 @@ test('the keys share the top row when they fit, and go under the rows when they 
   expect(await order(60)).toEqual(['row', 'row', 'row', 'row', 'all', 'send', 'clear'])
 })
 
-test('the help text fits one row of a 120-column terminal', async ($, on) => {
-  engine(on)
-  await $.turn.complete(end(ANSWER))
-  // A 120-column terminal gives the band 115 columns: the engine keeps five for its `[-]`.
-  const ui = await $.ui.mount({ ...BAND, surface: 'terminal', props: { ...BAND.props, bodyColumns: 115 } })
-  const help = await ui.find({ type: 'Text', text: /closes the band$/ })
+for (const isWorking of [false, true]) {
+  test(`the help text fits one row of a 120-column terminal, and names ctrl+x tab for the letter keys (working: ${isWorking})`, async ($, on) => {
+    engine(on)
+    await $.turn.complete(end(ANSWER))
+    // A 120-column terminal gives the band 115 columns: the engine keeps five for its `[-]`.
+    const ui = await $.ui.mount({ ...BAND, surface: 'terminal', props: { ...BAND.props, bodyColumns: 115, isWorking } })
+    const help = await ui.find({ type: 'Text', text: /closes the band$/ })
 
-  expect(help).toBeDefined()
-  expect(help?.text?.length ?? 0).toBeLessThanOrEqual(115)
+    expect(help?.text).toContain('ctrl+x tab for a, s, c and your words')
+    expect(help?.text?.length ?? 999).toBeLessThanOrEqual(115)
+    await ui.unmount()
+  })
+}
+
+test('Send while Claude works says that the answers go when Claude stops', async ($, on) => {
+  const { toasts } = engine(on)
+  await $.turn.complete(end(ANSWER))
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal', props: { ...BAND.props, isWorking: true } })
+  await ui.press({ key: 'all' })
+  await ui.press({ key: 'send' })
+
+  expect(toasts).toEqual(['Your answers go when Claude stops.'])
+  expect(await rows(ui)).toHaveLength(0)
+  await ui.unmount()
+})
+
+// A prompt typed over a running turn is queued: its `next` resolves at once,
+// and the prompt may start the next turn. Until the running turn ends, a line
+// it asks again has not read the prompt.
+test('a prompt typed over a running turn keeps its closed lines out until that turn ends', async ($, on) => {
+  engine(on)
+  await $.turn.complete(end('Needs you (GO: tag): may I tag the release?'))
+  await $.prompt.submit({ ...composer('Look at the logs first.'), turnId: 'running' })
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+
+  await $.turn.complete({ ...end('Needs you (GO: tag): may I tag the release?'), turnId: 'running' })
+  expect(await rows(ui)).toHaveLength(0)
+  // The turn after it read the prompt: a line it asks again is a new ask.
+  await $.turn.complete({ ...end('Needs you (GO: tag): may I tag the release?'), turnId: 'after' })
+  expect(await rows(ui)).toHaveLength(1)
   await ui.unmount()
 })
 
@@ -333,14 +368,47 @@ test('every line of a band that a waiting message closed stays out, and a droppe
   await ui.press({ key: await rowKey(ui, 0) })
   await ui.press({ key: 'send' })
   // The open row closed too, and a line asked in new words is still its line.
-  await $.turn.complete({ ...end(lines.replace('merge the PR?', 'merge PR #12?')), turnId: 'later' })
+  await $.turn.complete({ ...end(lines.replace('tag the release?', 'tag v0.3.0?')), turnId: 'later' })
   expect(await rows(ui)).toHaveLength(0)
   release('test drop')
   await toast
 
   expect(await rows(ui)).toHaveLength(2)
+  // A line asked again in the same words keeps its answer.
   expect(await chipOf(ui, 0)).toMatch(/^✓ go/)
+  // A row comes back in the newest words that the later turn asked it in.
   expect(await chipOf(ui, 1)).toMatch(/^○/)
+  expect(await ui.find({ type: 'Text', text: /^GO: tag · tag v0\.3\.0\?$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('a dropped message does not bring back a go for a question asked again in other words', async ($, on) => {
+  let release: (drop: string) => void = () => undefined
+  let toasted: () => void = () => undefined
+  const toast = new Promise<void>(resolve => (toasted = resolve))
+  on('turn.complete', (_, e) => ({ text: e.answer }))
+  on('prompt.submit', () => new Promise(resolve => (release = drop => resolve({ drop }))))
+  on('ui.toast', () => {
+    toasted()
+
+    return { value: undefined }
+  })
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+
+    return <Text>engine</Text>
+  })
+  await $.turn.complete(end('Needs you (GO: merge): merge the PR?'))
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  await ui.press({ key: await rowKey(ui, 0) })
+  await ui.press({ key: 'send' })
+  await $.turn.complete({ ...end('Needs you (GO: merge): merge PR #12 and delete the branch?'), turnId: 'later' })
+  release('test drop')
+  await toast
+
+  expect(await rows(ui)).toHaveLength(1)
+  expect(await chipOf(ui, 0)).toMatch(/^○/)
+  expect(await ui.find({ type: 'Text', text: /^GO: merge · merge PR #12 and delete the branch\?$/ })).toBeDefined()
   await ui.unmount()
 })
 
