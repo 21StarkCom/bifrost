@@ -690,7 +690,9 @@ export function loadSaved(file: string, cwd = process.cwd(), home = os.homedir()
   } catch {
     return { reason: "it does not parse as JSON" };
   }
-  const isFile = (f: unknown) => !!f && typeof (f as { path?: unknown }).path === "string" && Array.isArray((f as { clauses?: unknown }).clauses);
+  const isClause = (c: unknown) => !!c && typeof c === "object" && typeof (c as { type?: unknown }).type === "string";
+  const isFile = (f: unknown) => !!f && typeof (f as { path?: unknown }).path === "string"
+    && Array.isArray((f as { clauses?: unknown }).clauses) && (f as { clauses: unknown[] }).clauses.every(isClause);
   if (!r || typeof r !== "object" || !Array.isArray(r.files) || !r.files.every(isFile) || !r.totals || typeof r.totals !== "object") {
     return { reason: "it is not a --json triage report" };
   }
@@ -737,10 +739,11 @@ export function sinceDiff(
   since: string, base: SavedReport, head: SavedReport, read: (p: string) => string | null,
 ): SinceDiff {
   const same = (r: TriageReport) => new Map(r.files.map((f) => [f.path, f.path]));
-  const show = (p: string) => displayPath(p);
+  // A SIZE clause of the whole file or load set has no line to show.
+  const anchored = (c: Clause) => c.measure !== "core" && c.measure !== "load set";
   const item = (path: string, c: Clause, withContext: boolean): DiffClause => ({
-    path: show(path), line: c.line, type: c.type, text: c.text, detail: c.detail,
-    ...(withContext ? { context: contextLines(read(path), c.line) } : {}),
+    path: displayPath(path), line: c.line, type: c.type, text: c.text, detail: c.detail,
+    ...(withContext && anchored(c) ? { context: contextLines(read(path), c.line) } : {}),
   });
   const settings: SinceDiff["settings"] = [];
   if (base.settings && head.settings) {
@@ -833,6 +836,10 @@ export function selfUpdate(toolDir: string): SelfUpdate {
   const top = gitTop(toolDir);
   if (!top) return { updated: false, stale: { repo: displayPath(toolDir), reason: "self-update: not in a git checkout" } };
   const stale = (reason: string): SelfUpdate => ({ updated: false, stale: { repo: displayPath(top), reason: `self-update: ${reason}` } });
+  // A copy of the tools inside some other repo (a dotfiles repo above the
+  // plugin cache) is not this tool's checkout: never move that repo.
+  const own = path.relative(top, path.join(fs.realpathSync(toolDir), "rules_audit.ts")).split(path.sep).join("/");
+  if (git(top, ["ls-files", "--error-unmatch", "--", own]).status !== 0) return stale(`${own} is not tracked in ${displayPath(top)}`);
   const fetch = spawnSync("git", ["-C", top, "fetch", "--quiet", "--no-tags", "--no-recurse-submodules", "origin", "main"], {
     encoding: "utf8", timeout: FETCH_TIMEOUT_MS, env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
   });
@@ -918,7 +925,8 @@ async function playbookMain(flags: Map<string, string | true>, extraStale: Stale
   } else {
     const diff = sinceDiff(sinceFile!, base.report, absolute, (p) => c.readReal(p));
     const render = flags.has("json") ? (d: SinceDiff) => JSON.stringify(d, null, 2) : formatSince;
-    process.stdout.write(`${fitSince(diff, render)}\n`);
+    // Room for the newline and a `notified:` line, so the whole stdout stays under the limit.
+    process.stdout.write(`${fitSince(diff, render, SINCE_MAX_CHARS - 200)}\n`);
     code = diff.new.length ? 3 : 0;
   }
   if (flags.has("notify")) {
@@ -974,7 +982,11 @@ export async function main(argv: string[]): Promise<number> {
         const again = spawnSync(process.execPath, [
           ...process.execArgv, fileURLToPath(import.meta.url), ...argv.filter((a) => a !== "--self-update"),
         ], { stdio: "inherit" });
-        return again.status ?? 1;
+        // A run that did not start or was killed sent no push of its own.
+        if (again.status === null) {
+          return playbookFailed(flags, new Error(`the new code did not run: ${again.error?.message ?? `signal ${again.signal}`}`), 1);
+        }
+        return again.status;
       }
       if (u.stale) extraStale.push(u.stale);
     }

@@ -483,6 +483,8 @@ test("triage: a new service on the Mac is a kept gate, YELLOW; a schedule off th
   assert.equal(gateOf("A cron entry on the Mac waits for the operator's word."), mac);
   assert.equal(gateOf("A daemon on macOS is the operator's call."), mac);
   assert.equal(gateOf("A schedule on the devbox needs a GO."), `RED: gate words "needs a GO"`);
+  assert.match(gateOf("Restarting the Mímir Service on the Mac needs a GO."), /^RED/, "a service that is not new is no kept gate");
+  assert.equal(gateOf("A new background service on the Mac needs a GO."), mac);
 });
 
 test("triage: the kept-gate check runs first, on the whole sentence; a file name in code does not count", () => {

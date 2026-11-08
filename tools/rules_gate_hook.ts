@@ -43,8 +43,6 @@ import { precheckCli } from "./cli_args_lib.ts";
 import { isMainModule } from "./main_module_lib.ts";
 import { agentKind, newReds, type TriageReport } from "./rules_audit_lib.ts";
 
-export { newReds, type NewReds } from "./rules_audit_lib.ts";
-
 const USAGE = "usage: rules_gate_hook.ts (no arguments; PreToolUse JSON on stdin)\n";
 const TOOLS_DIR = import.meta.dirname;
 const AUDIT = path.join(TOOLS_DIR, "rules_audit.ts");

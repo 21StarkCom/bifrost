@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import { absolutePath, buildView, contextLines, fitSince, loadSaved, originView, sinceDiff, type SavedReport, type SinceDiff, formatSince, SINCE_MAX_CHARS, readModelSettings } from "./rules_audit.ts";
+import { absolutePath, buildView, contextLines, fitSince, loadSaved, originView, sinceDiff, type SavedReport, type SinceDiff, formatSince, SINCE_MAX_CHARS, readModelSettings, selfUpdate } from "./rules_audit.ts";
 
 const CLI = path.join(import.meta.dirname, "rules_audit.ts");
 
@@ -606,7 +606,7 @@ test("sinceDiff: a SIZE clause that shrinks is neither new nor gone; one that gr
   assert.equal(grown.new.length, 1);
   assert.match(grown.new[0].detail, /grown from 40000 to 45000 chars/);
   assert.equal(grown.gone.length, 0);
-  assert.deepEqual(grown.new[0].context, []);
+  assert.equal(grown.new[0].context, undefined, "a whole-file SIZE clause has no lines to show");
 });
 
 test("sinceDiff prints each settings value that changed", () => {
@@ -749,5 +749,22 @@ test("--self-update fast-forwards a clean main and runs the new code; a changed 
     assert.match(JSON.parse(branch.stdout).stale[0].reason, /self-update: on feature, not main/);
   } finally {
     for (const d of [f.top, f.bare, f.h]) fs.rmSync(d, { recursive: true, force: true });
+  }
+});
+
+test("selfUpdate leaves a repo alone that only holds an untracked copy of the tools", () => {
+  const top = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "rules-audit-other-")));
+  try {
+    writeAll(top, { "README.md": "x", "cache/tools/rules_audit.ts": "// copy" });
+    gitOk(top, "init", "-q");
+    gitOk(top, "add", "README.md");
+    gitOk(top, "commit", "-q", "-m", "seed");
+    const head = gitOk(top, "rev-parse", "HEAD");
+    const u = selfUpdate(path.join(top, "cache", "tools"));
+    assert.equal(u.updated, false);
+    assert.match(u.updated ? "" : u.stale?.reason ?? "", /self-update: cache\/tools\/rules_audit\.ts is not tracked/);
+    assert.equal(gitOk(top, "rev-parse", "HEAD"), head);
+  } finally {
+    fs.rmSync(top, { recursive: true, force: true });
   }
 });

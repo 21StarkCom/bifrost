@@ -9,8 +9,8 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import type { Clause, TriageReport } from "./rules_audit_lib.ts";
-import { BUDGET_MS, findMerges, newReds, PR_FIELDS, render, renamesIn, shellCommands, timeLeft } from "./rules_gate_hook.ts";
+import { newReds, type Clause, type TriageReport } from "./rules_audit_lib.ts";
+import { BUDGET_MS, findMerges, PR_FIELDS, render, renamesIn, shellCommands, timeLeft } from "./rules_gate_hook.ts";
 
 const HOOK = path.join(import.meta.dirname, "rules_gate_hook.ts");
 const RED_LINE = "This is the operator's call.\n";

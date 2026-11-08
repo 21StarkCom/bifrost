@@ -606,7 +606,8 @@ export const KEPT_GATE_RES: readonly { label: string; re: RegExp }[] = [
     // The root rule "A new service on the Mac needs the operator's own request":
     // its own bullet, not on the GO list, so a worker launch does not cover it.
     label: "a new service on the Mac",
-    re: /^(?=.*\b(?:Mac|macOS|launchd|LaunchAgents?)\b)(?=.*\b(?:launchd|LaunchAgents?|daemons?|cron(?:tab)?|schedules?|services?)\b)/is,
+    // A bare "service" or "schedule" needs "new": "the Mímir Service on the Mac" is no new service.
+    re: /^(?=.*\b(?:Mac|macOS|launchd|LaunchAgents?)\b)(?=.*\b(?:launchd|LaunchAgents?|daemons?|cron(?:tab)?|new\s+(?:\S+\s+){0,2}?(?:schedules?|services?))\b)/is,
   },
   {
     label: "a step that needs a person's own grant",
