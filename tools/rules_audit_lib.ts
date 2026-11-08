@@ -1557,11 +1557,21 @@ export interface TriagedFile {
   budget: number | null;
   flag: Flag;
   clauses: Clause[];
+  /** Set when the file was read from its repo's checkout because `--fleet`
+   *  could not read the repo at `origin/HEAD`: why not. */
+  stale?: string;
+}
+
+/** A repo that `--fleet` read from its checkout, not at `origin/HEAD`. */
+export interface StaleRepo {
+  repo: string;
+  reason: string;
 }
 
 export interface TriageReport {
   files: TriagedFile[];
   totals: Record<Flag, number>;
+  stale: StaleRepo[];
 }
 
 export interface TriageGroup {
@@ -1570,8 +1580,8 @@ export interface TriageGroup {
   view: RepoView;
   /** A git repo: its start-up load set is measured against the budget. */
   repo: boolean;
-  /** `path` is the name the report prints. */
-  files: { rel: string; kind: AgentKind; path: string }[];
+  /** `path` is the name the report prints; `stale` goes to the report as it is. */
+  files: { rel: string; kind: AgentKind; path: string; stale?: string }[];
   /** A repo's CLAUDE.md files above its root that load with it at start-up. */
   above?: { path: string; text: string }[];
 }
@@ -1582,6 +1592,8 @@ export interface TriageInput {
    *  clauses is RED. `path` is the report name: the triaged file's own name
    *  when the root rules are one of the triaged files. */
   rootRules?: { path: string; text: string };
+  /** The repos read from their checkout, since `origin/HEAD` could not be. */
+  stale?: StaleRepo[];
 }
 
 /** The playbook kind of a repo-relative path, or null for no agent file. A
@@ -1783,7 +1795,10 @@ export function triage(input: TriageInput): TriageReport {
       const raw = g.view.read(f.rel);
       if (raw === null) continue;
       const t = triageText(f.kind, raw);
-      const file = { path: f.path, kind: f.kind, chars: t.chars, budget: t.budget, flag: "GREEN" as Flag, clauses: t.clauses, raw };
+      const file = {
+        path: f.path, kind: f.kind, chars: t.chars, budget: t.budget, flag: "GREEN" as Flag, clauses: t.clauses,
+        ...(f.stale === undefined ? {} : { stale: f.stale }), raw,
+      };
       file.clauses.push(...deadPointers(f.rel, f.kind, raw, tree));
       files.push(file);
       byPath.set(file.path, file);
@@ -1838,24 +1853,33 @@ export function triage(input: TriageInput): TriageReport {
     totals[f.flag]++;
     return f;
   });
-  return { files: out, totals };
+  return { files: out, totals, stale: input.stale ?? [] };
 }
+
+/** The heading of the stale list in the text and the push. */
+const STALE_HEAD = "Stale, read from the checkout, not origin/HEAD";
 
 const TYPE_ORDER: readonly ClauseType[] = ["SIZE", "GATE", "GROWTH", "HISTORY", "DUPLICATE", "POINTER"];
 
-/** One line per file, then each RED clause as `path:line`, then the totals. */
+/** One line per file, then each RED clause as `path:line`, then the stale
+ *  repos with their reasons, then the totals. A stale file's line ends in
+ *  `· STALE`. */
 export function formatTriage(r: TriageReport): string {
   const out: string[] = [];
   for (const f of r.files) {
     const counts = TYPE_ORDER.map((t) => [t, f.clauses.filter((c) => c.type === t).length] as const)
       .filter(([, n]) => n).map(([t, n]) => ` · ${t} ${n}`).join("");
     const size = f.budget === null ? `${thousands(f.chars)} chars` : `${thousands(f.chars)}/${thousands(f.budget)} chars`;
-    out.push(`${f.flag.padEnd(6)}  ${f.path}  ${size}${counts}`);
+    out.push(`${f.flag.padEnd(6)}  ${f.path}  ${size}${counts}${f.stale === undefined ? "" : " · STALE"}`);
   }
   const red = r.files.flatMap((f) => f.clauses.filter((c) => c.flag === "RED").map((c) => ({ f, c })));
   if (red.length) {
     out.push("", "RED clauses:");
     for (const { f, c } of red) out.push(`  ${f.path}:${c.line}  ${c.type}  ${c.detail}: ${c.text}`);
+  }
+  if (r.stale.length) {
+    out.push("", `${STALE_HEAD}:`);
+    for (const s of r.stale) out.push(`  ${s.repo}  ${s.reason}`);
   }
   const t = r.totals;
   out.push("", `${r.files.length} agent file${r.files.length === 1 ? "" : "s"}: GREEN ${t.GREEN} · YELLOW ${t.YELLOW} · RED ${t.RED}`);
@@ -1871,7 +1895,8 @@ function sizeNote(c: Clause): string {
   return /^(?:over the|start-up load set)/.test(detail) ? `${c.text}, ${detail}` : detail;
 }
 
-/** The title and body of one push for a triage report: the RED files first,
+/** The title and body of one push for a triage report: the stale repos
+ *  first, since their counts are not of `origin/HEAD`; then the RED files,
  *  the most RED clauses first; then the files over budget that are not RED.
  *  Each list keeps its first `max` lines and counts the rest. */
 export function notifySummary(r: TriageReport, max = NOTIFY_LIST_MAX): { title: string; body: string } {
@@ -1887,6 +1912,7 @@ export function notifySummary(r: TriageReport, max = NOTIFY_LIST_MAX): { title: 
     ...(lines.length > max ? [`- +${lines.length - max} more`] : []),
   ];
   const body = [`${r.files.length} agent file${r.files.length === 1 ? "" : "s"}.`];
+  if (r.stale.length) body.push(...list(STALE_HEAD, r.stale.map((s) => `${s.repo}: ${s.reason}`)));
   if (reds.length) {
     body.push(...list("RED files", reds.map(({ f, red }) => {
       const types = TYPE_ORDER.map((ty) => [ty, red.filter((c) => c.type === ty).length] as const)
@@ -1901,6 +1927,6 @@ export function notifySummary(r: TriageReport, max = NOTIFY_LIST_MAX): { title: 
     })));
   }
   if (!reds.length && !over.length) body.push("No file is RED or over budget.");
-  if (reds.length > max || over.length > max) body.push("The full list: rules_audit.ts --playbook with the same inputs.");
+  if (r.stale.length > max || reds.length > max || over.length > max) body.push("The full list: rules_audit.ts --playbook with the same inputs.");
   return { title, body: body.join("\n") };
 }

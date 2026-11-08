@@ -85,6 +85,7 @@ const clause = (type: Clause["type"], text: string, line = 1, more: Partial<Clau
 const report = (...files: [string, Clause[]][]): TriageReport => ({
   files: files.map(([p, clauses]) => ({ path: p, kind: "root", chars: 0, budget: 15_000, flag: "RED", clauses })),
   totals: { GREEN: 0, YELLOW: 0, RED: files.length },
+  stale: [],
 });
 const core = (chars: number) => clause("SIZE", `${chars} chars`, 1, { chars, measure: "core", detail: "over the 15k budget twice over" });
 const load = (chars: number) => clause("SIZE", `${chars} chars in 3 files`, 1, { chars, measure: "load set", detail: "start-up load set over the 40k budget twice over (a, b)" });

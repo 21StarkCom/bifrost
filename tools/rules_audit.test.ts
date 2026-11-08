@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import { SWEEP_LABEL, sweepPlist } from "./rules_audit.ts";
+import { buildView, originView, SWEEP_LABEL, sweepPlist } from "./rules_audit.ts";
 
 const CLI = path.join(import.meta.dirname, "rules_audit.ts");
 
@@ -26,20 +26,60 @@ function run(args: string[], cwd = os.tmpdir(), env: NodeJS.ProcessEnv = process
   return spawnSync(process.execPath, ["--no-warnings", CLI, ...args], { cwd, encoding: "utf8", env });
 }
 
-/** A home with a fleet folder of one repo, the root rules, and one memory folder. */
-function home(): { dir: string; env: NodeJS.ProcessEnv } {
-  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "rules-audit-home-")));
-  const write = (rel: string, text: string) => {
+/** git in `cwd` with a fixed identity and no user or system config; its stdout. */
+function gitOk(cwd: string, ...args: string[]): string {
+  const r = spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "init.defaultBranch=main", "-c", "commit.gpgsign=false", ...args], {
+    cwd, encoding: "utf8", env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" },
+  });
+  assert.equal(r.status, 0, `git ${args.join(" ")}: ${r.stderr}`);
+  return r.stdout;
+}
+
+/** Writes `files` under `dir`, creating folders. */
+function writeAll(dir: string, files: Record<string, string>): void {
+  for (const [rel, text] of Object.entries(files)) {
     fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
     fs.writeFileSync(path.join(dir, rel), text);
-  };
+  }
+}
+
+/** Commits all of the repo `dir` and gives it a bare origin at `bare`, with
+ *  `origin/HEAD` set unless `noHead`: a checkout at origin. With `noHead`, a
+ *  fetch does not set it either (git 2.48 and later set it by default). */
+function publish(dir: string, bare: string, noHead = false): void {
+  gitOk(dir, "add", "-A");
+  gitOk(dir, "commit", "-q", "-m", "seed");
+  gitOk(dir, "clone", "-q", "--bare", dir, bare);
+  gitOk(dir, "remote", "add", "origin", bare);
+  if (noHead) gitOk(dir, "config", "remote.origin.followRemoteHEAD", "never");
+  gitOk(dir, "fetch", "-q", "origin");
+  if (!noHead) gitOk(dir, "remote", "set-head", "origin", "-a");
+}
+
+/** A clone of `bare` in which `files` are written, committed and pushed:
+ *  origin moves on while the fleet's checkout stays behind. */
+function pushToOrigin(home: string, bare: string, files: Record<string, string>): void {
+  const up = fs.mkdtempSync(path.join(home, "upstream-"));
+  gitOk(home, "clone", "-q", bare, up);
+  writeAll(up, files);
+  gitOk(up, "add", "-A");
+  gitOk(up, "commit", "-q", "-m", "origin moves on");
+  gitOk(up, "push", "-q", "origin", "HEAD");
+}
+
+/** A home with a fleet folder of one repo at its origin, the root rules, and
+ *  one memory folder. */
+function home(): { dir: string; env: NodeJS.ProcessEnv } {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "rules-audit-home-")));
+  const write = (rel: string, text: string) => writeAll(dir, { [rel]: text });
   const fleet = path.join(dir, "Code", "21Stark");
   fs.mkdirSync(fleet, { recursive: true });
-  assert.equal(spawnSync("git", ["init", "-q", path.join(fleet, "alpha")]).status, 0);
+  gitOk(fleet, "init", "-q", "alpha");
   write("Code/21Stark/alpha/CLAUDE.md", "# Alpha\n\n- Never commit or push to a default branch directly unless the operator asks.\n");
   write("Code/21Stark/alpha/docs/workspace/CLAUDE.md", "# Workspace\n\n- One clone per repo.\n");
   write("Code/21Stark/alpha/skill/s/SKILL.md", "---\nname: s\ndescription: A short skill.\n---\n- Do the step.\n");
   fs.symlinkSync("CLAUDE.md", path.join(fleet, "alpha", "AGENTS.md"));
+  publish(path.join(fleet, "alpha"), path.join(dir, "origins", "alpha.git"));
   fs.symlinkSync("alpha/docs/workspace/CLAUDE.md", path.join(fleet, "CLAUDE.md"));
   fs.mkdirSync(path.join(fleet, "not-a-repo"));
   write("Code/21Stark/not-a-repo/CLAUDE.md", "# Not a repo\n");
@@ -190,6 +230,7 @@ test("--playbook --fleet --memory: each agent file once, in one run, against the
       "GREEN ~/Code/21Stark/alpha/skill/s/SKILL.md",
     ]);
     assert.match(fleet.stdout, /alpha\/CLAUDE\.md:3 {2}DUPLICATE {2}a copy of the root rules at ~\/Code\/CLAUDE\.md:3/);
+    assert.doesNotMatch(fleet.stdout, /STALE|Stale/);
     const memory = run(["--playbook", "--memory"], "/", h.env);
     assert.equal(memory.status, 3, memory.stderr);
     assert.deepEqual(lines(memory.stdout), [
@@ -203,6 +244,205 @@ test("--playbook --fleet --memory: each agent file once, in one run, against the
     assert.match(both.stdout, /5 agent files: GREEN 3 · YELLOW 0 · RED 2/);
   } finally {
     fs.rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+/** HEAD, status and branch of each checkout: a fleet run must leave them as they are. */
+const checkoutState = (dirs: string[]) => dirs.map((d) => ["rev-parse HEAD", "status --porcelain", "branch --show-current"]
+  .map((cmd) => gitOk(d, ...cmd.split(" "))).join("|"));
+
+test("--playbook --fleet reads each repo at origin/HEAD: behind it, on another branch, or edited; no checkout changes", () => {
+  const h = home();
+  try {
+    const fleet = path.join(h.dir, "Code", "21Stark");
+    const alpha = path.join(fleet, "alpha");
+    // alpha falls behind: origin drops the copy of the root rules, adds a
+    // package file with a gate, and puts a gate in the workspace map, which
+    // grows past the start-up budget of each repo below it.
+    pushToOrigin(h.dir, path.join(h.dir, "origins", "alpha.git"), {
+      "CLAUDE.md": "# Alpha\n\n- Keep each rule short.\n",
+      "pkg/CLAUDE.md": "# Pkg\n\n- This is the operator's call.\n",
+      "docs/workspace/CLAUDE.md": `# Workspace\n\n- Each repo is the operator's call.\n\n${"w".repeat(41_000)}\n`,
+    });
+    // An edit in alpha's checkout that is not committed is not read.
+    writeAll(alpha, { "skill/s/SKILL.md": "---\nname: s\ndescription: A short skill.\n---\n- Add a rule for each lesson.\n" });
+    // beta is on a branch whose gate main does not have.
+    const beta = path.join(fleet, "beta");
+    gitOk(fleet, "init", "-q", "beta");
+    writeAll(beta, { "CLAUDE.md": "# Beta\n\n- Keep it lean.\n" });
+    publish(beta, path.join(h.dir, "origins", "beta.git"));
+    gitOk(beta, "switch", "-q", "-c", "topic");
+    writeAll(beta, { "CLAUDE.md": "# Beta\n\n- Merging is the operator's call.\n" });
+    gitOk(beta, "commit", "-q", "-am", "topic");
+    // nastrond's buried code under graves/ is left out.
+    const nastrond = path.join(fleet, "nastrond");
+    gitOk(fleet, "init", "-q", "nastrond");
+    writeAll(nastrond, {
+      "skill/a/SKILL.md": "---\nname: a\ndescription: A live skill.\n---\n- Do the step.\n",
+      "graves/old/skill/b/SKILL.md": "---\nname: b\ndescription: A buried skill.\n---\n- It is the operator's call.\n",
+      "graves/old/CLAUDE.md": "# Old\n\n- It is the operator's call.\n",
+    });
+    publish(nastrond, path.join(h.dir, "origins", "nastrond.git"));
+    const before = checkoutState([alpha, beta, nastrond]);
+
+    const r = run(["--playbook", "--fleet", "--json"], "/", h.env);
+    assert.equal(r.status, 3, r.stderr);
+    const report = JSON.parse(r.stdout) as {
+      files: { path: string; flag: string; stale?: string; clauses: { type: string; detail: string }[] }[]; stale: unknown[];
+    };
+    // The root files are YELLOW for their load set alone: the map above them.
+    assert.deepEqual(Object.fromEntries(report.files.map((f) => [f.path, f.flag])), {
+      "~/Code/21Stark/CLAUDE.md": "RED",
+      "~/Code/21Stark/alpha/CLAUDE.md": "YELLOW",
+      "~/Code/21Stark/alpha/pkg/CLAUDE.md": "RED",
+      "~/Code/21Stark/alpha/skill/s/SKILL.md": "GREEN",
+      "~/Code/21Stark/beta/CLAUDE.md": "YELLOW",
+      "~/Code/21Stark/nastrond/skill/a/SKILL.md": "GREEN",
+    });
+    const alphaRoot = report.files.find((f) => f.path === "~/Code/21Stark/alpha/CLAUDE.md")!;
+    assert.deepEqual(alphaRoot.clauses.map((c) => c.type), ["SIZE"]);
+    assert.match(alphaRoot.clauses[0].detail, /start-up load set .*~\/Code\/21Stark\/CLAUDE\.md/);
+    assert.deepEqual(report.stale, []);
+    assert.ok(report.files.every((f) => f.stale === undefined));
+    assert.deepEqual(checkoutState([alpha, beta, nastrond]), before);
+  } finally {
+    fs.rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("--playbook --fleet: root rules that link into a fleet repo are read at its origin/HEAD and never copy themselves", () => {
+  const h = home();
+  try {
+    const fleet = path.join(h.dir, "Code", "21Stark");
+    const rules = path.join(fleet, "rules");
+    gitOk(fleet, "init", "-q", "rules");
+    writeAll(rules, { "CLAUDE.md": "# Root\n\n- Never commit or push to a default branch directly unless the operator asks.\n" });
+    publish(rules, path.join(h.dir, "origins", "rules.git"));
+    // The checkout lags a rule that only origin has; gamma copies that rule.
+    pushToOrigin(h.dir, path.join(h.dir, "origins", "rules.git"), {
+      "CLAUDE.md": "# Root\n\n- Never commit or push to a default branch directly unless the operator asks.\n- Close the ticket the moment the PR merges, and never hold it open for a later check.\n",
+    });
+    const gamma = path.join(fleet, "gamma");
+    gitOk(fleet, "init", "-q", "gamma");
+    writeAll(gamma, { "CLAUDE.md": "# Gamma\n\n- Close the ticket the moment the PR merges, and never hold it open for a later check.\n" });
+    publish(gamma, path.join(h.dir, "origins", "gamma.git"));
+    fs.rmSync(path.join(h.dir, "Code", "CLAUDE.md"));
+    fs.symlinkSync("21Stark/rules/CLAUDE.md", path.join(h.dir, "Code", "CLAUDE.md"));
+
+    const r = run(["--playbook", "--fleet"], "/", h.env);
+    assert.equal(r.status, 3, r.stderr);
+    assert.match(r.stdout, /^GREEN {3}~\/Code\/21Stark\/rules\/CLAUDE\.md /m);
+    assert.match(r.stdout, /gamma\/CLAUDE\.md:3 {2}DUPLICATE {2}a copy of the root rules at ~\/Code\/21Stark\/rules\/CLAUDE\.md:4/);
+    assert.match(r.stdout, /alpha\/CLAUDE\.md:3 {2}DUPLICATE {2}a copy of the root rules at ~\/Code\/21Stark\/rules\/CLAUDE\.md:3/);
+  } finally {
+    fs.rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("--playbook --fleet: a repo that fails its fetch, or has no origin/HEAD, is read from its checkout and marked stale; the run goes on", () => {
+  const h = home();
+  const bin = fakeBin();
+  try {
+    const fleet = path.join(h.dir, "Code", "21Stark");
+    const gamma = path.join(fleet, "gamma");
+    gitOk(fleet, "init", "-q", "gamma");
+    writeAll(gamma, { "CLAUDE.md": "# Gamma\n\n- This is the operator's call.\n" });
+    gitOk(gamma, "remote", "add", "origin", path.join(h.dir, "origins", "missing.git"));
+    const delta = path.join(fleet, "delta");
+    gitOk(fleet, "init", "-q", "delta");
+    writeAll(delta, { "CLAUDE.md": "# Delta\n\n- Keep it lean.\n" });
+    publish(delta, path.join(h.dir, "origins", "delta.git"), true);
+
+    const text = run(["--playbook", "--fleet"], "/", h.env);
+    assert.equal(text.status, 3, text.stderr);
+    assert.match(text.stdout, /^RED {5}~\/Code\/21Stark\/gamma\/CLAUDE\.md {2}\S+ chars · GATE 1 · STALE$/m);
+    assert.match(text.stdout, /^GREEN {3}~\/Code\/21Stark\/delta\/CLAUDE\.md {2}\S+ chars · STALE$/m);
+    assert.match(text.stdout, /^RED {5}~\/Code\/21Stark\/alpha\/CLAUDE\.md {2}\S+ chars · DUPLICATE 1$/m);
+    const stale = text.stdout.split("\n\n").find((b) => b.startsWith("Stale"))!.split("\n");
+    assert.equal(stale[0], "Stale, read from the checkout, not origin/HEAD:");
+    assert.equal(stale[1], "  ~/Code/21Stark/delta  origin/HEAD is not set");
+    assert.match(stale[2], /^ {2}~\/Code\/21Stark\/gamma {2}git fetch failed: fatal: .*missing\.git/);
+    assert.equal(stale.length, 3);
+
+    const json = JSON.parse(run(["--playbook", "--fleet", "--json"], "/", h.env).stdout) as {
+      files: { path: string; stale?: string }[]; stale: { repo: string; reason: string }[];
+    };
+    const staleOf = Object.fromEntries(json.files.map((f) => [f.path, f.stale]));
+    assert.equal(staleOf["~/Code/21Stark/delta/CLAUDE.md"], "origin/HEAD is not set");
+    assert.match(staleOf["~/Code/21Stark/gamma/CLAUDE.md"]!, /^git fetch failed: /);
+    assert.equal(staleOf["~/Code/21Stark/alpha/CLAUDE.md"], undefined);
+    assert.deepEqual(json.stale.map((s) => s.repo), ["~/Code/21Stark/delta", "~/Code/21Stark/gamma"]);
+
+    const notify = run(["--playbook", "--fleet", "--notify"], "/", bin.env({ HOME: h.dir }));
+    assert.equal(notify.status, 3, notify.stderr);
+    const body = bin.calls().at(-1)![3].split("\n");
+    assert.deepEqual(body.slice(1, 3), ["Stale, read from the checkout, not origin/HEAD (2):", "- ~/Code/21Stark/delta: origin/HEAD is not set"]);
+    assert.match(body[3], /^- ~\/Code\/21Stark\/gamma: git fetch failed: /);
+  } finally {
+    fs.rmSync(h.dir, { recursive: true, force: true });
+    fs.rmSync(bin.dir, { recursive: true, force: true });
+  }
+});
+
+test("originView lists, reads and resolves a tree at origin/HEAD as the disk walk does for the same checkout", () => {
+  const top = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "rules-audit-origin-")));
+  try {
+    const dir = path.join(top, "r");
+    gitOk(top, "init", "-q", "r");
+    fs.writeFileSync(path.join(top, "outside.md"), "# Outside\n");
+    writeAll(dir, {
+      "CLAUDE.md": "# R\n\n- A rule.\n",
+      ".claude/rules/a.md": "- Rule a.\n",
+      "shared/rules/b.md": "- Rule b.\n",
+      "other/rules/c.md": "- Rule c.\n",
+      "docs/x.md": "# X\n",
+      "node_modules/p/CLAUDE.md": "# Pruned\n",
+      "vendor/modules.txt": "# go vendor\n",
+      "vendor/m/CLAUDE.md": "# Pruned\n",
+      "pkg/vendor/n/CLAUDE.md": "# Kept: no modules.txt\n",
+    });
+    fs.symlinkSync("CLAUDE.md", path.join(dir, "AGENTS.md"));
+    fs.symlinkSync("../../shared/rules", path.join(dir, ".claude", "rules", "shared"));
+    // A target that ends in `/`, and an absolute link into the checkout.
+    fs.symlinkSync("../../other/rules/", path.join(dir, ".claude", "rules", "other"));
+    fs.symlinkSync(path.join(dir, "CLAUDE.md"), path.join(dir, "ABS.md"));
+    fs.symlinkSync("docs", path.join(dir, "docs-link"));
+    fs.symlinkSync("../outside.md", path.join(dir, "out.md"));
+    fs.symlinkSync("loop2", path.join(dir, "loop1"));
+    fs.symlinkSync("loop1", path.join(dir, "loop2"));
+    fs.symlinkSync("nope.md", path.join(dir, "dangling.md"));
+    publish(dir, path.join(top, "r.git"));
+    // An edit that is not committed: the disk walk reads it, origin does not.
+    fs.writeFileSync(path.join(dir, "CLAUDE.md"), "# R\n\n- An edit.\n");
+
+    const o = originView(dir);
+    const disk = buildView(dir);
+    assert.deepEqual(o.files, disk.files);
+    assert.ok(o.files.includes(".claude/rules/shared/b.md") && o.files.includes("AGENTS.md"));
+    assert.ok(o.files.includes(".claude/rules/other/c.md") && o.files.includes("ABS.md"));
+    assert.equal(o.resolve("ABS.md"), "CLAUDE.md");
+    assert.ok(!o.files.some((f) => /node_modules|^vendor|out\.md|loop|dangling/.test(f)));
+    assert.equal(o.read("CLAUDE.md"), "# R\n\n- A rule.\n");
+    assert.equal(o.read("AGENTS.md"), "# R\n\n- A rule.\n");
+    assert.equal(o.read(".claude/rules/shared/b.md"), "- Rule b.\n");
+    assert.equal(o.read("docs-link/x.md"), "# X\n");
+    assert.equal(o.read("out.md"), null);
+    for (const rel of ["docs", "docs/", "docs-link/x.md", ".claude/rules", "node_modules/p/CLAUDE.md", "", "./docs/x.md"]) {
+      assert.equal(o.exists(rel), true, rel);
+      assert.equal(disk.exists(rel), true, rel);
+    }
+    for (const rel of ["nope.md", "dangling.md", "loop1", "docs/y.md"]) assert.equal(o.exists(rel), false, rel);
+    assert.equal(o.resolve("AGENTS.md"), "CLAUDE.md");
+    assert.equal(o.resolve(".claude/rules/shared/b.md"), "shared/rules/b.md");
+    assert.equal(o.resolve("loop1"), null);
+    assert.equal(o.resolve("out.md"), null);
+    assert.ok(o.isLink("AGENTS.md") && !o.isLink("CLAUDE.md"));
+    assert.equal(o.claudeFamilyAbove, true);
+    assert.deepEqual([...o.ignored], []);
+    gitOk(dir, "remote", "set-head", "origin", "-d");
+    assert.throws(() => originView(dir), /origin\/HEAD is not set/);
+  } finally {
+    fs.rmSync(top, { recursive: true, force: true });
   }
 });
 
