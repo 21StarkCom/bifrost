@@ -70,7 +70,7 @@ Read `docs/operations/branch-protection.md` before you touch CI or branch contro
 - **`--help` is side-effect-free.** Every skill opens with a `## Help` block that points at `standards/help.md`. Every tool entrypoint exits on `help`, `--help` or `-h` before it does work, and refuses an unknown argument or a missing option value. Use `tools/cli_args_lib.ts`.
 - **When you add, move or delete an entrypoint, edit both tables in `docs/operations/source-entrypoint-help-audit.md`** in the same PR. `tools/source_help.test.ts` checks them.
 - **One run-as-main guard:** `tools/main_module_lib.ts::isMainModule(import.meta.url)`. No other tool source may mention `process.argv[1]`.
-- **`tools/skill_smoke_test.test.ts`** checks each skill's frontmatter, `name:`, help link, in-repo links and `--help` runs. A cross-repo reference needs an entry in its `CROSS_REPO_PREFIXES`. Keep `agnes`, `gru`, `minion`, `stark-ticket`, `goldfinger`, `stark-agent-docs` and `c4-design` model-invocable.
+- **`tools/skill_smoke_test.test.ts`** checks each skill's frontmatter, `name:`, help link, in-repo links and `--help` runs. A cross-repo reference needs an entry in its `CROSS_REPO_PREFIXES`. Keep `agnes`, `gru`, `minion`, `stark-ticket`, `stark-agent-docs` and `c4-design` model-invocable.
 - **Docs:** `/stark-init-docs` scaffolds `docs/adr/`, `docs/specs/` and `docs/retros/` into a target repo; `tools/doc_convention.test.ts` guards it. Never create a `docs/plans/`.
 - **Config is JSON; prompts are Markdown.** `tools/stark_config_lib.ts` reads each section from the global `config.json` only. The org → repo `.code-review/config.json` walk feeds preflight's `agents` and nothing else, so a per-repo override of another section is ignored.
 
@@ -117,7 +117,6 @@ Read `skill/<name>/SKILL.md` before you change or run a skill. By plugin, as in 
   - `minion` — to work one ticket for a leader.
   - `agnes` — to work one ticket alone, unattended.
   - `lucius` — to open a Lucius brainstorm in its own tab.
-  - `goldfinger` — to drive a native app with the goldfinger CLI.
 - **stark-constitution**
   - `stark-init-docs` — to scaffold a repo's dev docs.
   - `stark-adr` — to record or supersede an ADR.
