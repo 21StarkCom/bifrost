@@ -115,7 +115,7 @@ The pipeline has two stages: you gate the spec at `/stark-author`, and checks ga
 | [`/stark-gha-cost`](skill/stark-gha-cost/SKILL.md) | Diagnoses and cuts GitHub Actions and Advanced Security billing for an org or enterprise. |
 | [`/stark-bury`](skill/stark-bury/SKILL.md) | Retires code into the nastrond graveyard: bury before delete, and every destructive step waits for the operator. |
 | [`/stark-memory`](skill/stark-memory/SKILL.md) | Audits and tidies Claude Code auto-memory under its load and recall caps. Dry-run by default; `--apply` writes. |
-| [`/gru`](skill/gru/SKILL.md) | Drives an epic or a list of tickets to done, one Minion per ticket, and confirms each `done` from the merged PR and the board. |
+| [`/gru`](skill/gru/SKILL.md) | Drives an epic or a list of tickets to done, one Minion per ticket, and confirms each `done` from the merged PR and the board. A Gru launched with a muninn leader reports to odin's chief in place of the operator. |
 | [`/minion`](skill/minion/SKILL.md) | Owns one ticket for Gru through ticket → PR → review → merge → close, and reports through native messaging when available or Hermod fallback. |
 | [`/agnes`](skill/agnes/SKILL.md) | Carries one ticket alone and unattended, with no Gru: confirms its own merge and close, then stands down. |
 | [`/lucius`](skill/lucius/SKILL.md) | Opens a Lucius brainstorm in a tab of its own through `hermod lucius`, then stops. |
