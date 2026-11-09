@@ -355,10 +355,6 @@ for (const name of SKILLS) {
 // adding the flag in a tidy-up would look consistent and would silently stop
 // every follow-up from being checked.
 //
-// `goldfinger` (STARK-9636): the same reach problem. An agent that needs a
-// native app with no API finds the goldfinger CLI only through this skill's
-// description; with the flag it would never learn the tool exists.
-//
 // `stark-agent-docs` (STARK-11169): the same reach problem. An agent about to
 // edit a CLAUDE.md, a rule, a skill or a doc they point to loads it from the
 // description, mid-task, with no slash command typed.
@@ -379,7 +375,6 @@ const MODEL_INVOCABLE_SKILLS: Record<string, string> = {
   gru: WORKER_LAUNCH,
   minion: WORKER_LAUNCH,
   "stark-ticket": "no agent filing a ticket would ever load it on its own (STARK-9471)",
-  goldfinger: "an agent that needs a native app would never find the goldfinger CLI on its own (STARK-9636)",
   "stark-agent-docs": "no agent editing an instruction file, a skill or a doc they point to would ever load it on its own (STARK-11169)",
   "c4-design": "no agent asked to change a product's architecture would ever learn the floorplan design loop on its own (STARK-16814)",
 };
