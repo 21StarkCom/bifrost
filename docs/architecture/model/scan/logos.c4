@@ -1,0 +1,21 @@
+// Written by floorplan scan. Do not edit.
+// The logo of the language of each element of stack.c4. The view stack applies it with the line
+// "global style languageLogos". floorplan scan and floorplan build write this file again.
+
+global {
+  styleGroup languageLogos {
+    style
+      bifrost.buildTools,
+      bifrost.dispatchers,
+      bifrost.docTools,
+      bifrost.factHook,
+      bifrost.gateHook,
+      bifrost.progressMod,
+      bifrost.questionMods,
+      bifrost.releaseTools,
+      bifrost.reviewPoster,
+      bifrost.sessionTools {
+      icon tech:typescript
+    }
+  }
+}

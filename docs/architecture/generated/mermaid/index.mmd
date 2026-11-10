@@ -1,0 +1,42 @@
+---
+title: "System Context: Bifröst"
+---
+graph TB
+  Operator@{ icon: "fa:user", shape: rounded, label: "Operator" }
+  Agent@{ icon: "fa:user", shape: rounded, label: "Coding agent" }
+  Bifrost@{ shape: rectangle, label: "Bifröst" }
+  Alfred@{ shape: rectangle, label: "alfred" }
+  Hermod@{ shape: rectangle, label: "Hermod" }
+  Idun@{ shape: rectangle, label: "idun" }
+  Urd@{ shape: rectangle, label: "urd" }
+  Muninn@{ shape: rectangle, label: "muninn" }
+  Frigg@{ shape: rectangle, label: "frigg" }
+  Atlas@{ shape: rectangle, label: "Atlas" }
+  Heimdall@{ shape: rectangle, label: "Heimdall" }
+  Nastrond@{ shape: rectangle, label: "Náströnd" }
+  Floorplan@{ shape: rectangle, label: "floorplan" }
+  Sleipnir@{ shape: rectangle, label: "Sleipnir" }
+  Github@{ shape: rectangle, label: "GitHub" }
+  AiClis@{ shape: rectangle, label: "Review agent CLIs" }
+  EcosystemVault@{ shape: rectangle, label: "Ecosystem vault" }
+  Operator -- "`starts skills, watches the runs and answers questions with`" --> Bifrost
+  Agent -- "`follows the skills and runs the tools of`" --> Bifrost
+  Bifrost -- "`binds, files and closes the tickets with`" --> Alfred
+  Bifrost -- "`opens, messages and closes the worker tabs with`" --> Hermod
+  Bifrost -- "`launches the workers and opens and merges the PRs with`" --> Idun
+  Bifrost -- "`finds the folder of each repo with`" --> Urd
+  Bifrost -. "`reports to a muninn leader through`" .-> Muninn
+  Bifrost -- "`files and reads the EI tickets with`" --> Frigg
+  Bifrost -- "`records and supersedes the ADRs with`" --> Atlas
+  Bifrost -- "`sends the summary of an audit with`" --> Heimdall
+  Bifrost -- "`buries retired code in`" --> Nastrond
+  Bifrost -- "`proposes, checks and accepts the C4 models with`" --> Floorplan
+  Bifrost -- "`asks the operator questions on the diagram with`" --> Sleipnir
+  Bifrost -- "`opens, reviews and reads the PRs, runs and releases on`" --> Github
+  Bifrost -- "`runs the reviews and the jury on`" --> AiClis
+  Bifrost -- "`reads the names of the fleet repos from`" --> EcosystemVault
+  classDef c4_system fill:#0D74CE,stroke:#0052a6,color:#e0ffff
+  class Bifrost c4_system
+  classDef c4_external fill:#F1F0EF,stroke:#c8c7c6,color:#504f4e
+  class Alfred,Hermod,Idun,Urd,Muninn,Frigg,Atlas,Heimdall,Nastrond,Floorplan,Sleipnir,Github,AiClis,EcosystemVault c4_external
+  linkStyle 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 stroke:#8D8D8D

@@ -1,0 +1,16 @@
+// Written by floorplan scan. Do not edit.
+// The view of the tech stack: one group for each language that the scan found. floorplan scan and floorplan
+// build write this file again.
+
+views {
+  view stack {
+    title 'Tech stack'
+    description 'The elements with a code key, grouped by the language that the scan found.'
+
+    group 'TypeScript' {
+      include * where metadata.language is 'TypeScript'
+    }
+
+    global style languageLogos
+  }
+}

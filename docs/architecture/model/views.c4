@@ -1,0 +1,109 @@
+// One view for each question: who uses Bifröst and what it calls, how the skills and the
+// mods reach the fleet, and how the tools and the hooks run.
+
+views {
+  // Level 1: System Context
+  view index {
+    title 'System Context: Bifröst'
+    description 'Who uses Bifröst, which fleet products its skills and tools drive, and which other systems it calls.'
+    include *
+    include operator -> bifrost with {
+      title 'starts skills, watches the runs and answers questions with'
+    }
+    include agent -> bifrost with {
+      title 'follows the skills and runs the tools of'
+    }
+    include bifrost -> alfred with {
+      title 'binds, files and closes the tickets with'
+      technology ''
+    }
+    include bifrost -> hermod with {
+      title 'opens, messages and closes the worker tabs with'
+      technology ''
+    }
+    include bifrost -> idun with {
+      technology ''
+    }
+    include bifrost -> urd with {
+      technology ''
+    }
+    include bifrost -> muninn with {
+      technology ''
+    }
+    include bifrost -> frigg with {
+      technology ''
+    }
+    include bifrost -> atlas with {
+      technology ''
+    }
+    include bifrost -> heimdall with {
+      technology ''
+    }
+    include bifrost -> nastrond with {
+      technology ''
+    }
+    include bifrost -> floorplan with {
+      technology ''
+    }
+    include bifrost -> sleipnir with {
+      technology ''
+    }
+    include bifrost -> github with {
+      title 'opens, reviews and reads the PRs, runs and releases on'
+      technology ''
+    }
+    include bifrost -> aiClis with {
+      title 'runs the reviews and the jury on'
+      technology ''
+    }
+    include bifrost -> ecosystemVault with {
+      technology ''
+    }
+  }
+
+  // Level 2: Containers, in two views: one view of all of them is too full to follow
+  view containers of bifrost {
+    title 'Containers: Bifröst, the skills, the mods and the fleet'
+    description 'How the operator and the coding agent use the skills and the mods, and which fleet products the skills drive.'
+    include
+      operator,
+      agent,
+      bifrost.skills,
+      bifrost.progressMod,
+      bifrost.questionMods,
+      bifrost.progressFiles,
+      alfred,
+      hermod,
+      idun,
+      urd,
+      muninn,
+      frigg,
+      atlas,
+      nastrond,
+      floorplan,
+      sleipnir,
+      github
+  }
+
+  view tools of bifrost {
+    title 'Containers: Bifröst, the tools and the hooks'
+    description 'The TypeScript tools that the skills run, the two hooks that Claude Code runs on a tool call, and the systems that they call.'
+    include
+      agent,
+      bifrost.skills,
+      bifrost.dispatchers,
+      bifrost.reviewPoster,
+      bifrost.buildTools,
+      bifrost.sessionTools,
+      bifrost.docTools,
+      bifrost.releaseTools,
+      bifrost.gateHook,
+      bifrost.factHook,
+      bifrost.toolState,
+      github,
+      aiClis,
+      alfred,
+      heimdall,
+      ecosystemVault
+  }
+}
