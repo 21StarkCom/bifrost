@@ -64,7 +64,8 @@ Read the reference for the task before you edit `model/`:
 4. **Find Huginn.** `list_huginns` (MCP server `sleipnir`) names each installation. Pick one that is `online`, not
    `stale`, and whose features list `annotate` and `annotateChat` (Huginn 0.69.97): step 4's chat, its `choice`
    and `thread` cards, `messages` and `reply` need `annotateChat`. With an older build, show `verdict` items with
-   no `chat`, and wait for Send with `answers`, whose answers keep their `note`. `guide` and `block` need
+   no `chat`, and wait for Send with `answers` (`timeoutMs:120000`, again at `sent:false`); each answer keeps
+   its `note`. `guide` and `block` need
    `annotateGuide` (Huginn 0.69.54); with an older build, leave both out. The loop needs the grants `open`,
    `click`, `screenshot`, `focus`, `annotate` and `close`; a missing grant is refused with its name. A grant is a
    local CLI step: `slp huginn allow <id> annotate`. Each mutation also takes `confirm:true`, and every
@@ -195,21 +196,22 @@ Give each question the card that fits it, by the item's `kind`:
    - `guide:true` walks the operator through the items one at a time, with the card of the current item open.
      `block:true` stops a press on a box from also selecting the element under it.
 2. Read the result. An element in `missing` has no box: fix its `locator`, and run `show` again. Keep `last` (0)
-   for step 4. The boxes and cards do not show in Huginn's own `screenshot`, so do not look for them there.
+   for `messages`. The boxes and cards do not show in Huginn's own `screenshot`, so do not look for them there.
 3. Tell the operator in the chat that the questions are on the page, that each card takes a message to you, and
-   that **Send to Odin** sends the answers. When the bar hides a part of the diagram, tell them to press the dock
-   button, the last button of the bar: it moves the bar to the bottom of the page, and a new `show` keeps it there.
+   that **Send to Odin** sends the answers. The bar covers the studio's toolbar. When it hides a part of the page
+   that the operator needs, tell them to press the dock button, the last button of the bar: it moves the bar to the
+   bottom of the page, and a new `show` keeps it there.
 4. Run `annotate` with `op:"messages"`, `after` set to `last`, `timeoutMs:120000` (on MCP, in `args`, with a
    top-level `timeoutMs` of 150000 so the call outlives the wait) and `confirm:true`. It returns at a new
    message, at Send, or at the timeout, with `{sent, last, messages:[{n, id, from, text}]}`.
    - Answer each message whose `from` is `person` in its card: `reply` with `item` set to the message's `id`, a
      `text` of at most 4000 characters, and `confirm:true`. The open card shows the reply at once.
-   - Keep each item's thread, its messages and your replies in order, for step 6.
+   - Keep each item's thread, its messages and your replies in order, for the next `show`.
    - Pass the new `last` as `after`, and run `messages` again until `sent` is `true`.
 5. Run `annotate` with `op:"answers"`, `timeoutMs:0` and `confirm:true`. Each answer has its kind's shape above.
    `verdict` is `correct` (the operator agrees with your pick), `wrong`, `retag` (with the `tag` they chose) or
    `null`; `choice` is an option's label or `null`. With the chat, an answer has no `note`: read the threads.
-6. Change the proposal by the answers and the threads, and run step 2 again. To ask again, run `show` with each
+6. Change the proposal by the answers and the threads, and run loop step 2 again. To ask again, run `show` with each
    item's `thread` (`[{from, text}]`, `from` being `person` or `caller`): a new `show` replaces the boxes and
    their threads, so a thread you do not send again is gone.
 7. Run `annotate` with `op:"clear"` and `confirm:true` when no question is open.
