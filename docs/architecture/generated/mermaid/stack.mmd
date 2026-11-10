@@ -1,0 +1,20 @@
+---
+title: "Tech stack"
+---
+graph TB
+  subgraph _gr1["`TypeScript`"]
+    _gr1.BifrostDispatchers@{ shape: rectangle, label: "Review dispatchers" }
+    _gr1.BifrostReviewPoster@{ shape: rectangle, label: "Review poster" }
+    _gr1.BifrostBuildTools@{ shape: rectangle, label: "Build tools" }
+    _gr1.BifrostSessionTools@{ shape: rectangle, label: "Session tools" }
+    _gr1.BifrostReleaseTools@{ shape: rectangle, label: "Release tools" }
+    _gr1.BifrostGateHook@{ shape: rectangle, label: "Agent-doc gate hook" }
+    _gr1.BifrostDocTools@{ shape: rectangle, label: "Agent-doc tools" }
+    _gr1.BifrostFactHook@{ shape: rectangle, label: "Fact routing hook" }
+    _gr1.BifrostProgressMod@{ shape: rectangle, label: "stark-progress mod" }
+    _gr1.BifrostQuestionMods@{ shape: rectangle, label: "Question mods" }
+  end
+  _gr1.BifrostGateHook -- "`triages the agent files of the PR with`" --> _gr1.BifrostDocTools
+  classDef c4_container fill:#5EB1EF,stroke:#2a8bc6,color:#000000
+  class _gr1.BifrostDispatchers,_gr1.BifrostReviewPoster,_gr1.BifrostBuildTools,_gr1.BifrostSessionTools,_gr1.BifrostReleaseTools,_gr1.BifrostGateHook,_gr1.BifrostDocTools,_gr1.BifrostFactHook,_gr1.BifrostProgressMod,_gr1.BifrostQuestionMods c4_container
+  linkStyle 0 stroke:#8D8D8D

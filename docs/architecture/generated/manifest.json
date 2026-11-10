@@ -1,0 +1,27 @@
+{
+  "floorplan": "0.8.2",
+  "inputs": {
+    "floorplan.config.json": "3fadb3fc49f0030bdd90e94c613382a9c9fedb632f0a6194810c74a7f31c56ee",
+    "kit/spec.c4": "59491868eda1db988f78dc28af027ba771ea3569262a3a547b5c87233dad0baa",
+    "model/model.c4": "6fbaf94b582536c2e50bc5d05ae564afc194da22123a9572b7ccfa824d459601",
+    "model/scan/links.c4": "f72a545e95533b1aef74e0eeb3ac05ba02b351d50a9856803f1fc50f66008622",
+    "model/scan/logos.c4": "ac909607dc726fada371a3e4c1e60a1a62642ae48d0ea82817f621bfdc5cd5c7",
+    "model/scan/stack-views.c4": "d47a69bcafe911a326a667b19db85c9a6a1358fbe0d063509952df9961ac4377",
+    "model/scan/stack.c4": "7bc0dd6d737a5871c3b0fd71b9d314d85f99b9e3599262d31d47c4713ca9304a",
+    "model/views.c4": "d5520e4f1c874c3a031bbc49f1b24685a80c09af0d4d296dad13f8b4c073fac0"
+  },
+  "outputs": {
+    "generated/llms.txt": "a9cbf00b217e4d09e0563b2731c78dd61bc7205fce15baead3682de1fa56d676",
+    "generated/mermaid/containers.mmd": "3f4c06e525ecada6fb013a4f87f0c72e70c1c35162ff3e9ee949e0d33c0bb29e",
+    "generated/mermaid/index.mmd": "53a71823a2f5d0a050fd4998778659dc4599f298c88deeda4c4966e8dc63cc87",
+    "generated/mermaid/stack.mmd": "faa94555d7323e898747de29bf8c91d5db3508f84438cddbb01c380f4d514d9a",
+    "generated/mermaid/tools.mmd": "1f9bccfffe628657ea0d15bbe886c187cff2bd5d5add01e128786f3ee70f223f",
+    "generated/model.json": "da4580829eff6e415afc1919d8baf9354ed736cec8127338a99b5118f54549b0",
+    "generated/png/containers.png": "819b2a7a2c2e9da1a5c18879bd859a4712ad4b40aa569c52a5446550afb3db38",
+    "generated/png/index.png": "2ad456e61345f16632034b409abbf175eee94990bc5568da2046bd66b3124edb",
+    "generated/png/stack.png": "f9f4814338b89099bcf955f919ab289bd923d29377962bedb2e89983b73aa97a",
+    "generated/png/tools.png": "e5c416a210c6f1b27cfb3fb600bf27fa45dc43f6f052c4e0862b89bb97fffb7c",
+    "generated/site/404.html": "6685ec6ec33ab475552846e5feaa35eec580470194dc5a8b48b38f8efd256dca",
+    "generated/site/index.html": "6685ec6ec33ab475552846e5feaa35eec580470194dc5a8b48b38f8efd256dca"
+  }
+}

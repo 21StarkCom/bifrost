@@ -1,0 +1,176 @@
+// Written by floorplan scan. Do not edit.
+// One code link for each path of a code key. floorplan scan and floorplan build write this file again.
+
+model {
+  extend bifrost.buildTools {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/approach_contract.ts 'code: tools/approach_contract.ts'
+  }
+
+  extend bifrost.buildTools {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/copilot_land.ts 'code: tools/copilot_land.ts'
+  }
+
+  extend bifrost.buildTools {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/github_projects.ts 'code: tools/github_projects.ts'
+  }
+
+  extend bifrost.buildTools {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/ticket_fields_lib.ts 'code: tools/ticket_fields_lib.ts'
+  }
+
+  extend bifrost.buildTools {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/validation_gate.ts 'code: tools/validation_gate.ts'
+  }
+
+  extend bifrost.dispatchers {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/agent_dispatch_lib.ts 'code: tools/agent_dispatch_lib.ts'
+  }
+
+  extend bifrost.dispatchers {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/iac_review.ts 'code: tools/iac_review.ts'
+  }
+
+  extend bifrost.dispatchers {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/jury.ts 'code: tools/jury.ts'
+  }
+
+  extend bifrost.dispatchers {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/preflight.ts 'code: tools/preflight.ts'
+  }
+
+  extend bifrost.dispatchers {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/refactor_planner.ts 'code: tools/refactor_planner.ts'
+  }
+
+  extend bifrost.docTools {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/ask_guard_metric.ts 'code: tools/ask_guard_metric.ts'
+  }
+
+  extend bifrost.docTools {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/memory_tidy.ts 'code: tools/memory_tidy.ts'
+  }
+
+  extend bifrost.docTools {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/optimize_skill_description.ts 'code: tools/optimize_skill_description.ts'
+  }
+
+  extend bifrost.docTools {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/rules_audit.ts 'code: tools/rules_audit.ts'
+  }
+
+  extend bifrost.docTools {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/skill_audit.ts 'code: tools/skill_audit.ts'
+  }
+
+  extend bifrost.docTools {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/skill_autopilot.ts 'code: tools/skill_autopilot.ts'
+  }
+
+  extend bifrost.docTools {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/skill_diet.ts 'code: tools/skill_diet.ts'
+  }
+
+  extend bifrost.docTools {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/skill_optimize.ts 'code: tools/skill_optimize.ts'
+  }
+
+  extend bifrost.factHook {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/fact_routing_hook.ts 'code: tools/fact_routing_hook.ts'
+  }
+
+  extend bifrost.factHook {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/fact_routing_hook_lib.ts 'code: tools/fact_routing_hook_lib.ts'
+  }
+
+  extend bifrost.gateHook {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/rules_gate_hook.ts 'code: tools/rules_gate_hook.ts'
+  }
+
+  extend bifrost.progressMod {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/mods/stark-progress 'code: mods/stark-progress/'
+  }
+
+  extend bifrost.questionMods {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/mods/decision-deck 'code: mods/decision-deck/'
+  }
+
+  extend bifrost.questionMods {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/mods/interview 'code: mods/interview/'
+  }
+
+  extend bifrost.questionMods {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/mods/needs-you 'code: mods/needs-you/'
+  }
+
+  extend bifrost.releaseTools {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/release_changelog.ts 'code: tools/release_changelog.ts'
+  }
+
+  extend bifrost.releaseTools {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/release_version_bump.ts 'code: tools/release_version_bump.ts'
+  }
+
+  extend bifrost.reviewPoster {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/findings_review_post.ts 'code: tools/findings_review_post.ts'
+  }
+
+  extend bifrost.reviewPoster {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/review_post_lib.ts 'code: tools/review_post_lib.ts'
+  }
+
+  extend bifrost.sessionTools {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/alert_delivery.ts 'code: tools/alert_delivery.ts'
+  }
+
+  extend bifrost.sessionTools {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/asset_links.ts 'code: tools/asset_links.ts'
+  }
+
+  extend bifrost.sessionTools {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/context_compactor.ts 'code: tools/context_compactor.ts'
+  }
+
+  extend bifrost.sessionTools {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/failure_classifier.ts 'code: tools/failure_classifier.ts'
+  }
+
+  extend bifrost.sessionTools {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/healer_canary.ts 'code: tools/healer_canary.ts'
+  }
+
+  extend bifrost.sessionTools {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/self_healer.ts 'code: tools/self_healer.ts'
+  }
+
+  extend bifrost.sessionTools {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/session_id.ts 'code: tools/session_id.ts'
+  }
+
+  extend bifrost.sessionTools {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/session_state.ts 'code: tools/session_state.ts'
+  }
+
+  extend bifrost.sessionTools {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/skill_router.ts 'code: tools/skill_router.ts'
+  }
+
+  extend bifrost.sessionTools {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/stark_handover.ts 'code: tools/stark_handover.ts'
+  }
+
+  extend bifrost.sessionTools {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/stark_persona.ts 'code: tools/stark_persona.ts'
+  }
+
+  extend bifrost.sessionTools {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/stark_session.ts 'code: tools/stark_session.ts'
+  }
+
+  extend bifrost.skills {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/.claude-plugin/marketplace.json 'code: .claude-plugin/marketplace.json'
+  }
+
+  extend bifrost.skills {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/standards 'code: standards/'
+  }
+}

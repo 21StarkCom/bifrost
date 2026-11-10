@@ -1,0 +1,72 @@
+// Written by floorplan scan. Do not edit.
+// The tech stack of each element with a code key. floorplan scan and floorplan build write this file again.
+
+model {
+  extend bifrost.buildTools {
+    metadata {
+      language 'TypeScript'
+      runtime 'Node 24'
+    }
+  }
+
+  extend bifrost.dispatchers {
+    metadata {
+      language 'TypeScript'
+      runtime 'Node 24'
+    }
+  }
+
+  extend bifrost.docTools {
+    metadata {
+      language 'TypeScript'
+      runtime 'Node 24'
+    }
+  }
+
+  extend bifrost.factHook {
+    metadata {
+      language 'TypeScript'
+      runtime 'Node 24'
+    }
+  }
+
+  extend bifrost.gateHook {
+    metadata {
+      language 'TypeScript'
+      runtime 'Node 24'
+    }
+  }
+
+  extend bifrost.progressMod {
+    metadata {
+      language 'TypeScript'
+    }
+  }
+
+  extend bifrost.questionMods {
+    metadata {
+      language 'TypeScript'
+    }
+  }
+
+  extend bifrost.releaseTools {
+    metadata {
+      language 'TypeScript'
+      runtime 'Node 24'
+    }
+  }
+
+  extend bifrost.reviewPoster {
+    metadata {
+      language 'TypeScript'
+      runtime 'Node 24'
+    }
+  }
+
+  extend bifrost.sessionTools {
+    metadata {
+      language 'TypeScript'
+      runtime 'Node 24'
+    }
+  }
+}

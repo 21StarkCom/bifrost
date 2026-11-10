@@ -1,0 +1,47 @@
+---
+title: "Containers: Bifröst, the skills, the mods and the fleet"
+---
+graph TB
+  Operator@{ icon: "fa:user", shape: rounded, label: "Operator" }
+  Agent@{ icon: "fa:user", shape: rounded, label: "Coding agent" }
+  BifrostProgressMod@{ shape: rectangle, label: "stark-progress mod" }
+  BifrostSkills@{ shape: rectangle, label: "Skill plugins" }
+  BifrostQuestionMods@{ shape: rectangle, label: "Question mods" }
+  BifrostProgressFiles@{ shape: disk, label: "Progress files" }
+  Alfred@{ shape: rectangle, label: "alfred" }
+  Hermod@{ shape: rectangle, label: "Hermod" }
+  Idun@{ shape: rectangle, label: "idun" }
+  Urd@{ shape: rectangle, label: "urd" }
+  Muninn@{ shape: rectangle, label: "muninn" }
+  Frigg@{ shape: rectangle, label: "frigg" }
+  Atlas@{ shape: rectangle, label: "Atlas" }
+  Nastrond@{ shape: rectangle, label: "Náströnd" }
+  Floorplan@{ shape: rectangle, label: "floorplan" }
+  Sleipnir@{ shape: rectangle, label: "Sleipnir" }
+  Github@{ shape: rectangle, label: "GitHub" }
+  Operator -- "`starts skills by slash command from`" --> BifrostSkills
+  Agent -- "`loads and follows the skills of`" --> BifrostSkills
+  Operator -- "`watches the worker runs and sets the ticket settings in`" --> BifrostProgressMod
+  Operator -- "`answers the questions of the agent in`" --> BifrostQuestionMods
+  Agent -- "`asks the operator questions with`" --> BifrostQuestionMods
+  BifrostSkills -- "`writes the ticket, run and log files to`" --> BifrostProgressFiles
+  BifrostProgressMod -- "`reads each run and ticket from, and writes the settings to`" --> BifrostProgressFiles
+  BifrostSkills -- "`binds, files, moves and closes the tickets with`" --> Alfred
+  BifrostProgressMod -- "`reads the title of the epic from`" --> Alfred
+  BifrostSkills -- "`opens, titles, messages and closes the worker tabs with`" --> Hermod
+  BifrostProgressMod -- "`brings a worker tab to the front with`" --> Hermod
+  BifrostSkills -- "`launches the workers and opens and merges the PRs with`" --> Idun
+  BifrostSkills -- "`finds the folder of each repo with`" --> Urd
+  BifrostSkills -. "`reports to a muninn leader through`" .-> Muninn
+  BifrostSkills -- "`files and reads the EI tickets with`" --> Frigg
+  BifrostSkills -- "`records and supersedes the ADRs with`" --> Atlas
+  BifrostSkills -- "`buries retired code in`" --> Nastrond
+  BifrostSkills -- "`proposes, checks and accepts the C4 models with`" --> Floorplan
+  BifrostSkills -- "`asks the operator questions on the diagram with`" --> Sleipnir
+  BifrostSkills -- "`reads the Actions costs and publishes the releases on`" --> Github
+  BifrostProgressMod -- "`reads the PRs, the Actions runs and the commits of a run from`" --> Github
+  classDef c4_container fill:#5EB1EF,stroke:#2a8bc6,color:#000000
+  class BifrostProgressMod,BifrostSkills,BifrostQuestionMods,BifrostProgressFiles c4_container
+  classDef c4_external fill:#F1F0EF,stroke:#c8c7c6,color:#504f4e
+  class Alfred,Hermod,Idun,Urd,Muninn,Frigg,Atlas,Nastrond,Floorplan,Sleipnir,Github c4_external
+  linkStyle 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20 stroke:#8D8D8D

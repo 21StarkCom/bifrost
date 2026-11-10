@@ -1,0 +1,341 @@
+// The model of Bifröst: the people who use it, its processes and its files, and the
+// systems around it. A skill is Markdown that a coding agent follows, so the fleet CLIs
+// that a skill names are calls of the Skill plugins container, run by the agent.
+// The *_lib.ts files of tools/ are libraries: they run inside each tool that imports
+// them, so they are no element here.
+
+model {
+  operator = person 'Operator' {
+    description 'Starts the skills with slash commands, watches the worker runs in the progress panes, and answers the questions of the agents.'
+  }
+
+  agent = person 'Coding agent' {
+    description 'A Claude Code or Codex session that loads the skill plugins, follows a skill step by step, and runs the tools and the fleet CLIs that it names.'
+  }
+
+  bifrost = softwareSystem 'Bifröst' {
+    description 'The skills layer of the 21Stark fleet: 30 skills in seven Claude Code plugins, the TypeScript tools that they call, two hooks and four mods, served from source as a Claude Code marketplace.'
+
+    skills = container 'Skill plugins' {
+      technology 'Markdown, Claude Code plugins'
+      summary 'The 30 skills in seven plugins, which a coding agent loads and follows.'
+      description 'Hold the procedures that a coding agent follows: tickets, specs, builds, reviews, sessions, releases, the Gru, Minion and Agnes workers, and the docs, writing and design skills. Claude Code installs them from the marketplace manifest; Codex reads the same tree.'
+      metadata {
+        // Not 'skill/': its one Go example file (stark-logging) makes the scan call the skills Go.
+        code ['.claude-plugin/marketplace.json', 'standards/']
+      }
+    }
+
+    dispatchers = container 'Review dispatchers' {
+      technology 'TypeScript, Node.js 24'
+      summary 'Start Claude, Codex and Gemini as headless reviewers and merge their findings.'
+      description 'iac_review, refactor_planner and jury start Claude, Codex and Gemini as headless subprocesses with a scrubbed environment, then parse and merge their output. preflight checks the agents and the logins first.'
+      metadata {
+        code ['tools/iac_review.ts', 'tools/refactor_planner.ts', 'tools/jury.ts', 'tools/preflight.ts', 'tools/agent_dispatch_lib.ts']
+      }
+    }
+
+    reviewPoster = container 'Review poster' {
+      technology 'TypeScript, Node.js 24'
+      description 'Posts the findings of a code review on a PR as one review: inline where the anchor is in the diff, in the body otherwise, and never twice.'
+      metadata {
+        code ['tools/findings_review_post.ts', 'tools/review_post_lib.ts']
+      }
+    }
+
+    buildTools = container 'Build tools' {
+      technology 'TypeScript, Node.js 24'
+      description 'copilot_land pushes the branch of a build and opens or adopts its PR, validation_gate runs the checks of a repo, and approach_contract and github_projects support the build.'
+      metadata {
+        code ['tools/copilot_land.ts', 'tools/validation_gate.ts', 'tools/approach_contract.ts', 'tools/github_projects.ts', 'tools/ticket_fields_lib.ts']
+      }
+    }
+
+    sessionTools = container 'Session tools' {
+      technology 'TypeScript, Node.js 24'
+      summary 'Open, close and hand over sessions, and run the health checks and the self-heal.'
+      description 'stark_session opens and closes a session with its health checks and briefing; stark_handover, session_state, context_compactor and stark_persona keep its state; self_healer and healer_canary fix known failures; asset_links installs the checkout links.'
+      metadata {
+        code ['tools/stark_session.ts', 'tools/stark_handover.ts', 'tools/session_id.ts', 'tools/session_state.ts', 'tools/context_compactor.ts', 'tools/stark_persona.ts', 'tools/skill_router.ts', 'tools/alert_delivery.ts', 'tools/self_healer.ts', 'tools/healer_canary.ts', 'tools/failure_classifier.ts', 'tools/asset_links.ts']
+      }
+    }
+
+    docTools = container 'Agent-doc tools' {
+      technology 'TypeScript, Node.js 24'
+      summary 'Audit the agent docs, the skills and the memory notes, and measure the asks.'
+      description 'rules_audit triages the agent instruction files clause by clause, memory_tidy tidies the auto-memory, ask_guard_metric counts the turns that end on a question, and the skill tools audit and tune the skills.'
+      metadata {
+        code ['tools/rules_audit.ts', 'tools/memory_tidy.ts', 'tools/ask_guard_metric.ts', 'tools/skill_audit.ts', 'tools/skill_diet.ts', 'tools/skill_optimize.ts', 'tools/skill_autopilot.ts', 'tools/optimize_skill_description.ts']
+      }
+    }
+
+    releaseTools = container 'Release tools' {
+      technology 'TypeScript, Node.js 24'
+      description 'release_changelog drafts the changelog of a release from the git history, and release_version_bump picks and writes the next version.'
+      metadata {
+        code ['tools/release_changelog.ts', 'tools/release_version_bump.ts']
+      }
+    }
+
+    gateHook = container 'Agent-doc gate hook' {
+      technology 'TypeScript, Node.js 24, PreToolUse hook'
+      description 'Runs before each njord pr-merge call, triages the agent files that the PR changes, and denies the merge only on a RED clause that the PR adds.'
+      metadata {
+        code 'tools/rules_gate_hook.ts'
+      }
+    }
+
+    factHook = container 'Fact routing hook' {
+      technology 'TypeScript, Node.js 24, PostToolUse hook'
+      description 'Runs after each write to an auto-memory file, and tells the session when the fact may belong in the ecosystem vault instead.'
+      metadata {
+        code ['tools/fact_routing_hook.ts', 'tools/fact_routing_hook_lib.ts']
+      }
+    }
+
+    progressMod = container 'stark-progress mod' {
+      technology 'TypeScript, Claude Code mod'
+      summary 'Shows a live board of each Gru run and a pane of each worker ticket.'
+      description 'Shows the Gru pane and the ticket pane beside the chat: the board of a run, its log in plain words, its stats, and the settings that the workers read before a review, a merge or a release.'
+      metadata {
+        code 'mods/stark-progress/'
+      }
+    }
+
+    questionMods = container 'Question mods' {
+      technology 'TypeScript, Claude Code mods'
+      summary 'Let the operator answer the questions of the agent in a band or a pane.'
+      description 'needs-you shows the Needs you lines of a turn in a band above the prompt; decision-deck and interview give the agent the present and ask tools, and show the questions in a pane.'
+      metadata {
+        code ['mods/needs-you/', 'mods/decision-deck/', 'mods/interview/']
+      }
+    }
+
+    progressFiles = database 'Progress files' {
+      technology 'JSON and JSON Lines files'
+      description 'The ticket, run, log and settings files in ~/.cache/stark-progress: the state contract between the worker skills and the stark-progress mod.'
+    }
+
+    toolState = database 'Tool state' {
+      technology 'JSON and JSON Lines files'
+      description 'The session files, the handovers, the healer log, the jury runs and the ask-guard log in ~/.claude/code-review, outside the plugin cache, so that they outlive an update.'
+    }
+  }
+
+  // Fleet products: each one has its own element, with its repo in fleetRepo
+  alfred = externalSystem 'alfred' {
+    description 'The ticket CLI of the fleet: binds a ticket to a session, and reads, files and moves the ClickUp tickets.'
+    metadata {
+      fleetRepo 'odin'
+    }
+  }
+
+  hermod = externalSystem 'Hermod' {
+    description 'Places the tabs of the agents in cmux, carries their messages, and closes the tabs.'
+    metadata {
+      fleetRepo 'hermod'
+    }
+  }
+
+  idun = externalSystem 'idun' {
+    description 'Holds njord, which opens and merges the PRs, and valkyrie, which launches the Gru, Minion and Agnes workers.'
+    metadata {
+      fleetRepo 'idun'
+    }
+  }
+
+  urd = externalSystem 'urd' {
+    description 'The local registry of the fleet: tells a launcher the folder of each repo on the Mac.'
+    metadata {
+      fleetRepo 'urd'
+    }
+  }
+
+  muninn = externalSystem 'muninn' {
+    description 'Carries messages between agents. A Gru with a muninn leader reports to the chief of odin through it.'
+    metadata {
+      fleetRepo 'muninn'
+    }
+  }
+
+  frigg = externalSystem 'frigg' {
+    description 'The vendor CLI of the fleet: reads and writes the EI tickets in the Jira of Evinced.'
+    metadata {
+      fleetRepo 'frigg'
+    }
+  }
+
+  atlas = externalSystem 'Atlas' {
+    description 'The second-brain engine. Its brain adr commands record and supersede the ADRs of a repo.'
+    metadata {
+      fleetRepo 'atlas'
+    }
+  }
+
+  heimdall = externalSystem 'Heimdall' {
+    description 'Sends a push from the Mac to the iPhone, the iPad and the Watch of the operator.'
+    metadata {
+      fleetRepo 'heimdall'
+    }
+  }
+
+  nastrond = externalSystem 'Náströnd' {
+    description 'The code graveyard of the fleet: a git repo that keeps the retired code, one row for each burial in its index.'
+    metadata {
+      fleetRepo 'nastrond'
+    }
+  }
+
+  floorplan = externalSystem 'floorplan' {
+    description 'Keeps the C4 model of each product as LikeC4 text, builds its views, and shows the proposals in its studio.'
+    metadata {
+      fleetRepo 'floorplan'
+    }
+  }
+
+  sleipnir = externalSystem 'Sleipnir' {
+    description 'Drives Chrome for agents. Its Huginn route draws boxes with questions on a page of the operator.'
+    metadata {
+      fleetRepo 'sleipnir'
+    }
+  }
+
+  // Other systems
+  github = externalSystem 'GitHub' {
+    description 'Hosts the repos, the PRs, the reviews and the releases, and serves this repo as the plugin marketplace.'
+    icon tech:github
+  }
+
+  aiClis = externalSystem 'Review agent CLIs' {
+    description 'The claude, codex and gemini CLIs, which run headless as reviewers, as a jury, or as a test of a skill description.'
+  }
+
+  ecosystemVault = externalSystem 'Ecosystem vault' {
+    description 'The vault of the fleet facts that every session reads. Its entity folders name the repos of the fleet.'
+  }
+
+  // People
+  operator -[sync]-> bifrost.skills 'starts skills by slash command from'
+  operator -[sync]-> bifrost.progressMod 'watches the worker runs and sets the ticket settings in'
+  operator -[sync]-> bifrost.questionMods 'answers the questions of the agent in'
+  agent -[sync]-> bifrost.skills 'loads and follows the skills of'
+  agent -[sync]-> bifrost.reviewPoster 'posts the findings of a code review with'
+  agent -[sync]-> bifrost.questionMods 'asks the operator questions with'
+  agent -[sync]-> bifrost.gateHook 'is checked before each njord pr-merge call by'
+  agent -[sync]-> bifrost.factHook 'is told where a memory fact belongs by'
+
+  // The skills and the tools that they run
+  bifrost.skills -[sync]-> bifrost.dispatchers 'runs the multi-agent reviews, the refactor plans and the jury with' {
+    technology 'Shell command'
+  }
+  bifrost.skills -[sync]-> bifrost.buildTools 'lands the PR of a build with' {
+    technology 'Shell command'
+  }
+  bifrost.skills -[sync]-> bifrost.sessionTools 'opens, closes and hands over the sessions with' {
+    technology 'Shell command'
+  }
+  bifrost.skills -[sync]-> bifrost.docTools 'audits the agent docs and tidies the memory with' {
+    technology 'Shell command'
+  }
+  bifrost.skills -[sync]-> bifrost.releaseTools 'drafts the changelog and the version of a release with' {
+    technology 'Shell command'
+  }
+  bifrost.skills -[sync]-> bifrost.progressFiles 'writes the ticket, run and log files to' {
+    technology 'File write'
+  }
+
+  // The skills and the fleet
+  bifrost.skills -[sync]-> alfred 'binds, files, moves and closes the tickets with' {
+    technology 'Shell command'
+  }
+  bifrost.skills -[sync]-> hermod 'opens, titles, messages and closes the worker tabs with' {
+    technology 'Shell command'
+  }
+  bifrost.skills -[sync]-> idun 'launches the workers and opens and merges the PRs with' {
+    technology 'Shell command'
+  }
+  bifrost.skills -[sync]-> urd 'finds the folder of each repo with' {
+    technology 'Shell command'
+  }
+  bifrost.skills -[async]-> muninn 'reports to a muninn leader through' {
+    technology 'Shell command'
+  }
+  bifrost.skills -[sync]-> frigg 'files and reads the EI tickets with' {
+    technology 'Shell command'
+  }
+  bifrost.skills -[sync]-> atlas 'records and supersedes the ADRs with' {
+    technology 'Shell command'
+  }
+  bifrost.skills -[sync]-> nastrond 'buries retired code in' {
+    technology 'Git, PR'
+  }
+  bifrost.skills -[sync]-> floorplan 'proposes, checks and accepts the C4 models with' {
+    technology 'Shell command, MCP'
+  }
+  bifrost.skills -[sync]-> sleipnir 'asks the operator questions on the diagram with' {
+    technology 'Shell command, MCP'
+  }
+  bifrost.skills -[sync]-> github 'reads the Actions costs and publishes the releases on' {
+    technology 'HTTPS (gh CLI)'
+  }
+
+  // The tools
+  bifrost.dispatchers -[sync]-> aiClis 'runs the review panels and the jury on' {
+    technology 'Child process'
+  }
+  bifrost.dispatchers -[sync]-> github 'posts the IaC review of a PR to' {
+    technology 'HTTPS (gh CLI)'
+  }
+  bifrost.dispatchers -[sync]-> bifrost.toolState 'keeps the jury runs in' {
+    technology 'File write'
+  }
+  bifrost.reviewPoster -[sync]-> github 'posts one anchored review of the findings to' {
+    technology 'HTTPS (gh CLI)'
+  }
+  bifrost.buildTools -[sync]-> github 'pushes the branch and opens the PR on' {
+    technology 'Git, HTTPS (gh CLI)'
+  }
+  bifrost.buildTools -[sync]-> alfred 'stamps the PR on the ticket with' {
+    technology 'Child process'
+  }
+  bifrost.sessionTools -[sync]-> bifrost.toolState 'keeps the sessions, the handovers and the healer log in' {
+    technology 'File read and write'
+  }
+  bifrost.sessionTools -[sync]-> github 'reads the PR of the branch from' {
+    technology 'HTTPS (gh CLI)'
+  }
+  bifrost.docTools -[sync]-> heimdall 'sends the summary of an audit with' {
+    technology 'Child process'
+  }
+  bifrost.docTools -[sync]-> aiClis 'tests the descriptions of the skills on' {
+    technology 'Child process'
+  }
+  bifrost.docTools -[sync]-> bifrost.toolState 'keeps the ask-guard log in' {
+    technology 'File write'
+  }
+
+  // The hooks
+  bifrost.gateHook -[sync]-> bifrost.docTools 'triages the agent files of the PR with' {
+    technology 'Child process'
+  }
+  bifrost.gateHook -[sync]-> github 'reads the head and the base of the PR from' {
+    technology 'HTTPS (gh CLI)'
+  }
+  bifrost.factHook -[sync]-> ecosystemVault 'reads the names of the fleet repos from' {
+    technology 'File read'
+  }
+
+  // The mods
+  bifrost.progressMod -[sync]-> bifrost.progressFiles 'reads each run and ticket from, and writes the settings to' {
+    technology 'File read and write'
+  }
+  bifrost.progressMod -[sync]-> github 'reads the PRs, the Actions runs and the commits of a run from' {
+    technology 'HTTPS (gh GraphQL)'
+  }
+  bifrost.progressMod -[sync]-> alfred 'reads the title of the epic from' {
+    technology 'Child process'
+  }
+  bifrost.progressMod -[sync]-> hermod 'brings a worker tab to the front with' {
+    technology 'Child process'
+  }
+}

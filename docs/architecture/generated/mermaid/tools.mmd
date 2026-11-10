@@ -1,0 +1,50 @@
+---
+title: "Containers: Bifröst, the tools and the hooks"
+---
+graph TB
+  Agent@{ icon: "fa:user", shape: rounded, label: "Coding agent" }
+  BifrostSkills@{ shape: rectangle, label: "Skill plugins" }
+  BifrostReviewPoster@{ shape: rectangle, label: "Review poster" }
+  BifrostGateHook@{ shape: rectangle, label: "Agent-doc gate hook" }
+  BifrostFactHook@{ shape: rectangle, label: "Fact routing hook" }
+  BifrostDispatchers@{ shape: rectangle, label: "Review dispatchers" }
+  BifrostBuildTools@{ shape: rectangle, label: "Build tools" }
+  BifrostSessionTools@{ shape: rectangle, label: "Session tools" }
+  BifrostReleaseTools@{ shape: rectangle, label: "Release tools" }
+  BifrostDocTools@{ shape: rectangle, label: "Agent-doc tools" }
+  EcosystemVault@{ shape: rectangle, label: "Ecosystem vault" }
+  Alfred@{ shape: rectangle, label: "alfred" }
+  Github@{ shape: rectangle, label: "GitHub" }
+  BifrostToolState@{ shape: disk, label: "Tool state" }
+  AiClis@{ shape: rectangle, label: "Review agent CLIs" }
+  Heimdall@{ shape: rectangle, label: "Heimdall" }
+  Agent -- "`loads and follows the skills of`" --> BifrostSkills
+  BifrostSkills -- "`runs the multi-agent reviews, the refactor plans and the jury with`" --> BifrostDispatchers
+  Agent -- "`posts the findings of a code review with`" --> BifrostReviewPoster
+  BifrostSkills -- "`lands the PR of a build with`" --> BifrostBuildTools
+  BifrostSkills -- "`opens, closes and hands over the sessions with`" --> BifrostSessionTools
+  BifrostSkills -- "`audits the agent docs and tidies the memory with`" --> BifrostDocTools
+  BifrostSkills -- "`drafts the changelog and the version of a release with`" --> BifrostReleaseTools
+  Agent -- "`is checked before each njord pr-merge call by`" --> BifrostGateHook
+  BifrostGateHook -- "`triages the agent files of the PR with`" --> BifrostDocTools
+  Agent -- "`is told where a memory fact belongs by`" --> BifrostFactHook
+  BifrostDispatchers -- "`keeps the jury runs in`" --> BifrostToolState
+  BifrostSessionTools -- "`keeps the sessions, the handovers and the healer log in`" --> BifrostToolState
+  BifrostDocTools -- "`keeps the ask-guard log in`" --> BifrostToolState
+  BifrostSkills -- "`reads the Actions costs and publishes the releases on`" --> Github
+  BifrostDispatchers -- "`posts the IaC review of a PR to`" --> Github
+  BifrostReviewPoster -- "`posts one anchored review of the findings to`" --> Github
+  BifrostBuildTools -- "`pushes the branch and opens the PR on`" --> Github
+  BifrostSessionTools -- "`reads the PR of the branch from`" --> Github
+  BifrostGateHook -- "`reads the head and the base of the PR from`" --> Github
+  BifrostDispatchers -- "`runs the review panels and the jury on`" --> AiClis
+  BifrostDocTools -- "`tests the descriptions of the skills on`" --> AiClis
+  BifrostSkills -- "`binds, files, moves and closes the tickets with`" --> Alfred
+  BifrostBuildTools -- "`stamps the PR on the ticket with`" --> Alfred
+  BifrostDocTools -- "`sends the summary of an audit with`" --> Heimdall
+  BifrostFactHook -- "`reads the names of the fleet repos from`" --> EcosystemVault
+  classDef c4_container fill:#5EB1EF,stroke:#2a8bc6,color:#000000
+  class BifrostSkills,BifrostReviewPoster,BifrostGateHook,BifrostFactHook,BifrostDispatchers,BifrostBuildTools,BifrostSessionTools,BifrostReleaseTools,BifrostDocTools,BifrostToolState c4_container
+  classDef c4_external fill:#F1F0EF,stroke:#c8c7c6,color:#504f4e
+  class EcosystemVault,Alfred,Github,AiClis,Heimdall c4_external
+  linkStyle 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24 stroke:#8D8D8D

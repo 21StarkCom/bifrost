@@ -1,0 +1,2 @@
+# floorplan build writes a minified site bundle with trailing whitespace; keep it out of git diff --check.
+generated/site/** -whitespace
