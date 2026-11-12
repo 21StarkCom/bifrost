@@ -1,6 +1,6 @@
 # Bifröst
 
-Thirty skills and the TypeScript tools they call, served straight from this tree as a seven-plugin Claude Code marketplace. There is no build step: `skill/<name>/SKILL.md` is the artifact, and it ships when its PR merges.
+Thirty-one skills and the TypeScript tools they call, served straight from this tree as a seven-plugin Claude Code marketplace. There is no build step: `skill/<name>/SKILL.md` is the artifact, and it ships when its PR merges.
 
 **Status:** a public repo and a one-user personal playground. It is not production, and nothing here promises support to anyone but its author.
 
@@ -14,7 +14,7 @@ It absorbed the stark-skills repo, which is archived.
 
 **The name.** Bifröst (Bilröst in Grímnismál) is the burning, three-coloured rainbow bridge that joins Midgard, the world of humans, to Asgard. Heimdall guards it from Himinbjörg, the gods ride over it daily to hold court at the Well of Urðr, and it is fated to shatter at Ragnarök when the sons of Muspell ride across (Gylfaginning). Its skills /gru, /minion and /agnes come from Despicable Me (2010): Gru the supervillain, his yellow Minions, and Agnes, the youngest of the girls he adopts.
 
-The rainbow bridge is how the gods reach the world, and bifrost is how the operator's craft reaches every agent. One public source tree holds thirty skills and the tools they call, served straight from the tree as a seven-plugin Claude Code marketplace, with no build step. Cross the bridge and you meet a crew out of Despicable Me. `/gru` takes an epic and drives it with one Minion per ticket. `/minion` owns a single ticket through the whole spine. `/agnes`, named for the youngest girl Gru adopts and never one of his Minions, carries a ticket alone with no Gru at all. Their board is [alfred](https://github.com/21StarkCom/alfred), their horses are [hermod](https://github.com/21StarkCom/hermod)'s tabs, valkyrie launches them and their PRs pass through njord, both from [idun](https://github.com/21StarkCom/idun), and [frigg](https://github.com/21StarkCom/frigg) tells them where each repo lives. Beyond them wait a spec-to-code pipeline, a jury of Claude, Codex and Gemini, and a review poster that never posts the same review twice. When code must die, `/stark-bury` carries it down to [nastrond](https://github.com/21StarkCom/nastrond). The quest stepped onto the bridge. Gru called a Minion, and Hermod saddled up.
+The rainbow bridge is how the gods reach the world, and bifrost is how the operator's craft reaches every agent. One public source tree holds thirty-one skills and the tools they call, served straight from the tree as a seven-plugin Claude Code marketplace, with no build step. Cross the bridge and you meet a crew out of Despicable Me. `/gru` takes an epic and drives it with one Minion per ticket. `/minion` owns a single ticket through the whole spine. `/agnes`, named for the youngest girl Gru adopts and never one of his Minions, carries a ticket alone with no Gru at all. Their board is [alfred](https://github.com/21StarkCom/alfred), their horses are [hermod](https://github.com/21StarkCom/hermod)'s tabs, valkyrie launches them and their PRs pass through njord, both from [idun](https://github.com/21StarkCom/idun), and [frigg](https://github.com/21StarkCom/frigg) tells them where each repo lives. Beyond them wait a spec-to-code pipeline, a jury of Claude, Codex and Gemini, and a review poster that never posts the same review twice. When code must die, `/stark-bury` carries it down to [nastrond](https://github.com/21StarkCom/nastrond). The quest stepped onto the bridge. Gru called a Minion, and Hermod saddled up.
 
 **Supporting cast.** Every crossing passes a sentry: [.github](https://github.com/21StarkCom/.github), the org's public front door and home of this saga, hosts the one reusable gitleaks workflow that more than forty fleet repos pin by SHA, scanning only the commits a change brings.
 
@@ -78,7 +78,7 @@ Codex reads the same skills from a clone: idavoll links them in at session start
 
 ## Skills
 
-30 skills in seven plugins. Each skill's `SKILL.md` is its own documentation.
+31 skills in seven plugins. Each skill's `SKILL.md` is its own documentation.
 
 ### stark-plan: spec and ticket authoring
 
@@ -119,6 +119,7 @@ The pipeline has two stages: you gate the spec at `/stark-author`, and checks ga
 | [`/minion`](skill/minion/SKILL.md) | Owns one ticket for Gru through ticket → PR → review → merge → close, and reports through native messaging when available or Hermod fallback. |
 | [`/agnes`](skill/agnes/SKILL.md) | Carries one ticket alone and unattended, with no Gru: confirms its own merge and close, then stands down. |
 | [`/lucius`](skill/lucius/SKILL.md) | Opens a Lucius brainstorm in a tab of its own through `hermod lucius`, then stops. |
+| [`/stark-rich-text`](skill/stark-rich-text/SKILL.md) | Names the command for rich text: Markdown through `frigg slack send` for Slack and `frigg atlassian issue` for Jira, and Markdown as it is for GitHub. No code that builds Block Kit or ADF. Loads on its own before an agent writes such text. |
 
 /minion and /agnes run the same two shared docs, so their review gate and merge path cannot drift: [standards/worker-spine.md](standards/worker-spine.md) (bind → implement → verify live → PR → review by what it changes → merge → close) and [standards/stand-down.md](standards/stand-down.md) (the tab teardown after a `done`). A worker runs its own repo's release chain, and sends a need in another repo to a worker there, both by the spine's §8: a Minion reports it `blocked` for Gru to file and launch, and Agnes files and launches it herself.
 
@@ -220,7 +221,7 @@ Repos can override the enabled agents and nothing else: the walk above lives onl
   - `hermod`: /gru, /minion, /agnes, /lucius
   - `valkyrie` 0.1.1 or later (`valkyrie gru`, `valkyrie minion`, `valkyrie agnes` for the worker launches): /gru, /minion, /agnes
   - `njord` (`njord pr-open`, `pr-merge`): /gru, /minion, /agnes, /stark-bury, /stark-rules-optimizer
-  - `frigg`: /gru, /minion, /agnes, to find a ticket's repo
+  - `frigg`: /gru, /minion, /agnes, to find a ticket's repo; /stark-rich-text, to send Slack and Jira text (0.80.0 or later, for the Jira Markdown flags)
   - atlas's `brain`: /stark-adr
   - `lucius`: /lucius
 
