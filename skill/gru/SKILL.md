@@ -104,7 +104,7 @@ to the peer rules in [Coordination route](#coordination-route) and
    until its block clears, and so is a ticket step 3 could not resolve
    to a repo, and a ticket the run's [settings](#progress-pane) hold. You
    clear a follow-up's stop and a need in another repo yourself when the
-   run's settings turn it on (step 4); the operator clears the rest. When a block clears (the
+   run's settings have it on (step 4); the operator clears the rest. When a block clears (the
    operator tells you, or step 5 confirms the ticket it waited on), confirm
    it on the real surface (the PR `MERGED`, the tag on the remote), then send
    that Minion `unblocked <what cleared it>` through

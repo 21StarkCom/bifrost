@@ -50,6 +50,8 @@ test("settings take the file's value, else the launch's, else the default; a wro
     followUps: true,
     minionAgent: 'codex',
   })
+  // Each flag's false in the file wins over its default.
+  expect(settingsOf(run, JSON.stringify({ followUps: false }))).toMatchObject({ decideForMe: true, followUps: false })
   // Out of range reads as absent too.
   expect(settingsOf(run, JSON.stringify({ maxWorkers: 9 })).maxWorkers).toBe(5)
   // A launch above the pane's range keeps its N; it is not read as the default.

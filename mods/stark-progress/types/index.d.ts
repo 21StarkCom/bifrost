@@ -40,8 +40,9 @@ export type RunFile = {
 
 /**
  * `~/.cache/stark-progress/run-<id>.settings.json`, the run's settings: the
- * pane writes it, and Gru reads it before each launch. An absent field keeps
- * the launch's value.
+ * pane writes it, and Gru reads it before each launch and each scope change.
+ * An absent field keeps the launch's value; the launch has none for
+ * `decideForMe` and `followUps`, which are then true.
  */
 export type GruSettings = {
   decideForMe: boolean
