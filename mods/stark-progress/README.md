@@ -403,9 +403,9 @@ before each launch and each scope change ([the Gru skill](../../skill/gru/refere
 
 | Row | Field | What Gru does |
 |---|---|---|
-| Decide for me | `decideForMe` | On: splits a ticket across repos, and adds a blocking ticket, by itself. Off, the default: holds the ticket `blocked` and asks in its report. |
+| Decide for me | `decideForMe` | On, the default: splits a ticket across repos, and adds a blocking ticket, by itself. Off: holds the ticket `blocked` and asks in its report. |
 | Workers at once | `maxWorkers` | Keeps up to this many Minions alive, 1 to 8. A launch above 8 shows its own value; `−` steps it down to 8, and `+` does not change it. |
-| Pick up follow-ups | `followUps` | On: a ticket a Minion files joins the run. Off, the default: it waits on the board, named in the report. |
+| Pick up follow-ups | `followUps` | On, the default: a ticket a Minion files joins the run. Off: it waits on the board, named in the report. |
 | Worker type | `minionAgent` | The runtime of each new Minion, `claude` or `codex`. A relaunch keeps its runtime. |
 
 Under `This pane`, one more row that the pane alone reads, in every run:
@@ -644,11 +644,11 @@ draws as `no file yet`.
 the Gru pane writes and Gru reads before each launch and each scope change:
 
 ```json
-{ "decideForMe": false, "maxWorkers": 3, "followUps": false, "minionAgent": "claude" }
+{ "decideForMe": true, "maxWorkers": 3, "followUps": true, "minionAgent": "claude" }
 ```
 
 A field that is absent or of the wrong type takes the run file's value, else
-the default: `decideForMe` `false`, `maxWorkers` 3, `followUps` `false`,
+the default: `decideForMe` `true`, `maxWorkers` 3, `followUps` `true`,
 `minionAgent` `claude`. `maxWorkers` is 1 to 8 in the settings file; in the
 run file it is the launch's `--max-workers`, with no cap. A `*.settings.json` file is
 never a run file. Gru deletes it with the run file when the run ends.

@@ -5,7 +5,7 @@ Read from [the Gru skill](../SKILL.md#protocol).
 ## A ticket that joins the run
 
 A ticket outside the run's set joins the run only when the run's
-[settings](../SKILL.md#progress-pane) turn it on, and both are off by default: a
+[settings](../SKILL.md#progress-pane) have it on, and both are on by default: a
 follow-up a Minion files joins with `followUps`, and a ticket that blocks
 one in scope (a `Blocked by` link, or a dependency the ticket names) joins
 with `decideForMe`. Read them before each such change. Add a ticket that

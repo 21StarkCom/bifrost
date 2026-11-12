@@ -392,6 +392,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - Gru leadership transfer can replace operating limits that named the previous leader or held an already-finished phase (`resume --limits-file`), revalidated like `init`. Only an incoming leader may replace them — a sitting leader cannot rewrite the limits binding itself — and the event records both the removed and the installed array. The flag is refused on every other verb rather than ignored.
 
 ### Changed
+<!-- idun:pr-merge pr=497 runId=497 sha=067de700 -->
+- Gru now turns on `decideForMe` and `followUps` by default, so a run splits tickets, adds blockers and picks up follow-ups without opt-in. Turn either off in the Settings tab.
 <!-- idun:pr-merge pr=492 runId=492 sha=4d05a4e0 -->
 - README `/gru` row now says a Gru launched with a muninn leader reports to odin's chief instead of the operator.
 <!-- idun:pr-merge pr=468 runId=468 sha=677166c9 -->
