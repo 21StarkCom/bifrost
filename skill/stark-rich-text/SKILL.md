@@ -41,9 +41,9 @@ Codex), and say so in your report.
 | Slack, past Markdown: a real mention `<@Uxxx>`, a button | raw blocks, a JSON array | `frigg slack send (--channel\|--dm\|--mpim) <target> --blocks <file> --fallback <text> --confirm` |
 | Jira description | Markdown | `frigg atlassian issue create --project <P> --type <T> --summary <S> --markdown-file <md> --confirm`, or `frigg atlassian issue update <KEY> --markdown-file <md> --confirm` |
 | Jira comment | Markdown | `frigg atlassian issue comment <KEY> --markdown-file <md> --confirm` |
-| Jira, past Markdown: a mention, a panel, a status | raw ADF, a JSON document | `--adf-file <file>` in place of `--markdown-file`, on `issue create` and `issue comment` only |
-| A ticket through alfred | Markdown, as it is | `alfred task new --desc-file <md>`, or `alfred task edit --desc-file <md>`. alfred converts it for Jira |
-| GitHub text: a PR body, an issue, a comment | Markdown, as it is | `njord pr-open --body-file <md>`, or `gh pr comment <n> --body-file <md>`, `gh issue create --body-file <md>` |
+| Jira, past Markdown: a mention, a panel, a status | raw ADF, a JSON document | `--adf-file <file>` in place of `--markdown-file`, on `issue create` and `issue comment`. On `issue update`: `--fields-json <file>`, a JSON map with a `description` key |
+| A ticket through alfred | Markdown, as it is | `alfred task new --desc-file <md> <title>`, or `alfred task edit --desc-file <md> <id>`. alfred converts it for Jira |
+| GitHub text: a PR body, an issue, a comment | Markdown, as it is | `njord pr-open --body-file <md>`, or `gh pr comment <n> --body-file <md>`, `gh issue create --title <T> --body-file <md>` |
 
 ## What each surface needs
 
@@ -51,14 +51,19 @@ Codex), and say so in your report.
   `TYR_SLACK_WRITES_ENABLE=1` is set. `frigg slack preview` needs no switch and
   sends nothing.
   - `--dry-run` in place of `--confirm` prints the target and the blocks.
-  - `--thread <ts>` replies in a thread. `--as-user` posts as the user.
+  - `--thread <ts>` replies in a thread.
+  - `--as-user` posts as the user. Its switch is
+    `TYR_SLACK_USER_WRITES_ENABLE=1`, in place of `TYR_SLACK_WRITES_ENABLE`.
   - A mention in Markdown stays literal text. Use the raw blocks row for a
     mention that notifies.
   - `--channel` takes `#name` or an id. `--dm` takes an email or a `Uxxx` id.
     `--mpim` takes a list with commas.
-- **Jira.** Each write needs `TYR_JIRA_ISSUE_WRITES_ENABLE=1`.
+- **Jira.** Each write, `--dry-run` included, needs
+  `TYR_JIRA_ISSUE_WRITES_ENABLE=1`. The Markdown flags need frigg 0.80.0 or
+  later.
   - `--dry-run` in place of `--confirm` prints the request and sends nothing.
-  - `issue update` has no `--adf-file`. Its description takes Markdown only.
+  - `issue update` has no `--adf-file`. For raw ADF, give `--fields-json <file>`
+    with the ADF document as the value of its `description` key.
   - `--markdown-file -` and `--adf-file -` read stdin. `--markdown <text>`
     takes a short text inline.
   - For an EI ticket, use `/stark-ticket` first: it names the required fields.

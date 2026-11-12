@@ -221,7 +221,7 @@ Repos can override the enabled agents and nothing else: the walk above lives onl
   - `hermod`: /gru, /minion, /agnes, /lucius
   - `valkyrie` 0.1.1 or later (`valkyrie gru`, `valkyrie minion`, `valkyrie agnes` for the worker launches): /gru, /minion, /agnes
   - `njord` (`njord pr-open`, `pr-merge`): /gru, /minion, /agnes, /stark-bury, /stark-rules-optimizer
-  - `frigg`: /gru, /minion, /agnes, to find a ticket's repo; /stark-rich-text, to send Slack and Jira text
+  - `frigg`: /gru, /minion, /agnes, to find a ticket's repo; /stark-rich-text, to send Slack and Jira text (0.80.0 or later, for the Jira Markdown flags)
   - atlas's `brain`: /stark-adr
   - `lucius`: /lucius
 
