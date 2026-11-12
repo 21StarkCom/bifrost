@@ -363,6 +363,11 @@ for (const name of SKILLS) {
 // asked to change its architecture learns the floorplan design loop only
 // through this skill's description, with no slash command typed.
 //
+// `stark-rich-text` (STARK-18203): the same reach problem. An agent about to
+// write a Slack message, a Jira description or GitHub text loads it from the
+// description; without it, the agent writes a script that builds Block Kit or
+// ADF.
+//
 // The value match mirrors Claude Code's own coercion: a string counts when it is
 // one of 1/true/yes/on, any case, so a quoted `"true"` disables the skill as
 // surely as a bare `true`, and a trailing `# comment` does not change the value.
@@ -377,6 +382,7 @@ const MODEL_INVOCABLE_SKILLS: Record<string, string> = {
   "stark-ticket": "no agent filing a ticket would ever load it on its own (STARK-9471)",
   "stark-agent-docs": "no agent editing an instruction file, a skill or a doc they point to would ever load it on its own (STARK-11169)",
   "c4-design": "no agent asked to change a product's architecture would ever learn the floorplan design loop on its own (STARK-16814)",
+  "stark-rich-text": "no agent about to write Slack, Jira or GitHub text would ever learn the frigg text verbs on its own (STARK-18203)",
 };
 
 const DISABLE_MODEL_INVOCATION_TRUE =

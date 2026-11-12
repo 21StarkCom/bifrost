@@ -14,11 +14,11 @@ model {
   }
 
   bifrost = softwareSystem 'Bifröst' {
-    description 'The skills layer of the 21Stark fleet: 30 skills in seven Claude Code plugins, the TypeScript tools that they call, two hooks and four mods, served from source as a Claude Code marketplace.'
+    description 'The skills layer of the 21Stark fleet: 31 skills in seven Claude Code plugins, the TypeScript tools that they call, two hooks and four mods, served from source as a Claude Code marketplace.'
 
     skills = container 'Skill plugins' {
       technology 'Markdown, Claude Code plugins'
-      summary 'The 30 skills in seven plugins, which a coding agent loads and follows.'
+      summary 'The 31 skills in seven plugins, which a coding agent loads and follows.'
       description 'Hold the procedures that a coding agent follows: tickets, specs, builds, reviews, sessions, releases, the Gru, Minion and Agnes workers, and the docs, writing and design skills. Claude Code installs them from the marketplace manifest; Codex reads the same tree.'
       metadata {
         // Not 'skill/': its one Go example file (stark-logging) makes the scan call the skills Go.
