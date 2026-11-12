@@ -36,14 +36,15 @@ does for a ticket's file; append to the log, and never rewrite it.
   is the operator's: the pane's Settings tab writes it, and you never do.
   Read it with `cat` before each launch (step 3) and before each scope change
   (step 1). A missing or unparsable file, or a field that is absent or of the
-  wrong type, means the run file's value.
+  wrong type, means the run file's value. The run file holds neither
+  `followUps` nor `decideForMe`, so each such case means true for them.
   - `maxWorkers` (1 to 8) is N.
   - `minionAgent` (`claude` or `codex`) is the agent of each first launch. A
     relaunch keeps the agent it had.
-  - `followUps` (default false): true lets a ticket a Minion files, on a
+  - `followUps` (default true): true lets a ticket a Minion files, on a
     `follow-up … stopping` report too, join the run. False leaves it on the
     board, named in step 6's report; a ticket that waits on it stays blocked.
-  - `decideForMe` (default false): true lets you file a split and add a
+  - `decideForMe` (default true): true lets you file a split and add a
     ticket that joins by a `Blocked by` link or a named dependency. False
     stamps the ticket that needs the choice `blocked`, does not launch it, and
     names the choice in step 6's report. A later read that finds it true takes

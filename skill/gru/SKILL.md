@@ -83,9 +83,9 @@ to the peer rules in [Coordination route](#coordination-route) and
    ticket outside that set joins the run, before you split a ticket whose
    PRs span two repos or more, and when a ticket carries a `Gru: split`
    comment. A ticket joins only when the run's [settings](#progress-pane)
-   turn on `followUps` (a Minion's follow-up) or `decideForMe` (a ticket that
-   blocks one in scope), and a split files its sub-ticket only with
-   `decideForMe`; both are off by default. A split with the setting off
+   have `followUps` (a Minion's follow-up) or `decideForMe` (a ticket that
+   blocks one in scope) on, and a split files its sub-ticket only with
+   `decideForMe`; both are on by default. A split with the setting off
    stamps the ticket `blocked`, and step 6's report names the split.
    Then write the run's [progress file](#progress-pane) with every ticket in
    scope, and write it again whenever a split adds one. Append a line to the
@@ -209,7 +209,7 @@ write the run file, a stamp on a ticket's file (by
 [the spine's command](../../standards/worker-spine.md#progress-file)) or a run
 log line, and before you read the run's settings. The settings are
 `maxWorkers`, `minionAgent`, `followUps` and `decideForMe`; the last two are
-false by default.
+true by default.
 
 ## Preflight
 

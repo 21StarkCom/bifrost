@@ -140,9 +140,9 @@ export function settingsOf(run: RunEntry, text: string | undefined): GruSettings
   const s = parse(text)
 
   return {
-    decideForMe: flag(s?.decideForMe) ?? false,
+    decideForMe: flag(s?.decideForMe) ?? true,
     maxWorkers: workers(s?.maxWorkers) ?? run.maxWorkers ?? DEFAULT_WORKERS,
-    followUps: flag(s?.followUps) ?? false,
+    followUps: flag(s?.followUps) ?? true,
     minionAgent: agent(s?.minionAgent) ?? run.minionAgent ?? 'claude',
   }
 }
