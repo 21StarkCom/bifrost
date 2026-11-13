@@ -15,6 +15,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=501 runId=501 sha=845217b3 -->
+- Reworded the hermod surface stamp note in `standards/stand-down.md` to say "wrongly pasted", an approved Simplified Technical English phrase, in place of "mispasted".
 <!-- idun:pr-merge pr=500 runId=500 sha=ff5ecd38 -->
 - Add the Super-Gru board to `stark-progress`: one row per epic, blocked tickets, and a Settings tab that `super-gru` reads before each Gru starts.
 <!-- idun:pr-merge pr=499 runId=499 sha=3de1083d -->
