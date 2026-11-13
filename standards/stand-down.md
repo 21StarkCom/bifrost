@@ -152,7 +152,7 @@ in the foreground, exit 2, which is the report-and-stop in
   literal prefix is ignored and the count comes back right). The two steps stay
   correct there — the pasted id is simply what hermod would have found — so keep
   them until this contract pins a minimum hermod version. On that hermod the
-  stamp is ignored once your surface resolves, so a mispasted id produces
+  stamp is ignored once your surface resolves, so a wrongly pasted id produces
   neither the `not_found` shape below nor the silent one; either then means
   your surface did not resolve, which the `whoami` step already reports.
 
