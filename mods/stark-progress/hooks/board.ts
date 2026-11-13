@@ -55,7 +55,7 @@ export type RunEntry = {
 }
 
 /** A run file's `titles`: only the string titles of its own tickets count. */
-function titlesOf(v: unknown, tickets: readonly string[]): Record<string, string> {
+export function titlesOf(v: unknown, tickets: readonly string[]): Record<string, string> {
   if (typeof v !== 'object' || v === null || Array.isArray(v)) return {}
   const all = v as Record<string, unknown>
 
@@ -122,7 +122,7 @@ export function epicTitleOf(run: RunEntry, files: Record<string, string>, epicTi
 }
 
 /** A ticket of `run`'s title: its own file's, else the one Gru wrote at launch, else undefined. */
-function titleIn(run: RunEntry, id: string, file: Record<string, unknown> | null): string | undefined {
+export function titleIn(run: Pick<RunEntry, 'titles'>, id: string, file: Record<string, unknown> | null): string | undefined {
   return str(file?.title) ?? (Object.hasOwn(run.titles, id) ? run.titles[id] : undefined)
 }
 

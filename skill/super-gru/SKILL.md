@@ -32,7 +32,10 @@ stop and say so.
 
 Rerunning `start` with the same list resumes from the run file: a `live` Gru is
 left alone, an `ended` epic is skipped, and each `queued` epic waits for a
-slot. To stop, the operator tells you to stop.
+slot. To stop, the operator tells you to stop. A rerun in
+a new session writes that session's id into the run file's `session`, by
+[the run-file doc](references/run-file.md#the-writes): the pane and the
+statusline find Super-Gru's tab by that field.
 
 ## The run file
 
@@ -43,6 +46,13 @@ the launcher of this epic read the same shape.
 
 ## Protocol
 
+0. **Title your tab**, if you are in cmux or tmux. The mechanics are
+   [the worker spine's](../../standards/worker-spine.md#title-your-tab), and
+   the rule is the same: your own tab only, cosmetic, never a blocker. Your
+   title is `SUPER-GRU (<n>)`, `<n>` the number of the first epic without its
+   `STARK-` prefix: `SUPER-GRU (18470)`. `valkyrie super-gru` names the tab
+   `SUPER-<n>`, which does not say that a Super-Gru runs in it. A rerun
+   `start` sets the title again; that is harmless.
 1. **Expand.** Read each epic with `alfred task show` and its children with
    alfred's `list_children` tool. Note the repo of each epic. Note each known
    shared block: an open ticket that children of more than one epic wait on.

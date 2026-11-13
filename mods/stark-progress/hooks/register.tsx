@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Cell, GitSignal, GruSettings, PaneTab, Row, Seg, SuperSettings, TicketSettings, Tone } from '../types'
+import type { Cell, GitSignal, GruSettings, PaneTab, Row, Seg, SuperMemory, SuperSettings, TicketSettings, Tone } from '../types'
 import { beatFile, callEnded, callStarted, newBeat, seedBeat } from './beat'
 import { buildBoard, clockOf, launchIdOf, parse, pickRun, runsOf, settingsName, tabIsLive } from './board'
 import { readGit } from './git'
@@ -23,8 +23,20 @@ import {
   statsFile,
   statsName,
   statsOf,
+  superStatsName,
 } from './stats'
-import { buildSuper, isSuperName, ownSuper, superLogs, superReads, superSettingsName, superSettingsOf } from './super'
+import {
+  buildSuper,
+  isSuperName,
+  ownSuper,
+  rememberSuper,
+  superIdOf,
+  superLogs,
+  superReads,
+  superSettingsName,
+  superSettingsOf,
+  superTickets,
+} from './super'
 import { drawSuperPane } from './super-pane'
 import { buildTicket, epicRunOf, ticketSettingsName, ticketSettingsOf } from './ticket'
 import { drawTicketPane } from './ticket-pane'
@@ -56,8 +68,11 @@ const doneLastAtom = atom({ plugin: 'stark-progress', key: 'doneLast' } as const
 const DONE_LAST = 'doneLast'
 const ticketAtom = atom({ plugin: 'stark-progress', key: 'ticket' } as const, null, { shape: 'ticket-7' })
 const ticketTabAtom = atom({ plugin: 'stark-progress', key: 'ticketTab' } as const, 'overview' as PaneTab)
-const superAtom = atom({ plugin: 'stark-progress', key: 'superBoard' } as const, null, { shape: 'super-1' })
+const superAtom = atom({ plugin: 'stark-progress', key: 'superBoard' } as const, null, { shape: 'super-2' })
 const superTabAtom = atom({ plugin: 'stark-progress', key: 'superTab' } as const, 'overview' as PaneTab)
+const superGhFocusAtom = atom({ plugin: 'stark-progress', key: 'superGhFocus' } as const, '')
+/** What Super-Gru's tab kept of each epic's Gru: a Gru deletes its files at its end, and the board reads these after. */
+const superMemoryAtom = atom({ plugin: 'stark-progress', key: 'superMemory' } as const, null, { shape: 'memory-1' })
 /** The ticket whose file this worker's tab found, once found: its pane names the ticket's end after the file goes. */
 const ownTicketAtom = atom({ plugin: 'stark-progress', key: 'ownTicket' } as const, '')
 /** True once the person closed the ticket pane by hand in this session: only /ticket-board opens it again. */
@@ -77,6 +92,12 @@ let isTicketPaneOpened = false
 let isSuperPaneOpened = false
 /** The name of this tab's own Super-Gru run file, once found: a poll that lists it but could not read it is no run's end. */
 let ownSuperFile = ''
+/** True once this load found its own Super-Gru run file gone: the pane keeps the last board, marked ended. */
+let isSuperEnded = false
+/** What this tab kept of each epic's Gru, as the session's state holds it; undefined until this load reads it. */
+let superMemory: SuperMemory | null | undefined
+/** superMemory as JSON, as this load last wrote it: a poll compares one string, not two. */
+let superMemoryKey = ''
 /** True while the last poll found this worker tab's own ticket file. */
 let isOwnFileFound = false
 /** The ownTicket atom's value as this load of the mod last wrote or read it, or null before the first poll. */
@@ -168,8 +189,9 @@ const GH_OPEN_MS = 10_000
 const GH_TIMEOUT_MS = 30_000
 /** Each repo's last good answer, its last failure, and its last ask, by `owner/repo`. */
 const ghAnswers = new Map<string, RepoAnswer & { asked: number; isReading: boolean }>()
-/** Whether the last poll found the GitHub tab shown: a poll that finds it newly shown asks at once. */
+/** Whether the last poll found each pane's GitHub tab shown: a poll that finds one newly shown asks at once. */
 let wasGithubShown = false
+let wasSuperGithubShown = false
 
 /**
  * Ask GitHub, in the background, for each repo of `refs` whose answer is due:
@@ -284,7 +306,12 @@ export const register: Register = on => {
       // The time since the last poll: open, and busy while the main loop is in a turn.
       if (addTime(stats, lastTick === 0 ? 0 : now - lastTick, isTurning || agentTurns.size > 0, now)) isStatsDirty = true
       lastTick = now
-      const listed = await $.fs.list(dir).catch(() => [])
+      // A listing that failed is no file's end: the Super-Gru run ends only on a listing without its file.
+      let isListed = true
+      const listed = await $.fs.list(dir).catch(() => {
+        isListed = false
+        return []
+      })
       // A log file is JSON Lines (`.jsonl`); every other file is whole JSON.
       const jsons = listed.filter(f => f.kind === 'file' && (f.name.endsWith('.json') || f.name.endsWith('.jsonl')))
       const names = new Set(jsons.map(f => f.name))
@@ -312,7 +339,13 @@ export const register: Register = on => {
       await Promise.all([...names].filter(n => isRunName(n) || isSuperName(n)).map(load))
       // Super-Gru's tab: its run file, found by its session. One listed but not read leaves its pane as it is.
       const superName = ownSuper(session, files)
-      if (superName !== null) ownSuperFile = superName
+      if (superName !== null) {
+        ownSuperFile = superName
+        isSuperEnded = false
+      }
+      // What this tab kept of each epic's Gru: read once per load (a reload keeps it in the session's state).
+      if (superMemory === undefined) superMemory = await read($, superMemoryAtom)
+      const superKept = superName !== null && superMemory?.launchId === superIdOf(superName) ? superMemory.epics : {}
       const isSuperUnread = superName === null && ownSuperFile !== '' && names.has(ownSuperFile) && files[ownSuperFile] === undefined
       const run = ownRun(session, files)
       const own = run === null ? ticketOf(root) : null
@@ -351,7 +384,9 @@ export const register: Register = on => {
           ? { base: `${own}.json`, name: statsName(own) }
           : run !== null
             ? { base: run.name, name: runStatsName(launchIdOf(run.name)) }
-            : null
+            : superName !== null
+              ? { base: superName, name: superStatsName(superIdOf(superName)) }
+              : null
       const reads = new Set([
         ...wanted.flatMap(id => [`${id}.json`, `${id}.beat.json`, logName(id), statsName(id)]),
         ...(shown === undefined ? [] : [settingsName(shown.launchId), runLogName(shown.launchId), runStatsName(shown.launchId)]),
@@ -359,13 +394,23 @@ export const register: Register = on => {
         // An epic that is a ticket of its own run takes its title from its own file, as the Gru pane's does.
         ...(epicRun !== undefined && epicRun.tickets.includes(epicRun.epic) ? [`${epicRun.epic}.json`] : []),
         ...(statsAnchor === null ? [] : [statsAnchor.name]),
-        ...(superName === null ? [] : superReads(superName, files)),
+        ...(superName === null ? [] : superReads(superName, files, superKept)),
       ])
       // This tab's own stats file is read once, for the seed: its counts are in memory after that.
       reads.delete(statsSeededFor)
       await Promise.all([...reads].map(load))
       // Then the logs of the Super-Gru board's blocked tickets: their last line says what each waits on.
-      if (superName !== null) await Promise.all(superLogs(superName, files).map(load))
+      if (superName !== null) await Promise.all(superLogs(superName, files, superKept).map(load))
+      // Keep what each epic's Gru files say while they exist: the Gru deletes them at its end.
+      if (superName !== null) {
+        const remembered = rememberSuper(superName, files, superMemory)
+        const key = JSON.stringify(remembered)
+        if (key !== superMemoryKey) {
+          superMemory = remembered
+          superMemoryKey = key
+          await update($, superMemoryAtom, () => remembered)
+        }
+      }
       // A worker's ticket file, listed but not read (a read that failed), is not the ticket's end:
       // this poll leaves the ticket pane, the band and the heartbeat as they are.
       const isTicketUnread = own !== null && names.has(`${own}.json`) && files[`${own}.json`] === undefined
@@ -456,34 +501,62 @@ export const register: Register = on => {
         isSuperPaneOpened = true
         void $.ui.open({ id: SUPER_PANE, title: 'Super-Gru' }).catch(() => undefined)
       }
-      const shownSuper = superName === null ? null : buildSuper(superName, files, epicTitles, now)
-      for (const r of shownSuper?.rows ?? []) if (r.title === null) askEpicTitle($, r.epic, now)
-      const superKey = shownSuper === null ? 'null' : JSON.stringify([{ ...shownSuper, readAt: 0 }, Math.floor(now / 60_000)])
-      if (superKey !== lastSuper && !isSuperUnread) {
-        lastSuper = superKey
-        await update($, superAtom, () => shownSuper)
-      }
-
       // Gru's tab opens the pane once, the first time its run is found.
       if (run !== null && !isPaneOpened) {
         isPaneOpened = true
         void $.ui.open({ id: PANE, title: PANE_TITLE }).catch(() => undefined)
       }
-      // No run to show (Gru deleted its run file at the end) clears the
-      // pane, so it never keeps drawing a finished run as live.
-      // The GitHub tab asks GitHub only while the Gru pane is placed and shows it: a closed pane asks nothing.
+
+      // A GitHub tab asks GitHub only while its pane is placed and shows it: a closed pane asks nothing.
+      // One ask serves both panes, so a repo's answer holds the PRs of each.
       const isGithubShown =
         shown !== undefined &&
         (await read($, tabAtom)) === 'github' &&
         (await $.ui.panes()).some(p => p.id === PANE && p.isPlaced)
-      if (isGithubShown) {
-        const refs = shown.tickets.flatMap(id => {
+      const isSuperGithubShown =
+        superName !== null &&
+        (await read($, superTabAtom)) === 'github' &&
+        (await $.ui.panes()).some(p => p.id === SUPER_PANE && p.isPlaced)
+      if (isGithubShown || isSuperGithubShown) {
+        const ids = new Set([
+          ...(isGithubShown ? shown.tickets : []),
+          ...(isSuperGithubShown && superName !== null ? superTickets(superName, files, superKept) : []),
+        ])
+        const refs = [...ids].flatMap(id => {
           const ref = prRefOf(parse(files[`${id}.json`])?.pr)
           return ref === null ? [] : [ref]
         })
-        askGithub($, refs, now, !wasGithubShown)
+        askGithub($, refs, now, (isGithubShown && !wasGithubShown) || (isSuperGithubShown && !wasSuperGithubShown))
       }
       wasGithubShown = isGithubShown
+      wasSuperGithubShown = isSuperGithubShown
+
+      // Super-Gru deleted its run file at its end: the pane keeps the last board, marked ended, and draws no more.
+      const isSuperGone = isListed && superName === null && ownSuperFile !== '' && !names.has(ownSuperFile)
+      if (isSuperGone) {
+        if (!isSuperEnded) {
+          isSuperEnded = true
+          lastSuper = ''
+          await update($, superAtom, b => (b === null || b.endedAt !== null ? b : { ...b, endedAt: now }))
+          // The ended board keeps its counts; what was kept of each Gru is no later run's, even one with this launch id.
+          superMemory = null
+          superMemoryKey = 'null'
+          await update($, superMemoryAtom, () => null)
+        }
+      } else {
+        const shownSuper = superName === null ? null : buildSuper(superName, files, epicTitles, now, ghAnswers, superMemory ?? null)
+        for (const r of shownSuper?.rows ?? []) if (r.title === null) askEpicTitle($, r.epic, now)
+        const superKey = shownSuper === null ? 'null' : JSON.stringify([{ ...shownSuper, readAt: 0 }, Math.floor(now / 60_000)])
+        // A listing that failed leaves the board as it is, as a run file it could not read does.
+        if (superKey !== lastSuper && !isSuperUnread && isListed) {
+          lastSuper = superKey
+          // A tab with no run of its own keeps an ended board, in this load and after a reload.
+          await update($, superAtom, b => (shownSuper === null && b !== null && b.endedAt !== null ? b : shownSuper))
+        }
+      }
+
+      // No run to show (Gru deleted its run file at the end) clears the
+      // pane, so it never keeps drawing a finished run as live.
       const shownBoard = shown === undefined ? null : buildBoard(session, pick, now, files, mtimes, git, epicTitles, ghAnswers)
       // Draw again when a file changed, or once a minute for the times.
       const boardKey =
@@ -675,13 +748,16 @@ export const register: Register = on => {
       board: shown,
       tab: await read($, superTabAtom),
       setTab: tab => update($, superTabAtom, () => tab),
+      ghFocus: await read($, superGhFocusAtom),
+      setGhFocus: id => update($, superGhFocusAtom, () => id),
       // The whole settings, written as one file. Each press reads the file as it is now, after the presses before it,
       // and writes only to the run the operator saw.
       set: (change: (s: SuperSettings) => Partial<SuperSettings>) => {
         const seen = shown?.launchId
         superWrites = superWrites.catch(() => undefined).then(async () => {
           const current = await read($, superAtom)
-          if (current === null || stateDir === '') return
+          // An ended run has no settings file left to write: Super-Gru reads none.
+          if (current === null || current.endedAt !== null || stateDir === '') return
           if (current.launchId !== seen) {
             await $.ui.toast('The board moved to another run. Press again.')
             return

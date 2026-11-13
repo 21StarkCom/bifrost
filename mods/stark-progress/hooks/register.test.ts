@@ -13,7 +13,7 @@ const BAND = {
   plugin: 'stark-progress',
   surface: 'terminal',
   component: 'AbovePrompt',
-  props: { hasSurvey: false, isWorking: false, maxRows: 20, bodyColumns: 140, scroll: { offset: 0, bodyRows: 19 }, view: {} },
+  props: { hasSurvey: false, isCollapsed: false, isWorking: false, maxRows: 20, bodyColumns: 140, scroll: { offset: 0, bodyRows: 19 }, view: {} },
 } as const
 
 const ticket = (id: string, stage: string, extra: Record<string, unknown> = {}) =>
@@ -2300,4 +2300,109 @@ test('a tab whose session is no Super-Gru opens no Super-Gru board', async ($, o
   expect(seen.opens).toEqual([])
   const ran = await $.command.run(command('super-board'))
   expect(JSON.stringify(ran)).toMatch(/no Super-Gru run/)
+})
+
+/** A Super-Gru run of two epics: STARK-1 ended, STARK-2 live with a PR in review. */
+const superDisk = (): Record<string, string> => ({
+  'super-SUPER-1.json': JSON.stringify({
+    session: 'sg',
+    epics: ['STARK-1', 'STARK-2'],
+    grus: {
+      'STARK-1': { launch: 'STARK-1', session: 'aaaaaaaa-1', state: 'live' },
+      'STARK-2': { launch: 'STARK-2', session: 'bbbbbbbb-2', state: 'live' },
+    },
+  }),
+  'run-STARK-1.json': JSON.stringify({ epic: 'STARK-1', session: 'aaaaaaaa-1', tickets: ['STARK-11'] }),
+  'run-STARK-1.stats.json': JSON.stringify({ session: 'aaaaaaaa-1', since: new Date(T0).toISOString(), busyMs: 600_000, openMs: 600_000, tools: { Bash: { calls: 7, fails: 0 } } }),
+  'run-STARK-2.json': JSON.stringify({ epic: 'STARK-2', session: 'bbbbbbbb-2', tickets: ['STARK-21'] }),
+  'STARK-11.json': ticket('STARK-11', 'closed', { pr: 'https://github.com/21StarkCom/bifrost/pull/446' }),
+  'STARK-11.stats.json': JSON.stringify({ session: 'w', since: new Date(T0).toISOString(), busyMs: 1_800_000, tools: { Edit: { calls: 9, fails: 1 } }, git: { added: 681, removed: 120, commits: 3 } }),
+  'STARK-21.json': ticket('STARK-21', 'review', { pr: 'https://github.com/21StarkCom/bifrost/pull/447' }),
+})
+
+test("Super-Gru's tab writes its own stats, and Mega stats adds Super-Gru's, the Grus' and the workers' counts", async ($, on) => {
+  const disk = superDisk()
+  stage(on, disk, { session: 'sg', root: '/r' })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  await clock.advance(6000)
+  expect(JSON.parse(disk['super-SUPER-1.stats.json'] ?? '{}')).toMatchObject({ session: 'sg' })
+
+  const pane = await $.ui.mount(SUPER_PANE)
+  expect(await pane.find({ type: 'Text', text: 'Mega stats' })).toBeDefined()
+  await pane.press({ key: 'tab-stats' })
+  expect(await pane.find({ type: 'Text', text: '📊 Mega stats for SUPER-1' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^ +Super-Gru +Grus +Workers +Whole run$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'By epic' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^ +done +working +output +calls +lines +PRs merged$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^ +1\/1 +40m +0 +16 +\+681 −120 +1\/1$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'Gru STARK-1' })).toBeDefined()
+})
+
+test("Super-Gru's GitHub tab asks only while placed and shown, and draws each epic's PRs and the newest activity", async ($, on) => {
+  const seen = stage(on, superDisk(), { session: 'sg', root: '/r' })
+  seen.gh = { exitCode: 0, stdout: JSON.stringify(ANSWER), stderr: '' }
+  const NOW = Date.parse('2026-11-01T14:43:30Z')
+  const clock = mock.clock(on, { now: NOW })
+  const asks = () => seen.runs.filter(argv => argv[0] === 'gh')
+  await $.session.start({ cwd: '/r', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  const pane = await $.ui.mount(SUPER_PANE)
+  seen.isPlaced = true
+  await clock.advance(1000)
+  expect(asks()).toEqual([])
+  seen.isPlaced = false
+  await pane.press({ key: 'tab-github' })
+  await clock.advance(5000)
+  expect(asks()).toEqual([])
+
+  seen.isPlaced = true
+  await clock.advance(1000)
+  expect(asks()).toHaveLength(1)
+  expect((asks()[0]?.[4] ?? '').match(/p\d+: pullRequest/g)).toEqual(['p446: pullRequest', 'p447: pullRequest'])
+  await clock.advance(1000)
+  expect(await pane.find({ type: 'Text', text: '🐙 GitHub activity' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '2 PRs: 1 merged · 0 open · 1 draft · 0 closed' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^ +STARK-1 +1 PR: 1 merged · 0 open · 0 draft · 0 closed +\+681 −120$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '🌿 No open PR has a failing check.' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '⚡ Latest activity' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /\[STARK-21\] +● ci #\d+ started$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^PR #446 MERGED/ })).toBeDefined()
+
+  await pane.press({ key: 'tab-overview' })
+  await clock.advance(120_000)
+  expect(asks()).toHaveLength(1)
+})
+
+test("an ended Gru's epic keeps its count, and the pane keeps the last board once Super-Gru deletes its run file", async ($, on) => {
+  const disk = superDisk()
+  stage(on, disk, { session: 'sg', root: '/r' })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+
+  // STARK-1's Gru ends: it deletes its run file, and its tab's mod its stats file.
+  delete disk['run-STARK-1.json']
+  delete disk['run-STARK-1.stats.json']
+  disk['super-SUPER-1.json'] = (disk['super-SUPER-1.json'] ?? '').replace('"state":"live"', '"state":"ended"')
+  await clock.advance(1000)
+  const pane = await $.ui.mount(SUPER_PANE)
+  expect(await pane.find({ type: 'Text', text: /^done 1\/1 *$/ })).toBeDefined()
+  await pane.press({ key: 'tab-stats' })
+  expect(await pane.find({ type: 'Text', text: 'Gru STARK-1' })).toBeDefined()
+  await pane.unmount()
+
+  // Super-Gru ends: it deletes its run file. The board stays, marked ended.
+  delete disk['super-SUPER-1.json']
+  await clock.advance(1000)
+  await clock.advance(1000)
+  const after = await $.ui.mount(SUPER_PANE)
+  await after.press({ key: 'tab-overview' })
+  expect(await after.find({ type: 'Text', text: /^The run ended at \d\d:\d\d\. The pane keeps its last counts; it reads no more\.$/ })).toBeDefined()
+  expect(await after.find({ type: 'Text', text: /^done 1\/1 *$/ })).toBeDefined()
+  await after.press({ key: 'tab-settings' })
+  expect(await after.find({ type: 'Text', text: /^The run ended, and Super-Gru removed its settings file/ })).toBeDefined()
+  const ran = await $.command.run(command('super-board'))
+  expect(JSON.stringify(ran)).not.toMatch(/no Super-Gru run/)
 })

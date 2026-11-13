@@ -1,4 +1,4 @@
-import type { GitSignal, StatGroup, StatModel, StatsFile, StatsView, Tokens, ToolTally } from '../types'
+import type { EpicStats, GitSignal, StatGroup, StatModel, StatsFile, StatsView, Tokens, ToolTally } from '../types'
 import { dur, parse as parseAs } from './view'
 
 const parse = (text: string | undefined) => parseAs<Record<string, unknown>>(text)
@@ -13,6 +13,8 @@ const parse = (text: string | undefined) => parseAs<Record<string, unknown>>(tex
 export const statsName = (id: string) => `${id}.stats.json`
 /** A Gru run's stats file. */
 export const runStatsName = (launchId: string) => `run-${launchId}.stats.json`
+/** A Super-Gru run's stats file. */
+export const superStatsName = (launchId: string) => `super-${launchId}.stats.json`
 
 /** A session's counts, in memory: the file's fields less who wrote it and when. */
 export type Stats = Omit<StatsFile, 'session' | 'since' | 'updated'> & { since: number | null }
@@ -332,6 +334,9 @@ export type Work = { added: number; removed: number; commits: number; prs: numbe
 const TOP_TOOLS = 5
 const DASH = '—'
 
+/** The tool calls of a session's counts. */
+const callsIn = (s: Stats) => Object.values(s.tools).reduce((n, t) => n + t.calls, 0)
+
 /**
  * The table's groups, one value a column. `work[i]` is column i's lines,
  * commits and PRs, or null for `—` (Gru writes no code).
@@ -375,7 +380,7 @@ function groupsOf(columns: Stats[], work: Work[]): StatGroup[] {
       title: 'Tools',
       rows: [
         { label: 'tools used', values: each(s => Object.keys(s.tools).length) },
-        { label: 'tool calls', values: each(s => Object.values(s.tools).reduce((n, t) => n + t.calls, 0)) },
+        { label: 'tool calls', values: each(callsIn) },
         { label: 'failed calls', values: each(s => Object.values(s.tools).reduce((n, t) => n + t.fails, 0)) },
       ],
     },
@@ -479,5 +484,84 @@ export function runStats(
     models: modelsOf(all),
     missing,
     since: all.since,
+  }
+}
+
+/** One epic of a Super-Gru run, as its Mega stats read it: its Gru's stats file's text, its tickets, and its done count. */
+export type SuperEpic = { epic: string; gruStats: string | undefined; tickets: readonly string[]; done: number | null; total: number | null }
+
+/**
+ * The Super-Gru pane's Mega stats tab: Super-Gru's own column, the Grus' (each
+ * epic's run stats, or what Super-Gru's tab kept of them, added), the workers' (each ticket's, added) and the whole
+ * run's; then one row for each epic, its Gru's counts and its workers' added.
+ * Lines, commits and PRs are the workers': the other two columns draw `—`.
+ * A ticket in two epics counts once, in the first.
+ */
+export function superStats(
+  files: Record<string, string>,
+  launchId: string,
+  epics: readonly SuperEpic[],
+): { view: StatsView; epics: EpicStats[] } {
+  const own = statsOf(files[superStatsName(launchId)])
+  let grus = newStats()
+  let workers = newStats()
+  const work = { added: 0, removed: 0, commits: 0, prs: 0, merged: 0 }
+  const sessions: StatModel[] = own === null ? [] : [{ id: null, who: 'Super-Gru', words: modelWords(own) }]
+  // The workers' sessions, by model and effort: a run of many tickets lists each pair once.
+  const workerWords = new Map<string, number>()
+  const missing: string[] = []
+  const seen = new Set<string>()
+  const rows = epics.map(e => {
+    const gru = statsOf(e.gruStats)
+    let mine = gru ?? newStats()
+    const row = { added: 0, removed: 0, prs: 0, merged: 0 }
+    if (gru !== null) {
+      grus = addStats(grus, gru)
+      sessions.push({ id: null, who: `Gru ${e.epic}`, words: modelWords(gru) })
+    }
+    for (const id of e.tickets) {
+      if (seen.has(id)) continue
+      seen.add(id)
+      const s = statsOf(files[statsName(id)])
+      // Super-Gru reads no worktree: a ticket's lines are the last git signal its stats file kept.
+      const lines = linesOf(null, s)
+      const prs = prsOf(files[`${id}.json`])
+      row.added += lines.added
+      row.removed += lines.removed
+      row.prs += prs.prs
+      row.merged += prs.merged
+      work.commits += lines.commits
+      if (s !== null) {
+        workers = addStats(workers, s)
+        mine = addStats(mine, s)
+        const words = modelWords(s)
+        workerWords.set(words, (workerWords.get(words) ?? 0) + 1)
+      } else if (files[`${id}.json`] !== undefined) {
+        missing.push(id)
+      }
+    }
+    work.added += row.added
+    work.removed += row.removed
+    work.prs += row.prs
+    work.merged += row.merged
+
+    return { epic: e.epic, done: e.done, total: e.total, busyMs: mine.busyMs, output: mine.tokens.output, calls: callsIn(mine), ...row }
+  })
+  for (const [words, n] of [...workerWords].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))) {
+    sessions.push({ id: null, who: n === 1 ? '1 worker' : `${grouped(n)} workers`, words })
+  }
+  const all = addStats(addStats(own ?? newStats(), grus), workers)
+
+  return {
+    view: {
+      columns: ['Super-Gru', 'Grus', 'Workers', 'Whole run'],
+      groups: groupsOf([own ?? newStats(), grus, workers, all], [null, null, work, work]),
+      tools: topTools(all),
+      sessions,
+      models: modelsOf(all),
+      missing,
+      since: all.since,
+    },
+    epics: rows,
   }
 }
