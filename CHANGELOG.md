@@ -15,6 +15,7 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+- Teach the `c4-design` skill to answer a question from the studio chat's Session target with its `curl` reply, and say that a studio chat answer is not an accept (stark-design 0.1.44).
 <!-- idun:pr-merge pr=502 runId=502 sha=94a69d8e -->
 - Replace "cargo-culted" with plain wording in the stark-gha-cost advanced-practices reference; bump stark-ops to 0.54.1.
 <!-- idun:pr-merge pr=501 runId=501 sha=845217b3 -->

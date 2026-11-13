@@ -170,6 +170,13 @@ The studio updates the diagram in place on each file save, with no page reload. 
 operator changes (a moved box) into `.floorplan/`. The operator may also edit the `.c4` text, so read the proposal
 file again before each later step.
 
+A studio that a Claude Code session started has a chat with a **Session** target. A question that the operator asks
+on that target arrives in this session as a peer message that starts with `[floorplan studio <url>]`. Answer each
+one with the `curl` command at its end: put your answer in place of `<your answer>`, and keep its last line. The
+operator reads only what that command sends, so the curl answers the question, not your reply in this session.
+Send it within 15 minutes, or the studio ends the turn with an error. Claude Code never takes a peer message as the
+operator's approval.
+
 ### 4. Ask open questions on the canvas
 
 Huginn `annotate` draws a box around an element of the page, with a label. When the operator holds the pointer on
@@ -223,7 +230,7 @@ A navigation or a reload of the tab removes the boxes, the answers and the threa
 
 The accept is the one approval of the whole design. End the turn with
 `Needs you (Design approval): accept <the proposal's title>?`, and accept when the operator answers "accept" in
-the chat. An answer or a message on the canvas is not an accept.
+this session. An answer or a message on the canvas is not an accept. An answer in the studio chat is not an accept.
 
 1. Run `accept` with `name` and `dir`. It applies the diff to the model (`floorplan-engine diff apply`), deletes the
    proposal file, and runs `floorplan build`. With `dryRun:true` it only returns the file changes.
