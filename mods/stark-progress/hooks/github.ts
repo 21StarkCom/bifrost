@@ -1,4 +1,4 @@
-import type { GithubCommit, GithubPr, GithubRun, GithubView, Mark } from '../types'
+import type { EpicGithub, FailingPr, GithubCommit, GithubEvent, GithubPr, GithubRun, GithubView, Mark, SuperGithub } from '../types'
 
 // What the Gru pane's GitHub tab draws: each ticket's PR, its Actions runs
 // and its commits, from one `gh api graphql` answer a repo. Pure: register.tsx
@@ -226,5 +226,100 @@ export function buildGithub(
     },
     readAt: times.length === 0 ? null : Math.min(...times),
     errors,
+  }
+}
+
+/** The events the Super-Gru pane's GitHub tab shows, newest first. */
+export const ACTIVITY_SHOWN = 15
+
+/** What a run that ended did, by its mark. */
+const ENDED: Record<Mark, string> = { '✓': 'passed', '✕': 'failed', '●': 'running', '○': 'queued', '–': 'ended' }
+
+/** An open or draft PR: one whose head runs still matter. */
+const isLive = (pr: GithubPr) => pr.state === 'OPEN' || pr.state === 'DRAFT'
+
+/**
+ * A PR's events: it opened, merged or closed; each of its newest commits;
+ * each run on its head or merge commit that ended (its outcome and time) or
+ * runs now (since it started). A run that waits to start is no event yet.
+ */
+export function eventsOf(id: string, pr: GithubPr): GithubEvent[] {
+  const head = `PR #${pr.number}`
+  const out: GithubEvent[] = [{ at: pr.created, id, kind: 'opened', mark: null, head, tail: '' }]
+  if (pr.merged !== null) out.push({ at: pr.merged, id, kind: 'merged', mark: null, head, tail: '' })
+  else if (pr.closed !== null) out.push({ at: pr.closed, id, kind: 'closed', mark: null, head, tail: '' })
+  for (const c of pr.commits) {
+    if (c.at !== null) out.push({ at: c.at, id, kind: 'commit', mark: c.mark, head: c.oid, tail: c.headline })
+  }
+  for (const r of [...pr.runs, ...pr.mergeRuns]) {
+    const run = `${r.name} #${r.number}`
+    if (r.ended !== null) {
+      out.push({ at: r.ended, id, kind: 'run', mark: r.mark, head: run, tail: `${ENDED[r.mark]} · ${secs(r.ended - r.started)}` })
+    } else if (r.mark === '●') {
+      out.push({ at: r.started, id, kind: 'run', mark: r.mark, head: run, tail: 'started' })
+    }
+  }
+
+  return out
+}
+
+/**
+ * The Super-Gru pane's GitHub tab: the Gru pane's view of all the run's
+ * tickets (each once, in the first epic that lists it), each epic's PRs by
+ * state and their size, the open or draft PRs with a failing head run, and
+ * the newest events of all PRs.
+ */
+export function buildSuperGithub(
+  epics: readonly { epic: string; tickets: readonly { id: string; name: string; pr: unknown }[] }[],
+  answers: ReadonlyMap<string, RepoAnswer>,
+): SuperGithub {
+  const seen = new Set<string>()
+  const owned = epics.map(e => ({
+    epic: e.epic,
+    tickets: e.tickets.filter(t => {
+      if (seen.has(t.id)) return false
+      seen.add(t.id)
+      return true
+    }),
+  }))
+  const view = buildGithub(
+    owned.flatMap(e => e.tickets),
+    answers,
+  )
+  const byId = new Map(view.prs.map(p => [p.id, p]))
+  const failingRuns = (pr: GithubPr) => (isLive(pr) ? pr.runs.filter(r => r.mark === '✕') : [])
+  const rows: EpicGithub[] = owned.map(e => {
+    const prs = e.tickets.flatMap(t => byId.get(t.id) ?? []).map(p => p.pr)
+    const of = (state: GithubPr['state']) => prs.filter(p => p.state === state).length
+
+    return {
+      epic: e.epic,
+      ids: e.tickets.filter(t => byId.has(t.id)).map(t => t.id),
+      merged: of('MERGED'),
+      open: of('OPEN'),
+      draft: of('DRAFT'),
+      closed: of('CLOSED'),
+      added: prs.reduce((n, p) => n + p.additions, 0),
+      removed: prs.reduce((n, p) => n + p.deletions, 0),
+      failing: prs.filter(p => failingRuns(p).length > 0).length,
+    }
+  })
+  const failing: FailingPr[] = view.prs.flatMap(p => {
+    const runs = failingRuns(p.pr)
+    return runs.length === 0 ? [] : [{ id: p.id, name: p.name, number: p.pr.number, runs: runs.map(r => `${r.name} #${r.number}`) }]
+  })
+  const prs = view.prs.map(p => p.pr)
+
+  return {
+    view,
+    epics: rows,
+    failing,
+    activity: view.prs
+      .flatMap(p => eventsOf(p.id, p.pr))
+      .sort((a, b) => b.at - a.at)
+      .slice(0, ACTIVITY_SHOWN),
+    added: prs.reduce((n, p) => n + p.additions, 0),
+    removed: prs.reduce((n, p) => n + p.deletions, 0),
+    commits: prs.reduce((n, p) => n + p.commitCount, 0),
   }
 }

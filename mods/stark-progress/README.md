@@ -11,12 +11,13 @@ pane is not placed. Each says where a ticket
 is, whether its worker is doing anything, and whether that work gets anywhere:
 a worker that is busy for hours with no commit and no stage change reads
 `stalled`, not "20% done". Super-Gru's tab gets the Super-Gru pane: one row
-for each epic of its run, and the settings Super-Gru reads. No pane ever
+for each epic of its run, the counts of the whole run, the PR activity of
+every epic, and the settings Super-Gru reads. No pane ever
 forecasts the time left. All three draw in
 the terminal and in the Claude desktop app's Code tab. The mod polls
 the state files below once a second, and git once every 30 seconds; it asks
 alfred for an epic's title until it has one, and GitHub once a minute while
-the Gru pane shows its GitHub tab.
+the Gru pane or the Super-Gru pane shows its GitHub tab.
 
 Install it on its own; the seven skill plugins do not need it:
 
@@ -542,25 +543,59 @@ A hold is no stop: the worker writes `hold` into its ticket file, reports
 
 Super-Gru's tab (the session that a `super-<id>.json` file names as its
 `session`) opens the Super-Gru pane once, the first time it finds that file.
-`/super-board` opens it again there, and only there. It has two tabs:
+`/super-board` opens it again there, and only there. Super-Gru titles its own
+tab `SUPER-GRU (<n>)`, `<n>` the first epic's number. It has four tabs:
 
-- **Overview**: one row for each epic, in the run's order: its state, its
-  tickets done of its total, its Gru (the first 8 characters of its session
-  id, else its launch id) and that Gru's state, and the epic's title from
-  alfred. Below the rows, each blocked ticket of each epic is worth a look,
-  with the last line of its log as what it waits on.
-- **Settings**: `maxWorkers` and `parallel` (1 to 8; a launch above 8 keeps
-  its value until `−` steps it down), `followUps` and `decideForMe`. A press
-  writes all four, whole, to `super-<id>.settings.json`. Super-Gru reads that
-  file before it starts each Gru, and at each tick while an epic waits, so a
-  raised `parallel` starts a Gru at the next tick.
+- **Overview** (`o`): one row for each epic, in the run's order: its state,
+  its tickets done of its total, its Gru (the first 8 characters of its
+  session id, else its launch id) and that Gru's state, and the epic's title
+  from alfred. Below the rows, each blocked ticket of each epic is worth a
+  look, with the last line of its log as what it waits on.
+- **Mega stats** (`t`): the Gru pane's Stats table in four columns:
+  `Super-Gru` (its own stats file), `Grus` (each epic's
+  `run-<launch>.stats.json`, added), `Workers` (each ticket's stats file,
+  added) and `Whole run`. Lines, commits and PRs are the workers': the other
+  two columns draw `—`; a worker's lines are the last git signal its stats
+  file kept, since Super-Gru reads no worktree. Under it, `By epic`: one row
+  for each epic, with its tickets done, the working time, output tokens and
+  tool calls of its Gru and its workers, its lines added and removed, and its
+  PRs merged of PRs opened. Then the most used tools of the whole run, the
+  model and effort of Super-Gru, of each Gru (`Gru <epic>`), and of the
+  workers, one line for each pair with how many share it, the requests and
+  output tokens per model, and the started tickets with no stats file. A
+  ticket in two epics counts once, in the first.
+- **GitHub** (`g`): every PR of every epic, from the same `gh api graphql`
+  answers as the Gru pane's GitHub tab, by the same rule: only while the
+  pane is placed and shows the tab, one call a repo, once a minute. One ask
+  serves both panes in one tab. From the top:
+  - `🐙 GitHub activity`: the PRs by state, the head commits' runs, and the
+    size of all PRs: `+<added> −<removed> in <n> commits`.
+  - `By epic`: each epic's PRs by state and their size, and
+    `· ✕ <n> failing` when an open or draft PR of it has a failing run on
+    its head commit.
+  - A box, `🙋 Failing checks`, of each open or draft PR with a failing run
+    on its head commit, and those runs; with none,
+    `🌿 No open PR has a failing check.`
+  - `⚡ Latest activity`: the 15 newest events of all PRs, newest first: a
+    PR that opened, merged or closed (its state word in its own color), a
+    commit (its checks' mark, short id and headline), and a run that ended
+    (`✓ ci #1280 passed · 1m43s`) or runs now (`● ci #1281 started`, at its
+    start). Each names its ticket's id.
+  - Each PR's card, as the Gru pane's GitHub tab draws it, under a line for
+    each epic. Select a name to open each run's jobs and the newest commits.
+  - The tickets GitHub has not answered for yet, and the tickets with no PR.
+- **Settings** (`s`): `maxWorkers` and `parallel` (1 to 8; a launch above 8
+  keeps its value until `−` steps it down), `followUps` and `decideForMe`. A
+  press writes all four, whole, to `super-<id>.settings.json`. Super-Gru
+  reads that file before it starts each Gru, and at each tick while an epic
+  waits, so a raised `parallel` starts a Gru at the next tick.
 
 An epic's counts come from its Gru's run file (`run-<launch>.json`) and its
 tickets' files, as the Gru pane reads them. Its state:
 
 | State | When |
 |---|---|
-| `done` | every ticket of its run is `closed`; or its Gru `reported` or `ended` and its run file is gone (no count then) |
+| `done` | every ticket of its run is `closed`; or its Gru `reported` or `ended` and its run file is gone |
 | `blocked` | any ticket of its run is `blocked` |
 | `waiting` | its Gru is `queued` |
 | `in work` | anything else |
@@ -569,6 +604,20 @@ tickets' files, as the Gru pane reads them. Its state:
 ✅ STARK-100  done 3/3     Gru a3e9d0f2 reported  meridian-gcp: FinOps answers
 ⛔ STARK-200  blocked 1/2  Gru 6f1c2a9e live      meridian-support: answers
 ```
+
+**An ended epic.** At its end, a Gru deletes its run file, and its tab's mod
+deletes its run's stats file. While both exist, Super-Gru's tab keeps each
+epic's tickets, their titles and the text of its Gru's stats file in the
+session's state (`superMemory`), so a reload of the mod keeps them too. Once
+the files are gone, the pane reads what it kept: the epic keeps its count,
+its `By epic` rows, its Gru's column and its PRs. A tab that kept nothing (a
+new session) shows an ended epic as `done`, with no count.
+
+**An ended run.** At its end, Super-Gru deletes its run file. The pane then
+keeps its last board, marked `The run ended at <HH:MM>`, reads no more files
+and asks GitHub no more; its Settings tab says no one reads a change now. A
+reload of the mod keeps that board, and `/super-board` opens it, until a new
+run of this tab's session starts.
 
 ## How a row reads
 
@@ -736,8 +785,10 @@ first, `true` for a failure. After a reload the mod takes back the minutes,
 outcomes and last activity of a heartbeat its own session wrote.
 
 `~/.cache/stark-progress/<STARK-n>.stats.json`, one per ticket whose worker
-is a Claude session with the mod installed, and
-`~/.cache/stark-progress/run-<id>.stats.json`, one per Gru run whose Gru is:
+is a Claude session with the mod installed,
+`~/.cache/stark-progress/run-<id>.stats.json`, one per Gru run whose Gru is,
+and `~/.cache/stark-progress/super-<id>.stats.json`, one per Super-Gru run
+whose Super-Gru is:
 
 ```json
 { "session": "<the session that wrote it last>", "since": "<ISO 8601>", "updated": "<ISO 8601>",
@@ -750,9 +801,10 @@ is a Claude session with the mod installed, and
 ```
 
 Every session with the mod counts these in memory from its start (the Stats
-tab names each source); a worker's own tab writes the ticket's file and Gru's
-own tab the run's, at most once every 5 seconds after a count changed, and
-only while the ticket's or the run's file exists. Once that file is gone the
+tab names each source); a worker's own tab writes the ticket's file, Gru's
+own tab the run's, and Super-Gru's own tab its run's, at most once every 5
+seconds after a count changed, and only while the ticket's or the run's file
+exists. Once that file is gone the
 mod removes the stats file; a Minion's stays after its close, as its ticket
 file does, so the Gru pane still adds it in. The first write of a tab adds
 its counts to the ones the file holds, so a reload or a relaunch on the same
@@ -781,8 +833,10 @@ zero or absent. A `*.stats.json` file is never a run file.
   heartbeat and its stats file. `/ticket-board` opens the pane there, and
   only there.
 - A session that a `super-<id>.json` file names as its `session` is
-  Super-Gru's tab: it shows that run in the Super-Gru pane, and reads each
-  epic's run file, its tickets' files and its blocked tickets' logs.
+  Super-Gru's tab: it shows that run in the Super-Gru pane, writes the run's
+  stats file `super-<id>.stats.json`, and reads each epic's run file and its
+  Gru's stats file, its tickets' files and stats files, and its blocked
+  tickets' logs.
 - Any session shows the Gru pane after `/gru-board`.
 - Nothing matching draws nothing, and writes no stats file.
 
@@ -823,6 +877,9 @@ write: its counts are in memory after that.
   `alfred task show` refuses there. Gru's own tab is always in a checkout.
 - Stats from GitHub (a PR's own line count, its review threads), or a cost in
   dollars.
+- A Log tab on the Super-Gru pane, and Super-Gru's own steps in a log.
+- What Super-Gru's tab kept of an ended epic, in a new session: the session's
+  state holds it, and no file does.
 - On the GitHub tab: commits that are not pushed, a branch with no PR, reviews
   and review threads, a GitHub tab in the ticket pane, and any write to GitHub
   (a re-run of a failed job, a merge, a comment).

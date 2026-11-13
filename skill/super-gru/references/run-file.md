@@ -51,6 +51,13 @@ A change of one Gru's entry, from the file you read:
 jq --arg e 'STARK-100' --arg s '<Gru session id>' --arg st 'live' '.grus[$e] = {launch: $e, session: $s, state: $st}' ~/.cache/stark-progress/super-SUPER-100.json > ~/.cache/stark-progress/super-SUPER-100.json.tmp && mv ~/.cache/stark-progress/super-SUPER-100.json.tmp ~/.cache/stark-progress/super-SUPER-100.json
 ```
 
+A rerun of `start` in a new session, from the file you read, before any
+other write:
+
+```
+jq --arg s '<your session id>' '.session = $s' ~/.cache/stark-progress/super-SUPER-100.json > ~/.cache/stark-progress/super-SUPER-100.json.tmp && mv ~/.cache/stark-progress/super-SUPER-100.json.tmp ~/.cache/stark-progress/super-SUPER-100.json
+```
+
 ## The settings file of each epic
 
 Before each Gru starts, write its settings file. The Gru reads it before each

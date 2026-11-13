@@ -1,5 +1,5 @@
 // A real `gh api graphql` answer for 21StarkCom/bifrost #446 (merged) and #447 (a draft, its `ci` run
-// in progress), from githubQuery, on 2026-11-01. Only github.test.ts imports it.
+// in progress), from githubQuery, on 2026-11-01. Only the tests import it.
 export const ANSWER = {
   "data": {
     "repository": {

@@ -127,8 +127,12 @@ export type StatRow = { label: string; values: string[] }
 /** A titled group of lines on a Stats tab. */
 export type StatGroup = { title: string; rows: StatRow[] }
 
-/** One session's model and effort on a Stats tab: Gru's (`id` null) or a ticket's. */
-export type StatModel = { id: string | null; words: string }
+/**
+ * One session's model and effort on a Stats tab: Gru's (`id` null) or a
+ * ticket's. `who` names one that is neither, on the Super-Gru pane: Super-Gru,
+ * a Gru by its epic, or the workers that share a model and effort.
+ */
+export type StatModel = { id: string | null; words: string; who?: string }
 
 /** What a Stats tab draws: a table (one column, or Gru's and the whole run's), the top tools, the models and effort. */
 export type StatsView = {
@@ -336,16 +340,96 @@ export type SuperRow = {
 /** A blocked ticket of an epic, and what it waits on: its log's last line. */
 export type SuperLook = { epic: string; id: string; waits: string }
 
+/** One epic on the Super-Gru pane's Mega stats tab: its Gru's counts and its workers', added. */
+export type EpicStats = {
+  epic: string
+  /** Its closed tickets and all its tickets, as its row counts them; null with no run file. */
+  done: number | null
+  total: number | null
+  busyMs: number
+  output: number
+  calls: number
+  added: number
+  removed: number
+  prs: number
+  merged: number
+}
+
+/**
+ * One event on the Super-Gru pane's GitHub tab: a PR that opened, merged or
+ * closed, a commit, or an Actions run that ended or runs now. `head` is
+ * `PR #446`, a commit's short id or `ci #1280`; `tail` is a commit's headline
+ * or a run's outcome and time, and empty for a PR.
+ */
+export type GithubEvent = {
+  at: number
+  /** The ticket whose PR it is. */
+  id: string
+  kind: 'opened' | 'merged' | 'closed' | 'commit' | 'run'
+  /** A run's mark, a commit's checks' mark, or null. */
+  mark: Mark | null
+  head: string
+  tail: string
+}
+
+/** One epic's PRs on the Super-Gru pane's GitHub tab. */
+export type EpicGithub = {
+  epic: string
+  /** Its tickets with a PR GitHub answered for, in run order. */
+  ids: string[]
+  merged: number
+  open: number
+  draft: number
+  closed: number
+  added: number
+  removed: number
+  /** Its open and draft PRs with a failing run on the head commit. */
+  failing: number
+}
+
+/** An open or draft PR with a failing run on its head commit, and those runs. */
+export type FailingPr = { id: string; name: string; number: number; runs: string[] }
+
+/** What the Super-Gru pane's GitHub tab draws: the Gru pane's view of all the run's tickets, and the dashboard's parts. */
+export type SuperGithub = {
+  view: GithubView
+  epics: EpicGithub[]
+  failing: FailingPr[]
+  /** The newest events of all PRs, newest first. */
+  activity: GithubEvent[]
+  /** All PRs' lines added and removed, and their commits. */
+  added: number
+  removed: number
+  commits: number
+}
+
 /** What the Super-Gru pane draws. */
 export type SuperBoard = {
   launchId: string
   rows: SuperRow[]
   looks: SuperLook[]
   settings: SuperSettings
+  /** Super-Gru's own counts, the Grus', the workers' and the whole run's. */
+  stats: StatsView
+  epicStats: EpicStats[]
+  github: SuperGithub
+  /** When Super-Gru deleted its run file at the end, or null while it runs: the pane then keeps this last board. */
+  endedAt: number | null
   readAt: number
 }
 
-/** A pane's tabs; only the Gru pane has `github`. */
+/**
+ * What Super-Gru's tab remembers of each epic's Gru while its files exist:
+ * its tickets and their titles from `run-<launch>.json`, and the text of
+ * `run-<launch>.stats.json`. A Gru deletes both at its end; the board then
+ * reads these.
+ */
+export type SuperMemory = {
+  launchId: string
+  epics: Record<string, { tickets: string[]; titles: Record<string, string>; gruStats: string | null }>
+}
+
+/** A pane's tabs; the Gru pane and the Super-Gru pane have `github`. */
 export type PaneTab = 'overview' | 'log' | 'stats' | 'github' | 'settings'
 
 /** A run's, a job's or a commit's mark: `✓` passed, `✕` failed, `●` running, `○` queued, `–` cancelled, skipped or neutral. */
@@ -438,6 +522,10 @@ declare module 'claude-code' {
       /** The Super-Gru pane's model, in Super-Gru's own tab. */
       superBoard: Shaped<SuperBoard | null>
       superTab: PaneTab
+      /** The ticket whose PR is open on the Super-Gru pane's GitHub tab, or ''. */
+      superGhFocus: string
+      /** What Super-Gru's tab remembers of each epic's Gru, so an ended epic keeps its tickets and counts. */
+      superMemory: Shaped<SuperMemory | null>
       /** The ticket whose file this worker's tab found, once found, else '': its pane names that ticket's end. */
       ownTicket: string
       /** True once the person closed the ticket pane by hand in this session: no prompt or poll opens it again; /ticket-board does. */

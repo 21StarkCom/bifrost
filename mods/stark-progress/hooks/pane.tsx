@@ -218,7 +218,7 @@ function liveLabel(ui: UI, r: BoardRow, room: number, how: { bold: boolean; dim:
  * A line over a group of a list: its name and count, then a rule to the pane's
  * edge. `spaced` adds an empty row above and below it, for a list with no gap.
  */
-function divider(ui: UI, w: number, name: string, count: number, spaced = false) {
+export function divider(ui: UI, w: number, name: string, count: number, spaced = false) {
   const { Box, Text, P } = ui
   const words = ` ${name} · ${count} `
   const rule = Math.max(w - 2 - words.length, 2)
@@ -547,10 +547,16 @@ const TABS: Record<PaneTab, readonly [string, string]> = {
 /** The ticket pane's tabs; the Gru pane adds GitHub between Stats and Settings. */
 export const TICKET_TABS: readonly PaneTab[] = ['overview', 'log', 'stats', 'settings']
 
-/** The pane's tabs `ids`, in that order, each with its hotkey. */
-export function tabBar(ui: UI, tab: PaneTab, setTab: (tab: PaneTab) => unknown, ids: readonly PaneTab[] = TICKET_TABS) {
+/** The pane's tabs `ids`, in that order, each with its hotkey; `labels` renames a tab on this pane. */
+export function tabBar(
+  ui: UI,
+  tab: PaneTab,
+  setTab: (tab: PaneTab) => unknown,
+  ids: readonly PaneTab[] = TICKET_TABS,
+  labels: Partial<Record<PaneTab, string>> = {},
+) {
   const { Box, Button, Text, P } = ui
-  const tabs = ids.map(id => [id, ...TABS[id]] as const)
+  const tabs = ids.map(id => [id, TABS[id][0], labels[id] ?? TABS[id][1]] as const)
 
   return (
     <Box columnGap={3}>
@@ -625,7 +631,7 @@ const STAT_LABEL = 'from other sessions  '.length
 const STAT_GAP = 2
 
 /** When the counts began: `12:03`, or `Thu 29 Oct 12:03` on an earlier day. */
-const sinceOf = (since: number, now: number) => {
+export const sinceOf = (since: number, now: number) => {
   const day = dayOf(since, now)
 
   return day === 'Today' ? clockOf(since) : `${day} ${clockOf(since)}`
@@ -654,9 +660,16 @@ function missingLine(ui: UI, w: number, missing: readonly string[]) {
 
 /**
  * A Stats tab. `who` says whose counts these are, `empty` what to read before
- * any stats file exists, and `now` dates when the counts began.
+ * any stats file exists, and `now` dates when the counts began. `after` draws
+ * below the table, above the most used tools.
  */
-export function statsTab(ui: UI, w: number, view: StatsView, now: number, words: { title: string; who: string; empty: string }) {
+export function statsTab(
+  ui: UI,
+  w: number,
+  view: StatsView,
+  now: number,
+  words: { title: string; who: string; empty: string; after?: ReturnType<typeof divider> | null },
+) {
   const { Box, Text, P } = ui
   if (view.since === null && view.sessions.length === 0) {
     return (
@@ -702,6 +715,8 @@ export function statsTab(ui: UI, w: number, view: StatsView, now: number, words:
         ))}
       </Box>
 
+      {words.after ?? null}
+
       {view.tools.length > 0 && (
         <Box flexDirection="column">
           <Text bold>{view.columns.length > 0 ? 'Most used tools, whole run' : 'Most used tools'}</Text>
@@ -723,9 +738,9 @@ export function statsTab(ui: UI, w: number, view: StatsView, now: number, words:
       <Box flexDirection="column">
         <Text bold>Model and effort</Text>
         {view.sessions.map(s => (
-          <Box key={`s${s.id ?? 'own'}`} columnGap={1} paddingLeft={2}>
+          <Box key={`s${s.id ?? s.who ?? 'own'}`} columnGap={1} paddingLeft={2}>
             {s.id === null ? (
-              <Text color={P.blue}>{view.columns.length > 0 ? 'Gru' : 'This session'}</Text>
+              <Text color={P.blue}>{s.who ?? (view.columns.length > 0 ? 'Gru' : 'This session')}</Text>
             ) : (
               ticketLabel(ui, s.id, '', w)
             )}
@@ -802,8 +817,8 @@ function settings(ui: UI, w: number, board: Board, view: PaneView) {
 
 // The GitHub tab: each ticket's PR, its Actions runs and its commits. The model is github.ts's.
 
-const MARK_INK: Record<Mark, keyof Palette> = { '✓': 'green', '✕': 'blocked', '●': 'blue', '○': 'gray', '–': 'hint' }
-const PR_INK: Record<GithubPr['state'], keyof Palette> = { OPEN: 'pr', DRAFT: 'gray', MERGED: 'merged', CLOSED: 'blocked' }
+export const MARK_INK: Record<Mark, keyof Palette> = { '✓': 'green', '✕': 'blocked', '●': 'blue', '○': 'gray', '–': 'hint' }
+export const PR_INK: Record<GithubPr['state'], keyof Palette> = { OPEN: 'pr', DRAFT: 'gray', MERGED: 'merged', CLOSED: 'blocked' }
 const GH_LABEL = 'After merge  '.length
 
 /** A run's duration: `1m43s` once it ended, `running 2m` while it runs, `queued` before it starts; none for a job that ended unstarted. */
@@ -815,7 +830,7 @@ function runTime(r: { mark: Mark; started: number | null; ended: number | null }
 }
 
 /** A mark in its color: a different glyph for each state, so none rests on its color alone. */
-function markText(ui: UI, mark: Mark, key: string) {
+export function markText(ui: UI, mark: Mark, key: string) {
   const { Text, P } = ui
 
   return (
@@ -897,7 +912,7 @@ function prDetail(ui: UI, w: number, pr: GithubPr, now: number) {
  * each 0 in the hint's, so the eye goes to what is there. Bold keeps a draft's
  * gray apart from a 0's hint, two grays close in tone.
  */
-function countsText(ui: UI, lead: string, counts: readonly (readonly [number, string, keyof Palette])[]) {
+export function countsText(ui: UI, lead: string, counts: readonly (readonly [number, string, keyof Palette])[]) {
   const { Text, P } = ui
 
   return (
@@ -914,7 +929,7 @@ function countsText(ui: UI, lead: string, counts: readonly (readonly [number, st
 }
 
 /** One ticket's PR on the GitHub tab: its name, the PR, its runs and its commits, and its detail when open. */
-function prCard(ui: UI, w: number, item: GithubView['prs'][number], now: number, view: Pick<PaneView, 'ghFocus' | 'setGhFocus'>) {
+export function prCard(ui: UI, w: number, item: GithubView['prs'][number], now: number, view: Pick<PaneView, 'ghFocus' | 'setGhFocus'>) {
   const { Box, Button, Text, P } = ui
   const { id, name, pr } = item
   const isOpen = view.ghFocus === id
