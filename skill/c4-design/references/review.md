@@ -115,7 +115,7 @@ modeling.md, such as a code path in `technology` (M8); never shorten a text belo
 
 1. Fix each failure in a proposal by yourself when the fix is clear, and run `check` and `render` again.
 2. Put each failure that needs the operator's choice in a question. Name the check, such as "M5", the element id,
-   and your suggested fix. For a proposal, ask it on the canvas (step 4 of the loop). For a review with no
+   and your suggested fix. For a proposal, ask it in a thread (step 4 of the loop). For a review with no
    proposal, list the questions in the chat under their own heading, **Questions**, after the two groups of item 4.
 3. For a review with no proposal, list the findings in the chat, one line each: the check, the element id or the
    view id, what is wrong, and the fix.
