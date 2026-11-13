@@ -159,7 +159,7 @@ model {
   }
 
   frigg = externalSystem 'frigg' {
-    description 'The vendor CLI of the fleet: reads and writes the EI tickets in the Jira of Evinced.'
+    description 'The vendor CLI of the fleet: reads and writes the EI tickets in the Jira of Evinced, and sends rich text to Slack and Jira.'
     metadata {
       fleetRepo 'frigg'
     }
@@ -260,7 +260,7 @@ model {
   bifrost.skills -[async]-> muninn 'reports to a muninn leader through' {
     technology 'Shell command'
   }
-  bifrost.skills -[sync]-> frigg 'files and reads the EI tickets with' {
+  bifrost.skills -[sync]-> frigg 'files and reads the EI tickets, and sends Slack and Jira text, with' {
     technology 'Shell command'
   }
   bifrost.skills -[sync]-> atlas 'records and supersedes the ADRs with' {

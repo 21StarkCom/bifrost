@@ -234,7 +234,7 @@
         "color": "c4-system"
       },
       "description": {
-        "txt": "The skills layer of the 21Stark fleet: 30 skills in seven Claude Code plugins, the TypeScript tools that they call, two hooks and four mods, served from source as a Claude Code marketplace."
+        "txt": "The skills layer of the 21Stark fleet: 31 skills in seven Claude Code plugins, the TypeScript tools that they call, two hooks and four mods, served from source as a Claude Code marketplace."
       },
       "title": "Bifröst",
       "kind": "softwareSystem",
@@ -324,7 +324,7 @@
         "color": "c4-external"
       },
       "description": {
-        "txt": "The vendor CLI of the fleet: reads and writes the EI tickets in the Jira of Evinced."
+        "txt": "The vendor CLI of the fleet: reads and writes the EI tickets in the Jira of Evinced, and sends rich text to Slack and Jira."
       },
       "title": "frigg",
       "kind": "externalSystem",
@@ -454,7 +454,7 @@
         "color": "c4-container"
       },
       "summary": {
-        "txt": "The 30 skills in seven plugins, which a coding agent loads and follows."
+        "txt": "The 31 skills in seven plugins, which a coding agent loads and follows."
       },
       "technology": "Markdown, Claude Code plugins",
       "description": {
@@ -1181,7 +1181,7 @@
     "1i3i2di": {
       "line": "solid",
       "technology": "Shell command",
-      "title": "files and reads the EI tickets with",
+      "title": "files and reads the EI tickets, and sends Slack and Jira text, with",
       "source": {
         "model": "bifrost.skills"
       },
@@ -2338,7 +2338,7 @@
           }
         ]
       },
-      "hash": "Q2jKH2FrdPrVMR1StgloOTTNPzs0nY4VzfFNSwsywAU",
+      "hash": "ZjJuTOKOWVYmXD1TgYELS8WgzIzrGQ5KXK2OPpdkC6w",
       "bounds": {
         "x": 0,
         "y": 0,
@@ -2448,7 +2448,7 @@
             "size": "md"
           },
           "description": {
-            "txt": "The skills layer of the 21Stark fleet: 30 skills in seven Claude Code plugins, the TypeScript tools that they call, two hooks and four mods, served from source as a Claude Code marketplace."
+            "txt": "The skills layer of the 21Stark fleet: 31 skills in seven Claude Code plugins, the TypeScript tools that they call, two hooks and four mods, served from source as a Claude Code marketplace."
           },
           "tags": [],
           "notation": "Software System",
@@ -2668,7 +2668,7 @@
             "size": "md"
           },
           "description": {
-            "txt": "The vendor CLI of the fleet: reads and writes the EI tickets in the Jira of Evinced."
+            "txt": "The vendor CLI of the fleet: reads and writes the EI tickets in the Jira of Evinced, and sends rich text to Slack and Jira."
           },
           "tags": [],
           "metadata": {
@@ -2682,9 +2682,9 @@
           "height": 180,
           "labelBBox": {
             "x": 20,
-            "y": 56,
+            "y": 47,
             "width": 281,
-            "height": 65
+            "height": 83
           }
         },
         {
@@ -3388,7 +3388,7 @@
           "id": "17ox128",
           "source": "bifrost",
           "target": "frigg",
-          "label": "files and reads the EI tickets with",
+          "label": "files and reads the EI tickets, and\nsends Slack and Jira text, with",
           "points": [
             [
               2795,
@@ -3421,9 +3421,9 @@
           ],
           "labelBBox": {
             "x": 2588,
-            "y": 591,
+            "y": 582,
             "width": 221,
-            "height": 25
+            "height": 42
           },
           "parent": null,
           "relations": [
@@ -3924,7 +3924,7 @@
           }
         ]
       },
-      "hash": "VI0vg761Yba5Xva6BAVZVLQLM0a4vpDeG4KSRYAcmtM",
+      "hash": "RyQ2fZ47nY9zR0wVBxSW6CgOue4uTVkISTFYupUjZTo",
       "bounds": {
         "x": 0,
         "y": 0,
@@ -4085,7 +4085,7 @@
             "size": "md"
           },
           "description": {
-            "txt": "The 30 skills in seven plugins, which a coding agent loads and follows."
+            "txt": "The 31 skills in seven plugins, which a coding agent loads and follows."
           },
           "tags": [],
           "metadata": {
@@ -4417,7 +4417,7 @@
             "size": "md"
           },
           "description": {
-            "txt": "The vendor CLI of the fleet: reads and writes the EI tickets in the Jira of Evinced."
+            "txt": "The vendor CLI of the fleet: reads and writes the EI tickets in the Jira of Evinced, and sends rich text to Slack and Jira."
           },
           "tags": [],
           "metadata": {
@@ -4431,9 +4431,9 @@
           "height": 180,
           "labelBBox": {
             "x": 20,
-            "y": 56,
+            "y": 47,
             "width": 281,
-            "height": 65
+            "height": 83
           }
         },
         {
@@ -5323,7 +5323,7 @@
           "id": "5th370",
           "source": "bifrost.skills",
           "target": "frigg",
-          "label": "files and reads the EI tickets with",
+          "label": "files and reads the EI tickets, and\nsends Slack and Jira text, with",
           "points": [
             [
               2684,
@@ -5368,9 +5368,9 @@
           ],
           "labelBBox": {
             "x": 3245,
-            "y": 591,
+            "y": 583,
             "width": 221,
-            "height": 38
+            "height": 55
           },
           "parent": null,
           "relations": [
@@ -5789,7 +5789,7 @@
           }
         ]
       },
-      "hash": "gtEhNgnqYOe7XRFbISkaxQYSFyIULPtOc1vpr0APXvw",
+      "hash": "4qNRRYWz_sldNjBS4m_pDVZYPX2rutUGvJ_c97mNTWY",
       "bounds": {
         "x": 0,
         "y": 0,
@@ -5860,7 +5860,7 @@
             "size": "md"
           },
           "description": {
-            "txt": "The 30 skills in seven plugins, which a coding agent loads and follows."
+            "txt": "The 31 skills in seven plugins, which a coding agent loads and follows."
           },
           "tags": [],
           "metadata": {

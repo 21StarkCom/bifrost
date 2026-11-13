@@ -26,7 +26,7 @@ graph TB
   Bifrost -- "`launches the workers and opens and merges the PRs with`" --> Idun
   Bifrost -- "`finds the folder of each repo with`" --> Urd
   Bifrost -. "`reports to a muninn leader through`" .-> Muninn
-  Bifrost -- "`files and reads the EI tickets with`" --> Frigg
+  Bifrost -- "`files and reads the EI tickets, and sends Slack and Jira text, with`" --> Frigg
   Bifrost -- "`records and supersedes the ADRs with`" --> Atlas
   Bifrost -- "`sends the summary of an audit with`" --> Heimdall
   Bifrost -- "`buries retired code in`" --> Nastrond
