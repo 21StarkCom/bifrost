@@ -14,6 +14,7 @@ import {
   countTurns,
   decide,
   inLibrarianState,
+  isHeadless,
   lastAsk,
   statePath,
   threshold,
@@ -104,8 +105,11 @@ test("countTurns keeps a line whole when a JSON string holds U+2028 or U+2029", 
   assert.equal(countTurns(`${turn("msg_a")}\n${odd}\n`), 2);
 });
 
-test("countTurns throws on a line that does not parse", () => {
+test("countTurns throws on any line that does not parse", () => {
   assert.throws(() => countTurns(`${turn("msg_a")}\n{"type":"assistant",\n`));
+  assert.throws(() => countTurns(`${turn("msg_a")}\n{"type":"user",\n`));
+  // A crash can leave a line of NUL bytes at the end of a transcript.
+  assert.throws(() => countTurns(`${turn("msg_a")}\n${"\u0000".repeat(64)}`));
 });
 
 // ── the threshold ───────────────────────────────────────────────────────────
@@ -158,6 +162,23 @@ test("decide never asks when stop_hook_active is true", () => {
     b.write(transcript(500));
     assert.equal(decide(b.payload({ stop_hook_active: true }), { env: {}, home: b.home, root: b.root }), null);
     assert.equal(fs.existsSync(statePath(SID, b.root)), false, "no ask records no count");
+  });
+});
+
+test("decide never asks in a headless run, and asks in an interactive one", () => {
+  withBox((b) => {
+    b.write(transcript(500));
+    for (const entry of ["sdk-cli", "sdk-ts", "sdk-py"]) {
+      assert.equal(isHeadless({ CLAUDE_CODE_ENTRYPOINT: entry }), true, entry);
+      const env = { CLAUDE_CODE_ENTRYPOINT: entry };
+      assert.equal(decide(b.payload(), { env, home: b.home, root: b.root }), null, entry);
+    }
+    assert.equal(fs.existsSync(statePath(SID, b.root)), false, "no ask records no count");
+    for (const entry of ["cli", "claude-desktop", "claude-vscode", undefined]) {
+      assert.equal(isHeadless({ CLAUDE_CODE_ENTRYPOINT: entry }), false, String(entry));
+    }
+    const env = { CLAUDE_CODE_ENTRYPOINT: "cli" };
+    assert.equal(decide(b.payload(), { env, home: b.home, root: b.root }), ASK, "cli asks");
   });
 });
 
@@ -233,6 +254,7 @@ test("decide never asks in the librarian's folder or under it", () => {
       assert.equal(inLibrarianState(cwd, b.home), true, cwd);
       assert.equal(decide(b.payload({ cwd }), { env: {}, home: b.home, root: b.root }), null, cwd);
     }
+    assert.equal(inLibrarianState(path.join(lib, "..notes"), b.home), true, "a child whose name starts with ..");
     for (const cwd of [path.join(b.home, ".local", "state", "atlas"), `${lib}-other`, b.cwd]) {
       assert.equal(inLibrarianState(cwd, b.home), false, cwd);
     }
@@ -279,7 +301,8 @@ test("a state file it cannot write means no ask", () => {
 // ── the entrypoint, as Claude Code runs it ──────────────────────────────────
 
 function hook(b: Box, input: string, args: string[] = [], extraEnv: Record<string, string> = {}) {
-  const env: NodeJS.ProcessEnv = { ...process.env, HOME: b.home, STARK_STATE_ROOT: b.root };
+  // The test may itself run inside a headless claude: the hook must see an interactive one.
+  const env: NodeJS.ProcessEnv = { ...process.env, HOME: b.home, STARK_STATE_ROOT: b.root, CLAUDE_CODE_ENTRYPOINT: "cli" };
   delete env.STARK_TELL_ON_STOP_TURNS;
   Object.assign(env, extraEnv);
   return spawnSync(process.execPath, ["--no-warnings", CLI, ...args], { input, env, encoding: "utf8" });
@@ -299,6 +322,9 @@ test("the hook prints the block line at the threshold, and nothing below it", ()
     r = hook(b, b.payload({ stop_hook_active: true }), [], { STARK_TELL_ON_STOP_TURNS: "1" });
     assert.equal(r.status, 0, r.stderr);
     assert.equal(r.stdout, "");
+    r = hook(b, b.payload(), [], { STARK_TELL_ON_STOP_TURNS: "1", CLAUDE_CODE_ENTRYPOINT: "sdk-cli" });
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout, "", "a headless run");
   });
 });
 

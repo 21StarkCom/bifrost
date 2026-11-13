@@ -46,7 +46,9 @@ export function threshold(env: NodeJS.ProcessEnv = process.env): number {
  * The main agent's model turns: the distinct `message.id` values of the
  * `assistant` lines that are not `isSidechain`. Splits on `\n` only: readline
  * also splits at U+2028 and U+2029, which a transcript can hold inside a JSON
- * string. A blank line is skipped; a line that does not parse throws.
+ * string. A blank line is skipped; any other line that does not parse throws,
+ * since a fault must print nothing (STARK-18495 step 10). Parsing every line
+ * costs 0.19s on a 38 MB transcript of 2410 turns.
  */
 export function countTurns(transcript: string): number {
   const ids = new Set<string>();
@@ -60,10 +62,20 @@ export function countTurns(transcript: string): number {
   return ids.size;
 }
 
+/**
+ * True for a headless run: `claude -p` sets `CLAUDE_CODE_ENTRYPOINT` to
+ * `sdk-cli`, and the Agent SDK to `sdk-ts` or `sdk-py`. A program reads the
+ * last reply of such a run, so a block would replace that reply with the
+ * answer to the ask. An interactive session sets `cli`, or an app's own name.
+ */
+export function isHeadless(env: NodeJS.ProcessEnv = process.env): boolean {
+  return (env.CLAUDE_CODE_ENTRYPOINT ?? "").startsWith("sdk");
+}
+
 /** True when `cwd` is the librarian's state folder or under it: the librarian runs its own sessions there. */
 export function inLibrarianState(cwd: string, home: string = os.homedir()): boolean {
   const rel = path.relative(path.join(home, ".local", "state", "atlas", "librarian"), path.resolve(cwd));
-  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+  return rel === "" || (rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
 }
 
 /** The state file of one session: `<stateRoot()>/tell-on-stop/<session_id>.json`. */
@@ -115,7 +127,7 @@ export function decide(raw: string, opts: HookOptions = {}): string | null {
   try {
     const data = JSON.parse(raw);
     if (data === null || typeof data !== "object") return null;
-    if (data.stop_hook_active === true) return null;
+    if (data.stop_hook_active === true || isHeadless(opts.env)) return null;
     const { session_id: sessionId, transcript_path: transcriptPath, cwd } = data;
     if (typeof sessionId !== "string" || !UUID.test(sessionId)) return null;
     if (typeof transcriptPath !== "string" || transcriptPath === "") return null;
