@@ -123,7 +123,7 @@ These are not elements of a context, container or component view:
 
 Use this when a repo has code but no model. A first model of code that exists is not a design change: write it in
 `model/`, and do not make a proposal. Show it to the operator in the studio (step 3 of the loop) and ask the open
-questions on the canvas (step 4) before the PR.
+questions in threads (step 4) before the PR.
 
 1. Run `floorplan init` when the repo has no `docs/architecture/floorplan.config.json`. Replace the whole starter
    model.

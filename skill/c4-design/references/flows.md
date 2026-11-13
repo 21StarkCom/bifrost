@@ -2,6 +2,9 @@
 
 Read from [the c4-design skill](../SKILL.md#code-keys-flows-deployments-and-logos).
 
+A process with steps and decisions, such as an odin playbook, is a flow of the flow kit, not this page:
+[flow-kit.md](flow-kit.md).
+
 A flow shows the steps of one main path through the code, in order, as a sequence diagram. Write it as a
 `dynamic view` with `variant sequence` in a `views` block of `model/`:
 
