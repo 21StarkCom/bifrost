@@ -15,6 +15,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=498 runId=498 sha=7d937174 -->
+- Rebuilt the floorplan C4 outputs to match the model: 31 skills, and frigg now shown as the way skills send Slack and Jira text.
 <!-- idun:pr-merge pr=496 runId=496 sha=f702892f -->
 - Added the `stark-rich-text` skill to `stark-ops` (0.51.0): it names the frigg, alfred, njord and gh commands that send rich text to Slack, Jira and GitHub.
 <!-- idun:pr-merge pr=495 runId=495 sha=0e5a3065 -->

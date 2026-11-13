@@ -1,12 +1,12 @@
 element operator | person | Operator |  | Starts the skills with slash commands, watches the worker runs in the progress panes, and answers the questions of the agents.
 element agent | person | Coding agent |  | A Claude Code or Codex session that loads the skill plugins, follows a skill step by step, and runs the tools and the fleet CLIs that it names.
-element bifrost | softwareSystem | Bifröst |  | The skills layer of the 21Stark fleet: 30 skills in seven Claude Code plugins, the TypeScript tools that they call, two hooks and four mods, served from source as a Claude Code marketplace.
+element bifrost | softwareSystem | Bifröst |  | The skills layer of the 21Stark fleet: 31 skills in seven Claude Code plugins, the TypeScript tools that they call, two hooks and four mods, served from source as a Claude Code marketplace.
 element alfred | externalSystem | alfred |  | The ticket CLI of the fleet: binds a ticket to a session, and reads, files and moves the ClickUp tickets.
 element hermod | externalSystem | Hermod |  | Places the tabs of the agents in cmux, carries their messages, and closes the tabs.
 element idun | externalSystem | idun |  | Holds njord, which opens and merges the PRs, and valkyrie, which launches the Gru, Minion and Agnes workers.
 element urd | externalSystem | urd |  | The local registry of the fleet: tells a launcher the folder of each repo on the Mac.
 element muninn | externalSystem | muninn |  | Carries messages between agents. A Gru with a muninn leader reports to the chief of odin through it.
-element frigg | externalSystem | frigg |  | The vendor CLI of the fleet: reads and writes the EI tickets in the Jira of Evinced.
+element frigg | externalSystem | frigg |  | The vendor CLI of the fleet: reads and writes the EI tickets in the Jira of Evinced, and sends rich text to Slack and Jira.
 element atlas | externalSystem | Atlas |  | The second-brain engine. Its brain adr commands record and supersede the ADRs of a repo.
 element heimdall | externalSystem | Heimdall |  | Sends a push from the Mac to the iPhone, the iPad and the Watch of the operator.
 element nastrond | externalSystem | Náströnd |  | The code graveyard of the fleet: a git repo that keeps the retired code, one row for each burial in its index.

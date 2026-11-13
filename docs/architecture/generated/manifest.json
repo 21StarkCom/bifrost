@@ -3,7 +3,7 @@
   "inputs": {
     "floorplan.config.json": "3fadb3fc49f0030bdd90e94c613382a9c9fedb632f0a6194810c74a7f31c56ee",
     "kit/spec.c4": "59491868eda1db988f78dc28af027ba771ea3569262a3a547b5c87233dad0baa",
-    "model/model.c4": "6fbaf94b582536c2e50bc5d05ae564afc194da22123a9572b7ccfa824d459601",
+    "model/model.c4": "010e2ae4e3d817baec18efe8a53a71d4b13259c791e73454af70f5ae6a93421e",
     "model/scan/links.c4": "f72a545e95533b1aef74e0eeb3ac05ba02b351d50a9856803f1fc50f66008622",
     "model/scan/logos.c4": "ac909607dc726fada371a3e4c1e60a1a62642ae48d0ea82817f621bfdc5cd5c7",
     "model/scan/stack-views.c4": "d47a69bcafe911a326a667b19db85c9a6a1358fbe0d063509952df9961ac4377",
@@ -11,17 +11,17 @@
     "model/views.c4": "d5520e4f1c874c3a031bbc49f1b24685a80c09af0d4d296dad13f8b4c073fac0"
   },
   "outputs": {
-    "generated/llms.txt": "a9cbf00b217e4d09e0563b2731c78dd61bc7205fce15baead3682de1fa56d676",
-    "generated/mermaid/containers.mmd": "3f4c06e525ecada6fb013a4f87f0c72e70c1c35162ff3e9ee949e0d33c0bb29e",
-    "generated/mermaid/index.mmd": "53a71823a2f5d0a050fd4998778659dc4599f298c88deeda4c4966e8dc63cc87",
+    "generated/llms.txt": "cb8ace1a82dc93c96b79d28d782a478de641e2947212f77d8289431a1b6e2c8c",
+    "generated/mermaid/containers.mmd": "07b3099847a4abb49168cdb2c1103bf56ba5b4928b798382a740b8f082a0d899",
+    "generated/mermaid/index.mmd": "6eaf8f1c9d127bb497b48dd035bab7f667d049f4b72fcfb1912b61c30cd7660a",
     "generated/mermaid/stack.mmd": "faa94555d7323e898747de29bf8c91d5db3508f84438cddbb01c380f4d514d9a",
     "generated/mermaid/tools.mmd": "1f9bccfffe628657ea0d15bbe886c187cff2bd5d5add01e128786f3ee70f223f",
-    "generated/model.json": "da4580829eff6e415afc1919d8baf9354ed736cec8127338a99b5118f54549b0",
-    "generated/png/containers.png": "819b2a7a2c2e9da1a5c18879bd859a4712ad4b40aa569c52a5446550afb3db38",
-    "generated/png/index.png": "2ad456e61345f16632034b409abbf175eee94990bc5568da2046bd66b3124edb",
+    "generated/model.json": "b7bc43fb4f7b3737ad84a5adf3cb89ead359367b16ff2a0a4723d0350bde35b1",
+    "generated/png/containers.png": "0e7519b53fe528cdb60758f49e476ae0b7dde9e4a539cccb5ad60a5b120c08a7",
+    "generated/png/index.png": "f0fa9acf5fbadcef97d8fb78054908385a1774fffbf69f0abe2515235085dd04",
     "generated/png/stack.png": "f9f4814338b89099bcf955f919ab289bd923d29377962bedb2e89983b73aa97a",
-    "generated/png/tools.png": "e5c416a210c6f1b27cfb3fb600bf27fa45dc43f6f052c4e0862b89bb97fffb7c",
-    "generated/site/404.html": "6685ec6ec33ab475552846e5feaa35eec580470194dc5a8b48b38f8efd256dca",
-    "generated/site/index.html": "6685ec6ec33ab475552846e5feaa35eec580470194dc5a8b48b38f8efd256dca"
+    "generated/png/tools.png": "535642faac8ba1f3c9425acd0f161f7ec9819a4cfd13db782bca90721b567215",
+    "generated/site/404.html": "b44012ef92ee5b297b165f207f1ec51e13f80aaf72954588dac30f88d95aa5cf",
+    "generated/site/index.html": "b44012ef92ee5b297b165f207f1ec51e13f80aaf72954588dac30f88d95aa5cf"
   }
 }
