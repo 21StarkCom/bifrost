@@ -350,7 +350,7 @@ test("plugin hooks are declared inline on stark-ops alone and run tools from thi
   assert.deepEqual(
     withHooks.map((p) => p.name),
     ["stark-ops"],
-    `${MARKETPLACE_REL}: only stark-ops ships hooks (the fact-routing hook, next to /stark-memory, and the agent-doc gate).`,
+    `${MARKETPLACE_REL}: only stark-ops ships hooks (the fact-routing hook, next to /stark-memory, the agent-doc gate and the tell-on-stop hook).`,
   );
   const hooks = withHooks[0].hooks;
   assert.ok(
@@ -385,10 +385,17 @@ test("plugin hooks are declared inline on stark-ops alone and run tools from thi
     `${MARKETPLACE_REL}: stark-ops must wire tools/rules_gate_hook.ts on PreToolUse as one Bash command hook, ` +
       `gated to \`njord pr-merge\` by \`if\`.`,
   );
+  // The tell-on-stop hook: Stop takes no matcher and no `if`, so it runs on
+  // each stop and decides from the transcript itself.
+  assert.deepEqual(
+    groups.Stop?.map((g) => [g.matcher, g.hooks?.map((h) => [h.type, h.if, h.command])]),
+    [[undefined, [["command", undefined, 'node "${CLAUDE_PLUGIN_ROOT}/tools/tell_on_stop_hook.ts"']]]],
+    `${MARKETPLACE_REL}: stark-ops must wire tools/tell_on_stop_hook.ts on Stop as one command hook, with no matcher and no \`if\`.`,
+  );
   assert.deepEqual(
     Object.keys(groups).sort(),
-    ["PostToolUse", "PreToolUse"],
-    `${MARKETPLACE_REL}: stark-ops ships hooks on PreToolUse and PostToolUse only.`,
+    ["PostToolUse", "PreToolUse", "Stop"],
+    `${MARKETPLACE_REL}: stark-ops ships hooks on PreToolUse, PostToolUse and Stop only.`,
   );
   for (const [event, list] of Object.entries(groups)) {
     assert.ok(Array.isArray(list), `${MARKETPLACE_REL}: stark-ops \`hooks.${event}\` must be an array of matcher groups.`);

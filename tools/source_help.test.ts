@@ -24,7 +24,7 @@ const routes: Record<string, string[]> = {
   skill_audit: [""], skill_autopilot: [""], skill_diet: [""], skill_optimize: [""],
   skill_router: [""], stark_config_lib: [""], stark_handover: ["", "resolve", "save", "resume", "list"],
   stark_persona: ["", "select", "deactivate", "rate", "survey", "survey-answer", "add", "stats", "history", "print-roster", "print-weights", "session-end"],
-  stark_session: ["", "start", "end"], validation_gate: [""],
+  stark_session: ["", "start", "end"], tell_on_stop_hook: [""], validation_gate: [""],
 };
 const shells = [
   "tools/check-rest-only.sh",

@@ -1,6 +1,6 @@
 element operator | person | Operator |  | Starts the skills with slash commands, watches the worker runs in the progress panes, and answers the questions of the agents.
 element agent | person | Coding agent |  | A Claude Code or Codex session that loads the skill plugins, follows a skill step by step, and runs the tools and the fleet CLIs that it names.
-element bifrost | softwareSystem | Bifröst |  | The skills layer of the 21Stark fleet: 31 skills in seven Claude Code plugins, the TypeScript tools that they call, two hooks and four mods, served from source as a Claude Code marketplace.
+element bifrost | softwareSystem | Bifröst |  | The skills layer of the 21Stark fleet: 31 skills in seven Claude Code plugins, the TypeScript tools that they call, three hooks and four mods, served from source as a Claude Code marketplace.
 element alfred | externalSystem | alfred |  | The ticket CLI of the fleet: binds a ticket to a session, and reads, files and moves the ClickUp tickets.
 element hermod | externalSystem | Hermod |  | Places the tabs of the agents in cmux, carries their messages, and closes the tabs.
 element idun | externalSystem | idun |  | Holds njord, which opens and merges the PRs, and valkyrie, which launches the Gru, Minion and Agnes workers.
@@ -24,10 +24,11 @@ element bifrost.docTools | container | Agent-doc tools | TypeScript, Node.js 24 
 element bifrost.releaseTools | container | Release tools | TypeScript, Node.js 24 | release_changelog drafts the changelog of a release from the git history, and release_version_bump picks and writes the next version.
 element bifrost.gateHook | container | Agent-doc gate hook | TypeScript, Node.js 24, PreToolUse hook | Runs before each njord pr-merge call, triages the agent files that the PR changes, and denies the merge only on a RED clause that the PR adds.
 element bifrost.factHook | container | Fact routing hook | TypeScript, Node.js 24, PostToolUse hook | Runs after each write to an auto-memory file, and tells the session when the fact may belong in the ecosystem vault instead.
+element bifrost.stopHook | container | Tell-on-stop hook | TypeScript, Node.js 24, Stop hook | Runs on each stop of a session, counts the model turns of the main agent in the transcript, and asks a long session to tell the librarian its lasting facts.
 element bifrost.progressMod | container | stark-progress mod | TypeScript, Claude Code mod | Shows the Gru pane and the ticket pane beside the chat: the board of a run, its log in plain words, its stats, and the settings that the workers read before a review, a merge or a release.
 element bifrost.questionMods | container | Question mods | TypeScript, Claude Code mods | needs-you shows the Needs you lines of a turn in a band above the prompt; decision-deck and interview give the agent the present and ask tools, and show the questions in a pane.
 element bifrost.progressFiles | database | Progress files | JSON and JSON Lines files | The ticket, run, log and settings files in ~/.cache/stark-progress: the state contract between the worker skills and the stark-progress mod.
-element bifrost.toolState | database | Tool state | JSON and JSON Lines files | The session files, the handovers, the healer log, the jury runs and the ask-guard log in ~/.claude/code-review, outside the plugin cache, so that they outlive an update.
+element bifrost.toolState | database | Tool state | JSON and JSON Lines files | The session files, the handovers, the healer log, the jury runs, the ask-guard log and the tell-on-stop counts in ~/.claude/code-review, outside the plugin cache, so that they outlive an update.
 view stack | Tech stack | generated/png/stack.png
 view index | System Context: Bifröst | generated/png/index.png
 view containers | Containers: Bifröst, the skills, the mods and the fleet | generated/png/containers.png

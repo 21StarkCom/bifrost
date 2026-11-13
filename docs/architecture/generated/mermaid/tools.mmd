@@ -7,6 +7,7 @@ graph TB
   BifrostReviewPoster@{ shape: rectangle, label: "Review poster" }
   BifrostGateHook@{ shape: rectangle, label: "Agent-doc gate hook" }
   BifrostFactHook@{ shape: rectangle, label: "Fact routing hook" }
+  BifrostStopHook@{ shape: rectangle, label: "Tell-on-stop hook" }
   BifrostDispatchers@{ shape: rectangle, label: "Review dispatchers" }
   BifrostBuildTools@{ shape: rectangle, label: "Build tools" }
   BifrostSessionTools@{ shape: rectangle, label: "Session tools" }
@@ -28,9 +29,11 @@ graph TB
   Agent -- "`is checked before each njord pr-merge call by`" --> BifrostGateHook
   BifrostGateHook -- "`triages the agent files of the PR with`" --> BifrostDocTools
   Agent -- "`is told where a memory fact belongs by`" --> BifrostFactHook
+  Agent -- "`is asked to tell the librarian its lasting facts by`" --> BifrostStopHook
   BifrostDispatchers -- "`keeps the jury runs in`" --> BifrostToolState
   BifrostSessionTools -- "`keeps the sessions, the handovers and the healer log in`" --> BifrostToolState
   BifrostDocTools -- "`keeps the ask-guard log in`" --> BifrostToolState
+  BifrostStopHook -- "`keeps the turn count of the last ask of each session in`" --> BifrostToolState
   BifrostSkills -- "`reads the Actions costs and publishes the releases on`" --> Github
   BifrostDispatchers -- "`posts the IaC review of a PR to`" --> Github
   BifrostReviewPoster -- "`posts one anchored review of the findings to`" --> Github
@@ -44,7 +47,7 @@ graph TB
   BifrostDocTools -- "`sends the summary of an audit with`" --> Heimdall
   BifrostFactHook -- "`reads the names of the fleet repos from`" --> EcosystemVault
   classDef c4_container fill:#5EB1EF,stroke:#2a8bc6,color:#000000
-  class BifrostSkills,BifrostReviewPoster,BifrostGateHook,BifrostFactHook,BifrostDispatchers,BifrostBuildTools,BifrostSessionTools,BifrostReleaseTools,BifrostDocTools,BifrostToolState c4_container
+  class BifrostSkills,BifrostReviewPoster,BifrostGateHook,BifrostFactHook,BifrostStopHook,BifrostDispatchers,BifrostBuildTools,BifrostSessionTools,BifrostReleaseTools,BifrostDocTools,BifrostToolState c4_container
   classDef c4_external fill:#F1F0EF,stroke:#c8c7c6,color:#504f4e
   class EcosystemVault,Alfred,Github,AiClis,Heimdall c4_external
-  linkStyle 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24 stroke:#8D8D8D
+  linkStyle 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26 stroke:#8D8D8D

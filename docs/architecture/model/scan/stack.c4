@@ -69,4 +69,11 @@ model {
       runtime 'Node 24'
     }
   }
+
+  extend bifrost.stopHook {
+    metadata {
+      language 'TypeScript'
+      runtime 'Node 24'
+    }
+  }
 }
