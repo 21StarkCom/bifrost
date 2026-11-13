@@ -14,7 +14,7 @@ model {
   }
 
   bifrost = softwareSystem 'Bifröst' {
-    description 'The skills layer of the 21Stark fleet: 31 skills in seven Claude Code plugins, the TypeScript tools that they call, two hooks and four mods, served from source as a Claude Code marketplace.'
+    description 'The skills layer of the 21Stark fleet: 31 skills in seven Claude Code plugins, the TypeScript tools that they call, three hooks and four mods, served from source as a Claude Code marketplace.'
 
     skills = container 'Skill plugins' {
       technology 'Markdown, Claude Code plugins'
@@ -93,6 +93,14 @@ model {
       }
     }
 
+    stopHook = container 'Tell-on-stop hook' {
+      technology 'TypeScript, Node.js 24, Stop hook'
+      description 'Runs on each stop of a session, counts the model turns of the main agent in the transcript, and asks a long session to tell the librarian its lasting facts.'
+      metadata {
+        code ['tools/tell_on_stop_hook.ts', 'tools/tell_on_stop_hook_lib.ts']
+      }
+    }
+
     progressMod = container 'stark-progress mod' {
       technology 'TypeScript, Claude Code mod'
       summary 'Shows a live board of each Gru run and a pane of each worker ticket.'
@@ -118,7 +126,7 @@ model {
 
     toolState = database 'Tool state' {
       technology 'JSON and JSON Lines files'
-      description 'The session files, the handovers, the healer log, the jury runs and the ask-guard log in ~/.claude/code-review, outside the plugin cache, so that they outlive an update.'
+      description 'The session files, the handovers, the healer log, the jury runs, the ask-guard log and the tell-on-stop counts in ~/.claude/code-review, outside the plugin cache, so that they outlive an update.'
     }
   }
 
@@ -223,6 +231,7 @@ model {
   agent -[sync]-> bifrost.questionMods 'asks the operator questions with'
   agent -[sync]-> bifrost.gateHook 'is checked before each njord pr-merge call by'
   agent -[sync]-> bifrost.factHook 'is told where a memory fact belongs by'
+  agent -[sync]-> bifrost.stopHook 'is asked to tell the librarian its lasting facts by'
 
   // The skills and the tools that they run
   bifrost.skills -[sync]-> bifrost.dispatchers 'runs the multi-agent reviews, the refactor plans and the jury with' {
@@ -323,6 +332,9 @@ model {
   }
   bifrost.factHook -[sync]-> ecosystemVault 'reads the names of the fleet repos from' {
     technology 'File read'
+  }
+  bifrost.stopHook -[sync]-> bifrost.toolState 'keeps the turn count of the last ask of each session in' {
+    technology 'File read and write'
   }
 
   // The mods

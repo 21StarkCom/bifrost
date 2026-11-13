@@ -14,7 +14,8 @@ global {
       bifrost.questionMods,
       bifrost.releaseTools,
       bifrost.reviewPoster,
-      bifrost.sessionTools {
+      bifrost.sessionTools,
+      bifrost.stopHook {
       icon tech:typescript
     }
   }

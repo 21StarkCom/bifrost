@@ -87,7 +87,7 @@ views {
 
   view tools of bifrost {
     title 'Containers: Bifröst, the tools and the hooks'
-    description 'The TypeScript tools that the skills run, the two hooks that Claude Code runs on a tool call, and the systems that they call.'
+    description 'The TypeScript tools that the skills run, the three hooks that Claude Code runs on a tool call or a stop, and the systems that they call.'
     include
       agent,
       bifrost.skills,
@@ -99,6 +99,7 @@ views {
       bifrost.releaseTools,
       bifrost.gateHook,
       bifrost.factHook,
+      bifrost.stopHook,
       bifrost.toolState,
       github,
       aiClis,

@@ -114,6 +114,7 @@ argument: …" — wording alone cannot tell a working help from a broken one.
 | `stark_handover.ts` | resolve, save, resume, list |
 | `stark_persona.ts` | select, deactivate, rate, survey, survey-answer, add, stats, history, print-roster, print-weights, session-end |
 | `stark_session.ts` | start, end |
+| `tell_on_stop_hook.ts` | Stop stdin protocol; argv help exits first |
 | `validation_gate.ts` | configured validation, repo-root, timeout |
 
 | Shell / other executable | Boundary |

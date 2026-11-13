@@ -173,4 +173,12 @@ model {
   extend bifrost.skills {
     link https://github.com/21StarkCom/bifrost/tree/HEAD/standards 'code: standards/'
   }
+
+  extend bifrost.stopHook {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/tell_on_stop_hook.ts 'code: tools/tell_on_stop_hook.ts'
+  }
+
+  extend bifrost.stopHook {
+    link https://github.com/21StarkCom/bifrost/tree/HEAD/tools/tell_on_stop_hook_lib.ts 'code: tools/tell_on_stop_hook_lib.ts'
+  }
 }
