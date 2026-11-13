@@ -334,6 +334,9 @@ export type Work = { added: number; removed: number; commits: number; prs: numbe
 const TOP_TOOLS = 5
 const DASH = '—'
 
+/** The tool calls of a session's counts. */
+const callsIn = (s: Stats) => Object.values(s.tools).reduce((n, t) => n + t.calls, 0)
+
 /**
  * The table's groups, one value a column. `work[i]` is column i's lines,
  * commits and PRs, or null for `—` (Gru writes no code).
@@ -377,7 +380,7 @@ function groupsOf(columns: Stats[], work: Work[]): StatGroup[] {
       title: 'Tools',
       rows: [
         { label: 'tools used', values: each(s => Object.keys(s.tools).length) },
-        { label: 'tool calls', values: each(s => Object.values(s.tools).reduce((n, t) => n + t.calls, 0)) },
+        { label: 'tool calls', values: each(callsIn) },
         { label: 'failed calls', values: each(s => Object.values(s.tools).reduce((n, t) => n + t.fails, 0)) },
       ],
     },
@@ -483,9 +486,6 @@ export function runStats(
     since: all.since,
   }
 }
-
-/** The tool calls of a session's counts. */
-const callsIn = (s: Stats) => Object.values(s.tools).reduce((n, t) => n + t.calls, 0)
 
 /** One epic of a Super-Gru run, as its Mega stats read it: its Gru's stats file's text, its tickets, and its done count. */
 export type SuperEpic = { epic: string; gruStats: string | undefined; tickets: readonly string[]; done: number | null; total: number | null }

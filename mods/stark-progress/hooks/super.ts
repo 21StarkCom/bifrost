@@ -1,5 +1,5 @@
 import type { SuperBoard, SuperLook, SuperMemory, SuperRow, SuperSettings, SuperState } from '../types'
-import { launched, MAX_WORKERS, nameOf, parse } from './board'
+import { launched, MAX_WORKERS, nameOf, parse, titleIn, titlesOf } from './board'
 import { buildSuperGithub } from './github'
 import type { RepoAnswer } from './github'
 import { logName, logOf } from './log'
@@ -69,26 +69,22 @@ export const gruRunName = (launch: string) => `run-${launch}.json`
 /** What Super-Gru's tab remembers of each epic, by epic. */
 type Kept = SuperMemory['epics']
 
-/** A run file's `titles`: only the string titles of its own tickets count. */
-function titlesOf(v: unknown, tickets: readonly string[]): Record<string, string> {
-  const all = v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {}
-
-  return Object.fromEntries(tickets.flatMap(id => {
-    const title = Object.hasOwn(all, id) ? str(all[id]) : null
-    return title === null ? [] : [[id, title]]
-  }))
-}
+/** A Gru's state in the Super-Gru run file; anything else reads `queued`. */
+const GRU_STATES = new Set(['queued', 'live', 'reported', 'ended'])
+const gruStateOf = (gru: Record<string, unknown> | undefined): SuperRow['gruState'] =>
+  typeof gru?.state === 'string' && GRU_STATES.has(gru.state) ? (gru.state as SuperRow['gruState']) : 'queued'
 
 /**
  * An epic's Gru: its launch id (the epic while none is written), and its
  * tickets, their titles and its Gru's stats file, from its run files while
  * they exist, else from what Super-Gru's tab kept of them; null tickets with
- * neither. `isGone` says the Gru's run file is gone.
+ * neither. `isGone` says the Gru's run file is gone. A queued Gru has run
+ * nothing in this run: what was kept of its epic is an earlier run's.
  */
 function epicRun(epic: string, gru: Record<string, unknown> | undefined, files: Record<string, string>, kept: Kept = {}) {
   const launch = str(gru?.launch) ?? epic
   const runFile = parse(files[gruRunName(launch)])
-  const was = Object.hasOwn(kept, epic) ? kept[epic] : undefined
+  const was = gruStateOf(gru) !== 'queued' && Object.hasOwn(kept, epic) ? kept[epic] : undefined
   const listed = Array.isArray(runFile?.tickets)
     ? [...new Set(runFile.tickets.filter((id): id is string => typeof id === 'string'))]
     : null
@@ -124,10 +120,10 @@ export function rememberSuper(name: string, files: Record<string, string>, was: 
 }
 
 /** A ticket's name, as the Gru pane names it: its own file's title, else the one its Gru wrote at launch, less its leads; '' with neither. */
-function ticketName(id: string, titles: Record<string, string>, files: Record<string, string>): string {
-  const title = str(parse(files[`${id}.json`])?.title) ?? (Object.hasOwn(titles, id) ? (titles[id] ?? null) : null)
+function ticketName(id: string, titles: Record<string, string>, file: Record<string, unknown> | null): string {
+  const title = titleIn({ titles }, id, file)
 
-  return title === null ? '' : nameOf(title).name
+  return title === undefined ? '' : nameOf(title).name
 }
 
 /** The tickets of each epic of a Super-Gru run file, its own or kept: the files a poll reads for its board. */
@@ -136,8 +132,6 @@ export function superTickets(name: string, files: Record<string, string>, kept: 
 
   return s === null ? [] : s.epics.flatMap(epic => epicRun(epic, s.grus[epic], files, kept).tickets ?? [])
 }
-
-const GRU_STATES = new Set(['queued', 'live', 'reported', 'ended'])
 
 /**
  * One epic's row: its tickets from its Gru's run file, or kept from it, each
@@ -150,10 +144,9 @@ function rowOf(
   epic: string,
   gru: Record<string, unknown> | undefined,
   files: Record<string, string>,
-  kept: Kept,
+  { launch, tickets, isGone }: ReturnType<typeof epicRun>,
 ): { row: Omit<SuperRow, 'title'>; looks: SuperLook[] } {
-  const { launch, tickets, isGone } = epicRun(epic, gru, files, kept)
-  const gruState = typeof gru?.state === 'string' && GRU_STATES.has(gru.state) ? gru.state : 'queued'
+  const gruState = gruStateOf(gru)
   const stages = (tickets ?? []).map(id => ({ id, file: parse(files[`${id}.json`]) }))
   const done = stages.filter(t => t.file?.stage === 'closed').length
   const blocked = stages.filter(t => t.file?.stage === 'blocked')
@@ -183,7 +176,7 @@ function rowOf(
       total,
       // A session id's first 8 characters name it; a launch id shows whole.
       gru: gruState === 'queued' ? null : (str(gru?.session)?.slice(0, 8) ?? launch),
-      gruState: gruState as SuperRow['gruState'],
+      gruState,
     },
     looks,
   }
@@ -206,8 +199,8 @@ export function buildSuper(
   if (s === null) return null
   const launchId = superIdOf(name)
   const kept = memory?.launchId === launchId ? memory.epics : {}
-  const built = s.epics.map(epic => rowOf(epic, s.grus[epic], files, kept))
   const runs = s.epics.map(epic => ({ epic, ...epicRun(epic, s.grus[epic], files, kept) }))
+  const built = runs.map(r => rowOf(r.epic, s.grus[r.epic], files, r))
   const stats = superStats(
     files,
     launchId,
@@ -227,10 +220,15 @@ export function buildSuper(
     settings: superSettingsOf(s.run, files[superSettingsName(launchId)]),
     stats: stats.view,
     epicStats: stats.epics,
+    // A ticket two epics list is one ticket, as every count on the board takes it.
+    tickets: new Set(runs.flatMap(r => r.tickets ?? [])).size,
     github: buildSuperGithub(
       runs.map(r => ({
         epic: r.epic,
-        tickets: (r.tickets ?? []).map(id => ({ id, name: ticketName(id, r.titles, files), pr: parse(files[`${id}.json`])?.pr })),
+        tickets: (r.tickets ?? []).map(id => {
+          const file = parse(files[`${id}.json`])
+          return { id, name: ticketName(id, r.titles, file), pr: file?.pr }
+        }),
       })),
       github,
     ),
@@ -246,13 +244,13 @@ export function buildSuper(
 export function superReads(name: string, files: Record<string, string>, kept: Kept = {}): string[] {
   const s = superRunOf(files[name])
   const launchId = superIdOf(name)
-  const launches = s === null ? [] : s.epics.map(epic => epicRun(epic, s.grus[epic], files, kept).launch)
+  const runs = s === null ? [] : s.epics.map(epic => epicRun(epic, s.grus[epic], files, kept))
 
   return [
     superSettingsName(launchId),
     superStatsName(launchId),
-    ...launches.map(runStatsName),
-    ...superTickets(name, files, kept).flatMap(id => [`${id}.json`, statsName(id)]),
+    ...runs.map(r => runStatsName(r.launch)),
+    ...runs.flatMap(r => r.tickets ?? []).flatMap(id => [`${id}.json`, statsName(id)]),
   ]
 }
 

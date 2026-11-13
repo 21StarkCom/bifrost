@@ -590,14 +590,17 @@ tab `SUPER-GRU (<n>)`, `<n>` the first epic's number. It has four tabs:
   reads that file before it starts each Gru, and at each tick while an epic
   waits, so a raised `parallel` starts a Gru at the next tick.
 
-An epic's counts come from its Gru's run file (`run-<launch>.json`) and its
-tickets' files, as the Gru pane reads them. Its state:
+An epic's counts come from its Gru's run file (`run-<launch>.json`), or what
+Super-Gru's tab kept of it, and its tickets' files, as the Gru pane reads
+them. Its state is the first row that holds, so a Gru that ended with a
+blocked ticket leaves its epic `blocked`:
 
 | State | When |
 |---|---|
-| `done` | every ticket of its run is `closed`; or its Gru `reported` or `ended` and its run file is gone |
+| `done` | every ticket of its run is `closed` |
 | `blocked` | any ticket of its run is `blocked` |
 | `waiting` | its Gru is `queued` |
+| `done` | its Gru `reported` or `ended`, and its run file is gone |
 | `in work` | anything else |
 
 ```

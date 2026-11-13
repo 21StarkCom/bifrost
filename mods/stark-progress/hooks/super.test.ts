@@ -171,6 +171,13 @@ test("an ended Gru's epic keeps its tickets, their titles and its Gru's counts o
   expect(ended?.epicStats[0]).toMatchObject({ epic: 'STARK-1', busyMs: 40 * 60_000, calls: 47 })
   expect(ended?.stats.sessions.map(s => s.who)).toContain('Gru STARK-1')
   expect(superReads('super-SUPER-1.json', gone, memory?.epics)).toContain('STARK-13.json')
+  // A later run with this launch id, its Gru queued again: what was kept is the earlier run's, so the epic waits.
+  const again: Record<string, string> = {
+    ...gone,
+    'super-SUPER-1.json': (gone['super-SUPER-1.json'] ?? '').replace('"state":"reported"', '"state":"queued"'),
+  }
+  expect(buildSuper('super-SUPER-1.json', again, new Map(), T0, new Map(), memory)?.rows.map(stateWords)).toEqual(['waiting', 'blocked 1/2'])
+  expect(rememberSuper('super-SUPER-1.json', again, memory)?.epics['STARK-1']).toBeUndefined()
   // Without the memory, the ended epic has no count, as before.
   expect(buildSuper('super-SUPER-1.json', gone, new Map(), T0)?.rows.map(stateWords)).toEqual(['done', 'blocked 1/2'])
   // Another run's memory is not this run's.
@@ -224,4 +231,18 @@ test('GitHub: an open or draft PR with a failed head run is in the failing box, 
   const g = buildSuper('super-SUPER-1.json', WITH_PRS, new Map(), T0, answers(true))?.github
   expect(g?.failing.map(f => [f.id, f.number, f.runs])).toEqual([['STARK-22', 447, [expect.stringMatching(/^ci #\d+$/)]]])
   expect(g?.epics.map(e => e.failing)).toEqual([0, 1])
+})
+
+test('a ticket two epics list counts once, and an ended Gru that left a blocked ticket leaves its epic blocked', () => {
+  const files: Record<string, string> = {
+    ...TWO_EPICS,
+    'run-STARK-2.json': JSON.stringify({ epic: 'STARK-2', session: 'gru-b-session', tickets: ['STARK-21', 'STARK-22', 'STARK-11'] }),
+  }
+  expect(buildSuper('super-SUPER-1.json', files, new Map(), T0)?.tickets).toBe(5)
+
+  const memory = rememberSuper('super-SUPER-1.json', files, null)
+  const gone: Record<string, string> = { ...files }
+  delete gone['run-STARK-2.json']
+  gone['super-SUPER-1.json'] = (gone['super-SUPER-1.json'] ?? '').replace('"state":"live"', '"state":"ended"')
+  expect(buildSuper('super-SUPER-1.json', gone, new Map(), T0, new Map(), memory)?.rows.map(stateWords)).toEqual(['done 3/3', 'blocked 2/3'])
 })

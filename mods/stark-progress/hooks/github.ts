@@ -287,6 +287,7 @@ export function buildSuperGithub(
     answers,
   )
   const byId = new Map(view.prs.map(p => [p.id, p]))
+  const waiting = new Set(view.waiting)
   const failingRuns = (pr: GithubPr) => (isLive(pr) ? pr.runs.filter(r => r.mark === '✕') : [])
   const rows: EpicGithub[] = owned.map(e => {
     const prs = e.tickets.flatMap(t => byId.get(t.id) ?? []).map(p => p.pr)
@@ -295,6 +296,7 @@ export function buildSuperGithub(
     return {
       epic: e.epic,
       ids: e.tickets.filter(t => byId.has(t.id)).map(t => t.id),
+      waiting: e.tickets.filter(t => waiting.has(t.id)).length,
       merged: of('MERGED'),
       open: of('OPEN'),
       draft: of('DRAFT'),

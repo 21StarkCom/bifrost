@@ -738,7 +738,8 @@ export function statsTab(
       <Box flexDirection="column">
         <Text bold>Model and effort</Text>
         {view.sessions.map(s => (
-          <Box key={`s${s.id ?? s.who ?? 'own'}`} columnGap={1} paddingLeft={2}>
+          // `who` repeats on the Super-Gru pane (`1 worker` for each pair of model and effort): its words keep the key apart.
+          <Box key={`s${s.id ?? `${s.who ?? 'own'} ${s.words}`}`} columnGap={1} paddingLeft={2}>
             {s.id === null ? (
               <Text color={P.blue}>{s.who ?? (view.columns.length > 0 ? 'Gru' : 'This session')}</Text>
             ) : (
@@ -982,6 +983,70 @@ export function prCard(ui: UI, w: number, item: GithubView['prs'][number], now: 
   )
 }
 
+/**
+ * The head of a GitHub tab: its title, the PRs by state, their head runs, `size`
+ * when given, when GitHub answered and what the tab asks next (`asks`), and each error.
+ */
+export function githubHead(ui: UI, gh: GithubView, title: string, asks: string, size: ReturnType<typeof countsText> | null = null) {
+  const { Box, Text, P } = ui
+  const c = gh.counts
+
+  return (
+    <Box flexDirection="column">
+      <Text bold>{title}</Text>
+      {c.prs === 0 ? (
+        <Text color={P.text}>
+          {gh.waiting.length > 0 ? 'Asking GitHub for the PRs.' : 'No ticket of this run has a PR yet.'}
+        </Text>
+      ) : (
+        countsText(ui, `${c.prs === 1 ? '1 PR' : `${c.prs} PRs`}: `, [
+          [c.merged, 'merged', 'merged'],
+          [c.open, 'open', 'pr'],
+          [c.draft, 'draft', 'gray'],
+          [c.closed, 'closed', 'blocked'],
+        ])
+      )}
+      {c.prs > 0 &&
+        countsText(ui, 'runs: ', [
+          [c.passed, 'passed', 'green'],
+          [c.failing, 'failing', 'blocked'],
+          [c.running, 'running', 'blue'],
+          [c.queued, 'queued', 'gray'],
+        ])}
+      {c.prs > 0 && size}
+      {gh.readAt !== null && <Text color={P.hint}>{`Read from GitHub at ${clockOf(gh.readAt)}. ${asks}`}</Text>}
+      {gh.errors.map((e, i) => (
+        <Text key={`e${i}`} color={P.amber}>
+          {e}
+        </Text>
+      ))}
+    </Box>
+  )
+}
+
+/** The foot of a GitHub tab: the tickets GitHub has not answered for yet, and the tickets with no PR; null with neither. */
+export function githubFoot(ui: UI, w: number, gh: GithubView) {
+  const { Box, Text, P } = ui
+  const ids = (lead: string, key: string, list: readonly string[]) => (
+    <Box flexDirection="column">
+      <Text color={P.hint}>{lead}</Text>
+      <Box flexWrap="wrap" columnGap={1} paddingLeft={2}>
+        {list.map(id => (
+          <Box key={`${key}${id}`}>{ticketLabel(ui, id, '', w)}</Box>
+        ))}
+      </Box>
+    </Box>
+  )
+  if (gh.waiting.length === 0 && gh.noPr.length === 0) return null
+
+  return (
+    <Box flexDirection="column" gap={1}>
+      {gh.waiting.length > 0 && ids('Waiting for GitHub:', 'w', gh.waiting)}
+      {gh.noPr.length > 0 && ids('No PR yet:', 'n', gh.noPr)}
+    </Box>
+  )
+}
+
 /** The PR groups while done tickets go last: open and draft PRs first, then merged, then closed, each in run order. */
 const PR_GROUPS: readonly (readonly [string, readonly GithubPr['state'][]])[] = [
   ['Open', ['OPEN', 'DRAFT']],
@@ -998,7 +1063,6 @@ export function githubTab(
   view: Pick<PaneView, 'ghFocus' | 'setGhFocus' | 'doneLast'>,
 ) {
   const { Box, Text, P } = ui
-  const c = gh.counts
   const groups: { name: string | null; prs: GithubView['prs'] }[] = view.doneLast
     ? PR_GROUPS.map(([name, states]) => ({ name, prs: gh.prs.filter(p => states.includes(p.pr.state)) })).filter(
         g => g.prs.length > 0,
@@ -1007,36 +1071,7 @@ export function githubTab(
 
   return (
     <Box flexDirection="column" gap={1}>
-      <Box flexDirection="column">
-        <Text bold>🐙 GitHub</Text>
-        {c.prs === 0 ? (
-          <Text color={P.text}>
-            {gh.waiting.length > 0 ? 'Asking GitHub for the PRs.' : 'No ticket of this run has a PR yet.'}
-          </Text>
-        ) : (
-          countsText(ui, `${c.prs === 1 ? '1 PR' : `${c.prs} PRs`}: `, [
-            [c.merged, 'merged', 'merged'],
-            [c.open, 'open', 'pr'],
-            [c.draft, 'draft', 'gray'],
-            [c.closed, 'closed', 'blocked'],
-          ])
-        )}
-        {c.prs > 0 &&
-          countsText(ui, 'runs: ', [
-            [c.passed, 'passed', 'green'],
-            [c.failing, 'failing', 'blocked'],
-            [c.running, 'running', 'blue'],
-            [c.queued, 'queued', 'gray'],
-          ])}
-        {gh.readAt !== null && (
-          <Text color={P.hint}>{`Read from GitHub at ${clockOf(gh.readAt)}. The tab asks again each minute while it is open.`}</Text>
-        )}
-        {gh.errors.map((e, i) => (
-          <Text key={`e${i}`} color={P.amber}>
-            {e}
-          </Text>
-        ))}
-      </Box>
+      {githubHead(ui, gh, '🐙 GitHub', 'The tab asks again each minute while it is open.')}
 
       {/* An empty row between two PRs, and above and below each group's line. */}
       {gh.prs.length > 0 && (
@@ -1049,26 +1084,7 @@ export function githubTab(
         </Box>
       )}
 
-      {gh.waiting.length > 0 && (
-        <Box flexDirection="column">
-          <Text color={P.hint}>Waiting for GitHub:</Text>
-          <Box flexWrap="wrap" columnGap={1} paddingLeft={2}>
-            {gh.waiting.map(id => (
-              <Box key={`w${id}`}>{ticketLabel(ui, id, '', w)}</Box>
-            ))}
-          </Box>
-        </Box>
-      )}
-      {gh.noPr.length > 0 && (
-        <Box flexDirection="column">
-          <Text color={P.hint}>No PR yet:</Text>
-          <Box flexWrap="wrap" columnGap={1} paddingLeft={2}>
-            {gh.noPr.map(id => (
-              <Box key={`n${id}`}>{ticketLabel(ui, id, '', w)}</Box>
-            ))}
-          </Box>
-        </Box>
-      )}
+      {githubFoot(ui, w, gh)}
     </Box>
   )
 }

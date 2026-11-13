@@ -96,6 +96,8 @@ let ownSuperFile = ''
 let isSuperEnded = false
 /** What this tab kept of each epic's Gru, as the session's state holds it; undefined until this load reads it. */
 let superMemory: SuperMemory | null | undefined
+/** superMemory as JSON, as this load last wrote it: a poll compares one string, not two. */
+let superMemoryKey = ''
 /** True while the last poll found this worker tab's own ticket file. */
 let isOwnFileFound = false
 /** The ownTicket atom's value as this load of the mod last wrote or read it, or null before the first poll. */
@@ -304,7 +306,12 @@ export const register: Register = on => {
       // The time since the last poll: open, and busy while the main loop is in a turn.
       if (addTime(stats, lastTick === 0 ? 0 : now - lastTick, isTurning || agentTurns.size > 0, now)) isStatsDirty = true
       lastTick = now
-      const listed = await $.fs.list(dir).catch(() => [])
+      // A listing that failed is no file's end: the Super-Gru run ends only on a listing without its file.
+      let isListed = true
+      const listed = await $.fs.list(dir).catch(() => {
+        isListed = false
+        return []
+      })
       // A log file is JSON Lines (`.jsonl`); every other file is whole JSON.
       const jsons = listed.filter(f => f.kind === 'file' && (f.name.endsWith('.json') || f.name.endsWith('.jsonl')))
       const names = new Set(jsons.map(f => f.name))
@@ -338,7 +345,7 @@ export const register: Register = on => {
       }
       // What this tab kept of each epic's Gru: read once per load (a reload keeps it in the session's state).
       if (superMemory === undefined) superMemory = await read($, superMemoryAtom)
-      const kept = superName !== null && superMemory?.launchId === superIdOf(superName) ? superMemory.epics : {}
+      const superKept = superName !== null && superMemory?.launchId === superIdOf(superName) ? superMemory.epics : {}
       const isSuperUnread = superName === null && ownSuperFile !== '' && names.has(ownSuperFile) && files[ownSuperFile] === undefined
       const run = ownRun(session, files)
       const own = run === null ? ticketOf(root) : null
@@ -387,18 +394,20 @@ export const register: Register = on => {
         // An epic that is a ticket of its own run takes its title from its own file, as the Gru pane's does.
         ...(epicRun !== undefined && epicRun.tickets.includes(epicRun.epic) ? [`${epicRun.epic}.json`] : []),
         ...(statsAnchor === null ? [] : [statsAnchor.name]),
-        ...(superName === null ? [] : superReads(superName, files, kept)),
+        ...(superName === null ? [] : superReads(superName, files, superKept)),
       ])
       // This tab's own stats file is read once, for the seed: its counts are in memory after that.
       reads.delete(statsSeededFor)
       await Promise.all([...reads].map(load))
       // Then the logs of the Super-Gru board's blocked tickets: their last line says what each waits on.
-      if (superName !== null) await Promise.all(superLogs(superName, files, kept).map(load))
+      if (superName !== null) await Promise.all(superLogs(superName, files, superKept).map(load))
       // Keep what each epic's Gru files say while they exist: the Gru deletes them at its end.
       if (superName !== null) {
         const remembered = rememberSuper(superName, files, superMemory)
-        if (JSON.stringify(remembered) !== JSON.stringify(superMemory)) {
+        const key = JSON.stringify(remembered)
+        if (key !== superMemoryKey) {
           superMemory = remembered
+          superMemoryKey = key
           await update($, superMemoryAtom, () => remembered)
         }
       }
@@ -511,7 +520,7 @@ export const register: Register = on => {
       if (isGithubShown || isSuperGithubShown) {
         const ids = new Set([
           ...(isGithubShown ? shown.tickets : []),
-          ...(isSuperGithubShown && superName !== null ? superTickets(superName, files, kept) : []),
+          ...(isSuperGithubShown && superName !== null ? superTickets(superName, files, superKept) : []),
         ])
         const refs = [...ids].flatMap(id => {
           const ref = prRefOf(parse(files[`${id}.json`])?.pr)
@@ -523,18 +532,23 @@ export const register: Register = on => {
       wasSuperGithubShown = isSuperGithubShown
 
       // Super-Gru deleted its run file at its end: the pane keeps the last board, marked ended, and draws no more.
-      const isSuperGone = superName === null && ownSuperFile !== '' && !names.has(ownSuperFile)
+      const isSuperGone = isListed && superName === null && ownSuperFile !== '' && !names.has(ownSuperFile)
       if (isSuperGone) {
         if (!isSuperEnded) {
           isSuperEnded = true
           lastSuper = ''
           await update($, superAtom, b => (b === null || b.endedAt !== null ? b : { ...b, endedAt: now }))
+          // The ended board keeps its counts; what was kept of each Gru is no later run's, even one with this launch id.
+          superMemory = null
+          superMemoryKey = 'null'
+          await update($, superMemoryAtom, () => null)
         }
       } else {
         const shownSuper = superName === null ? null : buildSuper(superName, files, epicTitles, now, ghAnswers, superMemory ?? null)
         for (const r of shownSuper?.rows ?? []) if (r.title === null) askEpicTitle($, r.epic, now)
         const superKey = shownSuper === null ? 'null' : JSON.stringify([{ ...shownSuper, readAt: 0 }, Math.floor(now / 60_000)])
-        if (superKey !== lastSuper && !isSuperUnread) {
+        // A listing that failed leaves the board as it is, as a run file it could not read does.
+        if (superKey !== lastSuper && !isSuperUnread && isListed) {
           lastSuper = superKey
           // A tab with no run of its own keeps an ended board, in this load and after a reload.
           await update($, superAtom, b => (shownSuper === null && b !== null && b.endedAt !== null ? b : shownSuper))

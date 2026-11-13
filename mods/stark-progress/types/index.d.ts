@@ -377,6 +377,8 @@ export type EpicGithub = {
   epic: string
   /** Its tickets with a PR GitHub answered for, in run order. */
   ids: string[]
+  /** Its tickets with a PR GitHub has not answered for yet. */
+  waiting: number
   merged: number
   open: number
   draft: number
@@ -412,6 +414,8 @@ export type SuperBoard = {
   /** Super-Gru's own counts, the Grus', the workers' and the whole run's. */
   stats: StatsView
   epicStats: EpicStats[]
+  /** The run's tickets, each once, however many epics list it. */
+  tickets: number
   github: SuperGithub
   /** When Super-Gru deleted its run file at the end, or null while it runs: the pane then keeps this last board. */
   endedAt: number | null

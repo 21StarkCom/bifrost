@@ -5,6 +5,8 @@ import {
   countsText,
   cut,
   divider,
+  githubFoot,
+  githubHead,
   markText,
   PR_INK,
   prCard,
@@ -125,11 +127,10 @@ function epicTable(ui: UI, rows: readonly EpicStats[]) {
 
 /** The Mega stats tab: the Gru pane's Stats table in four columns, then one row for each epic. */
 function megaStats(ui: UI, w: number, b: SuperBoard) {
-  const tickets = b.rows.reduce((n, r) => n + (r.total ?? 0), 0)
 
   return statsTab(ui, w, b.stats, b.readAt, {
     title: `Mega stats for ${b.launchId}`,
-    who: `Super-Gru's own counts, its Grus', its workers', and the whole run's: ${counted(b.rows.length, 'epic')}, ${counted(tickets, 'ticket')}.`,
+    who: `Super-Gru's own counts, its Grus', its workers', and the whole run's: ${counted(b.rows.length, 'epic')}, ${counted(b.tickets, 'ticket')}.`,
     empty: "No stats yet. The mod counts in Super-Gru's tab, in each Gru's tab and in each worker's tab, once each has the mod.",
     after: epicTable(ui, b.epicStats),
   })
@@ -204,46 +205,23 @@ function github(ui: UI, w: number, b: SuperBoard, view: SuperPaneView) {
   const c = gh.counts
   const idWidth = Math.max(...g.epics.map(e => e.epic.length), 4) + 2
   const prsWord = (n: number) => (n === 1 ? '1 PR' : `${n} PRs`)
+  const size = (
+    <Text color={P.text}>
+      <Text color={P.green}>{`+${grouped(g.added)}`}</Text>
+      <Text color={P.blocked}>{` −${grouped(g.removed)}`}</Text>
+      {` in ${counted(g.commits, 'commit')}`}
+    </Text>
+  )
 
   return (
     <Box flexDirection="column" gap={1}>
-      <Box flexDirection="column">
-        <Text bold>🐙 GitHub activity</Text>
-        {c.prs === 0 ? (
-          <Text color={P.text}>
-            {gh.waiting.length > 0 ? 'Asking GitHub for the PRs.' : 'No ticket of this run has a PR yet.'}
-          </Text>
-        ) : (
-          countsText(ui, `${prsWord(c.prs)}: `, [
-            [c.merged, 'merged', 'merged'],
-            [c.open, 'open', 'pr'],
-            [c.draft, 'draft', 'gray'],
-            [c.closed, 'closed', 'blocked'],
-          ])
-        )}
-        {c.prs > 0 &&
-          countsText(ui, 'runs: ', [
-            [c.passed, 'passed', 'green'],
-            [c.failing, 'failing', 'blocked'],
-            [c.running, 'running', 'blue'],
-            [c.queued, 'queued', 'gray'],
-          ])}
-        {c.prs > 0 && (
-          <Text color={P.text}>
-            <Text color={P.green}>{`+${grouped(g.added)}`}</Text>
-            <Text color={P.blocked}>{` −${grouped(g.removed)}`}</Text>
-            {` in ${counted(g.commits, 'commit')}`}
-          </Text>
-        )}
-        {gh.readAt !== null && (
-          <Text color={P.hint}>{`Read from GitHub at ${clockOf(gh.readAt)}. The tab asks again each minute while it is open.`}</Text>
-        )}
-        {gh.errors.map((e, i) => (
-          <Text key={`e${i}`} color={P.amber}>
-            {e}
-          </Text>
-        ))}
-      </Box>
+      {githubHead(
+        ui,
+        gh,
+        '🐙 GitHub activity',
+        b.endedAt === null ? 'The tab asks again each minute while it is open.' : 'The run ended: the tab asks no more.',
+        size,
+      )}
 
       {c.prs > 0 && (
         <Box flexDirection="column">
@@ -252,7 +230,7 @@ function github(ui: UI, w: number, b: SuperBoard, view: SuperPaneView) {
             <Text key={`ge${e.epic}`} wrap="truncate-end">
               <Text bold>{`  ${e.epic.padEnd(idWidth)}`}</Text>
               {e.ids.length === 0 ? (
-                <Text color={P.hint}>no PR yet</Text>
+                <Text color={P.hint}>{e.waiting > 0 ? 'waiting for GitHub' : 'no PR yet'}</Text>
               ) : (
                 countsText(ui, `${prsWord(e.ids.length)}: `, [
                   [e.merged, 'merged', 'merged'],
@@ -304,26 +282,7 @@ function github(ui: UI, w: number, b: SuperBoard, view: SuperPaneView) {
         </Box>
       )}
 
-      {gh.waiting.length > 0 && (
-        <Box flexDirection="column">
-          <Text color={P.hint}>Waiting for GitHub:</Text>
-          <Box flexWrap="wrap" columnGap={1} paddingLeft={2}>
-            {gh.waiting.map(id => (
-              <Box key={`w${id}`}>{ticketLabel(ui, id, '', w)}</Box>
-            ))}
-          </Box>
-        </Box>
-      )}
-      {gh.noPr.length > 0 && (
-        <Box flexDirection="column">
-          <Text color={P.hint}>No PR yet:</Text>
-          <Box flexWrap="wrap" columnGap={1} paddingLeft={2}>
-            {gh.noPr.map(id => (
-              <Box key={`n${id}`}>{ticketLabel(ui, id, '', w)}</Box>
-            ))}
-          </Box>
-        </Box>
-      )}
+      {githubFoot(ui, w, gh)}
     </Box>
   )
 }
