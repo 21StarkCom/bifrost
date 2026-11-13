@@ -535,17 +535,22 @@ export const settingRow = (ui: UI, w: number, label: string, control: ReturnType
   )
 }
 
-/** The pane's tabs, each with its hotkey. */
-export function tabBar(ui: UI, tab: PaneTab, setTab: (tab: PaneTab) => unknown, hasGithub = false) {
+/** Each tab's hotkey and label. */
+const TABS: Record<PaneTab, readonly [string, string]> = {
+  overview: ['o', 'Overview'],
+  log: ['l', 'Log'],
+  stats: ['t', 'Stats'],
+  github: ['g', 'GitHub'],
+  settings: ['s', 'Settings'],
+}
+
+/** The ticket pane's tabs; the Gru pane adds GitHub between Stats and Settings. */
+export const TICKET_TABS: readonly PaneTab[] = ['overview', 'log', 'stats', 'settings']
+
+/** The pane's tabs `ids`, in that order, each with its hotkey. */
+export function tabBar(ui: UI, tab: PaneTab, setTab: (tab: PaneTab) => unknown, ids: readonly PaneTab[] = TICKET_TABS) {
   const { Box, Button, Text, P } = ui
-  // Only the Gru pane has a GitHub tab, between Stats and Settings.
-  const tabs: (readonly [PaneTab, string, string])[] = [
-    ['overview', 'o', 'Overview'],
-    ['log', 'l', 'Log'],
-    ['stats', 't', 'Stats'],
-    ...(hasGithub ? [['github', 'g', 'GitHub'] as const] : []),
-    ['settings', 's', 'Settings'],
-  ]
+  const tabs = ids.map(id => [id, ...TABS[id]] as const)
 
   return (
     <Box columnGap={3}>
@@ -1075,7 +1080,7 @@ export function drawPane(ui: UI, w: number, view: PaneView) {
 
   return (
     <Box flexDirection="column" gap={1}>
-      {tabBar(ui, view.tab, view.setTab, true)}
+      {tabBar(ui, view.tab, view.setTab, ['overview', 'log', 'stats', 'github', 'settings'])}
       {view.tab === 'settings'
         ? settings(ui, w, board, view)
         : view.tab === 'github'

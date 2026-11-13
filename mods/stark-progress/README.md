@@ -10,7 +10,9 @@ merge and its release; one progress row above the prompt stands in while that
 pane is not placed. Each says where a ticket
 is, whether its worker is doing anything, and whether that work gets anywhere:
 a worker that is busy for hours with no commit and no stage change reads
-`stalled`, not "20% done". Neither ever forecasts the time left. Both draw in
+`stalled`, not "20% done". Super-Gru's tab gets the Super-Gru pane: one row
+for each epic of its run, and the settings Super-Gru reads. No pane ever
+forecasts the time left. All three draw in
 the terminal and in the Claude desktop app's Code tab. The mod polls
 the state files below once a second, and git once every 30 seconds; it asks
 alfred for an epic's title until it has one, and GitHub once a minute while
@@ -536,6 +538,38 @@ over the one before it. The worker reads the file at three points of
 A hold is no stop: the worker writes `hold` into its ticket file, reports
 `held`, and waits in one background command until you clear the setting.
 
+## The Super-Gru pane
+
+Super-Gru's tab (the session that a `super-<id>.json` file names as its
+`session`) opens the Super-Gru pane once, the first time it finds that file.
+`/super-board` opens it again there, and only there. It has two tabs:
+
+- **Overview**: one row for each epic, in the run's order: its state, its
+  tickets done of its total, its Gru (the first 8 characters of its session
+  id, else its launch id) and that Gru's state, and the epic's title from
+  alfred. Below the rows, each blocked ticket of each epic is worth a look,
+  with the last line of its log as what it waits on.
+- **Settings**: `maxWorkers` and `parallel` (1 to 8; a launch above 8 keeps
+  its value until `−` steps it down), `followUps` and `decideForMe`. A press
+  writes all four, whole, to `super-<id>.settings.json`. Super-Gru reads that
+  file before it starts each Gru, and at each tick while an epic waits, so a
+  raised `parallel` starts a Gru at the next tick.
+
+An epic's counts come from its Gru's run file (`run-<launch>.json`) and its
+tickets' files, as the Gru pane reads them. Its state:
+
+| State | When |
+|---|---|
+| `done` | every ticket of its run is `closed`; or its Gru `reported` or `ended` and its run file is gone (no count then) |
+| `blocked` | any ticket of its run is `blocked` |
+| `waiting` | its Gru is `queued` |
+| `in work` | anything else |
+
+```
+✅ STARK-100  done 3/3     Gru a3e9d0f2 reported  meridian-gcp: FinOps answers
+⛔ STARK-200  blocked 1/2  Gru 6f1c2a9e live      meridian-support: answers
+```
+
 ## How a row reads
 
 A worker's band row:
@@ -579,7 +613,12 @@ A worker's band row:
 ## The state contract
 
 The skills write the ticket, run and log files; the mod writes the heartbeat,
-the stats and the settings files. The ticket, run, log and settings files are runtime-neutral: a
+the stats and the settings files. The Super-Gru run file,
+`super-<id>.json`, has its shape in
+[the super-gru skill's run-file doc](../../skill/super-gru/references/run-file.md);
+its settings file, `super-<id>.settings.json`, holds `maxWorkers`,
+`parallel`, `followUps` and `decideForMe`, and Super-Gru deletes it with its
+run file when the run ends. The ticket, run, log and settings files are runtime-neutral: a
 Codex Gru or worker writes and reads them too, and only a Claude Code session
 draws them. Every file but a log is whole JSON, written atomically: a writer writes
 `<name>.json.tmp` beside it and renames it over `<name>.json`, so a poll never
@@ -741,6 +780,9 @@ zero or absent. A `*.stats.json` file is never a run file.
   exists, its band row while the pane is not placed, and writes its
   heartbeat and its stats file. `/ticket-board` opens the pane there, and
   only there.
+- A session that a `super-<id>.json` file names as its `session` is
+  Super-Gru's tab: it shows that run in the Super-Gru pane, and reads each
+  epic's run file, its tickets' files and its blocked tickets' logs.
 - Any session shows the Gru pane after `/gru-board`.
 - Nothing matching draws nothing, and writes no stats file.
 

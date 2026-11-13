@@ -2231,3 +2231,73 @@ test("a PR number GitHub does not know keeps the repo's other PRs and names the 
   ).toBeDefined()
   expect(await pane.find({ type: 'Text', text: 'Waiting for GitHub:' })).toBeDefined()
 })
+
+const SUPER_PANE = { ...PANE, requestId: 'super-board', props: { ...PANE.props, title: 'Super-Gru' } } as const
+
+test("Super-Gru's tab opens its board: one row per epic, a blocked ticket worth a look, and settings it writes whole", async ($, on) => {
+  const disk: Record<string, string> = {
+    'super-SUPER-1.json': JSON.stringify({
+      session: 'sg',
+      epics: ['STARK-1', 'STARK-2'],
+      grus: {
+        'STARK-1': { launch: 'STARK-1', session: 'aaaaaaaa-1', state: 'reported' },
+        'STARK-2': { launch: 'STARK-2', session: 'bbbbbbbb-2', state: 'live' },
+      },
+      settings: { maxWorkers: 4, parallel: 1, minionAgent: 'claude', followUps: true, decideForMe: true },
+    }),
+    'run-STARK-1.json': JSON.stringify({ epic: 'STARK-1', session: 'aaaaaaaa-1', tickets: ['STARK-11', 'STARK-12', 'STARK-13'] }),
+    'run-STARK-2.json': JSON.stringify({ epic: 'STARK-2', session: 'bbbbbbbb-2', tickets: ['STARK-21', 'STARK-22'] }),
+    'STARK-11.json': ticket('STARK-11', 'closed'),
+    'STARK-12.json': ticket('STARK-12', 'closed'),
+    'STARK-13.json': ticket('STARK-13', 'closed'),
+    'STARK-21.json': ticket('STARK-21', 'closed'),
+    'STARK-22.json': ticket('STARK-22', 'blocked'),
+    'STARK-22.log.jsonl': `${JSON.stringify({ at: new Date(T0).toISOString(), text: 'Stopped: waits on a change in idun.' })}\n`,
+  }
+  const seen = stage(on, disk, { session: 'sg', root: '/r' })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  await clock.advance(1000)
+  expect(seen.opens).toEqual(['super-board'])
+
+  const pane = await $.ui.mount(SUPER_PANE)
+  expect(await pane.find({ type: 'Text', text: /^done 3\/3 *$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^blocked 1\/2 *$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'Gru bbbbbbbb live' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'STARK-22 (STARK-2) is blocked: Stopped: waits on a change in idun.' })).toBeDefined()
+
+  await pane.press({ key: 'tab-settings' })
+  expect(await pane.find({ type: 'Text', text: 'Super-Gru runs up to 1 Gru at once.' })).toBeDefined()
+  await pane.press({ key: 'set-parallel-more' })
+  await pane.press({ key: 'set-decide' })
+  expect(JSON.parse(disk['super-SUPER-1.settings.json'] ?? '{}')).toEqual({
+    maxWorkers: 4,
+    parallel: 2,
+    followUps: true,
+    decideForMe: false,
+  })
+  expect(await pane.find({ type: 'Text', text: 'Super-Gru runs up to 2 Grus at once.' })).toBeDefined()
+  await pane.unmount()
+
+  // The super file stays listed, but its read fails for one poll: the board stays.
+  seen.failReads.add('super-SUPER-1.json')
+  await clock.advance(1000)
+  const missed = await $.ui.mount(SUPER_PANE)
+  await missed.press({ key: 'tab-overview' })
+  expect(await missed.find({ type: 'Text', text: 'No Super-Gru run' })).toBeUndefined()
+  expect(await missed.find({ type: 'Text', text: /^blocked 1\/2 *$/ })).toBeDefined()
+})
+
+test('a tab whose session is no Super-Gru opens no Super-Gru board', async ($, on) => {
+  const disk: Record<string, string> = {
+    'super-SUPER-1.json': JSON.stringify({ session: 'sg', epics: ['STARK-1'], grus: {} }),
+  }
+  const seen = stage(on, disk, { session: 'other', root: '/r' })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  expect(seen.opens).toEqual([])
+  const ran = await $.command.run(command('super-board'))
+  expect(JSON.stringify(ran)).toMatch(/no Super-Gru run/)
+})

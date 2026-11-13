@@ -52,13 +52,18 @@ the launcher of this epic read the same shape.
    `~/.agents/skills/muninn/scripts/join.sh super-<n> super-gru claude-code "$(pwd)"`,
    then `/muninn actas super-gru`. Take each choice it asks for from this
    skill, and ask nobody.
-3. **Start a Gru** for the next `queued` epic while fewer than `--parallel`
-   Grus are `live`:
+3. **Start a Gru** for the next `queued` epic while fewer than `parallel`
+   Grus are `live`. Read the settings first, at each pass of this step:
+   `~/.cache/stark-progress/super-<launch id>.settings.json` if it exists.
+   The Super-Gru pane writes it, and each of its fields (`maxWorkers`,
+   `parallel`, `followUps`, `decideForMe`) wins over the run's value
+   (`--max-workers`, `--parallel`). Then:
    1. Write `~/.cache/stark-progress/run-<epic>.settings.json` by
       [the run-file doc](references/run-file.md#the-settings-file-of-each-epic):
-      `maxWorkers`, `followUps` true, `decideForMe` true and `minionAgent`.
+      `maxWorkers`, `followUps`, `decideForMe` and `minionAgent`.
       The operator chose `followUps` and `decideForMe` true for every
-      Super-Gru run on 2026-11-13.
+      Super-Gru run on 2026-11-13; only the pane's settings file sets them
+      false.
    2. Join the Gru's member `gru-<m>` (`<m>` the epic's number) before the
       launch, as `valkyrie gru --help` says, with the Gru's worktree as its
       path:
@@ -74,8 +79,9 @@ the launcher of this epic read the same shape.
       `Needs you (Your hands: …)` line.
    4. Send the kickoff note by muninn:
       `~/.agents/skills/muninn/scripts/send.sh super-<n> super-gru gru-<m> '<text>'`.
-      It names the terms of the run (N, `followUps` and `decideForMe` true,
-      the Minion agent, and that you answer in the operator's place) and each
+      It names the terms of the run (N, `followUps` and `decideForMe` as
+      this step read them, the Minion agent, and that you answer in the
+      operator's place) and each
       known shared block, with the epic that holds it.
 4. **Wait.** Keep the muninn listener of
    [the Gru leader doc](../gru/references/leader-muninn.md#wait) armed for
@@ -103,7 +109,9 @@ the launcher of this epic read the same shape.
       (`alfred task move <epic> done`).
    3. Send one report, with a table: each epic, its Gru, its tickets done,
       its open items and its state.
-   4. Delete the run file.
+   4. Delete the run file and its settings file
+      `~/.cache/stark-progress/super-<launch id>.settings.json`, so a later
+      run with the same launch id starts from its own arguments.
 
 ## Authority
 

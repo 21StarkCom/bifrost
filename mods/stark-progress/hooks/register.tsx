@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Cell, GitSignal, GruSettings, PaneTab, Row, Seg, TicketSettings, Tone } from '../types'
+import type { Cell, GitSignal, GruSettings, PaneTab, Row, Seg, SuperSettings, TicketSettings, Tone } from '../types'
 import { beatFile, callEnded, callStarted, newBeat, seedBeat } from './beat'
 import { buildBoard, clockOf, launchIdOf, parse, pickRun, runsOf, settingsName, tabIsLive } from './board'
 import { readGit } from './git'
@@ -24,6 +24,8 @@ import {
   statsName,
   statsOf,
 } from './stats'
+import { buildSuper, isSuperName, ownSuper, superLogs, superReads, superSettingsName, superSettingsOf } from './super'
+import { drawSuperPane } from './super-pane'
 import { buildTicket, epicRunOf, ticketSettingsName, ticketSettingsOf } from './ticket'
 import { drawTicketPane } from './ticket-pane'
 import { buildView, isRunName, ownRun, startsWorker, ticketOf, worktreeOf } from './view'
@@ -37,6 +39,7 @@ const ALIVE_MS = 60_000
 const PANE = 'gru-board'
 const PANE_TITLE = 'Gru'
 const TICKET_PANE = 'ticket-board'
+const SUPER_PANE = 'super-board'
 
 const view = atom({ plugin: 'stark-progress', key: 'view' } as const, null, { shape: 'view-2' })
 const board = atom({ plugin: 'stark-progress', key: 'board' } as const, null, { shape: 'board-7' })
@@ -53,6 +56,8 @@ const doneLastAtom = atom({ plugin: 'stark-progress', key: 'doneLast' } as const
 const DONE_LAST = 'doneLast'
 const ticketAtom = atom({ plugin: 'stark-progress', key: 'ticket' } as const, null, { shape: 'ticket-7' })
 const ticketTabAtom = atom({ plugin: 'stark-progress', key: 'ticketTab' } as const, 'overview' as PaneTab)
+const superAtom = atom({ plugin: 'stark-progress', key: 'superBoard' } as const, null, { shape: 'super-1' })
+const superTabAtom = atom({ plugin: 'stark-progress', key: 'superTab' } as const, 'overview' as PaneTab)
 /** The ticket whose file this worker's tab found, once found: its pane names the ticket's end after the file goes. */
 const ownTicketAtom = atom({ plugin: 'stark-progress', key: 'ownTicket' } as const, '')
 /** True once the person closed the ticket pane by hand in this session: only /ticket-board opens it again. */
@@ -68,6 +73,10 @@ let isPaneOpened = false
 // A worker's own tab: its ticket, and whether the ticket pane opened by itself yet.
 let ownTicket: string | null = null
 let isTicketPaneOpened = false
+/** Super-Gru's tab: whether its pane opened by itself yet. */
+let isSuperPaneOpened = false
+/** The name of this tab's own Super-Gru run file, once found: a poll that lists it but could not read it is no run's end. */
+let ownSuperFile = ''
 /** True while the last poll found this worker tab's own ticket file. */
 let isOwnFileFound = false
 /** The ownTicket atom's value as this load of the mod last wrote or read it, or null before the first poll. */
@@ -223,9 +232,11 @@ export const register: Register = on => {
   let last = ''
   let lastBoard = ''
   let lastTicket = ''
+  let lastSuper = ''
   // Settings presses apply one at a time, each over the one before it.
   let settingsWrites: Promise<void> = Promise.resolve()
   let ticketWrites: Promise<void> = Promise.resolve()
+  let superWrites: Promise<void> = Promise.resolve()
   let doneLastWrites: Promise<void> = Promise.resolve()
   let isPolling = false
   let polling: Promise<void> = Promise.resolve()
@@ -240,6 +251,10 @@ export const register: Register = on => {
     await $.command.register({
       name: 'ticket-board',
       description: "Open the ticket pane in a Minion's or Agnes's tab: its ticket, and the settings its worker reads",
+    })
+    await $.command.register({
+      name: 'super-board',
+      description: "Open the Super-Gru board in Super-Gru's tab: one row for each epic, and the settings Super-Gru reads",
     })
     // The pane's own choice outlives the session; a store that cannot be read leaves the default.
     // It loads in the background, so no session waits on it, and a press queues behind it.
@@ -294,7 +309,11 @@ export const register: Register = on => {
       // The run files first; then only the files this tab draws, so a
       // directory of old tickets costs a listing, not a read of each.
       const [root, session] = await Promise.all([$.session.root(), $.session.id()])
-      await Promise.all([...names].filter(isRunName).map(load))
+      await Promise.all([...names].filter(n => isRunName(n) || isSuperName(n)).map(load))
+      // Super-Gru's tab: its run file, found by its session. One listed but not read leaves its pane as it is.
+      const superName = ownSuper(session, files)
+      if (superName !== null) ownSuperFile = superName
+      const isSuperUnread = superName === null && ownSuperFile !== '' && names.has(ownSuperFile) && files[ownSuperFile] === undefined
       const run = ownRun(session, files)
       const own = run === null ? ticketOf(root) : null
       isWorker = own !== null
@@ -340,10 +359,13 @@ export const register: Register = on => {
         // An epic that is a ticket of its own run takes its title from its own file, as the Gru pane's does.
         ...(epicRun !== undefined && epicRun.tickets.includes(epicRun.epic) ? [`${epicRun.epic}.json`] : []),
         ...(statsAnchor === null ? [] : [statsAnchor.name]),
+        ...(superName === null ? [] : superReads(superName, files)),
       ])
       // This tab's own stats file is read once, for the seed: its counts are in memory after that.
       reads.delete(statsSeededFor)
       await Promise.all([...reads].map(load))
+      // Then the logs of the Super-Gru board's blocked tickets: their last line says what each waits on.
+      if (superName !== null) await Promise.all(superLogs(superName, files).map(load))
       // A worker's ticket file, listed but not read (a read that failed), is not the ticket's end:
       // this poll leaves the ticket pane, the band and the heartbeat as they are.
       const isTicketUnread = own !== null && names.has(`${own}.json`) && files[`${own}.json`] === undefined
@@ -427,6 +449,19 @@ export const register: Register = on => {
           // One an earlier load of the mod wrote, whose file is gone (Agnes deletes her ticket's at stand-down).
           await $.process.run(['rm', '-f', `${dir}/${name}`]).catch(() => undefined)
         }
+      }
+
+      // Super-Gru's tab opens its pane once, the first time its run file is found, and draws its epics.
+      if (superName !== null && !isSuperPaneOpened) {
+        isSuperPaneOpened = true
+        void $.ui.open({ id: SUPER_PANE, title: 'Super-Gru' }).catch(() => undefined)
+      }
+      const shownSuper = superName === null ? null : buildSuper(superName, files, epicTitles, now)
+      for (const r of shownSuper?.rows ?? []) if (r.title === null) askEpicTitle($, r.epic, now)
+      const superKey = shownSuper === null ? 'null' : JSON.stringify([{ ...shownSuper, readAt: 0 }, Math.floor(now / 60_000)])
+      if (superKey !== lastSuper && !isSuperUnread) {
+        lastSuper = superKey
+        await update($, superAtom, () => shownSuper)
       }
 
       // Gru's tab opens the pane once, the first time its run is found.
@@ -617,6 +652,54 @@ export const register: Register = on => {
         })
 
         return ticketWrites
+      },
+    })
+  })
+
+  on('command.run', { command: 'super-board' }, async $ => {
+    await pollNow()
+    if ((await read($, superAtom)) === null) {
+      return { text: "This tab has no Super-Gru run: /super-board opens in Super-Gru's own tab, once its super file is written." }
+    }
+    const opened = await $.ui.open({ id: SUPER_PANE, title: 'Super-Gru', focus: true, closeOnEscape: true })
+
+    return { text: opened.isPlaced ? 'The Super-Gru board is open.' : `The Super-Gru board waits: ${opened.reason}.` }
+  })
+
+  on('ui.render', { component: 'Pane', requestId: SUPER_PANE }, async ($, e) => {
+    const { Box, Text, Button } = $.ui.resolve(e)
+    const ui = { Box, Text, Button, P: paletteFor(e.surface) }
+    const shown = await read($, superAtom)
+
+    return drawSuperPane(ui, Math.max(e.props.bodyColumns, 40), {
+      board: shown,
+      tab: await read($, superTabAtom),
+      setTab: tab => update($, superTabAtom, () => tab),
+      // The whole settings, written as one file. Each press reads the file as it is now, after the presses before it,
+      // and writes only to the run the operator saw.
+      set: (change: (s: SuperSettings) => Partial<SuperSettings>) => {
+        const seen = shown?.launchId
+        superWrites = superWrites.catch(() => undefined).then(async () => {
+          const current = await read($, superAtom)
+          if (current === null || stateDir === '') return
+          if (current.launchId !== seen) {
+            await $.ui.toast('The board moved to another run. Press again.')
+            return
+          }
+          const path = `${stateDir}/${superSettingsName(current.launchId)}`
+          const before = superSettingsOf({ settings: current.settings }, await $.fs.read(path).catch(() => undefined))
+          const settings: SuperSettings = { ...before, ...change(before) }
+          try {
+            await writeWhole($, path, `${JSON.stringify(settings, null, 2)}\n`)
+          } catch {
+            await $.ui.toast('The settings were not saved.')
+            return
+          }
+          await update($, superAtom, b => (b !== null && b.launchId === current.launchId ? { ...b, settings } : b))
+          await pollNow()
+        })
+
+        return superWrites
       },
     })
   })

@@ -54,8 +54,10 @@ jq --arg e 'STARK-100' --arg s '<Gru session id>' --arg st 'live' '.grus[$e] = {
 ## The settings file of each epic
 
 Before each Gru starts, write its settings file. The Gru reads it before each
-launch, by [its progress-pane doc](../../gru/references/progress-pane.md):
+launch, by [its progress-pane doc](../../gru/references/progress-pane.md).
+Put in `maxWorkers`, `followUps` and `decideForMe` as the skill's step 3 read
+them:
 
 ```
-jq -n --argjson maxWorkers 4 --arg minionAgent 'claude' '{maxWorkers: $maxWorkers, followUps: true, decideForMe: true, minionAgent: $minionAgent}' > ~/.cache/stark-progress/run-STARK-100.settings.json.tmp && mv ~/.cache/stark-progress/run-STARK-100.settings.json.tmp ~/.cache/stark-progress/run-STARK-100.settings.json
+jq -n --argjson maxWorkers 4 --argjson followUps true --argjson decideForMe true --arg minionAgent 'claude' '{maxWorkers: $maxWorkers, followUps: $followUps, decideForMe: $decideForMe, minionAgent: $minionAgent}' > ~/.cache/stark-progress/run-STARK-100.settings.json.tmp && mv ~/.cache/stark-progress/run-STARK-100.settings.json.tmp ~/.cache/stark-progress/run-STARK-100.settings.json
 ```

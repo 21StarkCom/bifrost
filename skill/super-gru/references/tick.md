@@ -5,7 +5,9 @@ listener.
 
 1. **Free slots.** For each `live` or `reported` epic, test
    `~/.cache/stark-progress/run-<epic>.json`. A missing file is a free slot:
-   go to the skill's step 7.
+   go to the skill's step 7. Then, when an epic is `queued`, go to the
+   skill's step 3: it reads the settings again, so a `parallel` that the
+   pane raised starts a Gru now.
 2. **Screens.** Read the screen of each Gru tab and each Minion tab of the
    run: `tmux capture-pane -p -t <pane>` in tmux,
    `hermod read-screen <surface UUID> --lines 20` in cmux. Act only on these

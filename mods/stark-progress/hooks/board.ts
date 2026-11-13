@@ -36,7 +36,7 @@ const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? 
 const workers = (v: unknown): number | null =>
   typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= MAX_WORKERS ? v : null
 // The launch's `--max-workers` has no cap: a run launched above the pane's range keeps its N.
-const launched = (v: unknown): number | null => (typeof v === 'number' && Number.isInteger(v) && v >= 1 ? v : null)
+export const launched = (v: unknown): number | null => (typeof v === 'number' && Number.isInteger(v) && v >= 1 ? v : null)
 const agent = (v: unknown): 'claude' | 'codex' | null => (v === 'claude' || v === 'codex' ? v : null)
 const flag = (v: unknown): boolean | null => (typeof v === 'boolean' ? v : null)
 
