@@ -328,18 +328,17 @@ export type SuperRow = {
   /** Its closed tickets and all its tickets, from its Gru's run file; null with no run file. */
   done: number | null
   total: number | null
-  /** Its Gru's session id, else its launch id; null while the Gru is queued. */
+  /** Its Gru: its session id's first 8 characters, else its launch id; null while the Gru is queued. */
   gru: string | null
   gruState: 'queued' | 'live' | 'reported' | 'ended'
 }
 
 /** A blocked ticket of an epic, and what it waits on: its log's last line. */
-export type SuperLook = { epic: string; id: string; title: string | null; waits: string }
+export type SuperLook = { epic: string; id: string; waits: string }
 
 /** What the Super-Gru pane draws. */
 export type SuperBoard = {
   launchId: string
-  session: string
   rows: SuperRow[]
   looks: SuperLook[]
   settings: SuperSettings

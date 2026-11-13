@@ -1,6 +1,6 @@
 import type { PaneTab, SuperBoard, SuperRow, SuperSettings, SuperState } from '../types'
 import { clockOf, MAX_WORKERS } from './board'
-import { choice, cut, settingRow, toggle } from './pane'
+import { choice, cut, settingRow, tabBar, toggle } from './pane'
 import type { UI } from './pane'
 
 // The Super-Gru pane, in Super-Gru's own tab: one row for each epic, the
@@ -21,30 +21,6 @@ const ICON: Record<SuperState, string> = { waiting: '⏳', 'in work': '🚧', bl
 export const stateWords = (r: Pick<SuperRow, 'state' | 'done' | 'total'>) =>
   r.total === null ? r.state : `${r.state} ${r.done ?? 0}/${r.total}`
 
-function tabs(ui: UI, tab: PaneTab, setTab: (tab: PaneTab) => unknown) {
-  const { Box, Button, Text, P } = ui
-  const all: (readonly [PaneTab, string, string])[] = [
-    ['overview', 'o', 'Overview'],
-    ['settings', 's', 'Settings'],
-  ]
-
-  return (
-    <Box columnGap={3}>
-      {all.map(([id, hotkey, label]) => (
-        <Button key={`tab-${id}`} plain hotkey={hotkey} onPress={() => setTab(id)}>
-          {tab === id ? (
-            <Text bold underline>
-              {label}
-            </Text>
-          ) : (
-            <Text color={P.text}>{label}</Text>
-          )}
-        </Button>
-      ))}
-    </Box>
-  )
-}
-
 function overview(ui: UI, w: number, b: SuperBoard) {
   const { Box, Text, P } = ui
   const idWidth = Math.max(...b.rows.map(r => r.epic.length), 4) + 2
@@ -59,7 +35,7 @@ function overview(ui: UI, w: number, b: SuperBoard) {
       </Box>
       <Box flexDirection="column">
         {b.rows.map(r => {
-          const gru = r.gru === null ? 'no Gru yet' : `Gru ${r.gru.slice(0, 8)} ${r.gruState}`
+          const gru = r.gru === null ? 'no Gru yet' : `Gru ${r.gru} ${r.gruState}`
           const room = w - 3 - idWidth - stateWidth - gru.length - 2
 
           return (
@@ -94,11 +70,16 @@ function settings(ui: UI, w: number, b: SuperBoard, view: SuperPaneView) {
   const { Box, Text, P } = ui
   const s = b.settings
   const row = (label: string, control: ReturnType<typeof toggle>, about: string) => settingRow(ui, w, label, control, about)
+  // A launch above MAX_WORKERS steps down into range, and + never lowers it.
   const stepper = (key: 'maxWorkers' | 'parallel') => (
     <Box columnGap={1}>
-      {choice(ui, `${key}-fewer`, '−', () => view.set(now => ({ [key]: Math.max(1, now[key] - 1) })))}
+      {choice(ui, `${key}-fewer`, '−', () =>
+        view.set(now => ({ [key]: Math.max(1, Math.min(MAX_WORKERS, now[key] - 1)) })),
+      )}
       <Text>{String(s[key])}</Text>
-      {choice(ui, `${key}-more`, '+', () => view.set(now => ({ [key]: Math.min(MAX_WORKERS, now[key] + 1) })))}
+      {choice(ui, `${key}-more`, '+', () =>
+        view.set(now => ({ [key]: Math.max(now[key], Math.min(MAX_WORKERS, now[key] + 1)) })),
+      )}
     </Box>
   )
 
@@ -140,7 +121,7 @@ export function drawSuperPane(ui: UI, w: number, view: SuperPaneView) {
 
   return (
     <Box flexDirection="column" gap={1}>
-      {tabs(ui, view.tab, view.setTab)}
+      {tabBar(ui, view.tab, view.setTab, ['overview', 'settings'])}
       {view.tab === 'settings' ? settings(ui, w, b, view) : overview(ui, w, b)}
     </Box>
   )

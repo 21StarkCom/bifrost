@@ -2278,6 +2278,15 @@ test("Super-Gru's tab opens its board: one row per epic, a blocked ticket worth 
     decideForMe: false,
   })
   expect(await pane.find({ type: 'Text', text: 'Super-Gru runs up to 2 Grus at once.' })).toBeDefined()
+  await pane.unmount()
+
+  // The super file stays listed, but its read fails for one poll: the board stays.
+  seen.failReads.add('super-SUPER-1.json')
+  await clock.advance(1000)
+  const missed = await $.ui.mount(SUPER_PANE)
+  await missed.press({ key: 'tab-overview' })
+  expect(await missed.find({ type: 'Text', text: 'No Super-Gru run' })).toBeUndefined()
+  expect(await missed.find({ type: 'Text', text: /^blocked 1\/2 *$/ })).toBeDefined()
 })
 
 test('a tab whose session is no Super-Gru opens no Super-Gru board', async ($, on) => {

@@ -1,5 +1,5 @@
 import type { SuperBoard, SuperLook, SuperRow, SuperSettings, SuperState } from '../types'
-import { MAX_WORKERS, parse } from './board'
+import { launched, MAX_WORKERS, parse } from './board'
 import { logName, logOf } from './log'
 
 // What the Super-Gru pane draws (super-pane.tsx), from the Super-Gru run file
@@ -17,14 +17,25 @@ export const superSettingsName = (launchId: string) => `super-${launchId}.settin
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null)
 const flag = (v: unknown): boolean | null => (typeof v === 'boolean' ? v : null)
+/** A count in the settings file: 1 to MAX_WORKERS, as the pane steps it. */
 const count = (v: unknown): number | null =>
   typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= MAX_WORKERS ? v : null
+
+type Grus = Record<string, Record<string, unknown> | undefined>
+
+/** A Super-Gru run file, read: its epics, each once, and each epic's Gru; null when it is no such file. */
+function superRunOf(text: string | undefined): { run: Record<string, unknown>; epics: string[]; grus: Grus } | null {
+  const run = parse(text)
+  if (run === null || !Array.isArray(run.epics)) return null
+  const grus = (run.grus !== null && typeof run.grus === 'object' ? run.grus : {}) as Grus
+
+  return { run, epics: [...new Set(run.epics.filter((e): e is string => typeof e === 'string'))], grus }
+}
 
 /** The name of the first Super-Gru run file, by name, whose `session` is `session`, else null. */
 export function ownSuper(session: string, files: Record<string, string>): string | null {
   for (const name of Object.keys(files).filter(isSuperName).sort()) {
-    const run = parse(files[name])
-    if (run !== null && run.session === session && Array.isArray(run.epics)) return name
+    if (superRunOf(files[name])?.run.session === session) return name
   }
 
   return null
@@ -32,15 +43,17 @@ export function ownSuper(session: string, files: Record<string, string>): string
 
 /**
  * The settings of a Super-Gru run: the settings file's value, else the run
- * file's, else the default. A field of the wrong type reads as absent.
+ * file's, else the default. A field of the wrong type reads as absent. The
+ * run file's counts are the launch's, with no cap: a run launched above the
+ * pane's range keeps its value.
  */
 export function superSettingsOf(run: Record<string, unknown> | null, text: string | undefined): SuperSettings {
   const s = parse(text)
   const r = run?.settings !== null && typeof run?.settings === 'object' ? (run.settings as Record<string, unknown>) : null
 
   return {
-    maxWorkers: count(s?.maxWorkers) ?? count(r?.maxWorkers) ?? DEFAULT_WORKERS,
-    parallel: count(s?.parallel) ?? count(r?.parallel) ?? DEFAULT_PARALLEL,
+    maxWorkers: count(s?.maxWorkers) ?? launched(r?.maxWorkers) ?? DEFAULT_WORKERS,
+    parallel: count(s?.parallel) ?? launched(r?.parallel) ?? DEFAULT_PARALLEL,
     followUps: flag(s?.followUps) ?? flag(r?.followUps) ?? true,
     decideForMe: flag(s?.decideForMe) ?? flag(r?.decideForMe) ?? true,
   }
@@ -49,18 +62,22 @@ export function superSettingsOf(run: Record<string, unknown> | null, text: strin
 /** The Gru run file an epic's Gru writes: `run-<launch>.json`, the launch being the epic. */
 export const gruRunName = (launch: string) => `run-${launch}.json`
 
+/** An epic's Gru: its launch id (the epic while none is written), and its run file's tickets, or null with no run file. */
+function epicRun(epic: string, gru: Record<string, unknown> | undefined, files: Record<string, string>) {
+  const launch = str(gru?.launch) ?? epic
+  const runFile = parse(files[gruRunName(launch)])
+  const tickets = Array.isArray(runFile?.tickets)
+    ? [...new Set(runFile.tickets.filter((id): id is string => typeof id === 'string'))]
+    : null
+
+  return { launch, tickets }
+}
+
 /** The tickets of each epic of a Super-Gru run file: the files a poll reads for its board. */
 export function superTickets(name: string, files: Record<string, string>): string[] {
-  const run = parse(files[name])
-  if (run === null || !Array.isArray(run.epics)) return []
-  const grus = (run.grus ?? {}) as Record<string, Record<string, unknown> | undefined>
+  const s = superRunOf(files[name])
 
-  return run.epics.flatMap(epic => {
-    if (typeof epic !== 'string') return []
-    const gru = parse(files[gruRunName(str(grus[epic]?.launch) ?? epic)])
-
-    return Array.isArray(gru?.tickets) ? gru.tickets.filter((id): id is string => typeof id === 'string') : []
-  })
+  return s === null ? [] : s.epics.flatMap(epic => epicRun(epic, s.grus[epic], files).tickets ?? [])
 }
 
 const GRU_STATES = new Set(['queued', 'live', 'reported', 'ended'])
@@ -71,13 +88,13 @@ const GRU_STATES = new Set(['queued', 'live', 'reported', 'ended'])
  * not started yet, `waiting`; a Gru that reported or ended with no run file
  * left, `done` with no count; else `in work`.
  */
-function rowOf(epic: string, gru: Record<string, unknown> | undefined, files: Record<string, string>): { row: SuperRow; looks: SuperLook[] } {
-  const launch = str(gru?.launch) ?? epic
+function rowOf(
+  epic: string,
+  gru: Record<string, unknown> | undefined,
+  files: Record<string, string>,
+): { row: Omit<SuperRow, 'title'>; looks: SuperLook[] } {
+  const { launch, tickets } = epicRun(epic, gru, files)
   const gruState = typeof gru?.state === 'string' && GRU_STATES.has(gru.state) ? gru.state : 'queued'
-  const runFile = parse(files[gruRunName(launch)])
-  const tickets = Array.isArray(runFile?.tickets)
-    ? [...new Set(runFile.tickets.filter((id): id is string => typeof id === 'string'))]
-    : null
   const stages = (tickets ?? []).map(id => ({ id, file: parse(files[`${id}.json`]) }))
   const done = stages.filter(t => t.file?.stage === 'closed').length
   const blocked = stages.filter(t => t.file?.stage === 'blocked')
@@ -93,11 +110,11 @@ function rowOf(epic: string, gru: Record<string, unknown> | undefined, files: Re
           : isEnded && tickets === null
             ? 'done'
             : 'in work'
-  const looks = blocked.map(t => {
-    const last = logOf(files[logName(t.id)]).at(-1)?.text ?? null
-
-    return { epic, id: t.id, title: str(t.file?.title), waits: last ?? 'no reason in its log yet' }
-  })
+  const looks = blocked.map(t => ({
+    epic,
+    id: t.id,
+    waits: logOf(files[logName(t.id)]).at(-1)?.text ?? 'no reason in its log yet',
+  }))
 
   return {
     row: {
@@ -105,7 +122,8 @@ function rowOf(epic: string, gru: Record<string, unknown> | undefined, files: Re
       state,
       done: total === null ? null : done,
       total,
-      gru: gruState === 'queued' ? null : str(gru?.session) ?? launch,
+      // A session id's first 8 characters name it; a launch id shows whole.
+      gru: gruState === 'queued' ? null : (str(gru?.session)?.slice(0, 8) ?? launch),
       gruState: gruState as SuperRow['gruState'],
     },
     looks,
@@ -114,27 +132,28 @@ function rowOf(epic: string, gru: Record<string, unknown> | undefined, files: Re
 
 /** The board of the Super-Gru run file `name`, or null when it does not parse. */
 export function buildSuper(name: string, files: Record<string, string>, epicTitles: ReadonlyMap<string, string>, now: number): SuperBoard | null {
-  const run = parse(files[name])
-  if (run === null || !Array.isArray(run.epics)) return null
+  const s = superRunOf(files[name])
+  if (s === null) return null
   const launchId = superIdOf(name)
-  const grus = (run.grus !== null && typeof run.grus === 'object' ? run.grus : {}) as Record<string, Record<string, unknown> | undefined>
-  const epics = [...new Set(run.epics.filter((e): e is string => typeof e === 'string'))]
-  const built = epics.map(epic => rowOf(epic, grus[epic], files))
+  const built = s.epics.map(epic => rowOf(epic, s.grus[epic], files))
 
   return {
     launchId,
-    session: str(run.session) ?? '',
     rows: built.map(b => ({ ...b.row, title: epicTitles.get(b.row.epic) ?? null })),
     looks: built.flatMap(b => b.looks),
-    settings: superSettingsOf(run, files[superSettingsName(launchId)]),
+    settings: superSettingsOf(s.run, files[superSettingsName(launchId)]),
     readAt: now,
   }
 }
 
-/** The files a Super-Gru board reads beyond the run files: its settings, and each epic's tickets' files and logs. */
+/** The files a Super-Gru board reads beyond the run files: its settings file, and each epic's tickets' files. */
 export function superReads(name: string, files: Record<string, string>): string[] {
-  return [
-    superSettingsName(superIdOf(name)),
-    ...superTickets(name, files).flatMap(id => [`${id}.json`, logName(id)]),
-  ]
+  return [superSettingsName(superIdOf(name)), ...superTickets(name, files).map(id => `${id}.json`)]
+}
+
+/** The logs a Super-Gru board reads once its tickets' files are in: each blocked ticket's, for what it waits on. */
+export function superLogs(name: string, files: Record<string, string>): string[] {
+  return superTickets(name, files)
+    .filter(id => parse(files[`${id}.json`])?.stage === 'blocked')
+    .map(logName)
 }
