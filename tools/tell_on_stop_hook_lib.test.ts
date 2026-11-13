@@ -11,8 +11,10 @@ import { test } from "node:test";
 import {
   ASK_TEXT,
   DEFAULT_TURNS,
+  claudeJsonPath,
   countTurns,
   decide,
+  hasLibrarianServer,
   inLibrarianState,
   isHeadless,
   lastAsk,
@@ -24,6 +26,10 @@ import {
 const CLI = path.join(import.meta.dirname, "tell_on_stop_hook.ts");
 const SID = "0b5c6c1e-8f2a-4d3b-9c7e-1a2b3c4d5e6f";
 const ASK = JSON.stringify({ decision: "block", reason: ASK_TEXT });
+const LIBRARIAN_CONFIG = {
+  numStartups: 3,
+  mcpServers: { alfred: { type: "http", url: "http://127.0.0.1:8823/mcp" }, librarian: { type: "stdio", command: "librarian", args: ["mcp"] } },
+};
 
 /** One main-agent model turn: two lines (a text block and a tool call) under one message id. */
 function turn(id: string, sidechain = false): string {
@@ -61,6 +67,8 @@ function withBox(fn: (b: Box) => void): void {
     const cwd = path.join(dir, "repo");
     fs.mkdirSync(home);
     fs.mkdirSync(cwd);
+    // The user config of a machine where `librarian install` ran.
+    fs.writeFileSync(path.join(home, ".claude.json"), JSON.stringify(LIBRARIAN_CONFIG));
     const file = path.join(dir, "transcript.jsonl");
     const payload = (extra: Record<string, unknown> = {}) =>
       JSON.stringify({
@@ -179,6 +187,47 @@ test("decide never asks in a headless run, and asks in an interactive one", () =
     }
     const env = { CLAUDE_CODE_ENTRYPOINT: "cli" };
     assert.equal(decide(b.payload(), { env, home: b.home, root: b.root }), ASK, "cli asks");
+  });
+});
+
+test("decide asks only when the user's Claude config names a librarian MCP server", () => {
+  withBox((b) => {
+    b.write(transcript(500));
+    const config = path.join(b.home, ".claude.json");
+    const run = (env: NodeJS.ProcessEnv = {}) => decide(b.payload(), { env, home: b.home, root: b.root });
+    const cases: [string, string | null][] = [
+      ["no file", null],
+      ["not JSON", "{"],
+      ["null", "null"],
+      ["no mcpServers", JSON.stringify({ numStartups: 3 })],
+      ["mcpServers is not an object", JSON.stringify({ mcpServers: "librarian" })],
+      ["other servers only", JSON.stringify({ mcpServers: { alfred: {}, meridian: {} } })],
+      ["librarian in one project only", JSON.stringify({ projects: { [b.cwd]: { mcpServers: { librarian: {} } } } })],
+    ];
+    for (const [label, text] of cases) {
+      fs.rmSync(config, { force: true });
+      if (text !== null) fs.writeFileSync(config, text);
+      assert.equal(run(), null, label);
+      assert.equal(fs.existsSync(statePath(SID, b.root)), false, `${label}: no ask records no count`);
+    }
+    fs.writeFileSync(config, JSON.stringify(LIBRARIAN_CONFIG));
+    assert.equal(run(), ASK, "a librarian server asks");
+  });
+});
+
+test("the Claude config is $CLAUDE_CONFIG_DIR/.claude.json when that is set, else ~/.claude.json", () => {
+  withBox((b) => {
+    assert.equal(claudeJsonPath({}, b.home), path.join(b.home, ".claude.json"));
+    const dir = path.join(b.dir, "cfg");
+    assert.equal(claudeJsonPath({ CLAUDE_CONFIG_DIR: dir }, b.home), path.join(dir, ".claude.json"));
+    assert.equal(hasLibrarianServer(path.join(b.home, ".claude.json")), true);
+    b.write(transcript(500));
+    // The home config names the librarian, but CLAUDE_CONFIG_DIR points elsewhere, at no file.
+    const env = { CLAUDE_CONFIG_DIR: dir };
+    assert.equal(decide(b.payload(), { env, home: b.home, root: b.root }), null);
+    fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(dir, ".claude.json"), JSON.stringify(LIBRARIAN_CONFIG));
+    assert.equal(decide(b.payload(), { env, home: b.home, root: b.root }), ASK);
   });
 });
 
@@ -304,6 +353,7 @@ function hook(b: Box, input: string, args: string[] = [], extraEnv: Record<strin
   // The test may itself run inside a headless claude: the hook must see an interactive one.
   const env: NodeJS.ProcessEnv = { ...process.env, HOME: b.home, STARK_STATE_ROOT: b.root, CLAUDE_CODE_ENTRYPOINT: "cli" };
   delete env.STARK_TELL_ON_STOP_TURNS;
+  delete env.CLAUDE_CONFIG_DIR;
   Object.assign(env, extraEnv);
   return spawnSync(process.execPath, ["--no-warnings", CLI, ...args], { input, env, encoding: "utf8" });
 }

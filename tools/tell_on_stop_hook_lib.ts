@@ -5,11 +5,12 @@
  * they are lost when the session ends. On each `Stop`, the hook counts the main
  * agent's model turns in the transcript. When the count has grown by the
  * threshold since this session's last ask, the hook blocks the stop once and
- * asks the agent to call `tell_librarian` for each lasting fact.
+ * asks the agent to call `tell_librarian` for each lasting fact. It asks only
+ * when the user's Claude config names an MCP server called `librarian`.
  *
  * Fail-open by design: every fault (no transcript, a line that does not parse,
- * a state file it cannot read or write) returns no ask, so a fault never
- * blocks a stop.
+ * a state file it cannot read or write, a Claude config it cannot read)
+ * returns no ask, so a fault never blocks a stop.
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -70,6 +71,22 @@ export function countTurns(transcript: string): number {
  */
 export function isHeadless(env: NodeJS.ProcessEnv = process.env): boolean {
   return (env.CLAUDE_CODE_ENTRYPOINT ?? "").startsWith("sdk");
+}
+
+/** Claude Code's user config file: `$CLAUDE_CONFIG_DIR/.claude.json`, else `~/.claude.json`. */
+export function claudeJsonPath(env: NodeJS.ProcessEnv = process.env, home: string = os.homedir()): string {
+  return path.join(env.CLAUDE_CONFIG_DIR ? path.resolve(env.CLAUDE_CONFIG_DIR) : home, ".claude.json");
+}
+
+/**
+ * True when the user config names an MCP server called `librarian`, which
+ * `librarian install` adds at user scope. With no such server the session has
+ * no `tell_librarian` tool, so an ask would cost a turn for nothing. Throws on
+ * a file it cannot read or parse: a fault, so no ask.
+ */
+export function hasLibrarianServer(file: string): boolean {
+  const servers = JSON.parse(fs.readFileSync(file, "utf8"))?.mcpServers;
+  return servers !== null && typeof servers === "object" && Object.hasOwn(servers, "librarian");
 }
 
 /** True when `cwd` is the librarian's state folder or under it: the librarian runs its own sessions there. */
@@ -136,6 +153,8 @@ export function decide(raw: string, opts: HookOptions = {}): string | null {
     const turns = countTurns(fs.readFileSync(transcriptPath, "utf8"));
     const file = statePath(sessionId, opts.root);
     if (turns < lastAsk(file) + threshold(opts.env)) return null;
+    // Read only when an ask is due: the config file can be large.
+    if (!hasLibrarianServer(claudeJsonPath(opts.env, opts.home))) return null;
     writeAsk(file, turns);
     return JSON.stringify({ decision: "block", reason: ASK_TEXT });
   } catch {
