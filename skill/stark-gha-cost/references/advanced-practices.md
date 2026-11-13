@@ -132,7 +132,7 @@ right grain **and** a storage tier that survives to the next job.
   *hits* → the save step is **skipped** → your build/compile cache **never
   accumulates** and ossifies. Suffix the key with `sha`/date to force a save; put
   the stable prefix in `restore-keys` to stay warm. A rotating key **without**
-  `restore-keys` = 100% miss (the cargo-culted anti-pattern).
+  `restore-keys` = 100% miss (the anti-pattern copied without thought).
 - **Branch scope makes PR-only pipelines cold.** Caches read only current + default
   + PR-base branch; siblings can't share. If CI is `on: pull_request` only and the
   default branch never runs the save, **every PR is a cold cache**. Fix: a
