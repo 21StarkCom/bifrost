@@ -53,12 +53,16 @@ the launcher of this epic read the same shape.
    then `/muninn actas super-gru`. Take each choice it asks for from this
    skill, and ask nobody.
 3. **Start a Gru** for the next `queued` epic while fewer than `--parallel`
-   Grus are `live`:
+   Grus are `live`. First read
+   `~/.cache/stark-progress/super-<launch id>.settings.json` if it exists:
+   the Super-Gru pane writes it, and each of its fields (`maxWorkers`,
+   `parallel`, `followUps`, `decideForMe`) wins over the run's value. Then:
    1. Write `~/.cache/stark-progress/run-<epic>.settings.json` by
       [the run-file doc](references/run-file.md#the-settings-file-of-each-epic):
-      `maxWorkers`, `followUps` true, `decideForMe` true and `minionAgent`.
+      `maxWorkers`, `followUps`, `decideForMe` and `minionAgent`.
       The operator chose `followUps` and `decideForMe` true for every
-      Super-Gru run on 2026-11-13.
+      Super-Gru run on 2026-11-13; only the pane's settings file sets them
+      false.
    2. Join the Gru's member `gru-<m>` (`<m>` the epic's number) before the
       launch, as `valkyrie gru --help` says, with the Gru's worktree as its
       path:

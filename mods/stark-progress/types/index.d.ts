@@ -304,6 +304,48 @@ export type TicketBoard = {
   readAt: number
 }
 
+/**
+ * `~/.cache/stark-progress/super-<id>.settings.json`, a Super-Gru run's
+ * settings: the Super-Gru pane writes it. A field that is absent or of the
+ * wrong type takes the run file's `settings` value, else its default.
+ */
+export type SuperSettings = {
+  maxWorkers: number
+  parallel: number
+  followUps: boolean
+  decideForMe: boolean
+}
+
+/** An epic's state on the Super-Gru pane. */
+export type SuperState = 'waiting' | 'in work' | 'blocked' | 'done'
+
+/** One epic of a Super-Gru run. */
+export type SuperRow = {
+  epic: string
+  /** Its title from alfred, or null while none is known. */
+  title: string | null
+  state: SuperState
+  /** Its closed tickets and all its tickets, from its Gru's run file; null with no run file. */
+  done: number | null
+  total: number | null
+  /** Its Gru's session id, else its launch id; null while the Gru is queued. */
+  gru: string | null
+  gruState: 'queued' | 'live' | 'reported' | 'ended'
+}
+
+/** A blocked ticket of an epic, and what it waits on: its log's last line. */
+export type SuperLook = { epic: string; id: string; title: string | null; waits: string }
+
+/** What the Super-Gru pane draws. */
+export type SuperBoard = {
+  launchId: string
+  session: string
+  rows: SuperRow[]
+  looks: SuperLook[]
+  settings: SuperSettings
+  readAt: number
+}
+
 /** A pane's tabs; only the Gru pane has `github`. */
 export type PaneTab = 'overview' | 'log' | 'stats' | 'github' | 'settings'
 
@@ -394,6 +436,9 @@ declare module 'claude-code' {
       /** The ticket pane's model, in a worker's own tab. */
       ticket: Shaped<TicketBoard | null>
       ticketTab: PaneTab
+      /** The Super-Gru pane's model, in Super-Gru's own tab. */
+      superBoard: Shaped<SuperBoard | null>
+      superTab: PaneTab
       /** The ticket whose file this worker's tab found, once found, else '': its pane names that ticket's end. */
       ownTicket: string
       /** True once the person closed the ticket pane by hand in this session: no prompt or poll opens it again; /ticket-board does. */
