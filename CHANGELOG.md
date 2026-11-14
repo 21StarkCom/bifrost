@@ -336,6 +336,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **`workflow_shape.test.ts` now proves `SCAN_SCOPES` is complete.** That hand-written list claims in its own comment to be *every* top-level dir holding a scannable file, and nothing checked it — so a new top-level directory (or a `gh` call parked in `docs/`) left the `gh api --slurp` gate reporting clean over a file it never opened. A second walk of the whole tree now diffs against the scoped walk and names anything outside it. Mutation-proved: dropping `config` from the list reddens with the eight files it covers.
 
 ### Fixed
+<!-- idun:pr-merge pr=512 runId=512 sha=41f5fce4 -->
+- The tell-on-stop Stop hook no longer asks for `tell_librarian` calls after a session arms `hermod poison-pill`; `stark-ops` is now 0.59.0.
 <!-- idun:pr-merge pr=509 runId=509 sha=4342196f -->
 - Bump `stark-ops` to 0.58.0 so installs that took 0.57.0 from another PR also get Gru's hermod poison-pill stand-down.
 <!-- idun:pr-merge pr=507 runId=507 sha=a16a5b8f -->
