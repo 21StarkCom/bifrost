@@ -33,11 +33,17 @@ the contract's "after `njord pr-merge` and the ticket close":
   into one more line of your report before you arm or stop.
 - **Your branch was never pushed**, so the contract's check for unpushed
   commits is its Gru form, `git -C <that path> log --oneline HEAD --not --remotes`.
+- **A check that prints anything is not yours to fix.** You make no commit,
+  and the skill keeps your files out of your worktree, so a line from either
+  check is work that is not yours: never push it, commit it or delete it.
+  Name it in your report, and end on the report: arm nothing, and leave the
+  session, the worktree and the tab.
 - **The command** is `hermod poison-pill --delete-branch --json`, by the
   contract's [Flags](../../../standards/stand-down.md#flags).
 - **A `partial` teardown** has no later step 6 to clean up after it. Your
-  report names the surface and the path, and
-  [the launch doc](../../../standards/launch.md#6-after-the-launch) removes
-  them before the next Gru on the same launch id.
+  report names the surface and the path.
+  [The launch doc](../../../standards/launch.md#6-after-the-launch) removes
+  the worktree and the branch before the next Gru on the same launch id. A
+  tab left as a bare shell stays for the operator to close.
 
 Once it reads `armed:true`, say so and end the turn. Never fire it twice.

@@ -210,7 +210,9 @@ At the end of step 6, close your own session, worktree and tab by
 [references/stand-down.md](references/stand-down.md) first: it holds your
 terms of the contract. Stand down only in the worktree valkyrie made for your
 launch id, and only when step 6's report names no blocked or held ticket and
-no open question.
+no open question. From your first turn, write each file of the run (a
+`--body-file` body for alfred or muninn) under `mktemp -d`, outside your
+worktree: a file inside it fails the stand-down's clean-tree check.
 
 ## Progress pane
 

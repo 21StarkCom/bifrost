@@ -12,7 +12,8 @@ listener.
    run: `tmux capture-pane -p -t <pane>` in tmux,
    `hermod read-screen <surface UUID> --lines 20` in cmux. A Gru whose run
    finished closes its own tab after its `report:`, by its stand-down. A Gru
-   that reported a blocked or held ticket keeps its tab. So skip only a Gru
+   that reported a blocked or held ticket or an open question keeps its tab,
+   and so does a Gru whose stand-down stopped on a check. So skip only a Gru
    tab that is gone. Act only on these screens:
    - **A known menu.** A menu that offers "Switch to Opus 5.5 and continue",
      or paid usage: take the option with no extra cost. Send only its number,

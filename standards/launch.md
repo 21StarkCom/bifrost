@@ -138,4 +138,7 @@ remove its worktree with
 `git -C <main checkout> branch -d <branch>`, never with `--force` or `-D`,
 then launch. The branch is `<launch id>` on Codex and `worktree-<launch id>`
 on Claude: read it from the worktree's `branch` line in
-`git worktree list --porcelain` before you remove the worktree.
+`git worktree list --porcelain` before you remove the worktree. A `partial`
+can stop before the reaper unlocks the worktree. When its entry in that list
+has a `locked` line, run `git -C <main checkout> worktree unlock <path>`
+before the remove.

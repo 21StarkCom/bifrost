@@ -1,8 +1,9 @@
 # The Stand-Down Contract
 
 How a solo ticket worker closes its own session, worktree and tab when its
-ticket is finished, and a Gru when its run is finished: a cmux tab, or in tmux without cmux (the Linux devbox) its
-tmux pane, and with it the window when the pane is the window's only one.
+ticket is finished, and a Gru when its run is finished: a cmux tab, or in
+tmux without cmux (the Linux devbox) its tmux pane, and with it the window
+when the pane is the window's only one.
 `/minion` and `/agnes` run this at the end of a ticket, and `/gru` at the end
 of a finished run; none restates it.
 The full hermod behaviour below was live-verified against hermod's TS engine
@@ -342,7 +343,8 @@ stop and leave everything in place. If it arms and the teardown comes back
 A `partial` does not heal itself. `njord cleanup --pr <n>` (Gru's step 6)
 removes the worktree it left, once no session stands in it. Gru's own
 `partial` has no later step 6: [the launch doc](launch.md#6-after-the-launch)
-removes what it left before the next Gru on the same launch id. Do not try to
+removes the worktree and the branch it left before the next Gru on the same
+launch id. Do not try to
 resume into it: `claude --worktree X --resume` re-enters the worktree
 left behind, or **recreates** it if it is gone, and re-locks it, turning a
 stale tab into a live one holding a worktree nobody expected to be in use.
