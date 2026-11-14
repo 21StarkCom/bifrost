@@ -1,6 +1,7 @@
 // tell_on_stop_hook: the turn count, the armed pill, the threshold steps, the
-// state file, the skips, and each fault, which must print nothing. The last tests run the
-// entrypoint as Claude Code does: a Stop payload on stdin, exit 0 always.
+// state file, the skips, and each fault, which must print nothing. The last
+// tests run the entrypoint as Claude Code does: a Stop payload on stdin, exit 0
+// always.
 import { strict as assert } from "node:assert";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -13,6 +14,7 @@ import {
   DEFAULT_TURNS,
   claudeJsonPath,
   PILL_LABEL,
+  PILL_UNIT,
   decide,
   hasLibrarianServer,
   inLibrarianState,
@@ -133,7 +135,9 @@ const ARM_ACK = JSON.stringify({
   removed: false,
   closed: false,
   outcome: "armed",
-  detail: "reaper launched to quit claude, close this tab, then remove worktree; teardown is pending",
+  detail:
+    "reaper launched to quit claude, close this tab, then remove worktree /home/u/repo/.claude/worktrees/STARK-1; " +
+    "teardown is pending. Read logPath for the final result",
   keepWorktree: false,
   armed: true,
   label: `${PILL_LABEL}26675-1794648114187`,
@@ -164,6 +168,15 @@ test("scanTranscript finds the ack of an armed pill in a main-agent tool result"
   assert.deepEqual(scanTranscript(text(result(ARM_ACK))), { turns: 3, armed: true }, "string content");
   assert.equal(scanTranscript(text(result([{ type: "text", text: ARM_ACK }]))).armed, true, "text blocks");
   assert.equal(scanTranscript(text(result(`a warning on stderr\n${ARM_ACK}\n`))).armed, true, "the ack is the last line");
+  const unit = JSON.stringify({ ...JSON.parse(ARM_ACK), label: `${PILL_UNIT}26675-1794648114187.service` });
+  assert.equal(scanTranscript(text(result(unit))).armed, true, "a systemd unit on Linux");
+  // Claude Code puts a Bash run's stderr after its stdout in the result text,
+  // and keeps the stdout apart in toolUseResult.
+  const bash = JSON.stringify({
+    ...JSON.parse(result(`${ARM_ACK}\nShell cwd was reset to /home/u/repo`)),
+    toolUseResult: { stdout: ARM_ACK, stderr: "Shell cwd was reset to /home/u/repo", interrupted: false },
+  });
+  assert.equal(scanTranscript(text(bash)).armed, true, "stderr after the ack");
 });
 
 test("scanTranscript finds no arm in a dry run, a subagent, or text that only names the pill", () => {

@@ -45,8 +45,10 @@ export function threshold(env: NodeJS.ProcessEnv = process.env): number {
   return DEFAULT_TURNS;
 }
 
-/** The launchd label prefix that `hermod poison-pill` gives each reaper it arms. */
+/** The launchd label prefix that `hermod poison-pill` gives each reaper it arms on macOS. */
 export const PILL_LABEL = "com.21stark.hermod.poison-pill.";
+/** The systemd unit prefix that `hermod poison-pill` gives each reaper it arms on Linux. */
+export const PILL_UNIT = "hermod-poison-pill-";
 
 /** What the hook reads from a transcript. */
 export interface TranscriptScan {
@@ -72,7 +74,8 @@ export function scanTranscript(transcript: string): TranscriptScan {
     const entry = JSON.parse(line);
     if (entry?.isSidechain === true) continue;
     if (entry?.type === "user") {
-      if (!armed && Array.isArray(entry.message?.content)) armed = entry.message.content.some(isArmResult);
+      // Both reaper label prefixes hold "poison-pill": skip the rest of the work on each other line.
+      if (!armed && line.includes("poison-pill")) armed = isArmEntry(entry);
       continue;
     }
     if (entry?.type !== "assistant") continue;
@@ -83,26 +86,42 @@ export function scanTranscript(transcript: string): TranscriptScan {
 }
 
 /**
- * True for a tool result whose last line is the ack of an armed pill:
- * `hermod poison-pill --json` prints one JSON object with `"armed":true` and
- * the reaper's launchd `label`. A dry run prints neither. Tool output is not
- * transcript structure, so a last line that does not parse is no arm, not a fault.
+ * True for a main-agent `user` line that holds the ack of an armed pill. A
+ * Bash result keeps its stdout apart in `toolUseResult.stdout`; read that when
+ * it is there, since the tool result's text puts stderr (a warning, or Claude
+ * Code's "Shell cwd was reset" note) after stdout.
  */
-function isArmResult(block: unknown): boolean {
-  if (block === null || typeof block !== "object") return false;
+function isArmEntry(entry: { toolUseResult?: { stdout?: unknown }; message?: { content?: unknown } }): boolean {
+  const stdout = entry.toolUseResult?.stdout;
+  if (typeof stdout === "string") return isArmAck(stdout);
+  const content = entry.message?.content;
+  return Array.isArray(content) && content.some((block) => isArmAck(resultText(block)));
+}
+
+/** The text of a `tool_result` block, or "" for any other block. */
+function resultText(block: unknown): string {
+  if (block === null || typeof block !== "object") return "";
   const { type, content } = block as { type?: unknown; content?: unknown };
-  if (type !== "tool_result") return false;
-  const text =
-    typeof content === "string"
-      ? content
-      : Array.isArray(content)
-        ? content.map((c) => (c?.type === "text" && typeof c.text === "string" ? c.text : "")).join("\n")
-        : "";
-  if (!text.includes(PILL_LABEL)) return false;
+  if (type !== "tool_result") return "";
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content.map((c) => (c?.type === "text" && typeof c.text === "string" ? c.text : "")).join("\n");
+}
+
+/**
+ * True for tool output whose last line is the ack of an armed pill:
+ * `hermod poison-pill --json` prints one JSON object with `"armed":true` and
+ * the reaper's `label` (a launchd label on macOS, a systemd unit on Linux). A
+ * dry run prints neither. Tool output is not transcript structure, so a last
+ * line that does not parse is no arm, not a fault.
+ */
+function isArmAck(text: string): boolean {
+  if (!text.includes(PILL_LABEL) && !text.includes(PILL_UNIT)) return false;
   const last = text.trimEnd().split("\n").pop() ?? "";
   try {
     const ack = JSON.parse(last);
-    return ack?.armed === true && typeof ack.label === "string" && ack.label.startsWith(PILL_LABEL);
+    const label = ack?.label;
+    return ack?.armed === true && typeof label === "string" && (label.startsWith(PILL_LABEL) || label.startsWith(PILL_UNIT));
   } catch {
     return false;
   }
