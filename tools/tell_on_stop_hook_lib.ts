@@ -6,7 +6,9 @@
  * agent's model turns in the transcript. When the count has grown by the
  * threshold since this session's last ask, the hook blocks the stop once and
  * asks the agent to call `tell_librarian` for each lasting fact. It asks only
- * when the user's Claude config names an MCP server called `librarian`.
+ * when the user's Claude config names an MCP server called `librarian`, and
+ * never after the session armed `hermod poison-pill` (a Gru, Minion or Agnes
+ * that stands down): its reaper quits the session and would cut the calls off.
  *
  * Fail-open by design: every fault (no transcript, a line that does not parse,
  * a state file it cannot read or write, a Claude config it cannot read)
@@ -43,24 +45,67 @@ export function threshold(env: NodeJS.ProcessEnv = process.env): number {
   return DEFAULT_TURNS;
 }
 
+/** The launchd label prefix that `hermod poison-pill` gives each reaper it arms. */
+export const PILL_LABEL = "com.21stark.hermod.poison-pill.";
+
+/** What the hook reads from a transcript. */
+export interface TranscriptScan {
+  /** The main agent's model turns. */
+  turns: number;
+  /** True when the main agent armed `hermod poison-pill`: its reaper quits the session within seconds. */
+  armed: boolean;
+}
+
 /**
- * The main agent's model turns: the distinct `message.id` values of the
- * `assistant` lines that are not `isSidechain`. Splits on `\n` only: readline
- * also splits at U+2028 and U+2029, which a transcript can hold inside a JSON
- * string. A blank line is skipped; any other line that does not parse throws,
- * since a fault must print nothing (STARK-18495 step 10). Parsing every line
- * costs 0.19s on a 38 MB transcript of 2410 turns.
+ * Reads a transcript in one pass. The turns are the distinct `message.id`
+ * values of the `assistant` lines that are not `isSidechain`. Splits on `\n`
+ * only: readline also splits at U+2028 and U+2029, which a transcript can hold
+ * inside a JSON string. A blank line is skipped; any other line that does not
+ * parse throws, since a fault must print nothing (STARK-18495 step 10).
+ * Parsing every line costs 0.19s on a 38 MB transcript of 2410 turns.
  */
-export function countTurns(transcript: string): number {
+export function scanTranscript(transcript: string): TranscriptScan {
   const ids = new Set<string>();
+  let armed = false;
   for (const line of transcript.split("\n")) {
     if (line.trim() === "") continue;
     const entry = JSON.parse(line);
-    if (entry?.type !== "assistant" || entry.isSidechain === true) continue;
+    if (entry?.isSidechain === true) continue;
+    if (entry?.type === "user") {
+      if (!armed && Array.isArray(entry.message?.content)) armed = entry.message.content.some(isArmResult);
+      continue;
+    }
+    if (entry?.type !== "assistant") continue;
     const id = entry.message?.id;
     if (typeof id === "string" && id !== "") ids.add(id);
   }
-  return ids.size;
+  return { turns: ids.size, armed };
+}
+
+/**
+ * True for a tool result whose last line is the ack of an armed pill:
+ * `hermod poison-pill --json` prints one JSON object with `"armed":true` and
+ * the reaper's launchd `label`. A dry run prints neither. Tool output is not
+ * transcript structure, so a last line that does not parse is no arm, not a fault.
+ */
+function isArmResult(block: unknown): boolean {
+  if (block === null || typeof block !== "object") return false;
+  const { type, content } = block as { type?: unknown; content?: unknown };
+  if (type !== "tool_result") return false;
+  const text =
+    typeof content === "string"
+      ? content
+      : Array.isArray(content)
+        ? content.map((c) => (c?.type === "text" && typeof c.text === "string" ? c.text : "")).join("\n")
+        : "";
+  if (!text.includes(PILL_LABEL)) return false;
+  const last = text.trimEnd().split("\n").pop() ?? "";
+  try {
+    const ack = JSON.parse(last);
+    return ack?.armed === true && typeof ack.label === "string" && ack.label.startsWith(PILL_LABEL);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -150,7 +195,9 @@ export function decide(raw: string, opts: HookOptions = {}): string | null {
     if (typeof transcriptPath !== "string" || transcriptPath === "") return null;
     if (typeof cwd !== "string" || cwd === "" || inLibrarianState(cwd, opts.home)) return null;
 
-    const turns = countTurns(fs.readFileSync(transcriptPath, "utf8"));
+    const { turns, armed } = scanTranscript(fs.readFileSync(transcriptPath, "utf8"));
+    // After the arm, the reaper quits the session and would cut the librarian calls off.
+    if (armed) return null;
     const file = statePath(sessionId, opts.root);
     if (turns < lastAsk(file) + threshold(opts.env)) return null;
     // Read only when an ask is due: the config file can be large.

@@ -17,7 +17,9 @@
  * It never asks on a stop that a Stop hook already continued
  * (`stop_hook_active`), in a headless run (`CLAUDE_CODE_ENTRYPOINT` `sdk-*`,
  * whose last reply a program reads), for a session id that is not a UUID, or
- * in the librarian's own folder (`~/.local/state/atlas/librarian/`). It asks
+ * in the librarian's own folder (`~/.local/state/atlas/librarian/`), or after
+ * the main agent armed `hermod poison-pill`, whose reaper quits the session
+ * within seconds and would cut the `tell_librarian` calls off. It asks
  * only when `~/.claude.json` (`$CLAUDE_CONFIG_DIR/.claude.json` when set) names
  * an MCP server called `librarian` in `mcpServers`, since a session without it
  * has no `tell_librarian` tool. Any fault prints

@@ -1,5 +1,5 @@
-// tell_on_stop_hook: the turn count, the threshold steps, the state file, the
-// skips, and each fault, which must print nothing. The last tests run the
+// tell_on_stop_hook: the turn count, the armed pill, the threshold steps, the
+// state file, the skips, and each fault, which must print nothing. The last tests run the
 // entrypoint as Claude Code does: a Stop payload on stdin, exit 0 always.
 import { strict as assert } from "node:assert";
 import { spawnSync } from "node:child_process";
@@ -12,12 +12,13 @@ import {
   ASK_TEXT,
   DEFAULT_TURNS,
   claudeJsonPath,
-  countTurns,
+  PILL_LABEL,
   decide,
   hasLibrarianServer,
   inLibrarianState,
   isHeadless,
   lastAsk,
+  scanTranscript,
   statePath,
   threshold,
   writeAsk,
@@ -87,7 +88,7 @@ function withBox(fn: (b: Box) => void): void {
 
 // ── the turn count ──────────────────────────────────────────────────────────
 
-test("countTurns counts distinct message ids of main-agent assistant lines only", () => {
+test("scanTranscript counts distinct message ids of main-agent assistant lines only", () => {
   const text = [
     turn("msg_a"),
     turn("msg_a"), // the same turn again: still one
@@ -99,10 +100,10 @@ test("countTurns counts distinct message ids of main-agent assistant lines only"
     "",
     "   ",
   ].join("\n");
-  assert.equal(countTurns(text), 2);
+  assert.deepEqual(scanTranscript(text), { turns: 2, armed: false });
 });
 
-test("countTurns keeps a line whole when a JSON string holds U+2028 or U+2029", () => {
+test("scanTranscript keeps a line whole when a JSON string holds U+2028 or U+2029", () => {
   const odd = JSON.stringify({
     type: "assistant",
     isSidechain: false,
@@ -110,14 +111,87 @@ test("countTurns keeps a line whole when a JSON string holds U+2028 or U+2029", 
   });
   // JSON.stringify leaves both characters raw, as a transcript holds them.
   assert.ok(odd.includes(" ") && odd.includes(" "));
-  assert.equal(countTurns(`${turn("msg_a")}\n${odd}\n`), 2);
+  assert.equal(scanTranscript(`${turn("msg_a")}\n${odd}\n`).turns, 2);
 });
 
-test("countTurns throws on any line that does not parse", () => {
-  assert.throws(() => countTurns(`${turn("msg_a")}\n{"type":"assistant",\n`));
-  assert.throws(() => countTurns(`${turn("msg_a")}\n{"type":"user",\n`));
+test("scanTranscript throws on any line that does not parse", () => {
+  assert.throws(() => scanTranscript(`${turn("msg_a")}\n{"type":"assistant",\n`));
+  assert.throws(() => scanTranscript(`${turn("msg_a")}\n{"type":"user",\n`));
   // A crash can leave a line of NUL bytes at the end of a transcript.
-  assert.throws(() => countTurns(`${turn("msg_a")}\n${"\u0000".repeat(64)}`));
+  assert.throws(() => scanTranscript(`${turn("msg_a")}\n${"\u0000".repeat(64)}`));
+});
+
+// ── the armed pill ──────────────────────────────────────────────────────────
+
+/** The stdout of `hermod poison-pill --json` that armed a reaper (hermod 0.47.3). */
+const ARM_ACK = JSON.stringify({
+  surface: "%101",
+  agent: "claude",
+  branch: "worktree-STARK-1",
+  worktree: "/home/u/repo/.claude/worktrees/STARK-1",
+  exited: false,
+  removed: false,
+  closed: false,
+  outcome: "armed",
+  detail: "reaper launched to quit claude, close this tab, then remove worktree; teardown is pending",
+  keepWorktree: false,
+  armed: true,
+  label: `${PILL_LABEL}26675-1794648114187`,
+  logPath: "/tmp/hermod-poison-pill-26675-1794648114187.log",
+});
+
+/** The stdout of `hermod poison-pill --dry-run --json`: no `armed`, no `label`. */
+const DRY_ACK = JSON.stringify({
+  surface: "%101",
+  agent: "claude",
+  worktree: "/home/u/repo/.claude/worktrees/STARK-1",
+  outcome: "completed",
+  detail: "dry-run: would exit claude, remove worktree, close the tab",
+  keepWorktree: false,
+});
+
+/** A main-agent tool result line, as a transcript holds it. */
+function result(content: unknown, sidechain = false): string {
+  return JSON.stringify({
+    type: "user",
+    isSidechain: sidechain,
+    message: { role: "user", content: [{ type: "tool_result", tool_use_id: "toolu_1", content }] },
+  });
+}
+
+test("scanTranscript finds the ack of an armed pill in a main-agent tool result", () => {
+  const text = (line: string) => `${transcript(3)}${line}\n`;
+  assert.deepEqual(scanTranscript(text(result(ARM_ACK))), { turns: 3, armed: true }, "string content");
+  assert.equal(scanTranscript(text(result([{ type: "text", text: ARM_ACK }]))).armed, true, "text blocks");
+  assert.equal(scanTranscript(text(result(`a warning on stderr\n${ARM_ACK}\n`))).armed, true, "the ack is the last line");
+});
+
+test("scanTranscript finds no arm in a dry run, a subagent, or text that only names the pill", () => {
+  const cases: [string, string][] = [
+    ["a dry run", result(DRY_ACK)],
+    ["armed is false", result(JSON.stringify({ ...JSON.parse(ARM_ACK), armed: false }))],
+    ["another label", result(JSON.stringify({ ...JSON.parse(ARM_ACK), label: "com.other.job" }))],
+    ["a subagent's tool result", result(ARM_ACK, true)],
+    ["the ack is not the last line", result(`${ARM_ACK}\ndone`)],
+    ["the ack inside another object", result(JSON.stringify({ content: ARM_ACK }))],
+    ["grep output that names the label", result(`log.txt:1:${PILL_LABEL}1-2 {"armed":true`)],
+    ["an assistant line that quotes the ack", JSON.stringify({ type: "assistant", message: { id: "msg_q", content: [{ type: "text", text: ARM_ACK }] } })],
+    ["a tool result with no content", result(undefined)],
+  ];
+  for (const [label, line] of cases) {
+    assert.equal(scanTranscript(`${transcript(3)}${line}\n`).armed, false, label);
+  }
+});
+
+test("decide never asks after the session armed hermod poison-pill, and writes no file", () => {
+  withBox((b) => {
+    const run = () => decide(b.payload(), { env: {}, home: b.home, root: b.root });
+    b.write(`${transcript(500)}${result(ARM_ACK)}\n${turn("msg_last")}\n`);
+    assert.equal(run(), null);
+    assert.equal(fs.existsSync(statePath(SID, b.root)), false, "no ask records no count");
+    b.write(`${transcript(500)}${result(DRY_ACK)}\n${turn("msg_last")}\n`);
+    assert.equal(run(), ASK, "a dry run still asks");
+  });
 });
 
 // ── the threshold ───────────────────────────────────────────────────────────
