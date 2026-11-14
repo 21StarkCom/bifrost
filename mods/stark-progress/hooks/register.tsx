@@ -68,7 +68,7 @@ const doneLastAtom = atom({ plugin: 'stark-progress', key: 'doneLast' } as const
 const DONE_LAST = 'doneLast'
 const ticketAtom = atom({ plugin: 'stark-progress', key: 'ticket' } as const, null, { shape: 'ticket-7' })
 const ticketTabAtom = atom({ plugin: 'stark-progress', key: 'ticketTab' } as const, 'overview' as PaneTab)
-const superAtom = atom({ plugin: 'stark-progress', key: 'superBoard' } as const, null, { shape: 'super-2' })
+const superAtom = atom({ plugin: 'stark-progress', key: 'superBoard' } as const, null, { shape: 'super-3' })
 const superTabAtom = atom({ plugin: 'stark-progress', key: 'superTab' } as const, 'overview' as PaneTab)
 const superGhFocusAtom = atom({ plugin: 'stark-progress', key: 'superGhFocus' } as const, '')
 /** What Super-Gru's tab kept of each epic's Gru: a Gru deletes its files at its end, and the board reads these after. */

@@ -68,3 +68,19 @@ them:
 ```
 jq -n --argjson maxWorkers 4 --argjson followUps true --argjson decideForMe true --arg minionAgent 'claude' '{maxWorkers: $maxWorkers, followUps: $followUps, decideForMe: $decideForMe, minionAgent: $minionAgent}' > ~/.cache/stark-progress/run-STARK-100.settings.json.tmp && mv ~/.cache/stark-progress/run-STARK-100.settings.json.tmp ~/.cache/stark-progress/run-STARK-100.settings.json
 ```
+
+## The log file
+
+`~/.cache/stark-progress/super-<launch id>.log.jsonl` holds your big steps,
+one JSON line each, as [the skill's log rule](../SKILL.md#the-log) lists
+them. The pane's Log tab shows them beside each Gru's own log. Append a line
+with the spine's log command, with this file in place of the ticket's:
+
+```
+mkdir -p ~/.cache/stark-progress && jq -nc --arg text '<the step, in plain words>' '{at: (now | todate), text: $text}' >> ~/.cache/stark-progress/super-SUPER-100.log.jsonl
+```
+
+Write each line by [the spine's rules for a line](../../../standards/worker-spine.md#log-file):
+plain words a five-year-old can follow, 20 words or fewer, and no ids. Name
+an epic by what it does: "Started the Gru for the video work." or "The Gru
+for the video work finished: 12 of 12 jobs done."

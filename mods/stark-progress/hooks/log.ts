@@ -14,6 +14,8 @@ export const LOG_SHOWN = 50
 export const logName = (id: string) => `${id}.log.jsonl`
 /** A Gru run's log file. */
 export const runLogName = (launchId: string) => `run-${launchId}.log.jsonl`
+/** A Super-Gru run's log file. */
+export const superLogName = (launchId: string) => `super-${launchId}.log.jsonl`
 
 /** One line of a log file, read: when, and the words kept to one line of 20. */
 export type LogLine = { at: number; text: string }

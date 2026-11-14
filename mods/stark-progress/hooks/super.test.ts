@@ -33,10 +33,11 @@ const TWO_EPICS: Record<string, string> = {
   'STARK-22.log.jsonl': `${JSON.stringify({ at: new Date(T0).toISOString(), text: 'Stopped: the job needs a change in another project first.' })}\n`,
 }
 
-test('a super file is neither a run file nor its own settings file', () => {
+test('a super file is neither a run file nor its own settings, stats or log file', () => {
   expect(isSuperName('super-SUPER-1.json')).toBe(true)
   expect(isSuperName('super-SUPER-1.settings.json')).toBe(false)
   expect(isSuperName('super-SUPER-1.stats.json')).toBe(false)
+  expect(isSuperName('super-SUPER-1.log.jsonl')).toBe(false)
   expect(isRunName('super-SUPER-1.json')).toBe(false)
   expect(ownSuper('sg', TWO_EPICS)).toBe('super-SUPER-1.json')
   expect(ownSuper('other', TWO_EPICS)).toBeNull()
@@ -45,13 +46,13 @@ test('a super file is neither a run file nor its own settings file', () => {
 test('two epics: A reads done 3/3, B reads blocked 1/2, and its blocked ticket is worth a look', () => {
   const b = buildSuper('super-SUPER-1.json', TWO_EPICS, new Map([['STARK-2', 'epic B']]), T0)
   expect(b?.rows.map(stateWords)).toEqual(['done 3/3', 'blocked 1/2'])
-  expect(b?.rows.map(r => [r.gru, r.title])).toEqual([['gru-a-se', null], ['gru-b-se', 'epic B']])
+  expect(b?.rows.map(r => [r.blocked, r.title])).toEqual([[0, null], [1, 'Epic B']])
   expect(b?.looks).toEqual([
     { epic: 'STARK-2', id: 'STARK-22', waits: 'Stopped: the job needs a change in another project first.' },
   ])
 })
 
-test('a queued epic waits; an ended Gru whose run file is gone reads done with no count; a Gru with no session shows its whole launch id', () => {
+test('a queued epic waits; an ended Gru whose run file is gone reads done with no count; a live Gru with no run file is in work', () => {
   const files = {
     'super-SUPER-5.json': JSON.stringify({
       session: 'sg',
@@ -65,8 +66,63 @@ test('a queued epic waits; an ended Gru whose run file is gone reads done with n
   }
   const b = buildSuper('super-SUPER-5.json', files, new Map(), T0)
   expect(b?.rows.map(stateWords)).toEqual(['done', 'waiting', 'in work'])
-  expect(b?.rows.map(r => r.gru)).toEqual(['x', null, 'STARK-18456'])
+  expect(b?.rows.map(r => [r.gruState, r.total])).toEqual([['ended', null], ['queued', null], ['live', null]])
   expect(b?.looks).toEqual([])
+})
+
+test("an epic's title loses its `EPIC:`, `[tag]` and `repo: ` leads, as the Gru pane names its epic", () => {
+  const titles = new Map([
+    ['STARK-1', 'lumiere: cutouts that work on any subject'],
+    ['STARK-2', 'EPIC: [infra] lumiere video and audio'],
+  ])
+  expect(buildSuper('super-SUPER-1.json', TWO_EPICS, titles, T0)?.rows.map(r => r.title)).toEqual([
+    'Cutouts that work on any subject',
+    'Lumiere video and audio',
+  ])
+})
+
+const line = (minutesAgo: number, text: string) => `${JSON.stringify({ at: new Date(T0 - minutesAgo * 60_000).toISOString(), text })}\n`
+
+test("the Log tab merges Super-Gru's own steps and each Gru's, newest first, and keeps a Gru's steps once its log is gone", () => {
+  const files: Record<string, string> = {
+    ...TWO_EPICS,
+    'super-SUPER-1.log.jsonl': line(50, 'Started the Gru for the export work.') + line(5, 'The Gru for the export work finished.'),
+    'run-STARK-1.log.jsonl': line(40, 'Sent a helper to add the export command.') + line(10, 'Checked the export command is really done.'),
+    'run-STARK-2.log.jsonl': line(20, 'Sent a helper to cache the index.'),
+  }
+  const titles = new Map([['STARK-1', 'bifrost: export the reading list']])
+  const steps = (b: ReturnType<typeof buildSuper>) =>
+    b?.log.days.flatMap(d => d.entries.map(e => [e.who, e.id, e.isRun, e.text])) ?? []
+  expect(steps(buildSuper('super-SUPER-1.json', files, titles, T0))).toEqual([
+    ['Super-Gru', null, true, 'The Gru for the export work finished.'],
+    ['Export the reading list', 'STARK-1', false, 'Checked the export command is really done.'],
+    ['', 'STARK-2', false, 'Sent a helper to cache the index.'],
+    ['Export the reading list', 'STARK-1', false, 'Sent a helper to add the export command.'],
+    ['Super-Gru', null, true, 'Started the Gru for the export work.'],
+  ])
+  expect(superReads('super-SUPER-1.json', files)).toEqual(
+    expect.arrayContaining(['super-SUPER-1.log.jsonl', 'run-STARK-1.log.jsonl', 'run-STARK-2.log.jsonl']),
+  )
+
+  // STARK-1's Gru ends: it deletes its run file and its log. The tab kept the log's lines.
+  const memory = rememberSuper('super-SUPER-1.json', files, null)
+  expect(memory?.epics['STARK-1']?.log).toBe(files['run-STARK-1.log.jsonl'])
+  const gone: Record<string, string> = { ...files }
+  delete gone['run-STARK-1.json']
+  delete gone['run-STARK-1.log.jsonl']
+  expect(rememberSuper('super-SUPER-1.json', gone, memory)).toEqual(memory)
+  expect(steps(buildSuper('super-SUPER-1.json', gone, titles, T0, new Map(), memory))).toHaveLength(5)
+  // Memory a build before 0.23.0 kept has no log: the epic still keeps its tickets.
+  const old = { launchId: 'SUPER-1', epics: { 'STARK-1': { tickets: ['STARK-11'], titles: {}, gruStats: null } } }
+  expect(steps(buildSuper('super-SUPER-1.json', gone, titles, T0, new Map(), old))).toHaveLength(3)
+})
+
+test('the tab keeps only the newest 50 lines of a Gru log', () => {
+  const long = Array.from({ length: 60 }, (_, i) => line(60 - i, `Step ${i + 1}.`)).join('')
+  const memory = rememberSuper('super-SUPER-1.json', { ...TWO_EPICS, 'run-STARK-1.log.jsonl': long }, null)
+  const kept = (memory?.epics['STARK-1']?.log ?? '').trim().split('\n')
+  expect(kept).toHaveLength(50)
+  expect(JSON.parse(kept[0] ?? '{}').text).toBe('Step 11.')
 })
 
 test("settings take the settings file's value, else the run file's, else the default; a wrong type reads as absent", () => {
@@ -86,12 +142,15 @@ test("a launch above the pane's range keeps its count; the settings file stays 1
   expect(superSettingsOf(run, JSON.stringify({ parallel: 9, maxWorkers: 0 }))).toMatchObject({ maxWorkers: 12, parallel: 10 })
 })
 
-test("a super board reads its settings and stats files, each Gru's stats, each ticket's file and stats, then its blocked tickets' logs", () => {
+test("a super board reads its settings, stats and log files, each Gru's stats and log, each ticket's file and stats, then its blocked tickets' logs", () => {
   expect(superReads('super-SUPER-1.json', TWO_EPICS)).toEqual([
     'super-SUPER-1.settings.json',
     'super-SUPER-1.stats.json',
+    'super-SUPER-1.log.jsonl',
     'run-STARK-1.stats.json',
+    'run-STARK-1.log.jsonl',
     'run-STARK-2.stats.json',
+    'run-STARK-2.log.jsonl',
     ...['STARK-11', 'STARK-12', 'STARK-13', 'STARK-21', 'STARK-22'].flatMap(id => [`${id}.json`, `${id}.stats.json`]),
   ])
   expect(superLogs('super-SUPER-1.json', TWO_EPICS)).toEqual(['STARK-22.log.jsonl'])
