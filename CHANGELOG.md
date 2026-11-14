@@ -334,6 +334,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **`workflow_shape.test.ts` now proves `SCAN_SCOPES` is complete.** That hand-written list claims in its own comment to be *every* top-level dir holding a scannable file, and nothing checked it — so a new top-level directory (or a `gh` call parked in `docs/`) left the `gh api --slurp` gate reporting clean over a file it never opened. A second walk of the whole tree now diffs against the scoped walk and names anything outside it. Mutation-proved: dropping `config` from the list reddens with the eight files it covers.
 
 ### Fixed
+<!-- idun:pr-merge pr=509 runId=509 sha=4342196f -->
+- Bump `stark-ops` to 0.58.0 so installs that took 0.57.0 from another PR also get Gru's hermod poison-pill stand-down.
 <!-- idun:pr-merge pr=507 runId=507 sha=a16a5b8f -->
 - Super-Gru pane is readable at 64 columns: grouped Overview with full epic titles, narrower Mega stats and GitHub tables, and a new Log tab (`l`).
 <!-- idun:pr-merge pr=490 runId=490 sha=a0004448 -->
