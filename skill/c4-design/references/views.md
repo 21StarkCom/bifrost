@@ -15,7 +15,11 @@ Make these views, and no others until a reader asks a new question:
 | Components               | `<container>`, "Components: <container>"           | Only for a container that a reader must open    |
 | Flow                     | `flow<Name>`, "Flow: <use case>"                   | One for each main path through the code         |
 | Tech stack               | `stack` (the scan writes it)                       | When an element has a `code` key                |
-| Deployment               | `deployment` (the scan writes it)                  | When the system has `terraform` and `deploy` keys |
+| Deployment               | `deployment` (the scan writes it)                  | When the system has `terraform` and `deploy` keys, or an `infra` key. It answers "Where does each container run?" |
+| Infra map                | `infra` (the scan writes it)                       | When the system has an `infra` key. It answers "What does the product use in the cloud?" |
+| Ingress                  | `ingress` (the scan writes it)                     | When the inventory has a node of the topic. It answers "How does a request reach a service?" |
+| Network                  | `network` (the scan writes it)                     | When the inventory has a node of the topic. It answers "What is the network, and the ways out?" |
+| Data                     | `data` (the scan writes it)                        | When the inventory has a node of the topic. It answers "Where is the data, and who uses it?" |
 
 - A new view must answer a new question: who uses X, what X calls, how flow Y runs, or where X runs. Do not make a
   second view that answers the same question with other boxes.
@@ -112,8 +116,11 @@ skill.
 
 ## Deployment views
 
-- The scan writes the view `deployment` from the `terraform` and `deploy` keys. Do not write a second view with
-  that id.
+- The scan owns the view ids `infra`, `deployment`, `ingress`, `network` and `data`. A hand-written view with one of
+  them is an error of `floorplan check` (`Duplicate view`): give that view another id.
+- From the `terraform` and `deploy` keys, the scan writes the view `deployment` only. From an `infra` key, it writes
+  the five views. It writes `ingress`, `network` and `data` only when the inventory has a node of their topic.
+- The views of an environment other than `prod` have the ids `<id>-<environment>`, such as `network-staging`.
 - Show one environment in each deployment view.
 - Show your own containers on the nodes, not only the cloud products. A view of vendor icons alone does not tell the
   reader what runs where.

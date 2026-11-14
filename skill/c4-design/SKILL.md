@@ -45,8 +45,11 @@ of the loop, and when the operator asks for a review of a model or its diagrams.
 
 Read the reference for the task before you edit `model/`:
 
-- [references/code-keys.md](references/code-keys.md): before you write a `code`, `deploy` or `terraform` key, run
-  `floorplan scan`, fix an R9 error, or show the deployments.
+- [references/code-keys.md](references/code-keys.md): before you write a `code`, `deploy`, `terraform` or `infra`
+  key, run `floorplan scan` or `floorplan infra pull`, fix an R9 error or an R14 warning, or show the deployments.
+  `floorplan infra pull [dir]` (MCP `infra_pull` {dir, check?, billingProject?}) reads the cloud projects of the
+  `infra` key and writes the inventory `infra/<environment>.json`. With `--check` (MCP `check:true`), it prints each
+  difference between the cloud and the inventory, and writes no file.
 - [references/flows.md](references/flows.md): before you write a flow, a sequence view of one main path.
 - [references/flow-kit.md](references/flow-kit.md): before you model a process (an odin playbook, a feature, a loop)
   as steps and decisions, or run `floorplan import`.
@@ -134,8 +137,8 @@ diff rfc-payments 'Split payments out of the API' {
   into the model, such as an element's `description`.
 - A new view for the change goes in `model/`, not in the proposal. A view that names an element only the
   proposal adds shows it in To-be alone.
-- Never write a `code`, `deploy` or `terraform` key in a proposal: R9 does not check it there, and a bad path
-  stops the build at the accept. Add the keys in `model/` at step 5.
+- Never write a `code`, `deploy`, `terraform` or `infra` key in a proposal: R9 does not check it there, and a bad
+  path stops the build at the accept. Add the keys in `model/` at step 5.
 
 ### 2. Check and render
 
