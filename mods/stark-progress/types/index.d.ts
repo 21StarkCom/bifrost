@@ -326,14 +326,14 @@ export type SuperState = 'waiting' | 'in work' | 'blocked' | 'done'
 /** One epic of a Super-Gru run. */
 export type SuperRow = {
   epic: string
-  /** Its title from alfred, or null while none is known. */
+  /** Its title from alfred, less its `EPIC:`, `[tag]` and `repo: ` leads, or null while none is known. */
   title: string | null
   state: SuperState
   /** Its closed tickets and all its tickets, from its Gru's run file; null with no run file. */
   done: number | null
   total: number | null
-  /** Its Gru: its session id's first 8 characters, else its launch id; null while the Gru is queued. */
-  gru: string | null
+  /** Its tickets whose stage is `blocked`. */
+  blocked: number
   gruState: 'queued' | 'live' | 'reported' | 'ended'
 }
 
@@ -417,6 +417,8 @@ export type SuperBoard = {
   /** The run's tickets, each once, however many epics list it. */
   tickets: number
   github: SuperGithub
+  /** Super-Gru's own steps and each epic's Gru's steps, newest first. */
+  log: LogView
   /** When Super-Gru deleted its run file at the end, or null while it runs: the pane then keeps this last board. */
   endedAt: number | null
   readAt: number
@@ -424,13 +426,14 @@ export type SuperBoard = {
 
 /**
  * What Super-Gru's tab remembers of each epic's Gru while its files exist:
- * its tickets and their titles from `run-<launch>.json`, and the text of
- * `run-<launch>.stats.json`. A Gru deletes both at its end; the board then
- * reads these.
+ * its tickets and their titles from `run-<launch>.json`, the text of
+ * `run-<launch>.stats.json`, and the newest 50 lines of
+ * `run-<launch>.log.jsonl` (absent in memory a build before 0.23.0 kept). A
+ * Gru deletes them at its end; the board then reads these.
  */
 export type SuperMemory = {
   launchId: string
-  epics: Record<string, { tickets: string[]; titles: Record<string, string>; gruStats: string | null }>
+  epics: Record<string, { tickets: string[]; titles: Record<string, string>; gruStats: string | null; log?: string }>
 }
 
 /** A pane's tabs; the Gru pane and the Super-Gru pane have `github`. */

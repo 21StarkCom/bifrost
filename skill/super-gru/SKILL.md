@@ -44,6 +44,16 @@ defines `~/.cache/stark-progress/super-<launch id>.json`, its write commands
 and an example. Write the file at each change of an epic's state. The pane and
 the launcher of this epic read the same shape.
 
+## The log
+
+Append one line to `~/.cache/stark-progress/super-<launch id>.log.jsonl` at
+each big step, for the Log tab of the Super-Gru pane. The big steps are the
+start (step 1), each Gru launch (step 3), each answer to a Gru (step 5), each
+relayed shared block (step 6), each epic that ends (step 7), and the end
+(step 8). [The run-file doc](references/run-file.md#the-log-file) has the
+command and the rules for a line. A write that fails costs one line and never
+holds the run.
+
 ## Protocol
 
 0. **Title your tab**, if you are in cmux or tmux. The mechanics are
@@ -119,9 +129,13 @@ the launcher of this epic read the same shape.
       (`alfred task move <epic> done`).
    3. Send one report, with a table: each epic, its Gru, its tickets done,
       its open items and its state.
-   4. Delete the run file and its settings file
-      `~/.cache/stark-progress/super-<launch id>.settings.json`, so a later
-      run with the same launch id starts from its own arguments.
+   4. Append the last log line. Then, in a later command, delete the run
+      file, its settings file
+      `~/.cache/stark-progress/super-<launch id>.settings.json` and its log
+      `~/.cache/stark-progress/super-<launch id>.log.jsonl`, so a later run
+      with the same launch id starts from its own arguments. The pane keeps
+      the last board, its Log tab included; it reads once a second, so a
+      delete in the same command as the append loses that last line.
 
 ## Authority
 

@@ -332,6 +332,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **`workflow_shape.test.ts` now proves `SCAN_SCOPES` is complete.** That hand-written list claims in its own comment to be *every* top-level dir holding a scannable file, and nothing checked it — so a new top-level directory (or a `gh` call parked in `docs/`) left the `gh api --slurp` gate reporting clean over a file it never opened. A second walk of the whole tree now diffs against the scoped walk and names anything outside it. Mutation-proved: dropping `config` from the list reddens with the eight files it covers.
 
 ### Fixed
+<!-- idun:pr-merge pr=507 runId=507 sha=a16a5b8f -->
+- Super-Gru pane is readable at 64 columns: grouped Overview with full epic titles, narrower Mega stats and GitHub tables, and a new Log tab (`l`).
 <!-- idun:pr-merge pr=490 runId=490 sha=a0004448 -->
 - `needs-you` 0.3.0: the band holds one round of `Needs you` lines, a reworded question keeps its row, and the operator's next message closes the band.
 <!-- idun:pr-merge pr=478 runId=478 sha=67ef344a -->

@@ -1,8 +1,8 @@
-import type { SuperBoard, SuperLook, SuperMemory, SuperRow, SuperSettings, SuperState } from '../types'
+import type { LogView, SuperBoard, SuperLook, SuperMemory, SuperRow, SuperSettings, SuperState } from '../types'
 import { launched, MAX_WORKERS, nameOf, parse, titleIn, titlesOf } from './board'
 import { buildSuperGithub } from './github'
 import type { RepoAnswer } from './github'
-import { logName, logOf } from './log'
+import { buildLog, LOG_SHOWN, logName, logOf, runLogName, superLogName } from './log'
 import { runStatsName, statsName, superStats, superStatsName } from './stats'
 
 // What the Super-Gru pane draws (super-pane.tsx), from the Super-Gru run file
@@ -76,15 +76,17 @@ const gruStateOf = (gru: Record<string, unknown> | undefined): SuperRow['gruStat
 
 /**
  * An epic's Gru: its launch id (the epic while none is written), and its
- * tickets, their titles and its Gru's stats file, from its run files while
- * they exist, else from what Super-Gru's tab kept of them; null tickets with
- * neither. `isGone` says the Gru's run file is gone. A queued Gru has run
- * nothing in this run: what was kept of its epic is an earlier run's.
+ * tickets, their titles, its Gru's stats file and its Gru's log, from its run
+ * files while they exist, else from what Super-Gru's tab kept of them; null
+ * tickets with neither. `isGone` says the Gru's run file is gone. A queued
+ * Gru has run nothing in this run: what was kept of its epic, and a log
+ * under its epic's name, are an earlier run's.
  */
 function epicRun(epic: string, gru: Record<string, unknown> | undefined, files: Record<string, string>, kept: Kept = {}) {
   const launch = str(gru?.launch) ?? epic
   const runFile = parse(files[gruRunName(launch)])
-  const was = gruStateOf(gru) !== 'queued' && Object.hasOwn(kept, epic) ? kept[epic] : undefined
+  const isQueued = gruStateOf(gru) === 'queued'
+  const was = !isQueued && Object.hasOwn(kept, epic) ? kept[epic] : undefined
   const listed = Array.isArray(runFile?.tickets)
     ? [...new Set(runFile.tickets.filter((id): id is string => typeof id === 'string'))]
     : null
@@ -95,15 +97,18 @@ function epicRun(epic: string, gru: Record<string, unknown> | undefined, files: 
     tickets,
     titles: listed !== null ? titlesOf(runFile?.titles, listed) : (was?.titles ?? {}),
     gruStats: files[runStatsName(launch)] ?? was?.gruStats ?? undefined,
+    log: isQueued ? undefined : (files[runLogName(launch)] ?? was?.log ?? undefined),
+    isQueued,
     isGone: runFile === null,
   }
 }
 
 /**
  * What Super-Gru's tab keeps of each epic of the run file `name`: its
- * tickets, their titles and its Gru's stats, read now while the Gru's files
- * exist, else kept from `was`. A Gru deletes its files at its end; the board
- * then reads these. Null while the run file does not parse and nothing is kept.
+ * tickets, their titles, its Gru's stats and the newest LOG_SHOWN lines of
+ * its Gru's log, read now while the Gru's files exist, else kept from `was`.
+ * A Gru deletes its files at its end; the board then reads these. Null while
+ * the run file does not parse and nothing is kept.
  */
 export function rememberSuper(name: string, files: Record<string, string>, was: SuperMemory | null): SuperMemory | null {
   const s = superRunOf(files[name])
@@ -113,10 +118,19 @@ export function rememberSuper(name: string, files: Record<string, string>, was: 
   const epics: Kept = {}
   for (const epic of s.epics) {
     const r = epicRun(epic, s.grus[epic], files, kept)
-    if (r.tickets !== null) epics[epic] = { tickets: r.tickets, titles: r.titles, gruStats: r.gruStats ?? null }
+    if (r.tickets === null) continue
+    const log = r.log === undefined ? '' : newestLines(r.log)
+    epics[epic] = { tickets: r.tickets, titles: r.titles, gruStats: r.gruStats ?? null, ...(log === '' ? {} : { log }) }
   }
 
   return { launchId, epics }
+}
+
+/** A log's newest LOG_SHOWN steps, each line whole: the Log tab never shows more of one file. A line logOf skips takes no place. */
+function newestLines(text: string): string {
+  const lines = text.split('\n').filter(l => logOf(l).length > 0)
+
+  return lines.length === 0 ? '' : `${lines.slice(-LOG_SHOWN).join('\n')}\n`
 }
 
 /** A ticket's name, as the Gru pane names it: its own file's title, else the one its Gru wrote at launch, less its leads; '' with neither. */
@@ -135,7 +149,7 @@ export function superTickets(name: string, files: Record<string, string>, kept: 
 
 /**
  * One epic's row: its tickets from its Gru's run file, or kept from it, each
- * ticket's stage from its own file. All closed reads `done`; any blocked,
+ * ticket's stage from its own file, and how many are blocked. All closed reads `done`; any blocked,
  * `blocked`; a Gru not started yet, `waiting`; a Gru that reported or ended
  * with no run file left, `done` (with no count when nothing was kept); else
  * `in work`.
@@ -144,7 +158,7 @@ function rowOf(
   epic: string,
   gru: Record<string, unknown> | undefined,
   files: Record<string, string>,
-  { launch, tickets, isGone }: ReturnType<typeof epicRun>,
+  { tickets, isGone }: ReturnType<typeof epicRun>,
 ): { row: Omit<SuperRow, 'title'>; looks: SuperLook[] } {
   const gruState = gruStateOf(gru)
   const stages = (tickets ?? []).map(id => ({ id, file: parse(files[`${id}.json`]) }))
@@ -174,8 +188,7 @@ function rowOf(
       state,
       done: total === null ? null : done,
       total,
-      // A session id's first 8 characters name it; a launch id shows whole.
-      gru: gruState === 'queued' ? null : (str(gru?.session)?.slice(0, 8) ?? launch),
+      blocked: blocked.length,
       gruState,
     },
     looks,
@@ -213,9 +226,11 @@ export function buildSuper(
     })),
   )
 
+  const rows = built.map(b => ({ ...b.row, title: epicName(epicTitles.get(b.row.epic)) }))
+
   return {
     launchId,
-    rows: built.map(b => ({ ...b.row, title: epicTitles.get(b.row.epic) ?? null })),
+    rows,
     looks: built.flatMap(b => b.looks),
     settings: superSettingsOf(s.run, files[superSettingsName(launchId)]),
     stats: stats.view,
@@ -232,14 +247,43 @@ export function buildSuper(
       })),
       github,
     ),
+    log: superLog(launchId, files, runs.map((r, i) => ({ epic: r.epic, name: rows[i]?.title ?? null, log: r.log })), now),
     endedAt: null,
     readAt: now,
   }
 }
 
+/** An epic's title as the Gru pane names its epic: less its `EPIC:`, `[tag]` and `repo: ` leads; null with none. */
+function epicName(title: string | undefined): string | null {
+  const name = title === undefined ? '' : nameOf(title).name
+
+  return name === '' ? null : name
+}
+
 /**
- * The files a Super-Gru board reads beyond the run files: its settings and
- * stats files, each Gru's stats file, and each epic's tickets' files and stats files.
+ * The Log tab: Super-Gru's own steps, and each epic's Gru's steps from its
+ * run log, or the lines kept of it, newest first. A Gru's step names its
+ * epic, by its row's name.
+ */
+function superLog(
+  launchId: string,
+  files: Record<string, string>,
+  runs: readonly { epic: string; name: string | null; log: string | undefined }[],
+  now: number,
+): LogView {
+  return buildLog(
+    [
+      { who: 'Super-Gru', isRun: true, text: files[superLogName(launchId)] },
+      ...runs.map(r => ({ who: r.name ?? '', id: r.epic, text: r.log })),
+    ],
+    now,
+  )
+}
+
+/**
+ * The files a Super-Gru board reads beyond the run files: its settings,
+ * stats and log files, each Gru's stats file, each started Gru's log, and
+ * each epic's tickets' files and stats files.
  */
 export function superReads(name: string, files: Record<string, string>, kept: Kept = {}): string[] {
   const s = superRunOf(files[name])
@@ -249,7 +293,8 @@ export function superReads(name: string, files: Record<string, string>, kept: Ke
   return [
     superSettingsName(launchId),
     superStatsName(launchId),
-    ...runs.map(r => runStatsName(r.launch)),
+    superLogName(launchId),
+    ...runs.flatMap(r => [runStatsName(r.launch), ...(r.isQueued ? [] : [runLogName(r.launch)])]),
     ...runs.flatMap(r => r.tickets ?? []).flatMap(id => [`${id}.json`, statsName(id)]),
   ]
 }

@@ -68,7 +68,7 @@ const doneLastAtom = atom({ plugin: 'stark-progress', key: 'doneLast' } as const
 const DONE_LAST = 'doneLast'
 const ticketAtom = atom({ plugin: 'stark-progress', key: 'ticket' } as const, null, { shape: 'ticket-7' })
 const ticketTabAtom = atom({ plugin: 'stark-progress', key: 'ticketTab' } as const, 'overview' as PaneTab)
-const superAtom = atom({ plugin: 'stark-progress', key: 'superBoard' } as const, null, { shape: 'super-2' })
+const superAtom = atom({ plugin: 'stark-progress', key: 'superBoard' } as const, null, { shape: 'super-3' })
 const superTabAtom = atom({ plugin: 'stark-progress', key: 'superTab' } as const, 'overview' as PaneTab)
 const superGhFocusAtom = atom({ plugin: 'stark-progress', key: 'superGhFocus' } as const, '')
 /** What Super-Gru's tab kept of each epic's Gru: a Gru deletes its files at its end, and the board reads these after. */
@@ -276,7 +276,7 @@ export const register: Register = on => {
     })
     await $.command.register({
       name: 'super-board',
-      description: "Open the Super-Gru board in Super-Gru's tab: one row for each epic, and the settings Super-Gru reads",
+      description: "Open the Super-Gru board in Super-Gru's tab: the epics in groups by state, and the settings Super-Gru reads",
     })
     // The pane's own choice outlives the session; a store that cannot be read leaves the default.
     // It loads in the background, so no session waits on it, and a press queues behind it.
