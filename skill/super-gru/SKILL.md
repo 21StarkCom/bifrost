@@ -129,11 +129,13 @@ holds the run.
       (`alfred task move <epic> done`).
    3. Send one report, with a table: each epic, its Gru, its tickets done,
       its open items and its state.
-   4. Append the last log line. Then delete the run file, its settings file
+   4. Append the last log line. Then, in a later command, delete the run
+      file, its settings file
       `~/.cache/stark-progress/super-<launch id>.settings.json` and its log
       `~/.cache/stark-progress/super-<launch id>.log.jsonl`, so a later run
       with the same launch id starts from its own arguments. The pane keeps
-      the last board, its Log tab included.
+      the last board, its Log tab included; it reads once a second, so a
+      delete in the same command as the append loses that last line.
 
 ## Authority
 

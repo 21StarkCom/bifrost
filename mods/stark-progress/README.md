@@ -564,7 +564,8 @@ with no count cut:
 - **Log** (`l`): the newest 50 steps of Super-Gru's own log
   (`super-<id>.log.jsonl`, named `Super-Gru`) and of each epic's Gru log
   (`run-<launch>.log.jsonl`, named `[STARK-n] <title>`), merged, newest
-  first, as the Gru pane's Log tab draws them. Minions' steps stay in each
+  first, as the Gru pane's Log tab draws them. A queued epic's log is an
+  earlier run's, so the tab leaves it out. Minions' steps stay in each
   Gru's pane.
 - **Mega stats** (`t`): the Gru pane's Stats table in four columns:
   `Super-Gru` (its own stats file), `Grus` (each epic's
@@ -572,10 +573,12 @@ with no count cut:
   added) and `Whole run`. Lines, commits and PRs are the workers': the other
   two columns draw `—`; a worker's lines are the last git signal its stats
   file kept, since Super-Gru reads no worktree. Under it, `By epic`: one row
-  for each epic with a Gru, with its tickets done, the working time, output
+  for each epic with a Gru or a ticket list (a run file an earlier run left
+  under its name), with its tickets done, the working time, output
   tokens and tool calls of its Gru and its workers, its lines added and
   removed, and its PRs merged of PRs opened. An epic with no ticket list
-  draws `—` in each column. A table wider than the pane drops `calls`, then
+  draws `—` for its tickets done, and `—` in each column when its Gru has no
+  counts either, never a 0. A table wider than the pane drops `calls`, then
   `output`. Then the most used tools of the whole run, the
   model and effort of Super-Gru, of each Gru (`Gru <epic>`), and of the
   workers, one line for each pair with how many share it, the requests and
@@ -587,7 +590,7 @@ with no count cut:
   serves both panes in one tab. From the top:
   - `🐙 GitHub activity`: the PRs by state, the head commits' runs, and the
     size of all PRs: `+<added> −<removed> in <n> commits`.
-  - `By epic`: each epic with a Gru, its PRs by state with no count of 0,
+  - `By epic`: each epic with a Gru or a PR, its PRs by state with no count of 0,
     their size, and `· ✕ <n> failing` when an open or draft PR of it has a
     failing run on its head commit. A line wider than the pane puts the size
     and the failing count on a second line. An epic with no ticket list says

@@ -1,12 +1,15 @@
 import { expect, test } from 'claude-code/testing'
 
-import type { GithubPr } from '../types'
+import type { GithubPr, SuperRow } from '../types'
 import { parseGithub } from './github'
 import type { RepoAnswer } from './github'
 import { ANSWER } from './github-fixture'
 import { isRunName } from './view'
 import { buildSuper, isSuperName, ownSuper, rememberSuper, superLogs, superReads, superSettingsOf } from './super'
-import { stateWords } from './super-pane'
+
+/** A row's state and count: `done 3/3`, `blocked 1/2`, or the state alone with no run file to count. */
+const stateWords = (r: Pick<SuperRow, 'state' | 'done' | 'total'>) =>
+  r.total === null ? r.state : `${r.state} ${r.done ?? 0}/${r.total}`
 
 const T0 = Date.parse('2026-11-13T12:00:00Z')
 const ticket = (id: string, stage: string) =>
@@ -117,12 +120,26 @@ test("the Log tab merges Super-Gru's own steps and each Gru's, newest first, and
   expect(steps(buildSuper('super-SUPER-1.json', gone, titles, T0, new Map(), old))).toHaveLength(3)
 })
 
-test('the tab keeps only the newest 50 lines of a Gru log', () => {
+test('the tab keeps only the newest 50 lines of a Gru log, and a line that does not parse takes no place', () => {
   const long = Array.from({ length: 60 }, (_, i) => line(60 - i, `Step ${i + 1}.`)).join('')
-  const memory = rememberSuper('super-SUPER-1.json', { ...TWO_EPICS, 'run-STARK-1.log.jsonl': long }, null)
+  const memory = rememberSuper('super-SUPER-1.json', { ...TWO_EPICS, 'run-STARK-1.log.jsonl': `${long}{"at":"2026-11-13T1` }, null)
   const kept = (memory?.epics['STARK-1']?.log ?? '').trim().split('\n')
   expect(kept).toHaveLength(50)
   expect(JSON.parse(kept[0] ?? '{}').text).toBe('Step 11.')
+  expect(JSON.parse(kept.at(-1) ?? '{}').text).toBe('Step 60.')
+})
+
+test("a queued epic's log is an earlier run's: the Log tab leaves it out, and the board does not read it", () => {
+  const files: Record<string, string> = {
+    'super-SUPER-1.json': JSON.stringify({
+      session: 'sg',
+      epics: ['STARK-1'],
+      grus: { 'STARK-1': { launch: null, session: null, state: 'queued' } },
+    }),
+    'run-STARK-1.log.jsonl': line(30, 'Sent a helper in an earlier run.'),
+  }
+  expect(buildSuper('super-SUPER-1.json', files, new Map(), T0)?.log.days).toEqual([])
+  expect(superReads('super-SUPER-1.json', files)).not.toContain('run-STARK-1.log.jsonl')
 })
 
 test("settings take the settings file's value, else the run file's, else the default; a wrong type reads as absent", () => {

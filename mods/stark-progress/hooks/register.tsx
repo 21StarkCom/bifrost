@@ -276,7 +276,7 @@ export const register: Register = on => {
     })
     await $.command.register({
       name: 'super-board',
-      description: "Open the Super-Gru board in Super-Gru's tab: one row for each epic, and the settings Super-Gru reads",
+      description: "Open the Super-Gru board in Super-Gru's tab: the epics in groups by state, and the settings Super-Gru reads",
     })
     // The pane's own choice outlives the session; a store that cannot be read leaves the default.
     // It loads in the background, so no session waits on it, and a press queues behind it.

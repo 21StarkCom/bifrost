@@ -2348,9 +2348,13 @@ test("Super-Gru's tab writes its own stats, and Mega stats adds Super-Gru's, the
 test("a narrow pane's By epic table drops calls, then output, and leaves out an epic with no Gru yet", async ($, on) => {
   const disk = superDisk()
   const run = JSON.parse(disk['super-SUPER-1.json'] ?? '{}') as { epics: string[]; grus: Record<string, unknown> }
-  run.epics.push('STARK-3')
+  run.epics.push('STARK-3', 'STARK-4', 'STARK-5')
   run.grus['STARK-3'] = { launch: null, session: null, state: 'queued' }
+  // STARK-4's Gru just started: its stats file, no run file yet. STARK-5's ended before this tab kept anything.
+  run.grus['STARK-4'] = { launch: 'STARK-4', session: 'dddddddd-4', state: 'live' }
+  run.grus['STARK-5'] = { launch: 'STARK-5', session: 'eeeeeeee-5', state: 'ended' }
   disk['super-SUPER-1.json'] = JSON.stringify(run)
+  disk['run-STARK-4.stats.json'] = JSON.stringify({ session: 'dddddddd-4', since: new Date(T0).toISOString(), busyMs: 300_000, openMs: 300_000, tools: { Bash: { calls: 4, fails: 0 } } })
   stage(on, disk, { session: 'sg', root: '/r' })
   const clock = mock.clock(on, { now: T0 })
   await $.session.start({ cwd: '/r', surface: 'terminal', isInteractive: true })
@@ -2360,13 +2364,17 @@ test("a narrow pane's By epic table drops calls, then output, and leaves out an 
   await wide.press({ key: 'tab-stats' })
   expect(await wide.find({ type: 'Text', text: /^ +done +working +output +calls +lines +PRs merged$/ })).toBeDefined()
   expect(await wide.find({ type: 'Text', text: /^ +STARK-3 / })).toBeUndefined()
+  // Gru counts with no ticket list: `—` done, the counts it has. Nothing known: `—` in each column, never a 0.
+  expect(await wide.find({ type: 'Text', text: /^ +— +5m +0 +4 +0 +0\/0$/ })).toBeDefined()
+  expect(await wide.find({ type: 'Text', text: /^ +— +— +— +— +— +—$/ })).toBeDefined()
   await wide.unmount()
 
   const narrow = await $.ui.mount({ ...SUPER_PANE, props: { ...SUPER_PANE.props, bodyColumns: 40 } })
   expect(await narrow.find({ type: 'Text', text: /^ +done +working +lines +PRs merged$/ })).toBeDefined()
   await narrow.press({ key: 'tab-overview' })
   expect(await narrow.find({ type: 'Text', text: /^ Waiting$/ })).toBeDefined()
-  expect(await narrow.find({ type: 'Text', text: '1 of 3 epics done · 1 in work · 1 waiting' })).toBeDefined()
+  expect(await narrow.find({ type: 'Text', text: '2 of 5 epics done · 2 in work · 1 waiting' })).toBeDefined()
+  expect(await narrow.find({ type: 'Text', text: 'no ticket list yet · Gru live' })).toBeDefined()
 })
 
 test("Super-Gru's GitHub tab asks only while placed and shown, and draws each epic's PRs and the newest activity", async ($, on) => {
@@ -2393,7 +2401,7 @@ test("Super-Gru's GitHub tab asks only while placed and shown, and draws each ep
   await clock.advance(1000)
   expect(await pane.find({ type: 'Text', text: '🐙 GitHub activity' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: '2 PRs: 1 merged · 0 open · 1 draft · 0 closed' })).toBeDefined()
-  // A count of 0 is left out; a line too wide for the pane puts its size on a second line.
+  // A count of 0 is left out, and a line that fits keeps its size on it.
   expect(await pane.find({ type: 'Text', text: /^ +STARK-1 +1 PR: 1 merged +\+681 −120$/ })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: '🌿 No open PR has a failing check.' })).toBeDefined()
   expect(await pane.find({ type: 'Text', text: '⚡ Latest activity' })).toBeDefined()

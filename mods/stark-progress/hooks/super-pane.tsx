@@ -44,10 +44,6 @@ export type SuperPaneView = {
   set: (change: (s: SuperSettings) => Partial<SuperSettings>) => unknown
 }
 
-/** `done 3/3`, `blocked 1/2`, or the state alone with no run file to count. */
-export const stateWords = (r: Pick<SuperRow, 'state' | 'done' | 'total'>) =>
-  r.total === null ? r.state : `${r.state} ${r.done ?? 0}/${r.total}`
-
 /** The Overview's groups, in order: the state each one holds, and its name. */
 const GROUPS: readonly (readonly [SuperState, string])[] = [
   ['blocked', 'Blocked'],
@@ -91,6 +87,9 @@ function progress(ui: UI, r: SuperRow, barWidth: number) {
   )
 }
 
+/** A waiting or done epic: one line, with no bar. */
+const isQuietRow = (r: SuperRow) => r.state === 'waiting' || r.state === 'done'
+
 /**
  * One epic: `[STARK-n] <title>`, its id padded so every title starts in one
  * column, the title cut only at the pane's edge. An epic in work or blocked
@@ -98,7 +97,7 @@ function progress(ui: UI, r: SuperRow, barWidth: number) {
  */
 function epicRow(ui: UI, w: number, r: SuperRow, idWidth: number, barWidth: number) {
   const { Box, Text, P } = ui
-  const isQuiet = r.state === 'waiting' || r.state === 'done'
+  const isQuiet = isQuietRow(r)
   const title = r.title === null ? '' : cut(r.title, Math.max(w - idWidth - 1, 2))
 
   return (
@@ -114,17 +113,21 @@ function epicRow(ui: UI, w: number, r: SuperRow, idWidth: number, barWidth: numb
 
 function overview(ui: UI, w: number, b: SuperBoard) {
   const { Box, Text, P } = ui
-  const count = (state: SuperState) => b.rows.filter(r => r.state === state).length
+  const byState = new Map(GROUPS.map(([state]) => [state, b.rows.filter(r => r.state === state)]))
+  const count = (state: SuperState) => byState.get(state)?.length ?? 0
   const counts = (['in work', 'blocked', 'waiting'] as const)
     .filter(state => count(state) > 0)
     .map(state => ` · ${count(state)} ${state}`)
     .join('')
   // `[` and `]` around the widest id.
   const idWidth = Math.max(...b.rows.map(r => r.epic.length + 2), 6)
-  // The bar takes what the longest words leave after the indent and the gap, BAR_MIN to BAR_MAX cells.
+  // The bar takes what the longest words of a drawn bar leave after the indent and the gap, BAR_MIN to BAR_MAX cells.
   const longest = Math.max(
     0,
-    ...b.rows.map(progressWords).map(p => (p === null ? 0 : p.done.length + p.blocked.length + p.gru.length)),
+    ...b.rows
+      .filter(r => !isQuietRow(r))
+      .map(progressWords)
+      .map(p => (p === null ? 0 : p.done.length + p.blocked.length + p.gru.length)),
   )
   const barWidth = Math.max(BAR_MIN, Math.min(BAR_MAX, w - 2 - 2 - longest))
 
@@ -135,7 +138,7 @@ function overview(ui: UI, w: number, b: SuperBoard) {
         <Text bold>{`Super-Gru · ${b.launchId}`}</Text>
         <Text color={P.text}>{`${count('done')} of ${b.rows.length} epics done${counts}`}</Text>
         {GROUPS.flatMap(([state, name]) => {
-          const rows = b.rows.filter(r => r.state === state)
+          const rows = byState.get(state) ?? []
 
           return rows.length === 0
             ? []
@@ -172,9 +175,11 @@ const EPIC_DROPS = [3, 2] as const
 function epicTable(ui: UI, w: number, rows: readonly EpicStats[]) {
   const { Box, Text, P } = ui
   if (rows.length === 0) return null
-  // An epic with no ticket list (a Gru that ended before this tab kept its files) has no counts: `—`, never a 0.
-  const cells = rows.map(r => r.total === null ? EPIC_HEADS.map(() => '—') : [
-    `${r.done ?? 0}/${r.total}`,
+  // An epic with no ticket list and no Gru counts (a Gru that ended before this tab kept its files) knows
+  // nothing: `—`, never a 0. One with Gru counts but no ticket list yet shows them, with `—` done.
+  const isKnown = (r: EpicStats) => r.total !== null || r.busyMs > 0 || r.output > 0 || r.calls > 0
+  const cells = rows.map(r => !isKnown(r) ? EPIC_HEADS.map(() => '—') : [
+    r.total === null ? '—' : `${r.done ?? 0}/${r.total}`,
     dur(r.busyMs),
     short(r.output),
     short(r.calls),
@@ -203,10 +208,14 @@ function epicTable(ui: UI, w: number, rows: readonly EpicStats[]) {
   )
 }
 
-/** The epics whose Gru started: an epic with no Gru yet has no counts and no PR to draw. */
+/**
+ * The epics whose Gru started. An epic with no Gru yet has, as a rule, no
+ * counts and no PR to draw; one whose epic has a run file left from an
+ * earlier run still shows, as the totals count it.
+ */
 const startedOf = (b: SuperBoard) => new Set(b.rows.filter(r => r.gruState !== 'queued').map(r => r.epic))
 
-/** The Mega stats tab: the Gru pane's Stats table in four columns, then one row for each epic with a Gru. */
+/** The Mega stats tab: the Gru pane's Stats table in four columns, then one row for each epic with a Gru or a ticket list. */
 function megaStats(ui: UI, w: number, b: SuperBoard) {
   const started = startedOf(b)
 
@@ -214,7 +223,7 @@ function megaStats(ui: UI, w: number, b: SuperBoard) {
     title: `Mega stats for ${b.launchId}`,
     who: `Super-Gru's own counts, its Grus', its workers', and the whole run's: ${counted(b.rows.length, 'epic')}, ${counted(b.tickets, 'ticket')}.`,
     empty: "No stats yet. The mod counts in Super-Gru's tab, in each Gru's tab and in each worker's tab, once each has the mod.",
-    after: epicTable(ui, w, b.epicStats.filter(e => started.has(e.epic))),
+    after: epicTable(ui, w, b.epicStats.filter(e => started.has(e.epic) || e.total !== null)),
   })
 }
 
@@ -305,8 +314,9 @@ function epicPrs(ui: UI, w: number, e: EpicGithub, idWidth: number, isListed: bo
   const prs = `${e.ids.length === 1 ? '1 PR' : `${e.ids.length} PRs`}: `
   const size = `+${grouped(e.added)} −${grouped(e.removed)}`
   const failing = e.failing > 0 ? ` · ✕ ${e.failing} failing` : ''
-  const countsWide = prs.length + counts.reduce((n, [k, word], i) => n + `${k} ${word}`.length + (i > 0 ? 3 : 0), 0)
-  const isSplit = lead.length + countsWide + 2 + size.length + failing.length > w
+  // The counts as countsText draws them: `<n> <word>`, joined by ` · `.
+  const countsLine = `${prs}${counts.map(([n, word]) => `${n} ${word}`).join(' · ')}`
+  const isSplit = lead.length + countsLine.length + 2 + size.length + failing.length > w
   const tail = (
     <Text>
       <Text color={P.green}>{`+${grouped(e.added)}`}</Text>
@@ -349,7 +359,9 @@ function github(ui: UI, w: number, b: SuperBoard, view: SuperPaneView) {
   const c = gh.counts
   const started = startedOf(b)
   const unlisted = new Set(b.rows.filter(r => r.total === null).map(r => r.epic))
-  const idWidth = Math.max(...g.epics.map(e => e.epic.length), 4) + 2
+  // Each epic with a Gru, or with a PR the totals above count.
+  const byEpic = g.epics.filter(e => started.has(e.epic) || e.ids.length > 0)
+  const idWidth = Math.max(...byEpic.map(e => e.epic.length), 4) + 2
   const size = (
     <Text color={P.text}>
       <Text color={P.green}>{`+${grouped(g.added)}`}</Text>
@@ -371,7 +383,7 @@ function github(ui: UI, w: number, b: SuperBoard, view: SuperPaneView) {
       {c.prs > 0 && (
         <Box flexDirection="column">
           <Text bold>By epic</Text>
-          {g.epics.filter(e => started.has(e.epic)).map(e => epicPrs(ui, w, e, idWidth, !unlisted.has(e.epic)))}
+          {byEpic.map(e => epicPrs(ui, w, e, idWidth, !unlisted.has(e.epic)))}
         </Box>
       )}
 
@@ -491,7 +503,8 @@ export function drawSuperPane(ui: UI, w: number, view: SuperPaneView) {
               w,
               b.log,
               "No steps yet. Super-Gru writes its own steps, and each Gru writes its run's.",
-              `~/.cache/stark-progress/${superLogName(b.launchId)} and each live Gru's run log`,
+              // An ended run's logs are gone: Super-Gru and each Gru deleted theirs at their end.
+              b.endedAt === null ? `~/.cache/stark-progress/${superLogName(b.launchId)} and each live Gru's run log` : null,
             )
           : view.tab === 'stats'
             ? megaStats(ui, w, b)

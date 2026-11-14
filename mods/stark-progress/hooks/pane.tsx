@@ -579,9 +579,10 @@ export function tabBar(
  * A Log tab: the big steps, newest first, each after its local time. In the
  * Gru pane each step names whose it is (`Gru`, or a ticket's name) on a line
  * above its words. `empty` says who writes the steps, and `files` names the
- * files that hold every step, the older ones the tab leaves out included.
+ * files that hold every step, the older ones the tab leaves out included;
+ * null once those files are gone (an ended Super-Gru run's kept board).
  */
-export function logTab(ui: UI, w: number, log: LogView, empty: string, files: string) {
+export function logTab(ui: UI, w: number, log: LogView, empty: string, files: string | null) {
   const { Box, Text, P } = ui
   const steps = log.days.reduce((n, d) => n + d.entries.length, 0)
 
@@ -616,7 +617,7 @@ export function logTab(ui: UI, w: number, log: LogView, empty: string, files: st
       ))}
       {log.older > 0 && (
         <Text color={P.hint}>
-          {`${log.older === 1 ? '1 older step is' : `${log.older} older steps are`} not shown. Every step is in ${files}.`}
+          {`${log.older === 1 ? '1 older step is' : `${log.older} older steps are`} not shown.${files === null ? '' : ` Every step is in ${files}.`}`}
         </Text>
       )}
     </Box>

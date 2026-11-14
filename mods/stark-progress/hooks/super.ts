@@ -79,12 +79,14 @@ const gruStateOf = (gru: Record<string, unknown> | undefined): SuperRow['gruStat
  * tickets, their titles, its Gru's stats file and its Gru's log, from its run
  * files while they exist, else from what Super-Gru's tab kept of them; null
  * tickets with neither. `isGone` says the Gru's run file is gone. A queued
- * Gru has run nothing in this run: what was kept of its epic is an earlier run's.
+ * Gru has run nothing in this run: what was kept of its epic, and a log
+ * under its epic's name, are an earlier run's.
  */
 function epicRun(epic: string, gru: Record<string, unknown> | undefined, files: Record<string, string>, kept: Kept = {}) {
   const launch = str(gru?.launch) ?? epic
   const runFile = parse(files[gruRunName(launch)])
-  const was = gruStateOf(gru) !== 'queued' && Object.hasOwn(kept, epic) ? kept[epic] : undefined
+  const isQueued = gruStateOf(gru) === 'queued'
+  const was = !isQueued && Object.hasOwn(kept, epic) ? kept[epic] : undefined
   const listed = Array.isArray(runFile?.tickets)
     ? [...new Set(runFile.tickets.filter((id): id is string => typeof id === 'string'))]
     : null
@@ -95,7 +97,8 @@ function epicRun(epic: string, gru: Record<string, unknown> | undefined, files: 
     tickets,
     titles: listed !== null ? titlesOf(runFile?.titles, listed) : (was?.titles ?? {}),
     gruStats: files[runStatsName(launch)] ?? was?.gruStats ?? undefined,
-    log: files[runLogName(launch)] ?? was?.log ?? undefined,
+    log: isQueued ? undefined : (files[runLogName(launch)] ?? was?.log ?? undefined),
+    isQueued,
     isGone: runFile === null,
   }
 }
@@ -123,9 +126,9 @@ export function rememberSuper(name: string, files: Record<string, string>, was: 
   return { launchId, epics }
 }
 
-/** A log's newest LOG_SHOWN lines, whole: the Log tab never shows more of one file. */
+/** A log's newest LOG_SHOWN steps, each line whole: the Log tab never shows more of one file. A line logOf skips takes no place. */
 function newestLines(text: string): string {
-  const lines = text.split('\n').filter(l => l.trim() !== '')
+  const lines = text.split('\n').filter(l => logOf(l).length > 0)
 
   return lines.length === 0 ? '' : `${lines.slice(-LOG_SHOWN).join('\n')}\n`
 }
@@ -223,9 +226,11 @@ export function buildSuper(
     })),
   )
 
+  const rows = built.map(b => ({ ...b.row, title: epicName(epicTitles.get(b.row.epic)) }))
+
   return {
     launchId,
-    rows: built.map(b => ({ ...b.row, title: epicName(epicTitles.get(b.row.epic)) })),
+    rows,
     looks: built.flatMap(b => b.looks),
     settings: superSettingsOf(s.run, files[superSettingsName(launchId)]),
     stats: stats.view,
@@ -242,7 +247,7 @@ export function buildSuper(
       })),
       github,
     ),
-    log: superLog(launchId, files, runs, epicTitles, now),
+    log: superLog(launchId, files, runs.map((r, i) => ({ epic: r.epic, name: rows[i]?.title ?? null, log: r.log })), now),
     endedAt: null,
     readAt: now,
   }
@@ -257,19 +262,19 @@ function epicName(title: string | undefined): string | null {
 
 /**
  * The Log tab: Super-Gru's own steps, and each epic's Gru's steps from its
- * run log, or the lines kept of it, newest first. A Gru's step names its epic.
+ * run log, or the lines kept of it, newest first. A Gru's step names its
+ * epic, by its row's name.
  */
 function superLog(
   launchId: string,
   files: Record<string, string>,
-  runs: readonly { epic: string; log: string | undefined }[],
-  epicTitles: ReadonlyMap<string, string>,
+  runs: readonly { epic: string; name: string | null; log: string | undefined }[],
   now: number,
 ): LogView {
   return buildLog(
     [
       { who: 'Super-Gru', isRun: true, text: files[superLogName(launchId)] },
-      ...runs.map(r => ({ who: epicName(epicTitles.get(r.epic)) ?? '', id: r.epic, text: r.log })),
+      ...runs.map(r => ({ who: r.name ?? '', id: r.epic, text: r.log })),
     ],
     now,
   )
@@ -277,8 +282,8 @@ function superLog(
 
 /**
  * The files a Super-Gru board reads beyond the run files: its settings,
- * stats and log files, each Gru's stats file and log, and each epic's
- * tickets' files and stats files.
+ * stats and log files, each Gru's stats file, each started Gru's log, and
+ * each epic's tickets' files and stats files.
  */
 export function superReads(name: string, files: Record<string, string>, kept: Kept = {}): string[] {
   const s = superRunOf(files[name])
@@ -289,7 +294,7 @@ export function superReads(name: string, files: Record<string, string>, kept: Ke
     superSettingsName(launchId),
     superStatsName(launchId),
     superLogName(launchId),
-    ...runs.flatMap(r => [runStatsName(r.launch), runLogName(r.launch)]),
+    ...runs.flatMap(r => [runStatsName(r.launch), ...(r.isQueued ? [] : [runLogName(r.launch)])]),
     ...runs.flatMap(r => r.tickets ?? []).flatMap(id => [`${id}.json`, statsName(id)]),
   ]
 }
