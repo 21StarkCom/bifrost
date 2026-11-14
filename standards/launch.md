@@ -131,7 +131,9 @@ leader is `/agnes --new-tab`.
 `--new-tab` starts a Gru; it does not resume one. To resume, rerun `start` in
 the tab of the Gru that runs. A second `--new-tab` on the same input meets the
 first Gru's worktree, and on Codex its branch, and valkyrie refuses it (exit
-2). When that Gru has ended, remove its worktree with
+2). A Gru whose stand-down completed took its worktree and its branch with
+it. When a Gru has ended without one, or its stand-down came back `partial`,
+remove its worktree with
 `git -C <main checkout> worktree remove <path>` and its branch with
 `git -C <main checkout> branch -d <branch>`, never with `--force` or `-D`,
 then launch. The branch is `<launch id>` on Codex and `worktree-<launch id>`
