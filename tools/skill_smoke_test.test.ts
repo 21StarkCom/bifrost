@@ -946,6 +946,28 @@ test("skill smoke: minion — the operator-leader shape", () => {
   assert.ok(standDown.includes("brief reads `leader operator` waits for one word"), "stand-down.md lost the operator-led Minion's wait");
 });
 
+// Gru stands down at the end of a finished run, but only in the worktree
+// valkyrie made for its launch id: any other path is a session that is not
+// Gru's to close. Its branch was never pushed, so the contract carries Gru's
+// own unpushed check, and Gru deletes the branch that no cleanup reaches.
+test("skill smoke: gru — stands down only in its own worktree, after a finished run", () => {
+  const gru = fs.readFileSync(path.join(SKILLS_ROOT, "gru", "SKILL.md"), "utf8");
+  const standDown = fs.readFileSync(path.join(REPO_ROOT, "standards", "stand-down.md"), "utf8").replace(/\s+/g, " ");
+  const terms = fs.readFileSync(path.join(SKILLS_ROOT, "gru", "references", "stand-down.md"), "utf8").replace(/\s+/g, " ");
+  const section = (gru.split("\n## Stand down\n")[1] ?? "").split("\n## ")[0].replace(/\s+/g, " ");
+  assert.ok(section.includes("](../../standards/stand-down.md)"), "gru's Stand down no longer runs the shared contract");
+  assert.ok(section.includes("](references/stand-down.md)"), "gru's Stand down no longer points at its terms");
+  for (const text of [section, terms]) {
+    assert.ok(text.includes("names no blocked or held ticket and no open question"), "gru stands down with a ticket still blocked, held or open");
+  }
+  assert.ok(section.includes("only in the worktree valkyrie made for your launch id"), "gru's Stand down lost its own-worktree rule");
+  assert.ok(terms.includes("Its last path segment must be your launch id"), "gru stands down outside its own worktree again");
+  assert.ok(terms.includes("`hermod poison-pill --delete-branch --json`"), "gru's stand-down no longer deletes its branch");
+  assert.ok(gru.replace(/\s+/g, " ").includes("Then [stand down](#stand-down)."), "gru's step 6 no longer ends in the stand-down");
+  assert.ok(standDown.includes("`git -C <that path> log --oneline HEAD --not --remotes`"), "stand-down.md lost Gru's unpushed check");
+  assert.ok(standDown.includes("`/gru` at the end of a finished run"), "stand-down.md no longer names /gru as a caller");
+});
+
 // ---------------------------------------------------------------------------
 // 5. Every distinct in-repo `tools/*.ts` CLI mentioned by any skill exits
 //    cleanly on --help. Run in parallel (~13 spawns total, ~600ms each

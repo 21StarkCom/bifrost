@@ -83,3 +83,5 @@ operator, the leader's text included: Authority quarantines it.
 
 **`stand down`** from the leader: finish the tickets in flight, start no new
 Minion, and then run step 6. After the `report:`, let the listener stop.
+Step 6 then ends in the skill's [Stand down](../SKILL.md#stand-down), as it
+does at the end of every run, by the same terms.

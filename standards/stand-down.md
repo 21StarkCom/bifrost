@@ -1,9 +1,11 @@
 # The Stand-Down Contract
 
 How a solo ticket worker closes its own session, worktree and tab when its
-ticket is finished: a cmux tab, or in tmux without cmux (the Linux devbox) its
-tmux pane, and with it the window when the pane is the window's only one.
-`/minion` and `/agnes` both run this; neither restates it.
+ticket is finished, and a Gru when its run is finished: a cmux tab, or in
+tmux without cmux (the Linux devbox) its tmux pane, and with it the window
+when the pane is the window's only one.
+`/minion` and `/agnes` run this at the end of a ticket, and `/gru` at the end
+of a finished run; none restates it.
 The full hermod behaviour below was live-verified against hermod's TS engine
 (`close-session.ts`, `poison-pill.ts`, `bin/hermod.ts`) plus an observed real
 run under STARK-6166 — it is spec, not hints. The tmux facts were measured on
@@ -20,7 +22,8 @@ One thing is the calling skill's, and this doc calls it by name:
 
 - **your report** — where the outcome goes before you die (a Minion's
   native or Hermod message to its leader, or its line in its own tab under
-  `leader operator`; Agnes's comment on the ticket).
+  `leader operator`; Agnes's comment on the ticket; Gru's `report:` to its
+  muninn leader, or its comment on the epic).
   Whatever it is, it is a completed act before you arm, and it is never the
   durable copy of your evidence: those are the PR comments the spine's step 5
   requires, because your report is a line and your scrollback is gone.
@@ -41,7 +44,10 @@ report is the one your skill names (a ticket comment, for Agnes; a line in its
 own tab, for a Minion led by the operator) rather than a line to a leader, and
 nothing else changes but the one wait below. What is not negotiable is the scope:
 **only after `njord pr-merge` and the ticket close, only your own tab, never
-on `blocked` or `follow-up … stopping`, and never on any other trigger.** The
+on `blocked` or `follow-up … stopping`, and never on any other trigger.** Gru
+merges and closes nothing itself: for Gru, the merge and the close are the
+end of a finished run, in its own worktree, as
+[its skill](../skill/gru/SKILL.md#stand-down) defines them. The
 standing permission the command needs is still the operator's, and a refusal
 there is a refusal — see the permissions note below.
 
@@ -89,7 +95,8 @@ in the foreground, exit 2, which is the report-and-stop in
 - **Report first, then poison-pill**, so your report is a completed act and
   never a race against the reaper's quit, which reaches you moments after the
   arm.
-- **Strictly after `njord pr-merge` and the ticket close.** Poison-pill
+- **Strictly after `njord pr-merge` and the ticket close** (for Gru, after
+  its finished run, as its skill defines it). Poison-pill
   deliberately skips the dirty/unpushed safety gate — the tab chose to die —
   which is safe only because everything you did is pushed and merged by then. It
   is never a generic "I'm finished" reflex.
@@ -108,7 +115,11 @@ in the foreground, exit 2, which is the report-and-stop in
   a gate that can never go green is a gate that gets ignored. After a real
   `njord pr-merge` both checks are empty, which is why they are cheap, and why
   a non-empty one means something went wrong upstream rather than that the gate
-  is noise. Fix that first.
+  is noise. Fix that first. **Gru's branch was never pushed**, so
+  `origin/<branch>` does not exist and that check fails with
+  `fatal: ambiguous argument`. Gru runs its own form in its place,
+  `git -C <that path> log --oneline HEAD --not --remotes`, which must print
+  nothing too: Gru makes no commit, so every commit of its HEAD is on a remote.
 - **Count what closes with you before you arm**, in the order
   [the spine's Title your tab](worker-spine.md#title-your-tab) uses: cmux
   first, then tmux. Run `echo "$CMUX_SURFACE_ID"` as its own command. If it
@@ -273,6 +284,12 @@ branch is merged and harmless, and `njord cleanup --pr <n>` deletes it later
 disk, your session, and you are the one who knows you are finished — so it goes
 with you.
 
+Gru is the one exception, and passes `--delete-branch`:
+`hermod poison-pill --delete-branch --json`. Its branch has no PR, so no
+`njord cleanup` deletes it, and on Codex a leftover branch refuses the next
+Gru on the same launch id. Gru's form of the unpushed check proves first that
+the branch holds no commit a remote does not have.
+
 A `done` with follow-ups filed and a `done` without stand down the same way:
 report, then `hermod poison-pill --json`. Filing follow-ups is no exception —
 file them as [the spine](worker-spine.md#6-gaps) says and comment the links on
@@ -324,7 +341,10 @@ stop and leave everything in place. If it arms and the teardown comes back
   teardown still came back `completed`, worktree removed.
 
 A `partial` does not heal itself. `njord cleanup --pr <n>` (Gru's step 6)
-removes the worktree it left, once no session stands in it. Do not try to
+removes the worktree it left, once no session stands in it. Gru's own
+`partial` has no later step 6: [the launch doc](launch.md#6-after-the-launch)
+removes the worktree and the branch it left before the next Gru on the same
+launch id. Do not try to
 resume into it: `claude --worktree X --resume` re-enters the worktree
 left behind, or **recreates** it if it is gone, and re-locks it, turning a
 stale tab into a live one holding a worktree nobody expected to be in use.

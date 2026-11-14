@@ -15,6 +15,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=508 runId=508 sha=28d58911 -->
+- Gru now stands down with `hermod poison-pill` after a finished run, closing its own tab, worktree and branch; it stays open if any ticket is blocked or a question remains.
 - Teach the `c4-design` skill to model a process as a flow of the flow kit (`floorplan import playbook` and the decisions by hand), and to ask, answer and close design threads in the studio with `thread_post` and `thread_resolve`; Huginn `annotate` stays for a page that is not the studio (stark-design 0.1.45).
 <!-- idun:pr-merge pr=504 runId=504 sha=160c58b1 -->
 - stark-ops: a `Stop` hook asks a long session (160+ model turns since its last ask) to call `tell_librarian` for its lasting facts.
