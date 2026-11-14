@@ -50,7 +50,7 @@ stops at `--`. The permissive parsers retain `--value=TEXT` for explicit
 leading-dash literals, and `copilot_land.ts` gained the same form: refusing a
 leading-dash value in the space form is only safe where `--key=VALUE` still
 expresses one, and its `--title`/`--body` carry free text that may legitimately
-begin with a dash. Other parsers retain their existing syntax; unsupported
+begin with a dash. Other parsers keep their existing syntax; unsupported
 equals forms are refused rather than silently ignored. No CLI gains a child
 command interface. The shared tokenizer preserves a `--` tail for callers that
 declare positionals; current operational callers reject unsupported tails.
