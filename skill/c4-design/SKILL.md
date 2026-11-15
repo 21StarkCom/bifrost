@@ -1,6 +1,6 @@
 ---
 name: c4-design
-description: "Run the floorplan design loop for a C4 model: propose a LikeC4 diff, check, render, show it in the studio, accept it. Use to change, review or first model a product's architecture, C4 model or diagrams, or when a task names floorplan, LikeC4, floorplan scan, R9, a flow, a playbook flow, a studio thread, a logo or a deployment view."
+description: "Run the floorplan design loop for a C4 model: propose a LikeC4 diff, check, render, show it in the studio, accept it. Use to change, review or first model a product's architecture, C4 model or diagrams, or when a task names floorplan, LikeC4, floorplan scan, R9, a flow, a playbook flow, a studio thread, a logo, a deployment view, or a lens key of the studio panel."
 argument-hint: "[<the change> | help]"
 ---
 
@@ -55,6 +55,8 @@ Read the reference for the task before you edit `model/`:
   as steps and decisions, or run `floorplan import`.
 - [references/logos.md](references/logos.md): before you give an element a logo, or when an icon name fails
   `floorplan check`.
+- [references/lenses.md](references/lenses.md): before you write a lens key of the studio panel, or answer a
+  thread that asks for a brief.
 
 ## Before you start
 
@@ -179,13 +181,16 @@ Start the studio from this session (`studio_start`, or `floorplan studio` in a B
 session's inbox, and it sends the operator's thread lines and chat questions here. A studio that another shell started
 has no inbox: its panel says **No session**.
 
-The studio has a **panel** on the right, with two tabs, and **marks** on the canvas:
+The studio has a **panel** on the right, and **marks** on the canvas:
 
-- A click on an element opens the panel on **Details**: the kind, the title, the technology, the description, the
-  metadata as rows (a flow step's `source` and `tools`), the tags and the links. A `source` path opens in the
-  studio's code panel.
+- A click on an element opens its panel. Its tabs are Flow, Cost, Watch, Facts and Discussion, and each lens tab
+  shows only when the model has its data. Read [references/lenses.md](references/lenses.md) before you write a
+  lens key (`owner`, `status`, `cost-30d-usd`, `security`, `brief`, `usage`, `support`), a flow that is a line of
+  an element, or the answer to a thread that asks for a brief.
+- **Facts** shows the kind, the title, the technology, the description, the metadata as rows (a flow step's
+  `source` and `tools`), the tags and the links. A `source` path opens in the studio's code panel.
 - **Discussion** lists the threads of the element, or of the view, newest first, and shows the open thread. The
-  button in the top bar opens the threads of the view.
+  button in the top bar opens the threads of the view. The panel of a view has Facts and Discussion.
 - A mark is the badge on an element with an open thread: the count of its open threads, and a dot that pulses while a
   thread waits for the operator. A press on a mark opens Discussion at that thread.
 - The panel and the AI chat use the same place: when one opens, the other closes.
@@ -233,7 +238,8 @@ The design is in § 5 to § 7 of the floorplan spec `docs/specs/2026-11-13-flow-
 
    Answer with `thread_post`: `thread` is the id from the message, `dir` is its `project`, and `text` is your
    answer. The panel shows the answer with no reload. An answer can ask again with `choices` or a `proposal`.
-   Run `threads` with `thread` first when you need its earlier lines.
+   Run `threads` with `thread` first when you need its earlier lines. A line that starts `Write the brief of` came
+   from the brief button of Watch: answer it by [lenses.md](references/lenses.md#answer-a-request-for-a-brief).
 4. **A choice.** The second line reads `The operator chose "<choice>".` Act on the choice. When it settles the
    question, run `thread_resolve` with `thread` and a `text` that says what you do with the choice. Else answer
    with `thread_post`.
