@@ -38,3 +38,5 @@ dynamic view flowCheckout {
   [views.md](views.md#flows), not by those two.
 - Run `floorplan build`, then `render` the flow's view id and look at the PNG, as in step 2 of the loop.
 - No rule asks for a flow.
+- In the studio panel, a flow whose steps name the parts of an element is a line of that element: the Inside level
+  of its Flow tab ([lenses.md](lenses.md#flow-the-neighbours-and-the-lines)).
