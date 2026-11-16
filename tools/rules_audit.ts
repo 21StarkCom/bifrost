@@ -602,8 +602,10 @@ class UsageError extends Error {}
 /** `git fetch origin` in each repo, `FETCH_CONCURRENCY` at a time and each
  *  within `FETCH_TIMEOUT_MS`: root → why the fetch failed, for each that did.
  *  The fetch moves remote refs only: no tags (a moved tag would fail it), no
- *  submodules, no `FETCH_HEAD` and no maintenance. Its own session has no
- *  terminal, so a sign-in prompt fails. */
+ *  submodules, no `FETCH_HEAD` and no maintenance. `--no-prune-tags`
+ *  overrides a checkout's `fetch.pruneTags` or `remote.origin.pruneTags`,
+ *  which adds the tag refspec in spite of `--no-tags`. Its own session has
+ *  no terminal, so a sign-in prompt fails. */
 async function fetchAll(roots: string[]): Promise<Map<string, string>> {
   const failed = new Map<string, string>();
   const queue = [...roots];
@@ -611,7 +613,8 @@ async function fetchAll(roots: string[]): Promise<Map<string, string>> {
   const fetchOne = async (root: string) => {
     try {
       const r = await spawnBounded("git", [
-        "-C", root, "fetch", "--quiet", "--no-tags", "--no-recurse-submodules", "--no-write-fetch-head", "--no-auto-gc", "origin",
+        "-C", root, "fetch", "--quiet", "--no-tags", "--no-prune-tags", "--no-recurse-submodules", "--no-write-fetch-head",
+        "--no-auto-gc", "origin",
       ], {
         env, timeoutMs: FETCH_TIMEOUT_MS, maxBuffer: 1024 * 1024,
       });

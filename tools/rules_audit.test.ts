@@ -384,6 +384,37 @@ test("--playbook --fleet: a repo that fails its fetch, or has no origin/HEAD, is
   }
 });
 
+test("--playbook --fleet: a moved tag on origin does not fail the fetch of a clone that sets pruneTags", () => {
+  const h = home();
+  try {
+    const fleet = path.join(h.dir, "Code", "21Stark");
+    // With pruneTags, with or without prune, a fetch that names no refspec
+    // also fetches refs/tags/*:refs/tags/*, in spite of --no-tags.
+    for (const [name, scope, prune] of [["epsilon", "fetch", true], ["zeta", "remote.origin", false]] as const) {
+      const clone = path.join(fleet, name);
+      const bare = path.join(h.dir, "origins", `${name}.git`);
+      gitOk(fleet, "init", "-q", name);
+      writeAll(clone, { "CLAUDE.md": `# ${name}\n\n- Keep it lean.\n` });
+      publish(clone, bare);
+      gitOk(bare, "tag", "nightly-tested", "HEAD");
+      gitOk(clone, "fetch", "-q", "--tags", "origin");
+      if (prune) gitOk(clone, "config", `${scope}.prune`, "true");
+      gitOk(clone, "config", `${scope}.pruneTags`, "true");
+      // Origin moves the tag; the clone's tag stays where it was.
+      pushToOrigin(h.dir, bare, { "CLAUDE.md": `# ${name}\n\n- Keep each rule short.\n` });
+      gitOk(bare, "tag", "-f", "nightly-tested", "main");
+      assert.notEqual(gitOk(clone, "rev-parse", "nightly-tested"), gitOk(bare, "rev-parse", "nightly-tested"));
+    }
+
+    const r = run(["--playbook", "--fleet", "--json"], "/", h.env);
+    assert.equal(r.status, 3, r.stderr);
+    const report = JSON.parse(r.stdout) as { stale: { repo: string; reason: string }[] };
+    assert.deepEqual(report.stale, []);
+  } finally {
+    fs.rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
 test("originView lists, reads and resolves a tree at origin/HEAD as the disk walk does for the same checkout", () => {
   const top = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "rules-audit-origin-")));
   try {
