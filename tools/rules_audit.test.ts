@@ -384,14 +384,13 @@ test("--playbook --fleet: a repo that fails its fetch, or has no origin/HEAD, is
   }
 });
 
-test("--playbook --fleet: a moved tag on origin does not fail the fetch of a clone that sets prune and pruneTags", () => {
+test("--playbook --fleet: a moved tag on origin does not fail the fetch of a clone that sets pruneTags", () => {
   const h = home();
   try {
     const fleet = path.join(h.dir, "Code", "21Stark");
-    // With prune and pruneTags, a fetch that names no refspec also fetches
-    // refs/tags/*:refs/tags/*, in spite of --no-tags. remote.origin.* wins
-    // over fetch.*, so each clone needs its own override in fetchAll.
-    for (const [name, scope] of [["epsilon", "fetch"], ["zeta", "remote.origin"]]) {
+    // With pruneTags, with or without prune, a fetch that names no refspec
+    // also fetches refs/tags/*:refs/tags/*, in spite of --no-tags.
+    for (const [name, scope, prune] of [["epsilon", "fetch", true], ["zeta", "remote.origin", false]] as const) {
       const clone = path.join(fleet, name);
       const bare = path.join(h.dir, "origins", `${name}.git`);
       gitOk(fleet, "init", "-q", name);
@@ -399,7 +398,7 @@ test("--playbook --fleet: a moved tag on origin does not fail the fetch of a clo
       publish(clone, bare);
       gitOk(bare, "tag", "nightly-tested", "HEAD");
       gitOk(clone, "fetch", "-q", "--tags", "origin");
-      gitOk(clone, "config", `${scope}.prune`, "true");
+      if (prune) gitOk(clone, "config", `${scope}.prune`, "true");
       gitOk(clone, "config", `${scope}.pruneTags`, "true");
       // Origin moves the tag; the clone's tag stays where it was.
       pushToOrigin(h.dir, bare, { "CLAUDE.md": `# ${name}\n\n- Keep each rule short.\n` });
