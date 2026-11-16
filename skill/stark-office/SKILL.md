@@ -31,7 +31,8 @@ a file.
 
 Do not write Python, or any other script, that reads or writes an Office or
 PDF file: no openpyxl, python-docx, python-pptx or pypdf, and no one-time
-converter. When a plume tool cannot do a step, file a ticket on plume with
+converter. Filter the JSON that plume prints with `jq`, never with Python.
+When a plume tool cannot do a step, file a ticket on plume with
 `/stark-ticket` (`$stark-ticket` on Codex), and say so in your report. Do not
 work around the gap.
 
@@ -78,10 +79,13 @@ plume-xlsx read --cells <file.xlsx>
   that `shared` names.
 - `--sheet <name or 1-based index>` reads one sheet.
 - `plume-xlsx inspect <file.xlsx>` gives a summary of the sheets.
-- `plume-xlsx read <file.xlsx>` prints the full Document. Use it to see what
-  `--cells` does not show: the `style` of each cell, and the
-  `dataValidations` of each sheet, which give the allowed values of a blank
-  cell.
+- `plume-xlsx read <file.xlsx>` prints the full Document, which is long. Use
+  it, through `jq`, to see what `--cells` does not show:
+  - The `style` of one cell:
+    `plume-xlsx read <file.xlsx> | jq '.sheets[] | select(.name == "<sheet>") | .rows[].cells[]? | select(.ref == "C16") | .style'`
+  - The data validations of one sheet, which give the allowed values of a
+    blank cell:
+    `plume-xlsx read <file.xlsx> | jq '.sheets[] | select(.name == "<sheet>") | .dataValidations'`
 
 ### Edit an existing file
 
@@ -138,8 +142,8 @@ plume-xlsx read --cells <file.xlsx>
 
    Make sure that it lists only the cells that you meant to change. `diff`
    does not compare styles, so it does not list an edit of a style alone. To
-   prove a style, find the cell in `plume-xlsx read <after.xlsx>` and read its
-   `style`.
+   prove a style, read the cell's `style` with the `jq` filter of
+   [Read](#read).
 2. Check the cells against their data validation:
 
    ```
