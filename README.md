@@ -78,7 +78,7 @@ Codex reads the same skills from a clone: idavoll links them in at session start
 
 ## Skills
 
-31 skills in seven plugins. Each skill's `SKILL.md` is its own documentation.
+33 skills in seven plugins. Each skill's `SKILL.md` is its own documentation.
 
 ### stark-plan: spec and ticket authoring
 
@@ -120,6 +120,7 @@ The pipeline has two stages: you gate the spec at `/stark-author`, and checks ga
 | [`/agnes`](skill/agnes/SKILL.md) | Carries one ticket alone and unattended, with no Gru: confirms its own merge and close, then stands down. |
 | [`/lucius`](skill/lucius/SKILL.md) | Opens a Lucius brainstorm in a tab of its own through `hermod lucius`, then stops. |
 | [`/stark-rich-text`](skill/stark-rich-text/SKILL.md) | Names the command for rich text: Markdown through `frigg slack send` for Slack and `frigg atlassian issue` for Jira, and Markdown as it is for GitHub. No code that builds Block Kit or ADF. Loads on its own before an agent writes such text. |
+| [`/stark-office`](skill/stark-office/SKILL.md) | Sends Office and PDF work to the plume tools: the `plume-xlsx` recipes to read, edit, prove and make a workbook, and `--help` for `plume-docx`, `plume-pptx`, `plume-pdf` and `plume-font`. No Python. Loads on its own when a task has such a file. |
 
 /minion and /agnes run the same two shared docs, so their review gate and merge path cannot drift: [standards/worker-spine.md](standards/worker-spine.md) (bind → implement → verify live → PR → review by what it changes → merge → close) and [standards/stand-down.md](standards/stand-down.md) (the tab teardown after a `done`). A worker runs its own repo's release chain, and sends a need in another repo to a worker there, both by the spine's §8: a Minion reports it `blocked` for Gru to file and launch, and Agnes files and launches it herself.
 
@@ -223,6 +224,7 @@ Repos can override the enabled agents and nothing else: the walk above lives onl
   - `valkyrie` 0.1.1 or later (`valkyrie gru`, `valkyrie minion`, `valkyrie agnes` for the worker launches): /gru, /minion, /agnes
   - `njord` (`njord pr-open`, `pr-merge`): /gru, /minion, /agnes, /stark-bury, /stark-rules-optimizer
   - `frigg`: /gru, /minion, /agnes, to find a ticket's repo; /stark-rich-text, to send Slack and Jira text (0.80.0 or later, for the Jira Markdown flags)
+  - `plume` 0.10.0 or later (`plume-xlsx read --cells`, `set`, `diff`, `check`): /stark-office
   - atlas's `brain`: /stark-adr
   - `lucius`: /lucius
 
