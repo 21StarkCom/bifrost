@@ -105,7 +105,7 @@
     {
       "name": "stark-ops",
       "source": "./",
-      "description": "Repository operations beyond the spec-driven pipeline — coordinate Minions with Gru, cut releases, run session start/end, hand off work across sessions, run one ticket solo and unattended with Agnes, open a Lucius brainstorm in a tab of its own, send rich text to Slack, Jira and GitHub with the fleet commands, with no code that builds Block Kit or ADF, and read, write and edit Office and PDF files with plume, with no Python.",
+      "description": "Repository operations beyond the spec-driven pipeline — coordinate Minions with Gru, cut releases, run session start/end, hand off work across sessions, run one ticket solo and unattended with Agnes, open a Lucius brainstorm in a tab of its own, send rich text to Slack, Jira and GitHub with the fleet commands, with no code that builds Block Kit or ADF, and send each task on an Office or PDF file to the plume tools, with no Python.",
       "version": "0.60.0",
       "author": {
         "name": "21 Stark AI",

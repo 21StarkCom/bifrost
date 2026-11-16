@@ -35,6 +35,9 @@ converter. When a plume tool cannot do a step, file a ticket on plume with
 `/stark-ticket` (`$stark-ticket` on Codex), and say so in your report. Do not
 work around the gap.
 
+Your own file-read tool can show the pages of a PDF, such as a scanned PDF
+that has no text. It runs no script, so use it when it does the step.
+
 ## The tools
 
 | Tool | Files |
@@ -47,12 +50,14 @@ work around the gap.
 | `plume-font` | Web fonts: WOFF and WOFF2 to TTF or OTF |
 
 - Each tool writes data on stdout and diagnostics on stderr. Exit 0 is ok,
-  1 is a runtime error, and 2 is a usage error.
+  1 is a runtime error, and 2 is a usage error. A checker (`check`, `a11y`)
+  also exits 1 on a fail: read its output to know which.
 - For Word, PowerPoint, PDF and fonts, run `<tool> --help`, then
   `<tool> <command> --help`. Use the command forms that they print. Do not
   guess a command or a flag.
 - When `plume` is not on the `PATH`, install it:
-  `brew install 21StarkCom/tap/plume`.
+  `brew install 21StarkCom/tap/plume`. The formula is for macOS on Apple
+  silicon only.
 
 ## Excel
 
@@ -66,10 +71,17 @@ plume-xlsx read --cells <file.xlsx>
 ```
 
 - It prints one JSON line for each cell with a value, a formula or a note:
-  `sheet`, `ref`, `kind`, `value`, and `formula`, `fill`, `comment`, `merge`
-  and `list` when the cell has them. A blank cell gets no line.
+  `sheet`, `ref`, `kind`, `value`, and `formula`, `shared`, `fill`,
+  `comment`, `merge` and `list` when the cell has them. A blank cell gets no
+  line.
+- A cell with `shared` holds a formula too: the formula of the master cell
+  that `shared` names.
 - `--sheet <name or 1-based index>` reads one sheet.
 - `plume-xlsx inspect <file.xlsx>` gives a summary of the sheets.
+- `plume-xlsx read <file.xlsx>` prints the full Document. Use it to see what
+  `--cells` does not show: the `style` of each cell, and the
+  `dataValidations` of each sheet, which give the allowed values of a blank
+  cell.
 
 ### Edit an existing file
 
@@ -97,16 +109,24 @@ plume-xlsx read --cells <file.xlsx>
    - `value: null` removes the value. A new value replaces a formula.
    - `comment` is a note. `\n` in its `text` starts a new line. `width` and
      `height` are the box size in points.
-2. Write the result to a new path, so that you can prove the edit:
+2. Write the result to a new path, so that you can prove the edit. Keep the
+   extension of the input: an `.xlsm` stays `.xlsm`.
 
    ```
    plume-xlsx set <in.xlsx> <edits.json> -o <out.xlsx>
    ```
 
+3. After the proof below, copy the result to the path that the task names.
+
 - `set` keeps each part of the workbook that the edits do not touch. Use it
   for each edit of an existing file. Use `build` only for a new file.
-- `plume-xlsx set --help` lists the style fields and the edits that it
-  refuses.
+- `plume-xlsx set --help` lists the edits that it refuses. `plume-xlsx schema`
+  gives each style field, in its `CellStyle` shape.
+- A value edit does not compute the formulas: each formula cell keeps its old
+  cached `value` until Excel opens the file. To get a new result, run
+  `plume-xlsx eval <file.xlsx> <Sheet!A1>`. Do not run `recalc` on a file that
+  `set` wrote: `recalc` writes the workbook again, and can lose the parts that
+  `set` kept.
 
 ### Prove an edit
 
@@ -117,17 +137,23 @@ plume-xlsx read --cells <file.xlsx>
    ```
 
    Make sure that it lists only the cells that you meant to change. `diff`
-   does not compare styles: read the changed cells with `read --cells` to see
-   their `fill`.
+   does not compare styles, so it does not list an edit of a style alone. To
+   prove a style, find the cell in `plume-xlsx read <after.xlsx>` and read its
+   `style`.
 2. Check the cells against their data validation:
 
    ```
    plume-xlsx check <after.xlsx>
    ```
 
-   Exit 0 means that no cell breaks its rule. On exit 1, run `check` on the
-   before file too. A broken cell that the before file has is not yours: name
-   it in your report.
+   - Exit 0 means that no checked cell breaks its rule. `check` skips the
+     cells that the `skipped` count gives, and it does not see a rule in
+     `extLst`: Excel often puts a list from another sheet there. Do not
+     report those cells as valid.
+   - Exit 1 means a broken cell, or a file that `check` cannot read. The last
+     line on stderr says which. On a broken cell, run `check` on the before
+     file too. A broken cell that the before file has is not yours: name it
+     in your report.
 
 ### Make a new file
 
