@@ -105,8 +105,8 @@
     {
       "name": "stark-ops",
       "source": "./",
-      "description": "Repository operations beyond the spec-driven pipeline — coordinate Minions with Gru, cut releases, run session start/end, hand off work across sessions, run one ticket solo and unattended with Agnes, open a Lucius brainstorm in a tab of its own, and send rich text to Slack, Jira and GitHub with the fleet commands, with no code that builds Block Kit or ADF.",
-      "version": "0.59.1",
+      "description": "Repository operations beyond the spec-driven pipeline — coordinate Minions with Gru, cut releases, run session start/end, hand off work across sessions, run one ticket solo and unattended with Agnes, open a Lucius brainstorm in a tab of its own, send rich text to Slack, Jira and GitHub with the fleet commands, with no code that builds Block Kit or ADF, and send each task on an Office or PDF file to the plume tools, with no Python.",
+      "version": "0.60.0",
       "author": {
         "name": "21 Stark AI",
         "email": "engineering@21stark.com"
@@ -131,7 +131,8 @@
         "./skill/minion",
         "./skill/agnes",
         "./skill/lucius",
-        "./skill/stark-rich-text"
+        "./skill/stark-rich-text",
+        "./skill/stark-office"
       ],
       "hooks": {
         "PreToolUse": [
