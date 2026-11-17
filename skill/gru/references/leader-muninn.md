@@ -45,6 +45,26 @@ step it names until the answer comes, and keep every other ticket moving.
 Never use a blocking question tool. A ticket that waits on an answer is not
 blocked for step 6: step 6 waits for the answer.
 
+## Wake the leader
+
+A muninn message wakes the leader only while its listener runs, and Claude
+Code can stop that listener. So when the leader's kickoff note names
+`wake <session name>`, also send a native wake:
+
+- after each `question:`;
+- at the end of the run, as the last act of the skill's step 6: after the
+  delete of the run's progress file, and before the
+  [stand-down](../SKILL.md#stand-down).
+
+The wake is one line: `a muninn message from <name> waits in <team>`.
+
+- **Claude:** `SendMessage` to `<session name>`, with that line.
+- **Codex:** write the line to a file under `mktemp -d`, then run
+  `<scripts>/poke.sh <team> <leader> --body-file <file>`.
+
+Send the wake each time, also while the leader's listener runs. A wake that
+fails never holds the run or the stand-down.
+
 ## Wait
 
 The leader's messages come to your inbox. This command, the listener, prints

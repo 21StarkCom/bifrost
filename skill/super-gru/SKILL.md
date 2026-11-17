@@ -102,26 +102,55 @@ holds the run.
       It names the terms of the run (N, `followUps` and `decideForMe` as
       this step read them, the Minion agent, and that you answer in the
       operator's place) and each
-      known shared block, with the epic that holds it.
+      known shared block, with the epic that holds it. It also names
+      `wake <session name>`: your own native session name, the name after
+      "This session is" in your `ListAgents` output, not the launch id.
+      Read it right before each note.
+      The Gru sends its native wake to that name, by
+      [the Gru leader doc](../gru/references/leader-muninn.md#wake-the-leader).
 4. **Wait.** Keep the muninn listener of
    [the Gru leader doc](../gru/references/leader-muninn.md#wait) armed for
    the member `super-gru`, as a Bash call with `run_in_background`. On a
    message, act by step 5. On a `tick`, run [the tick](references/tick.md).
    Then arm the listener again.
-5. **Act on a Gru's message.**
+
+   **The listener can exit with no `tick` and no message,** because Claude
+   Code stopped it, for example at low memory. Claude Code's notice keeps
+   the restart for the operator's request, so do not arm it again. Do these
+   three things, in one turn:
+   1. Run part 1 of [the tick](references/tick.md) one time. Then read
+      your inbox one time
+      (`~/.agents/skills/muninn/scripts/inbox.sh super-<n> super-gru`), and
+      act on each message by step 5.
+   2. Tell each `live` Gru by muninn that its native wake is now its only
+      route to you.
+   3. Ask for the restart on one
+      `Needs you (Yours: restart of the listener)` line in the same message.
+
+   Until the operator asks for the restart, a Gru's native wake and an
+   operator message are your only wakes. Arm the listener again when the
+   operator asks.
+5. **Act on a wake.** A wake is a message of the listener, a native message
+   from a Gru, or an operator message. Before you act on a wake, run part 1
+   of [the tick](references/tick.md). A native wake from a Gru (a
+   `SendMessage`, or the same line that a Codex Gru's `poke.sh` types into
+   your tab) holds no message: read your inbox
+   (`~/.agents/skills/muninn/scripts/inbox.sh super-<n> super-gru`), and
+   act on each message it prints. Act on each Gru message by its kind:
    - `heartbeat`: the Gru is alive. Nothing to do.
    - `progress: STARK-n done <PR url>`: check the shared blocks by step 6.
    - `question:`: answer it with `answer:` when the operator's defaults
      answer it: the settings of step 3, the root rules, the repo's rules.
      Put each other question on one `Needs you (Yours: …)` line, all in one
      batch, and keep the other Grus moving.
-   - `report:`: the Gru's run ended. Set the epic `reported`.
+   - `report:`: the Gru's run ended. Set the epic `reported`, unless part 1
+     of the tick set it `ended` already.
 6. **Relay a cleared shared block.** When a shared-block ticket reaches done,
    confirm its PR is `MERGED` (`gh pr view <url> --json state`). Then tell
    each Gru that waits on it, by muninn, to rerun its `start`.
 7. **Fill a free slot.** A slot is free when a Gru deletes its run file
-   `~/.cache/stark-progress/run-<epic>.json`; the tick checks this. Set that
-   epic `ended`, then go to step 3.
+   `~/.cache/stark-progress/run-<epic>.json` and its settings file; part 1
+   of the tick checks this. Set that epic `ended`, then go to step 3.
 8. **End**, when each epic is `ended`:
    1. Merge each open bump PR the runs left, by the bump rule in the agent
       instructions file of the repo that holds the PR.

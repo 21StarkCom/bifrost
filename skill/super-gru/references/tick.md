@@ -1,13 +1,19 @@
 # The tick
 
-Read from [the Super-Gru skill](../SKILL.md#protocol), at each `tick` of the
-listener.
+Read from [the Super-Gru skill](../SKILL.md#protocol), at each wake. Part 1
+runs at each wake: a `tick`, a message of the listener, a native message
+from a Gru, an operator message, and a listener that exits with no `tick`
+and no message. Parts 2 and 3 run only at a `tick`.
 
 1. **Free slots.** For each `live` or `reported` epic, test
-   `~/.cache/stark-progress/run-<epic>.json`. A missing file is a free slot:
-   go to the skill's step 7. Then, when an epic is `queued`, go to the
-   skill's step 3: it reads the settings again, so a `parallel` that the
-   pane raised starts a Gru now.
+   `~/.cache/stark-progress/run-<epic>.json` and
+   `~/.cache/stark-progress/run-<epic>.settings.json`. When both files are
+   missing, the slot is free: go to the skill's step 7. You write the
+   settings file before the launch, and the Gru deletes both files at the
+   end of its run. So a missing run file beside a settings file is a Gru
+   that has not written its run file yet, not a free slot. Then, when an
+   epic is `queued`, go to the skill's step 3: it reads the settings again,
+   so a `parallel` that the pane raised starts a Gru now.
 2. **Screens.** Read the screen of each Gru tab and each Minion tab of the
    run: `tmux capture-pane -p -t <pane>` in tmux,
    `hermod read-screen <surface UUID> --lines 20` in cmux. A Gru whose run
