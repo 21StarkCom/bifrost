@@ -252,7 +252,7 @@ the cwd hermod recorded in its session store, in tmux (where hermod keeps none)
 the cwd of the Claude or Codex process in your pane, never the directory your
 shell happens to be standing in — and it resolves that cwd up to the git
 toplevel, so a subdirectory is never what gets *removed* and there is no `cd`
-ritual to perform. (Measured on Claude: its process stayed at the worktree root
+ritual to do. (Measured on Claude: its process stayed at the worktree root
 while its shell worked in a subdirectory.)
 
 **But on `hermod v0.19.0` the path it PRINTS is not that toplevel** — it is the
