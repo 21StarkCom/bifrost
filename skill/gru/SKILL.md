@@ -201,7 +201,9 @@ to the peer rules in [Coordination route](#coordination-route) and
    run's [progress file](#progress-pane), its settings file and its log, and
    the settings file of each ticket of the run
    (`rm -f ~/.cache/stark-progress/STARK-n.settings.json ~/.cache/stark-progress/STARK-n.settings.json.tmp`).
-   Then [stand down](#stand-down).
+   With a muninn leader, then send the end wake of
+   [Wake the leader](references/leader-muninn.md#wake-the-leader). Then
+   [stand down](#stand-down).
 
 ## Stand down
 
