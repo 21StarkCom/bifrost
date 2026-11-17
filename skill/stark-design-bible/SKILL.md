@@ -20,8 +20,8 @@ follow [standard help](../../standards/help.md), then stop.
 
 - `<page type>`: the type of the page, for example `landing`. It names the
   playbook `design-bible/pages/<page type>.md`. With none, use the page type
-  that the task names. When the task names none, do as for a page type with
-  no playbook.
+  that the task names. When the task names none, go on as for a page type
+  with no playbook.
 
 # stark-design-bible
 
@@ -33,7 +33,8 @@ web page. It lives in the vault-docs clone, in `design-bible/`:
 - `pages/<type>.md` is the playbook of one page type: the order of the
   sections, the cards that each section follows, and a checklist.
 - A card holds one rule: its Rule, Why, Evidence, Do, Don't, Check and
-  Exceptions. The cards are in `principles/`, `foundations/`, `patterns/`
+  Exceptions, and, where they apply, its Conflict, WCAG floor and Draupnir
+  part. The cards are in `principles/`, `foundations/`, `patterns/`
   and `content/`.
 
 Do not edit the bible: the vault-docs repo owns it. A rule that is missing or
@@ -48,17 +49,19 @@ The clone is `~/Code/21Stark/vault-docs`. Each path below is relative to it.
    `Missing: ~/Code/21Stark/vault-docs`, and stop. When
    `design-bible/ATLAS.md` does not exist in it, print
    `Missing: ~/Code/21Stark/vault-docs/design-bible/ATLAS.md`, and stop: the
-   clone is older than the bible.
+   clone is older than the bible. Do not clone or pull it yourself: the
+   machine's owner keeps that clone.
 2. Read `design-bible/ATLAS.md`. Print `Read: design-bible/ATLAS.md`.
 3. Find the playbook. The page type is a playbook only when it holds only
    lowercase letters, digits and hyphens, and
    `design-bible/pages/<page type>.md` exists.
    - When it is a playbook, read it, and print
      `Read: design-bible/pages/<page type>.md`.
-   - When it is not, list the names of the `.md` files in
-     `design-bible/pages/`, without `.md`. Print
-     `No playbook for <page type>. Playbooks: <names, comma-separated>`. Read
-     no playbook, and go on with the index only.
+   - When it is not, or there is no page type, list the names of the `.md`
+     files in `design-bible/pages/`, without `.md`. Print
+     `No playbook for <page type>. Playbooks: <names, comma-separated>`, or
+     `No page type. Playbooks: <names, comma-separated>` when there is none.
+     Read no playbook, and go on with the index only.
 4. Print a `Read:` line for each other file of the bible that you read later,
    in the same form.
 
@@ -66,6 +69,9 @@ When the request names no page to build or review, stop here. The bible is
 now in your context for the next request.
 
 ## 2. Build the page
+
+To review a page that is already built, do only step 2 below (open the
+cards), then go to section 4. Do not change the page.
 
 Follow the steps of "How a builder uses the bible" in `ATLAS.md`. In short:
 
@@ -75,7 +81,8 @@ Follow the steps of "How a builder uses the bible" in `ATLAS.md`. In short:
    `../patterns/primary-cta.md` is `design-bible/patterns/primary-cta.md`.
    Follow each card's Rule, Do and Don't. Skip a card that the playbook marks
    for a case your page does not have, such as a form.
-3. Where a pattern card names a draupnir part, start from that part.
+3. Where a pattern card names a draupnir part, start from that part. Find it
+   with the `search` tool of the `stark-draupnir` MCP server.
 4. Take the colors, the fonts and the mood from the brand theme. A card never
    sets them.
 5. When two sources on a card disagree, the lower tier number wins, by the
@@ -92,11 +99,14 @@ cards:
 1. Ask the librarian with the tool `ask_librarian`. Ask one question, and ask
    for evidence from the vault `design-docs`. Give the page and the section
    in `context`. When the tool is not there, run
-   `librarian ask "<question>"`.
+   `librarian ask "<question>" --context "<page and section>"`.
 2. Use the answer only through its citations: each fact cites a page of the
    vault `design-docs` and the date of that page. Apply the trust order of
    `ATLAS.md` to them.
-3. Call `rate_answer` with `helpful` or `wrong` after you use the answer.
+3. After you use the answer, rate it with the id of its `id:` line: call
+   `rate_answer` with that `id` and `helpful` or `wrong`, or run
+   `librarian rate <id> helpful|wrong`. When it is wrong, say why in the
+   note (`--note "<why>"` on the CLI).
 4. Name the question and the cited pages in your report.
 
 ## 4. Run the Checks before you report done
@@ -104,14 +114,17 @@ cards:
 Do not report the page done before you run the Checks.
 
 1. Run each Check of each card that you opened in step 2, on the built page,
-   in a real browser. Use the two screens of the playbook (375 by 667 CSS px and 1280
-   by 800 CSS px) when it names them.
+   in a real browser. Use the screen size or the tool that a Check names,
+   such as 320 CSS px wide or a Lighthouse run. When a Check names none, run
+   it on each screen that the playbook names, such as 375 by 667 CSS px and
+   1280 by 800 CSS px.
    - `dom:`: query the page's DOM.
    - `count:`: count the elements that it names.
    - `measure:`: read the computed size, style or ratio that it names.
    - `screenshot:`: take a screenshot, and answer its yes or no question.
 2. Tick each card of the playbook's checklist when each of its Checks
    passes. Check the playbook's required items too.
-3. Fix each Check that fails, and run it again.
+3. Fix each Check that fails, and run it again. In a review, do not fix
+   it: report it.
 4. In your report, give each Check with its card and its result: `pass`,
    `fail`, or `not run` and why. A Check that you did not run is not a pass.
