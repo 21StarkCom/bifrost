@@ -338,6 +338,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **`workflow_shape.test.ts` now proves `SCAN_SCOPES` is complete.** That hand-written list claims in its own comment to be *every* top-level dir holding a scannable file, and nothing checked it — so a new top-level directory (or a `gh` call parked in `docs/`) left the `gh api --slurp` gate reporting clean over a file it never opened. A second walk of the whole tree now diffs against the scoped walk and names anything outside it. Mutation-proved: dropping `config` from the list reddens with the eight files it covers.
 
 ### Fixed
+<!-- idun:pr-merge pr=516 runId=516 sha=3ff63613 -->
+- A Gru now wakes its Super-Gru natively after each question and at the end of its run, so the next epic starts even if the muninn listener stopped.
 - `rules_audit.ts --fleet` no longer reports a repo as stale when origin moved a tag and the checkout sets `fetch.pruneTags` or `remote.origin.pruneTags`; `stark-constitution` is now 0.9.1 and `stark-ops` 0.59.1.
 <!-- idun:pr-merge pr=512 runId=512 sha=41f5fce4 -->
 - The tell-on-stop Stop hook no longer asks for `tell_librarian` calls after a session arms `hermod poison-pill`; `stark-ops` is now 0.59.0.
