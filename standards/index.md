@@ -98,4 +98,4 @@ Configure the threshold in `.doc-staleness.yml`.
 
 ## What This Is Not
 
-It doesn't replace Confluence for cross-functional or compliance docs. It doesn't enforce docs via hard CI gates. It doesn't add a review process — it makes the review process you already have much better.
+It doesn't replace Confluence for cross-functional or compliance docs. It doesn't enforce docs with hard CI gates. It doesn't add a review process — it makes the review process you already have much better.
