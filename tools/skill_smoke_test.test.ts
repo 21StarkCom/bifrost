@@ -372,6 +372,10 @@ for (const name of SKILLS) {
 // .xlsx, .docx, .pptx or .pdf file loads it from the description; without it,
 // the agent writes openpyxl or other Python in place of the plume tools.
 //
+// `stark-design-bible` (STARK-18916): the same reach problem. An agent that
+// builds a web page loads it from the description; without it, the agent
+// builds the page with no rule cards and runs no Check.
+//
 // The value match mirrors Claude Code's own coercion: a string counts when it is
 // one of 1/true/yes/on, any case, so a quoted `"true"` disables the skill as
 // surely as a bare `true`, and a trailing `# comment` does not change the value.
@@ -388,6 +392,7 @@ const MODEL_INVOCABLE_SKILLS: Record<string, string> = {
   "c4-design": "no agent asked to change a product's architecture would ever learn the floorplan design loop on its own (STARK-16814)",
   "stark-rich-text": "no agent about to write Slack, Jira or GitHub text would ever learn the frigg text verbs on its own (STARK-18203)",
   "stark-office": "no agent with an Office or PDF file would ever learn the plume tools on its own (STARK-18903)",
+  "stark-design-bible": "no agent that builds a web page would ever load the design bible on its own (STARK-18916)",
 };
 
 const DISABLE_MODEL_INVOCATION_TRUE =
