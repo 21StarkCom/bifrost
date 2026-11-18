@@ -38,6 +38,9 @@ Rerunning `start` with the same input resumes: done tickets are skipped, tickets
 with a live Minion are left alone, the rest are launched. To stop, the operator
 tells you to stop; there is no other verb.
 
+When the operator asks for a Slack List of the run, follow
+[`/stark-run-list`](../stark-run-list/SKILL.md) with your launch id.
+
 ## New tab
 
 **If `$ARGUMENTS` contains `--new-tab`, you are the launcher, not Gru.**

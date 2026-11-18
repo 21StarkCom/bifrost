@@ -102,6 +102,7 @@ argument: …" — wording alone cannot tell a working help from a broken one.
 | `release_version_bump.ts` | version, previous, allow-major, repo, dry-run, JSON |
 | `rules_audit.ts` | default, repo, JSON, budgets, playbook (repo, fleet, memory, files, notify, settings, save, since, self-update), commit; help before git or the disk walk |
 | `rules_gate_hook.ts` | PreToolUse stdin protocol; argv help exits first |
+| `run_list.ts` | start, sync, watch, stop; help before the run file, the state, frigg or alfred |
 | `self_healer.ts` | suggest/auto, pattern-id, stderr-file |
 | `session_id.ts` | default resolution |
 | `session_state.ts` | default/show, set |
