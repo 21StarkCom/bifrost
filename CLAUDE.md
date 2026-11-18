@@ -115,6 +115,7 @@ Read `skill/<name>/SKILL.md` before you change or run a skill. By plugin, as in 
   - `stark-memory` — to audit and tidy auto-memory.
   - `gru` — to drive an epic or a ticket list with Minions.
   - `super-gru` — to drive a list of epics with one Gru each.
+  - `stark-run-list` — to mirror a Gru or Super-Gru run in a Slack List.
   - `minion` — to work one ticket for a leader.
   - `agnes` — to work one ticket alone, unattended.
   - `lucius` — to open a Lucius brainstorm in its own tab.

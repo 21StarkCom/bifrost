@@ -37,6 +37,10 @@ a new session writes that session's id into the run file's `session`, by
 [the run-file doc](references/run-file.md#the-writes): the pane and the
 statusline find Super-Gru's tab by that field.
 
+When the operator asks for a Slack List of the run, follow
+[`/stark-run-list`](../stark-run-list/SKILL.md) with the launch id
+`SUPER-<n>`.
+
 ## The run file
 
 Read [references/run-file.md](references/run-file.md) before step 1. It
