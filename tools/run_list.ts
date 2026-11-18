@@ -71,6 +71,8 @@ interface ListState {
   rows: Record<string, RowRecord>;
   order: string[];
   lastRun?: unknown;
+  /** False until the user of the read token can open the List: each start tries the share again. */
+  shared?: boolean;
 }
 
 interface Meta {
@@ -147,7 +149,13 @@ function frigg(cap: string, args: unknown, write: boolean): Record<string, unkno
   }
   for (let attempt = 1; ; attempt++) {
     const r = spawnSync("frigg", argv, { encoding: "utf8", env, timeout: 180_000, maxBuffer: 64 << 20 });
-    if (r.error) throw new Error(`frigg ${cap}: ${r.error.message}`);
+    if (r.error) {
+      // A spawn timeout can come after a write landed: only a read tries again.
+      const timedOut = (r.error as NodeJS.ErrnoException).code === "ETIMEDOUT";
+      if (!timedOut || write || attempt >= 3) throw new Error(`frigg ${cap}: ${r.error.message}`);
+      sleep(20_000);
+      continue;
+    }
     if (r.status === 0) {
       try {
         return friggResult(JSON.parse(r.stdout));
@@ -196,7 +204,10 @@ function takeLock(file: string): boolean {
       return true;
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
-      if (pidAlive(readPid(file))) return false;
+      const holder = readPid(file);
+      if (pidAlive(holder)) return false;
+      // An empty lock is one that its taker has not written yet: not stale.
+      if (!holder && Date.now() - (fs.statSync(file, { throwIfNoEntry: false })?.mtimeMs ?? 0) < 10_000) return false;
       fs.rmSync(file, { force: true });
     }
   }
@@ -207,11 +218,72 @@ function dropLock(file: string): void {
   if (readPid(file) === process.pid) fs.rmSync(file, { force: true });
 }
 
+/** Wait for the sync lock of a run: a first sync can hold it for some minutes. */
+function waitLock(file: string): void {
+  const until = Date.now() + 15 * 60_000;
+  while (!takeLock(file)) {
+    if (Date.now() > until) throw new Error(`another sync holds ${file}: try again later`);
+    sleep(2_000);
+  }
+}
+
+/** Share the List with the user of the Slack read token: frigg writes as the bot, so that user cannot open it until then. */
+function shareList(st: ListState): void {
+  const who = frigg("slack.auth_test", {}, false);
+  if (typeof who.url === "string" && typeof who.team_id === "string") st.url = `${who.url.replace(/\/?$/, "/")}lists/${who.team_id}/${st.listId}`;
+  if (typeof who.user_id === "string" && !who.bot_id) {
+    // Slack can answer ok and still leave an id unchanged: only `complete` proves the share.
+    const shared = frigg("slack.set_list_access", { list_id: st.listId, access_level: "write", user_ids: [who.user_id] }, true);
+    st.shared = shared.complete === true;
+    console.log(st.shared ? `shared with ${who.user_id} (write)` : `share incomplete, share the List by hand: ${JSON.stringify(shared).slice(0, 300)}`);
+  } else {
+    console.log("not shared: the Slack read token is not a user's; share the List by hand");
+  }
+}
+
 function start(runId: string, flags: Map<string, string | true>): void {
   const p = paths(runId);
-  let st = readJson(p.state) as ListState | undefined;
   const children = typeof flags.get("children") === "string" ? parseChildren(readJsonFile(flags.get("children") as string)) : {};
-  const { data, gone } = readRun(runId, st);
+  // The state changes under the sync lock only: a sync that read it before would write over this change.
+  waitLock(p.lock);
+  let st: ListState | undefined;
+  let gone: boolean;
+  try {
+    st = readJson(p.state) as ListState | undefined;
+    const run = readRun(runId, st);
+    gone = run.gone;
+    st = makeOrMerge(runId, p.state, st, run.data, gone, children, flags);
+  } finally {
+    dropLock(p.lock);
+  }
+  console.log(`List: ${st.url || st.listId}`);
+  console.log(`state: ${p.state}`);
+  if (flags.has("no-watch")) return;
+  if (gone) {
+    console.log("watcher: none, the run file is gone");
+    return;
+  }
+  const live = readPid(p.pid);
+  if (pidAlive(live)) {
+    console.log(`watcher: already runs, pid ${live}`);
+    return;
+  }
+  const out = fs.openSync(p.log, "a");
+  const child = spawn(process.execPath, [fileURLToPath(import.meta.url), "watch", runId], {
+    detached: true, stdio: ["ignore", out, out], cwd: process.cwd(), env: process.env,
+  });
+  child.unref();
+  fs.closeSync(out);
+  // Write the pid now, not when the watcher starts: a second start in between would launch a second watcher.
+  if (child.pid) fs.writeFileSync(p.pid, String(child.pid));
+  console.log(`watcher: pid ${child.pid}, log ${p.log}`);
+}
+
+/** Make the List when the state names none, else merge new children into the state. The caller holds the sync lock. */
+function makeOrMerge(
+  runId: string, stateFile: string, st: ListState | undefined, data: unknown, gone: boolean,
+  children: Record<string, string[]>, flags: Map<string, string | true>,
+): ListState {
   if (!st) {
     if (gone) throw new Error(`no run file for ${runId} in ${progressDir()}`);
     const view = runView(runId, data, false);
@@ -234,43 +306,19 @@ function start(runId: string, flags: Map<string, string | true>): void {
     for (const c of (Array.isArray(made.schema) ? made.schema : []) as Array<{ key?: unknown; id?: unknown }>) {
       if (typeof c.key === "string" && typeof c.id === "string") cols[c.key] = c.id;
     }
-    st = { version: 1, runId, listId, url: "", cols, children, rows: {}, order: [], lastRun: data };
-    writeJson(p.state, st);
+    // A write of the state before the share: a failed share leaves `shared` false, and the next start tries it again.
+    st = { version: 1, runId, listId, url: "", cols, children, rows: {}, order: [], lastRun: data, shared: false };
+    writeJson(stateFile, st);
     console.log(`made List ${listId} for ${runId}`);
-    // frigg writes as the bot: the user of the read token cannot open the List until it is shared.
-    const who = frigg("slack.auth_test", {}, false);
-    if (typeof who.url === "string" && typeof who.team_id === "string") st.url = `${who.url.replace(/\/?$/, "/")}lists/${who.team_id}/${listId}`;
-    if (typeof who.user_id === "string" && !who.bot_id) {
-      // Slack can answer ok and still leave an id unchanged: only `complete` proves the share.
-      const shared = frigg("slack.set_list_access", { list_id: listId, access_level: "write", user_ids: [who.user_id] }, true);
-      console.log(shared.complete === true ? `shared with ${who.user_id} (write)` : `share incomplete, share the List by hand: ${JSON.stringify(shared).slice(0, 300)}`);
-    } else {
-      console.log("not shared: the Slack read token is not a user's; share the List by hand");
-    }
-    writeJson(p.state, st);
   } else if (Object.keys(children).length > 0) {
     for (const [e, kids] of Object.entries(children)) st.children[e] = [...new Set([...(st.children[e] ?? []), ...kids])];
-    writeJson(p.state, st);
+    writeJson(stateFile, st);
   }
-  console.log(`List: ${st.url || st.listId}`);
-  console.log(`state: ${p.state}`);
-  if (flags.has("no-watch")) return;
-  if (gone) {
-    console.log("watcher: none, the run file is gone");
-    return;
+  if (st.shared === false) {
+    shareList(st);
+    writeJson(stateFile, st);
   }
-  const live = readPid(p.pid);
-  if (pidAlive(live)) {
-    console.log(`watcher: already runs, pid ${live}`);
-    return;
-  }
-  const out = fs.openSync(p.log, "a");
-  const child = spawn(process.execPath, [fileURLToPath(import.meta.url), "watch", runId], {
-    detached: true, stdio: ["ignore", out, out], cwd: process.cwd(), env: process.env,
-  });
-  child.unref();
-  fs.closeSync(out);
-  console.log(`watcher: pid ${child.pid}, log ${p.log}`);
+  return st;
 }
 
 function readJsonFile(file: string): unknown {
@@ -284,10 +332,12 @@ function readJsonFile(file: string): unknown {
 /** One sync. Returns the log line, or undefined when another sync holds the lock. */
 function sync(runId: string, withAlfred: boolean): string | undefined {
   const p = paths(runId);
-  const st = readJson(p.state) as ListState | undefined;
-  if (!st) throw new Error(`no List for ${runId}: run start first`);
+  if (!fs.existsSync(p.state)) throw new Error(`no List for ${runId}: run start first`);
   if (!takeLock(p.lock)) return undefined;
   try {
+    // Read the state under the lock: a copy read before it can miss the rows that another sync added.
+    const st = readJson(p.state) as ListState | undefined;
+    if (!st) throw new Error(`the state ${p.state} does not parse`);
     const { data, gone } = readRun(runId, st);
     if (data === undefined) throw new Error(`no run file for ${runId}, and the state holds no copy`);
     if (!gone) st.lastRun = data;
@@ -368,16 +418,19 @@ async function watch(runId: string, intervalS: number): Promise<void> {
   const runFile = path.join(progressDir(), runFileName(runId).file);
   console.log(`${stamp()} watch ${runId}: pid ${process.pid}, each ${intervalS} s`);
   try {
-    for (let round = 0; ; round++) {
+    for (let round = 0, finalTries = 0; ; round++) {
       const gone = !fs.existsSync(runFile);
+      let synced = false;
       try {
         const line = sync(runId, gone || round % 15 === 0);
+        synced = line !== undefined;
         console.log(line ?? `${stamp()} sync skipped: another sync holds the lock`);
       } catch (err) {
         console.error(`${stamp()} sync failed: ${(err as Error).message}`);
       }
-      if (gone) {
-        console.log(`${stamp()} run file gone: final sync done, watcher ends`);
+      // No later round fixes a failed or skipped final sync, so try it again a few times.
+      if (gone && (synced || ++finalTries >= 3)) {
+        console.log(`${stamp()} run file gone: ${synced ? "final sync done" : "final sync failed 3 times"}, watcher ends`);
         return;
       }
       await new Promise((r) => setTimeout(r, intervalS * 1000));
@@ -397,7 +450,8 @@ function stop(runId: string): void {
   }
   const ps = spawnSync("ps", ["-p", String(pid), "-o", "command="], { encoding: "utf8", timeout: 10_000 });
   const command = ps.stdout ?? "";
-  if (!command.includes("run_list.ts") || !command.includes(" watch ") || !command.includes(runId)) {
+  // Match the whole run id: STARK-1 must not match the watcher of STARK-12.
+  if (!command.includes("run_list.ts") || !new RegExp(` watch ${runId}(\\s|$)`).test(command)) {
     throw new Error(`pid ${pid} in ${p.pid} is not the watcher of ${runId}: ${command.trim() || "no command"}`);
   }
   process.kill(pid, "SIGTERM");
@@ -429,8 +483,9 @@ export async function main(argv: string[]): Promise<number> {
   let interval = 120;
   if (flags.has("interval")) {
     interval = Number(flags.get("interval"));
-    if (!Number.isFinite(interval) || interval < 1) {
-      process.stderr.write(`--interval needs a number of seconds, 1 or more\n${USAGE}`);
+    // setTimeout runs a delay above 2^31 - 1 ms at once, so the cap is one day.
+    if (!Number.isFinite(interval) || interval < 1 || interval > 86_400) {
+      process.stderr.write(`--interval needs a number of seconds, 1 to 86400\n${USAGE}`);
       return 2;
     }
   }
