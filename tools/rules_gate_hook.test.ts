@@ -56,6 +56,7 @@ test("findMerges finds a ghx pr-merge as it finds a njord pr-merge, the tap's li
   assert.deepEqual(findMerges("ghx pr-merge", "/r"), [at(null)]);
   assert.deepEqual(findMerges("ghx pr-merge 412 --skip-changelog", "/r"), [at(412)]);
   assert.deepEqual(findMerges("ghx pr-merge --pr 7", "/r"), [at(7)]);
+  assert.deepEqual(findMerges("ghx pr-merge --skip-changelog --release-as 0.4.2", "/r"), [at(null)]);
   assert.deepEqual(findMerges("ghx pr-merge --help", "/r"), [at(null, "/r", true)]);
   assert.deepEqual(findMerges("STARK=1 env X=2 /home/linuxbrew/.linuxbrew/bin/ghx pr-merge 5", "/r"), [at(5)]);
   assert.deepEqual(findMerges("cd sub && ghx pr-merge 3; njord pr-merge 4", "/r"), [at(3, "/r/sub"), at(4, "/r/sub")]);

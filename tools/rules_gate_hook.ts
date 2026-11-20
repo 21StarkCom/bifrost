@@ -52,7 +52,7 @@ const PLAYBOOK = path.join(TOOLS_DIR, "..", "skill", "stark-agent-docs", "refere
 export const PR_FIELDS = "number,state,headRefOid,baseRefName,baseRefOid,changedFiles,files";
 
 /** `ghx pr-merge` options that take a value, from its argument parser. */
-const VALUE_FLAGS = new Set(["--pr", "--changelog-section", "--force-reason", "--watch-timeout"]);
+const VALUE_FLAGS = new Set(["--pr", "--changelog-section", "--force-reason", "--watch-timeout", "--release-as"]);
 /** The names that run the merge: `njord` is the tap's link to `ghx`. */
 const MERGE_CLIS = new Set(["ghx", "njord"]);
 /** Words that run the next word as the command. */
