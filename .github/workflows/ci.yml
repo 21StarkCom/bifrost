@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: read # dorny/paths-filter reads the PR's changed-files list
 
 # Opt into Node 24 for JS actions ahead of the Sep 2026 forced cutover so
 # Node-20 deprecation warnings stop and any incompatibility surfaces now —
@@ -25,9 +24,9 @@ env:
 # `ci-refs/heads/main` group. With `test` and `typecheck` becoming required
 # contexts, a cancelled run is a blocked merge that only a new commit clears.
 #
-# `cancel-in-progress: false` alone does NOT buy "never cancelled": GitHub also
-# cancels a run that is merely PENDING in the group when a newer one queues
-# behind it. Keying the non-PR half on `github.sha` rather than `github.ref` is
+# On a push `cancel-in-progress` is false, and that alone does NOT buy "never
+# cancelled": GitHub also cancels a run that is merely PENDING in the group when
+# a newer one queues behind it. Keying the non-PR half on `github.sha` rather than `github.ref` is
 # what actually retires the measured failure — every push to `main` lands in its
 # own group, so no merge can ever queue behind (and therefore cancel) another
 # merge's run. The PR half stays keyed on the PR number so a PR's runs still
@@ -45,6 +44,12 @@ concurrency:
 jobs:
   changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Only this job reads the PR's changed-files list. A job-level block
+    # replaces the workflow-level one, so it restates `contents: read`.
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       workflows: ${{ steps.filter.outputs.workflows }}
       tools: ${{ steps.filter.outputs.tools }}
@@ -196,10 +201,13 @@ jobs:
   # orphans the requirement, which blocks every merge on "Expected — waiting for
   # status" until someone edits the ruleset back.
   #
-  # Do NOT add `if:`, a draft guard, or a `paths:` filter to either job. A guarded
+  # Do NOT add `if:`, a draft guard, or a `paths:` filter to `test`. A guarded
   # job reports `skipped`, GitHub counts `skipped` as SATISFYING a required check
   # and renders it identically to a pass, and only a new commit clears it. That is
-  # how stark-skills#877 merged with its suite never having executed.
+  # how stark-skills#877 merged with its suite never having executed. The one
+  # exception is `typecheck`'s fail-closed `changes` gate: `tsc` reads only
+  # `tools/`, so a skip there skips a check whose inputs did not change.
+  # `tools/workflow_shape.test.ts` pins that gate's exact shape.
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 15

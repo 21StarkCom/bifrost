@@ -368,18 +368,29 @@ at all, and a required context that never reports blocks the merge box forever
 anyway. Doing it would silently unrequire the repo's entire functional suite on
 every PR that does not.
 
-Today: neither `ci.yml` nor `secret-scan.yml` carries a draft guard or a `paths:`
+The one exception is a job-level path gate on `actionlint` and `typecheck`
+(STARK-19324). Each reads only its own inputs (`.github/workflows/` and
+`tools/`), so a skip there skips a check whose inputs did not change. A
+`changes` job runs `dorny/paths-filter`, and each gated job carries
+`if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.<x> == 'true') }}`:
+when `changes` fails, the gate runs. `test` reads skills, standards, docs and
+data across the repo, so it stays unconditional. `tools/workflow_shape.test.ts`
+pins the exact `if:`.
+
+Today: neither workflow carries a draft guard or a workflow-level `paths:`
 filter, and **both** `pull_request` triggers use the default event types
 (`opened`, `synchronize`, `reopened`) — so both run on draft PRs, and `gh pr
 ready` fires nothing extra that `cancel-in-progress` could cancel out from under
 the head SHA.
 
-`ci.yml` sets `cancel-in-progress: false`, and keys its concurrency group on
+`ci.yml` cancels in progress on PR events only
+(`cancel-in-progress: ${{ github.event_name == 'pull_request' }}`): a superseded
+PR run is on a sha that is no longer the head. It keys its concurrency group on
 `github.event.pull_request.number || github.sha` — per PR on a PR event, per
 commit on every other event. Both halves are deliberate: **GitHub counts a
 CANCELLED required check as FAILING**, and `main` has already carried commits
 with `engine: cancelled` from back-to-back merges sharing one
-`ci-refs/heads/main` group. `cancel-in-progress: false` alone does not buy "never
+`ci-refs/heads/main` group. `cancel-in-progress` false on a push alone does not buy "never
 cancelled" — GitHub also cancels a run still PENDING in a group when a newer one
 queues behind it — so it is the `github.sha` half that actually retires that
 failure: every push to `main` lands in a group of its own and can never queue
@@ -390,7 +401,7 @@ is a blocked merge that only a new commit clears.
 push or a merge_group run, each of which scans its own commit range. Keep both as
 they are; `secret-scan.yml`'s bytes are not this repo's to design (§1).
 
-The one `if:` in `ci.yml` is step-level and correct: the second gitleaks pass
+Apart from the path gate above, the one `if:` in `ci.yml` is step-level and correct: the second gitleaks pass
 carries `if: github.event_name == 'pull_request'` because a push has no
 `base..head` range to scan. The unconditional fail-closed whole-tree scan above
 it is what the context actually proves, so the job never concludes SUCCESS having

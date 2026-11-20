@@ -34,7 +34,7 @@ Add only rules, traps and pointers here. Put reasons, history and catalogs in `d
 - `global/` — the default `config.json` and the dispatcher rubrics.
 - `standards/` — shared docs: `help.md` (every skill), `worker-spine.md`, `stand-down.md` and `launch.md` (Gru, Minion and Agnes; `launch.md` is the `--new-tab` launcher block), `preflight.md`, `templates/` and `workflows/`. Change a shared worker rule there, never in one skill.
 - `docs/operations/` — `branch-protection.md` and `source-entrypoint-help-audit.md`. `docs/specs/` — this repo's specs, each with its plan and a `.human.md` brief.
-- `.github/workflows/` — `ci.yml` and `secret-scan.yml`, both `permissions: contents: read`. Give no workflow here a write permission or an App credential.
+- `.github/workflows/` — `ci.yml` and `secret-scan.yml`, both `permissions: contents: read` (`ci.yml`'s `changes` job adds `pull-requests: read`). Give no workflow here a write permission or an App credential.
 - `.stark-gh.json` — njord config: a PR title carries a `STARK-n` scope, except a `--no-ticket` PR, whose title carries none.
 
 ## Shipping
@@ -54,7 +54,7 @@ Read `docs/operations/branch-protection.md` before you touch CI or branch contro
 - Ruleset **23544063** requires four contexts from `ci.yml`: `test`, `typecheck`, `secret scan (tree)`, `actionlint`. Its one bypass actor is the repository admin, so red *can* be merged; never write that it cannot.
 - Classic protection on `main` adds a required PR, `required_conversation_resolution` and `required_linear_history`, with `enforce_admins` off. Read both `repos/O/R/rules/branches/main` and `repos/O/R/branches/main/protection`: neither alone is complete.
 - `tools/workflow_shape.test.ts` pins `ci.yml`'s shape. A required context is a check-run name, so a job rename orphans it: PUT the ruleset in the same window; a PUT replaces the rule wholesale.
-- Never guard a required job with a draft check: GitHub counts a skipped required check as passing.
+- Never guard a required job with a draft check: GitHub counts a skipped required check as passing. Keep `test` and `secret scan (tree)` unconditional. `actionlint` and `typecheck` skip only through the fail-closed `changes` path gate that the shape test pins.
 - The `typecheck` step runs `npm run typecheck`, never `npx tsc`: with no TTY, `npx` downloads a missing package instead of failing.
 - Never combine `gh api --slurp` with `--jq` or `--template`; the same test bans it in the whole repo.
 - `secret-scan / secret-scan` is not required. The blocking secret gate is `ci.yml`'s `secret scan (tree)`.
