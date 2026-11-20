@@ -18,6 +18,10 @@
 // while it was advisory), and for a `paths:` filter, which reports `skipped` on
 // every PR that misses the filter.
 //
+// The one allowed exception: `actionlint` and `typecheck` read only
+// `.github/workflows/` and `tools/`, so each may skip through the exact
+// fail-closed `changes` gate pinned in `PATH_GATED_JOBS` below, and nothing else.
+//
 // node built-ins only, like the rest of the suite. There is no YAML parser in
 // the dependency set and `test` runs with no `npm ci` precisely because every
 // import in the suite is a `node:` builtin — adding a parser for five shape
@@ -63,6 +67,27 @@ const EXPECTED_CONTEXTS: Record<string, string> = {
   test: "test",
   typecheck: "typecheck",
 };
+
+// The one job that backs no required context: `changes` diffs the change with git
+// and feeds the path gate of the jobs in `PATH_GATED_JOBS`. It must never be
+// guarded itself, or the gated jobs lose the input their fail-closed `if:` reads.
+const HELPER_JOBS = new Set(["changes"]);
+
+// The required jobs that may skip, each through ONE shape of job-level `if:`:
+// `!cancelled()`, fail closed when `changes` did not succeed, and the named
+// paths-filter output. `actionlint` reads only `.github/workflows/`; `tsc` reads
+// only `tools/`. `test` and `secrets` read the whole repo and stay unconditional.
+const PATH_GATED_JOBS: Record<string, string> = {
+  actionlint: "workflows",
+  typecheck: "tools",
+};
+
+function pathGateIf(output: string): string {
+  return (
+    "${{ !cancelled() && (needs.changes.result != 'success' || " +
+    `needs.changes.outputs.${output} == 'true') }}`
+  );
+}
 
 function readCi(): string {
   // Loudly on ENOENT, never a skip. A gate that passes because its target
@@ -149,11 +174,11 @@ function parseJobs(lines: string[]): Job[] {
   return jobs;
 }
 
-test("ci.yml declares exactly the four jobs backing the required contexts", () => {
+test("ci.yml declares exactly the four jobs backing the required contexts, plus `changes`", () => {
   const jobs = parseJobs(codeLines(readCi()));
   assert.deepEqual(
     jobs.map((j) => j.id).sort(),
-    Object.keys(EXPECTED_CONTEXTS).sort(),
+    [...Object.keys(EXPECTED_CONTEXTS), ...HELPER_JOBS].sort(),
     "ci.yml's job set moved. Every job here backs a required status check, so adding or " +
       "removing one without PUTting the `Required CI on main` ruleset either orphans a " +
       "context (merges hang forever) or drops a gate with no signal at all.",
@@ -162,6 +187,7 @@ test("ci.yml declares exactly the four jobs backing the required contexts", () =
 
 test("each job reports under the required context string, and test/typecheck stay unnamed", () => {
   for (const job of parseJobs(codeLines(readCi()))) {
+    if (HELPER_JOBS.has(job.id)) continue;
     const expected = EXPECTED_CONTEXTS[job.id];
     const declaredName = job.keys.get("name");
     const context = declaredName ?? job.id;
@@ -185,7 +211,25 @@ test("each job reports under the required context string, and test/typecheck sta
 
 test("no job backing a required check is guarded, throttled or made advisory", () => {
   for (const job of parseJobs(codeLines(readCi()))) {
-    for (const banned of ["if", "continue-on-error", "paths", "paths-ignore"]) {
+    const gateOutput = PATH_GATED_JOBS[job.id];
+    if (gateOutput !== undefined) {
+      // The only `if:` a required job may carry. A drift to a bare
+      // `needs.changes.outputs.<x> == 'true'` would skip the gate when
+      // `changes` FAILS, which is the false green this file exists to flag.
+      assert.equal(
+        job.keys.get("if"),
+        pathGateIf(gateOutput),
+        `job \`${job.id}\` must carry exactly the fail-closed path gate \`if: ${pathGateIf(gateOutput)}\`.`,
+      );
+      assert.equal(
+        job.keys.get("needs"),
+        "changes",
+        `job \`${job.id}\` reads \`needs.changes\` in its \`if:\`, so it must declare \`needs: changes\`.`,
+      );
+    }
+    const bannedKeys = ["continue-on-error", "paths", "paths-ignore"];
+    if (gateOutput === undefined) bannedKeys.push("if");
+    for (const banned of bannedKeys) {
       assert.ok(
         !job.keys.has(banned),
         `job \`${job.id}\` carries a job-level \`${banned}:\`. A job that does not run reports ` +
@@ -300,23 +344,31 @@ test("both triggers reach the default branch, and no `types:` narrows the PR tri
   }
 });
 
-test("ci runs are scoped per PR and never cancelled", () => {
+test("ci runs are scoped per PR and per push sha, and a push run is never cancelled", () => {
   const block = topLevelBlock(codeLines(readCi()), "concurrency");
   const line = block.find((l) => /^\s*cancel-in-progress\s*:/.test(l));
   assert.ok(line !== undefined, `${CI_REL}: \`concurrency\` has no \`cancel-in-progress\` key`);
   const value = line.slice(line.indexOf(":") + 1).split("#")[0].trim();
-  assert.equal(
-    value,
-    "false",
+  // `false`, or cancel on PR events only: a superseded PR run is on a sha that is
+  // no longer the head, so no required context is read against it. A push run
+  // is the one `main`'s commit status comes from and must never be cancelled.
+  assert.ok(
+    value === "false" || value === "${{ github.event_name == 'pull_request' }}",
     `${CI_REL}: \`concurrency.cancel-in-progress\` is \`${value}\`. GitHub counts a CANCELLED ` +
       `required check as FAILING, and \`main\` has already carried commits cancelled by ` +
       `back-to-back merges sharing one concurrency group. A cancelled required check is a ` +
       `blocked merge that only a new commit clears.`,
   );
+  const group = block.find((l) => /^\s*group\s*:/.test(l));
   assert.ok(
-    block.some((l) => /^\s*group\s*:/.test(l) && l.includes("pull_request.number")),
+    group !== undefined && group.includes("pull_request.number"),
     `${CI_REL}: the concurrency group no longer keys on the PR number, so two PRs share a group ` +
       `and one starves the other even with cancellation off.`,
+  );
+  assert.ok(
+    group.includes("github.sha"),
+    `${CI_REL}: the concurrency group no longer keys a push on \`github.sha\`, so back-to-back ` +
+      `merges share a group and GitHub cancels the PENDING one.`,
   );
 });
 

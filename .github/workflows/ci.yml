@@ -24,19 +24,66 @@ env:
 # `ci-refs/heads/main` group. With `test` and `typecheck` becoming required
 # contexts, a cancelled run is a blocked merge that only a new commit clears.
 #
-# `cancel-in-progress: false` alone does NOT buy "never cancelled": GitHub also
-# cancels a run that is merely PENDING in the group when a newer one queues
-# behind it. Keying the non-PR half on `github.sha` rather than `github.ref` is
+# On a push `cancel-in-progress` is false, and that alone does NOT buy "never
+# cancelled": GitHub also cancels a run that is merely PENDING in the group when
+# a newer one queues behind it. Keying the non-PR half on `github.sha` rather than `github.ref` is
 # what actually retires the measured failure — every push to `main` lands in its
 # own group, so no merge can ever queue behind (and therefore cancel) another
 # merge's run. The PR half stays keyed on the PR number so a PR's runs still
-# serialize; a superseded pending run there is on a sha that is no longer the
-# head, which no required context is read against.
+# serialize; a superseded run there is on a sha that is no longer the head,
+# which no required context is read against. So a new push to a PR cancels the
+# PR's older run, even one in progress: nothing ever reads its result.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# `actionlint` and `typecheck` run only when a file they read changed. The
+# ruleset requires both names, so they skip with `if:`: a skipped job reports
+# success. `test` reads skills, standards, docs and data across the repo, so it
+# runs on each change.
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      workflows: ${{ steps.filter.outputs.workflows }}
+      tools: ${{ steps.filter.outputs.tools }}
+    steps:
+      # This repo allows only GitHub-owned actions and a short list, so the
+      # changed files come from git, not from a third-party filter action.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: List the changed files
+        id: filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          # A PR's checkout is its merge commit, whose first parent is the
+          # base tip, so HEAD^1..HEAD is exactly the PR's change. A push
+          # diffs against the commit it replaced.
+          case "$EVENT_NAME" in
+            pull_request) base="HEAD^1" ;;
+            push) base="$PUSH_BEFORE" ;;
+            *) base="" ;;
+          esac
+          if [ -z "$base" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            # No base to diff against (a new branch, a force push): run each gate.
+            echo "no base commit: each gate runs"
+            { echo "workflows=true"; echo "tools=true"; } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files="$(git diff --name-only "$base" HEAD)"
+          printf '%s\n' "$files"
+          workflows=false; tools=false
+          if grep -qE '^\.github/workflows/' <<<"$files"; then workflows=true; fi
+          if grep -qE '^(tools/|\.github/workflows/ci\.yml$)' <<<"$files"; then tools=true; fi
+          echo "workflows=$workflows tools=$tools"
+          { echo "workflows=$workflows"; echo "tools=$tools"; } >> "$GITHUB_OUTPUT"
+
   secrets:
     name: secret scan (tree)
     runs-on: ubuntu-latest
@@ -151,6 +198,9 @@ jobs:
 
   actionlint:
     name: actionlint
+    needs: changes
+    # Fail closed: when `changes` itself fails, run the gate.
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.workflows == 'true') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -170,10 +220,13 @@ jobs:
   # orphans the requirement, which blocks every merge on "Expected — waiting for
   # status" until someone edits the ruleset back.
   #
-  # Do NOT add `if:`, a draft guard, or a `paths:` filter to either job. A guarded
+  # Do NOT add `if:`, a draft guard, or a `paths:` filter to `test`. A guarded
   # job reports `skipped`, GitHub counts `skipped` as SATISFYING a required check
   # and renders it identically to a pass, and only a new commit clears it. That is
-  # how stark-skills#877 merged with its suite never having executed.
+  # how stark-skills#877 merged with its suite never having executed. The one
+  # exception is `typecheck`'s fail-closed `changes` gate: `tsc` reads only
+  # `tools/`, so a skip there skips a check whose inputs did not change.
+  # `tools/workflow_shape.test.ts` pins that gate's exact shape.
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -194,6 +247,9 @@ jobs:
         run: npm test
 
   typecheck:
+    needs: changes
+    # Fail closed: when `changes` itself fails, run the gate.
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.tools == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
