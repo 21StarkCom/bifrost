@@ -28,7 +28,7 @@ import {
 
 const CLI = path.join(import.meta.dirname, "tell_on_stop_hook.ts");
 const SID = "0b5c6c1e-8f2a-4d3b-9c7e-1a2b3c4d5e6f";
-const ASK = JSON.stringify({ decision: "block", reason: ASK_TEXT });
+const ASK = JSON.stringify({ hookSpecificOutput: { hookEventName: "Stop", additionalContext: ASK_TEXT } });
 const LIBRARIAN_CONFIG = {
   numStartups: 3,
   mcpServers: { alfred: { type: "http", url: "http://127.0.0.1:8823/mcp" }, librarian: { type: "stdio", command: "librarian", args: ["mcp"] } },
@@ -445,7 +445,7 @@ function hook(b: Box, input: string, args: string[] = [], extraEnv: Record<strin
   return spawnSync(process.execPath, ["--no-warnings", CLI, ...args], { input, env, encoding: "utf8" });
 }
 
-test("the hook prints the block line at the threshold, and nothing below it", () => {
+test("the hook prints the context line at the threshold, and nothing below it", () => {
   withBox((b) => {
     b.write(transcript(4));
     let r = hook(b, b.payload(), [], { STARK_TELL_ON_STOP_TURNS: "5" });
@@ -454,7 +454,8 @@ test("the hook prints the block line at the threshold, and nothing below it", ()
     b.write(transcript(5));
     r = hook(b, b.payload(), [], { STARK_TELL_ON_STOP_TURNS: "5" });
     assert.equal(r.status, 0, r.stderr);
-    assert.deepEqual(JSON.parse(r.stdout), { decision: "block", reason: ASK_TEXT });
+    // Context, not a block: Claude Code shows a Stop block as "Stop hook reported a problem".
+    assert.deepEqual(JSON.parse(r.stdout), { hookSpecificOutput: { hookEventName: "Stop", additionalContext: ASK_TEXT } });
     assert.equal(r.stdout, `${ASK}\n`);
     r = hook(b, b.payload({ stop_hook_active: true }), [], { STARK_TELL_ON_STOP_TURNS: "1" });
     assert.equal(r.status, 0, r.stderr);

@@ -10,9 +10,10 @@
  * `stop_hook_active`). When the main agent's model turns have grown by the
  * threshold (160, or `STARK_TELL_ON_STOP_TURNS`) since this session's last ask,
  * it records the count in `<stateRoot()>/tell-on-stop/<session_id>.json` and
- * prints `{"decision":"block","reason":…}`: Claude Code then keeps the agent
- * going with the reason, which asks it to call `tell_librarian` for each
- * lasting fact. Else it prints nothing.
+ * prints `{"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":…}}`:
+ * Claude Code then keeps the agent going with the context, which asks it to
+ * call `tell_librarian` for each lasting fact, and shows it as "Stop hook
+ * says:", not as a problem. Else it prints nothing.
  *
  * It never asks on a stop that a Stop hook already continued
  * (`stop_hook_active`), in a headless run (`CLAUDE_CODE_ENTRYPOINT` `sdk-*`,
