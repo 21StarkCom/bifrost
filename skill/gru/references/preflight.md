@@ -21,7 +21,7 @@ keep them for the rest of the run:
   `branches/<base>/protection` endpoint needs admin rights and answers 404
   both on an unprotected branch and to a caller without them, so a 404 there
   proves nothing. "No required checks" can
-  mean no checks at all, and then `njord pr-merge` merges at once: a merged
+  mean no checks at all, and then `ghx pr-merge` merges at once: a merged
   PR there says nothing about green, so step 5's verification comment carries
   the whole weight.
 - **Whether the gate binds a fixed host resource** — a port, a lock file, a

@@ -66,8 +66,8 @@ Agnes's brief is a ticket id with optional instructions for this run. **Send no
 ## Work
 
 Run [the worker spine](../../standards/worker-spine.md) — bind and read,
-implement, verify live, `njord pr-open` (draft) → the review its §4 names
-for what the PR changes → fix or answer every finding → `njord pr-merge` →
+implement, verify live, `ghx pr-open` (draft) → the review its §4 names
+for what the PR changes → fix or answer every finding → `ghx pr-merge` →
 close the ticket, post the live check on the PR and re-run it after a `--fix`
 round as [its §5](../../standards/worker-spine.md#5-re-verify-after---fix-and-post-the-runs-on-the-pr)
 scopes the re-run, and handle gaps as it says. A goal you were launched with
@@ -78,7 +78,7 @@ launch is the operator's standing GO for all of your ticket's work
 is never a `blocked`. Your tab title, which its step 1 sets, is `AGNES (<n>)`.
 Three things are yours on top of it, because there is no leader:
 
-- **Nobody sequences your merge.** Gru holds one `njord pr-merge` per repo at
+- **Nobody sequences your merge.** Gru holds one `ghx pr-merge` per repo at
   a time where the base has no merge queue; two Agneses in one repo have no
   such referee. Clear a refusal yourself, by [the spine's
   merge-contention rule](../../standards/worker-spine.md#4-the-spine).
@@ -129,7 +129,7 @@ the ticket, and see [When not to stand down](#when-not-to-stand-down).
 
 ## Self-confirmation
 
-A `done` is a claim. After `njord pr-merge` and
+A `done` is a claim. After `ghx pr-merge` and
 `alfred task move STARK-n done`, **re-read both from their source**:
 
 ```

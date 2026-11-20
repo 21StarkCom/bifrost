@@ -209,7 +209,7 @@ and this list disagree, it wins.
    `audit --repo <worktree> --json`). Each fixed clause must be gone, no new
    RED may appear, and each new glob must show a non-zero `matches` on the
    files it was written for.
-6. **Draft PR** from the worktree with `njord pr-open --no-ticket` (a draft by
+6. **Draft PR** from the worktree with `ghx pr-open --no-ticket` (a draft by
    default) and a plain title, e.g. `docs: apply the agent-doc review`. Put the
    report's first two lines and the proposals in the body.
 7. **Review by what the PR changes**, per the root rules' tiers: a PR of
@@ -217,7 +217,7 @@ and this list disagree, it wins.
    also changes a script, config or code takes that tier (for code,
    `/code-review xhigh --fix <full PR URL>`: the full URL, or it reviews the
    wrong repo's diff), then fix or answer every finding, push with
-   `njord pr-open`, and re-run step 5.
+   `ghx pr-open`, and re-run step 5.
 8. **Stop at the draft PR**, and print its URL. `--apply` never merges and
    never commits to `main`.
 

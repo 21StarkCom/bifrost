@@ -23,8 +23,8 @@ This is the Codex/Cursor entry point. **Read [CLAUDE.md](CLAUDE.md) before chang
 ## Development and shipping
 
 - Shipping follows the root spine (`~/Code/CLAUDE.md`, "How we ship"), which Codex loads as `~/.codex/AGENTS.md`.
-- Open PRs as drafts with `njord pr-open`. The merge command marks a draft ready, waits for green checks, and squash-merges. Merge once green; no rollout ceremony. For target repos, [skip-draft-guard.md](standards/workflows/skip-draft-guard.md) keeps CI off drafts; never apply it to a required check.
-- Use `gh` as `aryeh-stark` for PR actions. Review text identifies the model. No skill or hook runs an identity swap (`njord fallback on`, `njord user --swap`).
+- Open PRs as drafts with `ghx pr-open`. The merge command marks a draft ready, waits for green checks, and squash-merges. Merge once green; no rollout ceremony. For target repos, [skip-draft-guard.md](standards/workflows/skip-draft-guard.md) keeps CI off drafts; never apply it to a required check.
+- Use `gh` as `aryeh-stark` for PR actions. Review text identifies the model. No skill or hook runs an identity swap (`ghx fallback on`, `ghx user --swap`).
 - Publish every review's findings with `tools/findings_review_post.ts`: inline where anchored, in the body otherwise. Preserve every finding and its severity. Fix findings or explain their disposition on the thread; never resolve another reviewer's thread yourself.
 - Use TypeScript for tooling, Node 24+, `node:` builtins at runtime, and sibling `.ts` imports. POSIX shell is limited to the existing skill hooks, `gh` wrappers, and `tools/check-rest-only.sh`. No new Python.
 - Reuse existing tools. Keep code and docs lean; remove dead code and stale references.
@@ -38,7 +38,7 @@ This is the Codex/Cursor entry point. **Read [CLAUDE.md](CLAUDE.md) before chang
 - When changing a skill, bump every owning plugin's manifest version **in the same PR**. Installed plugins use versioned caches: bump → merge → `/plugin update`. Direct checkout invocations read edits immediately.
 - Resolve shipped assets through `tools/asset_root_lib.ts` (`assetRoot()`); keep mutable state under `stateRoot()`. Skills use `${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/code-review}`. Do not hardcode asset subdirectories under the home fallback.
 - `tools/asset_links.ts` owns the five code-review asset links declared in `tools/asset_links_lib.ts`. Machine settings, machine hooks, and generated GCP scope belong to the idavoll repo (`21StarkCom/idavoll`); only plugin-shipped hooks live here. `tools/ask_guard_metric.ts --install-schedule` installs its launchd job. The agent-doc sweep (`tools/rules_audit.ts`) runs on the devbox, not as a Mac job. Leave idavoll's `.envrc` block and `.worktreeinclude` entry to that provisioner; never add credential files or broad globs to `.worktreeinclude`. Claude- and Codex-managed worktrees copy its entries; a plain `git worktree add` does not, so a helper that creates one copies the named files itself.
-- bifrost and idun share no code: skills call idun's, njord's and valkyrie's CLIs, but neither repo imports, vendors or generates code from the other, so refuse a design that would link them.
+- bifrost and idun share no code: skills call the CLIs of idun, valkyrie and `ghx`, but neither repo imports, vendors or generates code from the other, so refuse a design that would link them.
 - Read a skill's own `SKILL.md` for its arguments and workflow. [CLAUDE.md](CLAUDE.md#skills) maps plugins to skills. Shared worker rules for Gru, Minion and Agnes live in [worker-spine.md](standards/worker-spine.md), [stand-down.md](standards/stand-down.md) and [launch.md](standards/launch.md) (the `--new-tab` launcher block); change shared rules there, never in one skill.
 
 ## Tool and documentation contracts
@@ -59,7 +59,7 @@ Read [branch-protection.md](docs/operations/branch-protection.md) before changin
 - Classic protection also requires a pull request, conversation resolution, and linear history. `enforce_admins` is off, so the admin can push to `main` directly; only the root rule keeps an agent off it. Audit both `rules/branches/main` and `branches/main/protection`; neither alone is complete.
 - Keep required jobs without draft guards or `continue-on-error`. Keep `test` and `secret scan (tree)` unconditional. `actionlint` and `typecheck` skip only through the fail-closed `changes` path gate that `tools/workflow_shape.test.ts` pins. Required contexts match check names; coordinate any rename with the ruleset. `tools/workflow_shape.test.ts` pins CI structure. The `typecheck` step runs `npm run typecheck`, never `npx tsc`.
 - The blocking secret job scans the whole tree and PR commit range and proves both custom gitleaks rules fire. `secret-scan / secret-scan` is additional and is not required.
-- `.github/workflows/secret-scan.yml` is owned by Terraform in `21StarkCom/21stark`, whose apply commits the new render straight to `main` on the admin's exemptions here (turn `enforce_admins` back on or drop the ruleset's admin bypass and that apply fails). Change its template there, never this file: a hand edit stalls every `njord fleet apply` there until a hand `terraform apply` reverts it.
+- `.github/workflows/secret-scan.yml` is owned by Terraform in `21StarkCom/21stark`, whose apply commits the new render straight to `main` on the admin's exemptions here (turn `enforce_admins` back on or drop the ruleset's admin bypass and that apply fails). Change its template there, never this file: a hand edit stalls every `ghx fleet apply` there until a hand `terraform apply` reverts it.
 
 Run from the repo root:
 

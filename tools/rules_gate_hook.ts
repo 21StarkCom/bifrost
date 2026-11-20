@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 /**
- * The agent-doc gate: a PreToolUse hook that stops `njord pr-merge` when the PR
+ * The agent-doc gate: a PreToolUse hook that stops `ghx pr-merge` when the PR
  * adds a RED clause, by the playbook triage, to an agent file. A RED that is on
  * the base branch already does not stop it.
  *
  * Shipped by the stark-ops plugin: its marketplace.json entry declares this hook
  * inline on PreToolUse through ${CLAUDE_PLUGIN_ROOT}, with an `if` gate that
- * starts node only for a Bash call that runs `njord pr-merge`.
+ * starts node only for a Bash call that runs `ghx pr-merge` or `njord pr-merge`
+ * (the tap keeps `njord` as a link to `ghx`, so both names run the same merge).
  *
- * For each `njord pr-merge` in the command, the hook:
+ * For each `ghx pr-merge` (or `njord pr-merge`) in the command, the hook:
  *   1. finds the PR: the number in the command, else the PR of the branch
  *      (`gh pr view`, in the folder the command runs in);
  *   2. lists the agent files the PR adds or changes (`agentKind`);
@@ -50,8 +51,10 @@ const PLAYBOOK = path.join(TOOLS_DIR, "..", "skill", "stark-agent-docs", "refere
 /** The fields of `gh pr view --json` that the gate reads. */
 export const PR_FIELDS = "number,state,headRefOid,baseRefName,baseRefOid,changedFiles,files";
 
-/** `njord pr-merge` options that take a value, from its argument parser. */
+/** `ghx pr-merge` options that take a value, from its argument parser. */
 const VALUE_FLAGS = new Set(["--pr", "--changelog-section", "--force-reason", "--watch-timeout"]);
+/** The names that run the merge: `njord` is the tap's link to `ghx`. */
+const MERGE_CLIS = new Set(["ghx", "njord"]);
 /** Words that run the next word as the command. */
 const WRAPPERS = new Set(["env", "command", "time", "nohup", "exec"]);
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
@@ -63,7 +66,7 @@ export type ShellPart = string[] | "(" | ")";
  * The words of each simple command in a shell line, split at unquoted
  * `; & | ( )` and newlines, with each unquoted `(` and `)` as a part of its
  * own. Quotes and backslashes are resolved; `$` expansions stay as text.
- * Enough to find a `njord pr-merge`, its arguments and the folder it runs in.
+ * Enough to find a `ghx pr-merge`, its arguments and the folder it runs in.
  */
 export function shellCommands(line: string): ShellPart[] {
   const out: ShellPart[] = [];
@@ -122,7 +125,7 @@ export interface MergeCall {
   cwd: string;
   /** The PR the command names, or null for the PR of the branch. */
   pr: number | null;
-  /** A help call: njord merges nothing. */
+  /** A help call: ghx merges nothing. */
   help: boolean;
 }
 
@@ -141,7 +144,7 @@ function mergeArgs(args: string[], cwd: string): MergeCall {
   return { cwd, pr, help };
 }
 
-/** Each `njord pr-merge` in a Bash command line, with the folder it runs in. */
+/** Each `ghx pr-merge` or `njord pr-merge` in a Bash command line, with the folder it runs in. */
 export function findMerges(line: string, cwd: string, home = os.homedir()): MergeCall[] {
   const out: MergeCall[] = [];
   let dir = cwd;
@@ -163,7 +166,7 @@ export function findMerges(line: string, cwd: string, home = os.homedir()): Merg
       const to = words[i + 1];
       if (to === undefined) dir = home;
       else if (to !== "-") dir = path.resolve(dir, to.replace(/^(~|\$HOME|\$\{HOME\})(?=\/|$)/, home));
-    } else if (name !== undefined && path.basename(name) === "njord" && words[i + 1] === "pr-merge") {
+    } else if (name !== undefined && MERGE_CLIS.has(path.basename(name)) && words[i + 1] === "pr-merge") {
       out.push(mergeArgs(words.slice(i + 2), dir));
     }
   }
@@ -269,7 +272,7 @@ function changedAgentFiles(cwd: string, pr: PrFiles): string[] | string {
   return [...new Set(paths.filter((p) => agentKind(p) !== null))].sort();
 }
 
-/** Triage the agent files one `njord pr-merge` would merge. */
+/** Triage the agent files one `ghx pr-merge` would merge. */
 export function gate(call: MergeCall, audit = AUDIT, home = os.homedir()): Verdict {
   if (!fs.statSync(call.cwd, { throwIfNoEntry: false })?.isDirectory()) {
     return warn(`the merge runs in ${call.cwd}, which is not a folder here`);
@@ -284,7 +287,7 @@ export function gate(call: MergeCall, audit = AUDIT, home = os.homedir()): Verdi
   } catch {
     return warn(`gh pr view printed no JSON for ${which}`);
   }
-  if (pr.state !== "OPEN") return PASS; // njord merges only an open PR
+  if (pr.state !== "OPEN") return PASS; // ghx merges only an open PR
   if (!Array.isArray(pr.files) || !SHA_RE.test(String(pr.headRefOid))) {
     return warn(`gh pr view gave no files or head commit for ${which}`);
   }
@@ -336,7 +339,7 @@ export function gate(call: MergeCall, audit = AUDIT, home = os.homedir()): Verdi
     return {
       kind: "red",
       text: `PR #${n} adds a RED clause to an agent file, so the merge stops. ` +
-        `Reword or delete each new RED clause by the playbook (${PLAYBOOK}), push, and run njord pr-merge again.\n\n` +
+        `Reword or delete each new RED clause by the playbook (${PLAYBOOK}), push, and run ghx pr-merge again.\n\n` +
         `New RED clauses:\n${lines.join("\n")}\n\n` +
         `${kept} RED clause${kept === 1 ? " was" : "s were"} on the base already; ${kept === 1 ? "it does" : "they do"} not stop the merge.`,
     };

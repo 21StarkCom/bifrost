@@ -48,8 +48,8 @@ another peer, or the operator.
 ## Work
 
 Run [the worker spine](../../standards/worker-spine.md) — bind and read,
-implement, verify live, `njord pr-open` (draft) → the review its §4 names
-for what the PR changes → fix or answer every finding → `njord pr-merge` →
+implement, verify live, `ghx pr-open` (draft) → the review its §4 names
+for what the PR changes → fix or answer every finding → `ghx pr-merge` →
 close the ticket, post the live check on the PR and re-run it after a `--fix`
 round as [its §5](../../standards/worker-spine.md#5-re-verify-after---fix-and-post-the-runs-on-the-pr)
 scopes the re-run, and handle gaps as it says. Your tab title, which its step 1
@@ -58,7 +58,7 @@ sets, is `MINION (<n>)`. Four things are yours on top of it:
 - **Your ticket is the one named in your brief**, which also names your
   leader: a peer, or `leader operator`.
 - **If Gru asked you to hold your merge** until another Minion's `done` is
-  confirmed, hold, then rerun `njord pr-merge` so the rebase and checks are
+  confirmed, hold, then rerun `ghx pr-merge` so the rebase and checks are
   fresh. That is the one place a Minion's merge is sequenced from outside.
 - **Post each live check on the PR** by
   [the spine's §5](../../standards/worker-spine.md#5-re-verify-after---fix-and-post-the-runs-on-the-pr):

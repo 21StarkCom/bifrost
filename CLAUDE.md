@@ -18,7 +18,7 @@ Add only rules, traps and pointers here. Put reasons, history and catalogs in `d
 - **Bump the version to ship a change.** Installs are keyed by version under `~/.claude/plugins/cache/bifrost/<plugin>/<version>/`, so an edit under an unchanged version never reaches the machine. When you touch a skill, a hook's tool or anything that tool imports, bump each plugin that owns it, in the same PR.
 - **Test against a real install** by bump → merge → `/plugin update`. Anything that resolves through this checkout (a direct `node tools/…` run, the `~/.claude/code-review` links) is live on save.
 - **Claude Code is the only install target; the skills are runtime-neutral.** Codex runs the same `skill/` and `tools/` trees. Never write a Codex-specific tree; fix the canonical file. In `standards/`, write "the repo's agent instructions file", not `CLAUDE.md`; say that `/agnes` is `$agnes` on Codex; and where a permission matters, name both models (Claude's bypass mode or allowlist entry, Codex's sandbox and approval policy).
-- **bifrost and idun share no code.** Skills call idun's, njord's and valkyrie's CLIs. Refuse a design that imports, vendors or generates code from one repo in the other.
+- **bifrost and idun share no code.** Skills call the CLIs of idun, valkyrie and `ghx`. Refuse a design that imports, vendors or generates code from one repo in the other.
 
 ### Asset and state paths
 
@@ -35,14 +35,14 @@ Add only rules, traps and pointers here. Put reasons, history and catalogs in `d
 - `standards/` — shared docs: `help.md` (every skill), `worker-spine.md`, `stand-down.md` and `launch.md` (Gru, Minion and Agnes; `launch.md` is the `--new-tab` launcher block), `preflight.md`, `templates/` and `workflows/`. Change a shared worker rule there, never in one skill.
 - `docs/operations/` — `branch-protection.md` and `source-entrypoint-help-audit.md`. `docs/specs/` — this repo's specs, each with its plan and a `.human.md` brief.
 - `.github/workflows/` — `ci.yml` and `secret-scan.yml`, both `permissions: contents: read`. Give no workflow here a write permission or an App credential.
-- `.stark-gh.json` — njord config: a PR title carries a `STARK-n` scope, except a `--no-ticket` PR, whose title carries none.
+- `.stark-gh.json` — ghx config: a PR title carries a `STARK-n` scope, except a `--no-ticket` PR, whose title carries none.
 
 ## Shipping
 
-- **PRs open as drafts** (`njord pr-open`; skills pass `--draft`). A merge path un-drafts first (`gh pr ready`), which fires CI, then waits for green. Merge once green: no soak, canary or rollout.
+- **PRs open as drafts** (`ghx pr-open`; skills pass `--draft`). A merge path un-drafts first (`gh pr ready`), which fires CI, then waits for green. Merge once green: no soak, canary or rollout.
 - **The admin's token can push to `main`.** Classic protection binds everyone but the admin, so the root rule, not the gate, keeps an agent off `main`.
 - **Every PR action uses `gh` as `aryeh-stark`**, review posting included. Review text names the model.
-- **No skill or hook runs an identity swap:** `njord fallback on` or `export GH_TOKEN=$(njord user --swap)`. While the fallback is on, `preflight.ts`'s `check_github_user` refuses: that is not a broken login. After a swapped command, run `unset GH_TOKEN GITHUB_TOKEN STARK_GH_USER`, or later PR activity authors as the relief account.
+- **No skill or hook runs an identity swap:** `ghx fallback on` or `export GH_TOKEN=$(ghx user --swap)`. While the fallback is on, `preflight.ts`'s `check_github_user` refuses: that is not a broken login. After a swapped command, run `unset GH_TOKEN GITHUB_TOKEN STARK_GH_USER`, or later PR activity authors as the relief account.
 - **Post review findings with `tools/findings_review_post.ts`:** inline where anchored, in the body otherwise. Keep every finding at its severity; fix it or reply on its thread. Never resolve another reviewer's thread.
 - **Language:** TypeScript for tooling. POSIX shell only in `tools/check-rest-only.sh`, `stark-build`'s two hook scripts and `stark-gha-cost`'s two `gh` wrappers. Never add Python.
 - **Keep it lean:** reuse a tool before you write one; leave no one-off script, dead code or stale doc.
@@ -62,7 +62,7 @@ Read `docs/operations/branch-protection.md` before you touch CI or branch contro
 ### `secret-scan.yml` is not this repo's to edit
 
 - Terraform in `21StarkCom/21stark` (`repos/secret_scan.tf`) owns it. Its apply commits a new render straight to `main` on the admin's exemptions, so turning `enforce_admins` on, or dropping the ruleset's admin bypass, makes that apply fail here.
-- Change its template in 21stark, never this file. A hand edit here stalls every `njord fleet apply` in 21stark until a hand `terraform apply` reverts it.
+- Change its template in 21stark, never this file. A hand edit here stalls every `ghx fleet apply` in 21stark until a hand `terraform apply` reverts it.
 - `tools/repo_contracts.test.ts` pins its shape. A deliberate template change edits that test first.
 
 ## Conventions every skill and tool follow

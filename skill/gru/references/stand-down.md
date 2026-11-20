@@ -5,7 +5,7 @@ Read from [the Gru skill](../SKILL.md#stand-down), at the end of step 6.
 Close your own session, worktree and tab by
 [the stand-down contract](../../../standards/stand-down.md), as a Minion
 does. You merge and close nothing yourself, so these terms take the place of
-the contract's "after `njord pr-merge` and the ticket close":
+the contract's "after `ghx pr-merge` and the ticket close":
 
 - **Only in your own worktree.** Your shell can stand in the main checkout
   after step 6's cleanup, so read the path poison-pill aims at. Run

@@ -51,6 +51,17 @@ test("findMerges reads the PR, skips option values, and follows cd", () => {
   assert.deepEqual(findMerges("(cd a); (njord pr-merge 7)", "/r"), [at(7)]);
 });
 
+test("findMerges finds a ghx pr-merge as it finds a njord pr-merge, the tap's link to ghx", () => {
+  const at = (pr: number | null, cwd = "/r", help = false) => ({ cwd, pr, help });
+  assert.deepEqual(findMerges("ghx pr-merge", "/r"), [at(null)]);
+  assert.deepEqual(findMerges("ghx pr-merge 412 --skip-changelog", "/r"), [at(412)]);
+  assert.deepEqual(findMerges("ghx pr-merge --pr 7", "/r"), [at(7)]);
+  assert.deepEqual(findMerges("ghx pr-merge --help", "/r"), [at(null, "/r", true)]);
+  assert.deepEqual(findMerges("STARK=1 env X=2 /home/linuxbrew/.linuxbrew/bin/ghx pr-merge 5", "/r"), [at(5)]);
+  assert.deepEqual(findMerges("cd sub && ghx pr-merge 3; njord pr-merge 4", "/r"), [at(3, "/r/sub"), at(4, "/r/sub")]);
+  assert.deepEqual(findMerges('echo "ghx pr-merge 5"; ghx pr-list; gh pr merge 5; ghxx pr-merge 5', "/r"), []);
+});
+
 test("shellCommands marks each subshell's start and end", () => {
   assert.deepEqual(shellCommands("(cd a && b) | c"), ["(", ["cd", "a"], ["b"], ")", ["c"]]);
 });
@@ -236,7 +247,7 @@ test("a PR that adds a RED clause to an agent file is denied, with the clause", 
     assert.equal(r.status, 0, r.stderr);
     const reason = denied(r);
     assert.match(reason, /^agent-doc gate: PR #5 adds a RED clause to an agent file/);
-    assert.match(reason, /playbook \(\/.*skill\/stark-agent-docs\/references\/playbook\.md\)/);
+    assert.match(reason, /playbook \(\/.*skill\/stark-agent-docs\/references\/playbook\.md\), push, and run ghx pr-merge again\./);
     assert.match(reason, /\n\nNew RED clauses:\n {2}CLAUDE\.md:4 {2}GATE .*This is the operator's call\.\n\n0 RED clauses were on the base already; they do not stop the merge\.$/);
     assert.doesNotMatch(reason, /x\.ts/);
     assert.deepEqual(r.gh, [["pr", "view", "5", "--json", PR_FIELDS]]);
@@ -252,6 +263,18 @@ test("the deny reason names only the new RED clauses, and counts the ones on the
     const reason = denied(f.run("njord pr-merge 5"));
     assert.match(reason, /New RED clauses:\n {2}CLAUDE\.md:1 {2}GATE .*This is the operator's call\.\n\n1 RED clause was on the base already; it does not stop the merge\.$/);
     assert.doesNotMatch(reason, /Merging needs a GO/);
+  });
+});
+
+test("a ghx pr-merge of a PR that adds a RED clause is denied, as a njord pr-merge is", () => {
+  withFixture((f) => {
+    const base = f.commit({ "CLAUDE.md": CLEAN });
+    const sha = f.commit({ "CLAUDE.md": CLEAN + RED_LINE });
+    f.pr(view(sha, base, [["CLAUDE.md", "MODIFIED"]]));
+    const r = f.run("ghx pr-merge 5");
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(denied(r), /^agent-doc gate: PR #5 adds a RED clause to an agent file/);
+    assert.deepEqual(r.gh, [["pr", "view", "5", "--json", PR_FIELDS]]);
   });
 });
 
@@ -443,7 +466,10 @@ test("a head RED with a base the hook cannot read lets the merge go on, with one
 
 test("other tools, other commands and a help call never reach gh", () => {
   withFixture((f) => {
-    for (const [command, tool] of [["njord pr-merge 5", "Write"], ["njord pr-list", "Bash"], ["njord pr-merge --help", "Bash"]]) {
+    for (const [command, tool] of [
+      ["njord pr-merge 5", "Write"], ["njord pr-list", "Bash"], ["njord pr-merge --help", "Bash"],
+      ["ghx pr-merge 5", "Write"], ["ghx pr-list", "Bash"], ["ghx pr-merge --help", "Bash"],
+    ]) {
       const r = f.run(command, {}, tool);
       assert.equal(r.status, 0, r.stderr);
       assert.equal(r.stdout, "");
