@@ -34,7 +34,7 @@ Add only rules, traps and pointers here. Put reasons, history and catalogs in `d
 - `global/` — the default `config.json` and the dispatcher rubrics.
 - `standards/` — shared docs: `help.md` (every skill), `worker-spine.md`, `stand-down.md` and `launch.md` (Gru, Minion and Agnes; `launch.md` is the `--new-tab` launcher block), `preflight.md`, `templates/` and `workflows/`. Change a shared worker rule there, never in one skill.
 - `docs/operations/` — `branch-protection.md` and `source-entrypoint-help-audit.md`. `docs/specs/` — this repo's specs, each with its plan and a `.human.md` brief.
-- `.github/workflows/` — `ci.yml` and `secret-scan.yml`, both `permissions: contents: read` (`ci.yml`'s `changes` job adds `pull-requests: read`). Give no workflow here a write permission or an App credential.
+- `.github/workflows/` — `ci.yml` and `secret-scan.yml`, both `permissions: contents: read`. Give no workflow here a write permission or an App credential.
 - `.stark-gh.json` — njord config: a PR title carries a `STARK-n` scope, except a `--no-ticket` PR, whose title carries none.
 
 ## Shipping

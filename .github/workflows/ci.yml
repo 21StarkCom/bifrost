@@ -45,25 +45,44 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # Only this job reads the PR's changed-files list. A job-level block
-    # replaces the workflow-level one, so it restates `contents: read`.
-    permissions:
-      contents: read
-      pull-requests: read
     outputs:
       workflows: ${{ steps.filter.outputs.workflows }}
       tools: ${{ steps.filter.outputs.tools }}
     steps:
+      # This repo allows only GitHub-owned actions and a short list, so the
+      # changed files come from git, not from a third-party filter action.
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
-        id: filter
         with:
-          filters: |
-            workflows:
-              - '.github/workflows/**'
-            tools:
-              - 'tools/**'
-              - '.github/workflows/ci.yml'
+          fetch-depth: 0
+          persist-credentials: false
+      - name: List the changed files
+        id: filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          # A PR's checkout is its merge commit, whose first parent is the
+          # base tip, so HEAD^1..HEAD is exactly the PR's change. A push
+          # diffs against the commit it replaced.
+          case "$EVENT_NAME" in
+            pull_request) base="HEAD^1" ;;
+            push) base="$PUSH_BEFORE" ;;
+            *) base="" ;;
+          esac
+          if [ -z "$base" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            # No base to diff against (a new branch, a force push): run each gate.
+            echo "no base commit: each gate runs"
+            { echo "workflows=true"; echo "tools=true"; } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files="$(git diff --name-only "$base" HEAD)"
+          printf '%s\n' "$files"
+          workflows=false; tools=false
+          if grep -qE '^\.github/workflows/' <<<"$files"; then workflows=true; fi
+          if grep -qE '^(tools/|\.github/workflows/ci\.yml$)' <<<"$files"; then tools=true; fi
+          echo "workflows=$workflows tools=$tools"
+          { echo "workflows=$workflows"; echo "tools=$tools"; } >> "$GITHUB_OUTPUT"
 
   secrets:
     name: secret scan (tree)

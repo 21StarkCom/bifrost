@@ -68,7 +68,7 @@ const EXPECTED_CONTEXTS: Record<string, string> = {
   typecheck: "typecheck",
 };
 
-// The one job that backs no required context: `changes` runs dorny/paths-filter
+// The one job that backs no required context: `changes` diffs the change with git
 // and feeds the path gate of the jobs in `PATH_GATED_JOBS`. It must never be
 // guarded itself, or the gated jobs lose the input their fail-closed `if:` reads.
 const HELPER_JOBS = new Set(["changes"]);
