@@ -4,8 +4,11 @@
  * A long Claude Code session finds facts that the librarian does not hold, and
  * they are lost when the session ends. On each `Stop`, the hook counts the main
  * agent's model turns in the transcript. When the count has grown by the
- * threshold since this session's last ask, the hook blocks the stop once and
- * asks the agent to call `tell_librarian` for each lasting fact. It asks only
+ * threshold since this session's last ask, the hook continues the session once
+ * and asks the agent to call `tell_librarian` for each lasting fact. It asks
+ * with `additionalContext`, not `decision: "block"`: Claude Code shows a Stop
+ * block as "Stop hook reported a problem", and context as "Stop hook says:",
+ * and both keep the agent going for one more turn. It asks only
  * when the user's Claude config names an MCP server called `librarian`, and
  * never after the session armed `hermod poison-pill` (a Gru, Minion or Agnes
  * that stands down): its reaper quits the session and would cut the calls off.
@@ -222,7 +225,7 @@ export function decide(raw: string, opts: HookOptions = {}): string | null {
     // Read only when an ask is due: the config file can be large.
     if (!hasLibrarianServer(claudeJsonPath(opts.env, opts.home))) return null;
     writeAsk(file, turns);
-    return JSON.stringify({ decision: "block", reason: ASK_TEXT });
+    return JSON.stringify({ hookSpecificOutput: { hookEventName: "Stop", additionalContext: ASK_TEXT } });
   } catch {
     return null;
   }
