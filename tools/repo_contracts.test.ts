@@ -377,13 +377,21 @@ test("plugin hooks are declared inline on stark-ops alone and run tools from thi
     `${MARKETPLACE_REL}: stark-ops must wire tools/fact_routing_hook.ts on PostToolUse as two command hooks, ` +
       `gated to auto-memory files by \`if\`, one for Write and one for Edit.`,
   );
-  // The agent-doc gate: the `if` gate starts node only for a `njord pr-merge`,
-  // never for every Bash call.
+  // The agent-doc gate: the `if` gates start node only for a `ghx pr-merge`, or
+  // a `njord pr-merge` through the tap's link to ghx, never for every Bash call.
   assert.deepEqual(
     groups.PreToolUse?.map((g) => [g.matcher, g.hooks?.map((h) => [h.type, h.if, h.command])]),
-    [["Bash", [["command", "Bash(njord pr-merge *)", 'node "${CLAUDE_PLUGIN_ROOT}/tools/rules_gate_hook.ts"']]]],
-    `${MARKETPLACE_REL}: stark-ops must wire tools/rules_gate_hook.ts on PreToolUse as one Bash command hook, ` +
-      `gated to \`njord pr-merge\` by \`if\`.`,
+    [
+      [
+        "Bash",
+        [
+          ["command", "Bash(ghx pr-merge *)", 'node "${CLAUDE_PLUGIN_ROOT}/tools/rules_gate_hook.ts"'],
+          ["command", "Bash(njord pr-merge *)", 'node "${CLAUDE_PLUGIN_ROOT}/tools/rules_gate_hook.ts"'],
+        ],
+      ],
+    ],
+    `${MARKETPLACE_REL}: stark-ops must wire tools/rules_gate_hook.ts on PreToolUse as two Bash command hooks, ` +
+      `gated by \`if\` to \`ghx pr-merge\` and to \`njord pr-merge\`, the tap's link to ghx.`,
   );
   // The tell-on-stop hook: Stop takes no matcher and no `if`, so it runs on
   // each stop and decides from the transcript itself.
@@ -542,7 +550,7 @@ test(".gitleaks.toml exempts values, never paths", () => {
 // pin bump or a template change — 21stark's apply commits the new bytes straight
 // to `main`. Its own header says "a hand edit is reverted by the next apply",
 // which holds only for a hand `terraform apply`: a hand edit here shows as a
-// pending update on 21stark's plan, and `njord fleet apply` refuses (57) the
+// pending update on 21stark's plan, and `ghx fleet apply` refuses (57) the
 // whole tier's apply, not just that row, until a hand `terraform apply` there
 // reverts it. Change the template in 21stark, never this file.
 //
@@ -562,7 +570,7 @@ function readSecretScanCaller(): string {
   return readRepoFile(
     SECRET_SCAN_REL,
     "21stark's Terraform owns it; deleting it here drops this repo out of the fleet's secret scan and " +
-      "leaves a pending create on 21stark's plan, which `njord fleet apply` refuses (57) until a hand " +
+      "leaves a pending create on 21stark's plan, which `ghx fleet apply` refuses (57) until a hand " +
       "`terraform apply` there writes it back. Restore it from the render, never rewrite it.",
   );
 }

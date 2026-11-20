@@ -43,7 +43,7 @@ Codex), and say so in your report.
 | Jira comment | Markdown | `frigg atlassian issue comment <KEY> --markdown-file <md> --confirm` |
 | Jira, past Markdown: a mention, a panel, a status | raw ADF, a JSON document | `--adf-file <file>` in place of `--markdown-file`, on `issue create` and `issue comment`. On `issue update`: `--fields-json <file>`, a JSON map with a `description` key |
 | A ticket through alfred | Markdown, as it is | `alfred task new --desc-file <md> <title>`, or `alfred task edit --desc-file <md> <id>`. alfred converts it for Jira |
-| GitHub text: a PR body, an issue, a comment | Markdown, as it is | `njord pr-open --body-file <md>`, or `gh pr comment <n> --body-file <md>`, `gh issue create --title <T> --body-file <md>` |
+| GitHub text: a PR body, an issue, a comment | Markdown, as it is | `ghx pr-open --body-file <md>`, or `gh pr comment <n> --body-file <md>`, `gh issue create --title <T> --body-file <md>` |
 
 ## What each surface needs
 

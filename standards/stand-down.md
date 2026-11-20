@@ -43,7 +43,7 @@ leader launched you or a hand did — with no leader peer to report to, your
 report is the one your skill names (a ticket comment, for Agnes; a line in its
 own tab, for a Minion led by the operator) rather than a line to a leader, and
 nothing else changes but the one wait below. What is not negotiable is the scope:
-**only after `njord pr-merge` and the ticket close, only your own tab, never
+**only after `ghx pr-merge` and the ticket close, only your own tab, never
 on `blocked` or `follow-up … stopping`, and never on any other trigger.** Gru
 merges and closes nothing itself: for Gru, the merge and the close are the
 end of a finished run, in its own worktree, as
@@ -95,7 +95,7 @@ in the foreground, exit 2, which is the report-and-stop in
 - **Report first, then poison-pill**, so your report is a completed act and
   never a race against the reaper's quit, which reaches you moments after the
   arm.
-- **Strictly after `njord pr-merge` and the ticket close** (for Gru, after
+- **Strictly after `ghx pr-merge` and the ticket close** (for Gru, after
   its finished run, as its skill defines it). Poison-pill
   deliberately skips the dirty/unpushed safety gate — the tab chose to die —
   which is safe only because everything you did is pushed and merged by then. It
@@ -113,7 +113,7 @@ in the foreground, exit 2, which is the report-and-stop in
   *squash*-merges, so your commits are never ancestors of main's squash and
   `origin/main..HEAD` stays non-empty forever after a perfectly good merge —
   a gate that can never go green is a gate that gets ignored. After a real
-  `njord pr-merge` both checks are empty, which is why they are cheap, and why
+  `ghx pr-merge` both checks are empty, which is why they are cheap, and why
   a non-empty one means something went wrong upstream rather than that the gate
   is noise. Fix that first. **Gru's branch was never pushed**, so
   `origin/<branch>` does not exist and that check fails with
@@ -279,14 +279,14 @@ with it, the reported path is the one you named.
 Run it with no behavior-changing flags. `--json` is not one of them — it only
 selects the output shape, and it is the sole way to read `armed:true` (below),
 so it is part of the command, not an embellishment. No `--delete-branch`: the
-branch is merged and harmless, and `njord cleanup --pr <n>` deletes it later
+branch is merged and harmless, and `ghx cleanup --pr <n>` deletes it later
 (Gru's step 6). The worktree is the one thing that is genuinely yours — your
 disk, your session, and you are the one who knows you are finished — so it goes
 with you.
 
 Gru is the one exception, and passes `--delete-branch`:
 `hermod poison-pill --delete-branch --json`. Its branch has no PR, so no
-`njord cleanup` deletes it, and on Codex a leftover branch refuses the next
+`ghx cleanup` deletes it, and on Codex a leftover branch refuses the next
 Gru on the same launch id. Gru's form of the unpushed check proves first that
 the branch holds no commit a remote does not have.
 
@@ -340,7 +340,7 @@ stop and leave everything in place. If it arms and the teardown comes back
   a tmux server's last pane too, where the close takes the server down: the
   teardown still came back `completed`, worktree removed.
 
-A `partial` does not heal itself. `njord cleanup --pr <n>` (Gru's step 6)
+A `partial` does not heal itself. `ghx cleanup --pr <n>` (Gru's step 6)
 removes the worktree it left, once no session stands in it. Gru's own
 `partial` has no later step 6: [the launch doc](launch.md#6-after-the-launch)
 removes the worktree and the branch it left before the next Gru on the same
