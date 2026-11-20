@@ -1,4 +1,7 @@
 {
   "requireTicketScope": true,
-  "ticketKey": "STARK"
+  "ticketKey": "STARK",
+  "merge": {
+    "allowSkippedChecks": true
+  }
 }
