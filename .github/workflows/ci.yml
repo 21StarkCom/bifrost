@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read # dorny/paths-filter reads the PR's changed-files list
 
 # Opt into Node 24 for JS actions ahead of the Sep 2026 forced cutover so
 # Node-20 deprecation warnings stop and any incompatibility surfaces now —
@@ -30,13 +31,35 @@ env:
 # what actually retires the measured failure — every push to `main` lands in its
 # own group, so no merge can ever queue behind (and therefore cancel) another
 # merge's run. The PR half stays keyed on the PR number so a PR's runs still
-# serialize; a superseded pending run there is on a sha that is no longer the
-# head, which no required context is read against.
+# serialize; a superseded run there is on a sha that is no longer the head,
+# which no required context is read against. So a new push to a PR cancels the
+# PR's older run, even one in progress: nothing ever reads its result.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# `actionlint` and `typecheck` run only when a file they read changed. The
+# ruleset requires both names, so they skip with `if:`: a skipped job reports
+# success. `test` reads skills, standards, docs and data across the repo, so it
+# runs on each change.
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      workflows: ${{ steps.filter.outputs.workflows }}
+      tools: ${{ steps.filter.outputs.tools }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          filters: |
+            workflows:
+              - '.github/workflows/**'
+            tools:
+              - 'tools/**'
+              - '.github/workflows/ci.yml'
+
   secrets:
     name: secret scan (tree)
     runs-on: ubuntu-latest
@@ -151,6 +174,8 @@ jobs:
 
   actionlint:
     name: actionlint
+    needs: changes
+    if: needs.changes.outputs.workflows == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -194,6 +219,8 @@ jobs:
         run: npm test
 
   typecheck:
+    needs: changes
+    if: needs.changes.outputs.tools == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
