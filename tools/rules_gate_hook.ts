@@ -6,8 +6,7 @@
  *
  * Shipped by the stark-ops plugin: its marketplace.json entry declares this hook
  * inline on PreToolUse through ${CLAUDE_PLUGIN_ROOT}, with an `if` gate that
- * starts node only for a Bash call that runs `ghx pr-merge` or `njord pr-merge`
- * (the tap keeps `njord` as a link to `ghx`, so both names run the same merge).
+ * starts node only for a Bash call that runs `ghx pr-merge`.
  *
  * For each `ghx pr-merge` (or `njord pr-merge`) in the command, the hook:
  *   1. finds the PR: the number in the command, else the PR of the branch
