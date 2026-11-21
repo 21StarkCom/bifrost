@@ -95,7 +95,7 @@ spaceOwner -> folkvang.backend 'the switch' {
 - A step with no `description` is a warning: its panel shows `<from> → <to> · <title>`. Give each step of a new flow
   a description. Keep a current flow as it is, and accept the warning.
 - The diagram draws one wire for each pair of boxes. Its label shows the title of the active step, and a wire of one
-  step shows its title always. Each other wire shows only the numbers of its steps. A label with no clear place
+  step shows its title always. Each other wire shows only the numbers of its steps: three, then `+n`. A label with no clear place
   between two boxes drops its title and keeps its numbers.
 - Change the words of a step in the view, never in the tour file. A small fix of a view is not a design change: edit
   `model/` by the skill's small-fix rule.
@@ -193,12 +193,14 @@ The MCP tool and the CLI run the same build: use either one. Huginn is needed on
      --virtual-time-budget=6000 --screenshot=/tmp/step4.png 'file:///tmp/x/tours/flowPublish.tour.html?s=flow&step=4'
    ```
 
-   A diagram wider than its frame scrolls sideways, so a screenshot shows only its left part. Use a wider window.
+   A diagram wider than its frame scrolls sideways, so a screenshot shows only its left part. Use a wider window:
+   six boxes in one row need about 1920 px.
 7. **Check the words** of the flow by the flow checks of [review.md](review.md#flow-checks). The page shows the
    title of a step on its wire only while the step is active, so P4 and P5 of the picture checks do not apply.
-8. **Sort each fault.** Unclear words, a wrong box, a missing step, or text cut short on a box (P6) is a fix of the
-   model in `model/`. A fault of the page itself, such as a step number that covers a box title, is a bug of
-   floorplan: tell the operator, and do not change the model to hide it.
+8. **Sort each fault.** Unclear words, a wrong box or a missing step is a fix of the model in `model/`. A fault of
+   the page itself is a bug of floorplan: tell the operator, and do not change the model to hide it. Two such bugs
+   are a step number that covers a box title, and text cut short on a box that `generated/png/<view>.png` shows in
+   full.
 
 ## Review in the studio
 
