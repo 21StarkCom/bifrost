@@ -15,7 +15,7 @@ screens, the choices, before and after. Nobody places a box or a wire by hand.
 | -------------------------------- | -------------------------------------------------------------------------------------------------- |
 | A spec of a change               | A tour of the flow that the spec adds, with screens of the app. Add `asis:` and `proposal:` when the change replaces a flow. |
 | A suggestion in a thread         | A tour of the suggested flow, with `proposal:`, so the operator reads it step by step before the accept. |
-| How a flow of the code works now | `floorplan tour new --view <id>`, then `floorplan tour build`. It needs no new words.               |
+| How a flow of the code works now | `floorplan tour new --view <id>`, then `floorplan tour build`. It needs no screens and no new words. Outside the project, write the tour file by hand ([below](#the-tour-file)). |
 
 A tour shows one dynamic view. The structure of a system is a view, not a tour ([views.md](views.md)). A process of
 decisions is a flow of the flow kit ([flow-kit.md](flow-kit.md)).
@@ -24,6 +24,10 @@ decisions is a flow of the flow kit ([flow-kit.md](flow-kit.md)).
 
 Keep it at `tours/<name>.tour.yaml` of the project folder, the folder of `floorplan.config.json`. The studio serves
 only the tour files there, and a thread can only name a tour there. `<name>` is the name of the tour.
+
+A tour file in another folder builds too, when the project must not change (a scratch folder, a review of another
+team's repo). Write it by hand, with `model:` relative to the tour file or absolute. The page then opens from disk
+and on Folkvang, but not in the studio.
 
 ```yaml
 title: Plugins in each Space
@@ -66,7 +70,7 @@ The flow is a `dynamic view` in `model/` ([flows.md](flows.md)). Each step gives
 
 | Of the step                         | On the page                             |
 | ----------------------------------- | --------------------------------------- |
-| `title`, the label of the step      | the label on the wire                   |
+| `title`, the label of the step      | the label on the wire of the active step, and the step panel |
 | `description`                       | the sentence of the step panel          |
 | the first fenced code block of `notes` | the call                             |
 | the rest of `notes`                 | the why                                 |
@@ -88,7 +92,8 @@ spaceOwner -> folkvang.backend 'the switch' {
 
 - A step with no `description` is a warning: its panel shows `<from> → <to> · <title>`. Give each step of a new flow
   a description. Keep a current flow as it is, and accept the warning.
-- The diagram draws one wire for each pair of boxes. Its label shows the active step, else the numbers of its steps.
+- The diagram draws one wire for each pair of boxes. Its label shows the title of the active step. A wire of one
+  step shows its title always. Each other wire shows only the numbers of its steps.
 - Change the words of a step in the view, never in the tour file. A small fix of a view is not a design change: edit
   `model/` by the skill's small-fix rule.
 - The tour draws the diagram, also for a view with `variant sequence`.
@@ -153,27 +158,33 @@ tool.
 | Step                        | MCP tool                         | CLI                                              |
 | --------------------------- | -------------------------------- | ------------------------------------------------ |
 | Write a tour file of a view | none                             | `floorplan tour new --view <id> [dir]`           |
-| Build the page              | `tour_build` {dir, tour, out?}   | `floorplan tour build <file> [--out <path>] [--json]` |
+| Build the page              | `tour_build` {tour, dir?, out?}  | `floorplan tour build <file> [--out <path>] [--json]` |
 
-1. **Start the file.** `floorplan tour new --view <id> <dir>` writes `<dir>/tours/<id>.tour.yaml` with `title`,
-   `model: ".."` and `flow`. It refuses to write over a file. Rename the file for a tour of a spec.
-2. **Add** the roles, the screens, the choices, before and after.
-3. **Build.** The page is `<name>.tour.html` beside the tour file, or at `out`. `tour_build` and `--json` return
-   `{file, bytes, flow, screens, warnings, errors}`. `flow` holds `view`, `steps`, `boxes`, `proposal`, `asis` and
-   `marks`, the counts of New, Changed and Removed steps and of new boxes.
+1. **Start the file.** `floorplan tour new --view <id> <dir>` writes `<dir>/tours/<id>.tour.yaml` with `title` (the
+   title of the view), `model: ".."` and `flow`. It refuses to write over a file, and it writes only into the
+   project. Rename the file for a tour of a spec. For a tour file outside the project, write the same three keys by
+   hand.
+2. **Add** the roles, the screens, the choices, before and after. A tour of a flow that exists can stop at step 1.
+3. **Build.** `tour` is the path of the tour file. Its `model:` names the project. `dir` only resolves a relative
+   `tour` or `out`. The page is `<name>.tour.html` beside the tour file, or at `out`. `tour_build` and `--json`
+   return `{file, bytes, flow, screens, warnings, errors}`. `flow` holds `view`, `steps`, `boxes`, `proposal`, `asis`
+   and `marks`, the counts of New, Changed and Removed steps and of new boxes.
 4. **Fix each stop.** The build writes no file, and exits 1, on:
    - a key that a tour file does not allow, or a missing required key;
    - a project, a view or a proposal that does not exist, or a `flow` or `asis` that is not a dynamic view;
    - an error of the model;
    - a screen file or a `css` file that is not on disk, a `role` that `roles` does not name, or two screens with one id.
 5. **Read each warning:** a step with no description, a screen with no notes.
-6. **Look at the page.** Open it in Huginn, or take a headless Chrome screenshot, and look at each state. The URL
-   holds the state: `s` (the screen), `step` (from 1), `m` (`asis` or `tobe`), and each key of a part.
-   - `<page>?s=flow&step=4` opens step 4 of the flow.
-   - `<page>?s=flow&m=asis` opens the As-is flow.
-   - `<page>?s=settings&p=on` opens the screen `settings` with the key `p` at `on`.
-7. **Check the diagram** by the picture checks of [review.md](review.md#picture-checks). A label on a box or a step
-   with unclear words is a fix of the view, not of the page.
+6. **Look at the page.** Open it in Huginn, or take a headless Chrome screenshot. The URL holds the state: `s` (the
+   screen), `step` (from 1), `m` (`asis` or `tobe`), and each key of a part. Look at these states:
+   - step 1, the first step of each `alt` branch, and the last step: `<page>?s=flow&step=4`;
+   - with `asis:`, the As-is and the To-be: `<page>?s=flow&m=asis`;
+   - each screen, and each state that its notes name: `<page>?s=settings&p=on`.
+7. **Check the words** of the flow by the flow checks of [review.md](review.md#flow-checks). The page shows the
+   title of a step on its wire only while the step is active, so the picture checks of a rendered PNG do not apply.
+8. **Sort each fault.** Unclear words, a wrong box or a missing step is a fix of the view in `model/`. A fault of the
+   page itself, such as a step number that covers a box title, is a bug of floorplan: tell the operator, and do not
+   change the model to hide it.
 
 ## Review in the studio
 
@@ -193,7 +204,9 @@ tool.
 
 ## Share and ship
 
-- **Folkvang:** `folkvang_publish` the one page. It needs no other file. Each publish makes a new version that never
-  changes, so publish to a private project unless the operator names another.
+- **Folkvang:** publish the one page with `folkvang_publish`. It needs no other file. The tool reads files by their
+  path in the session's git worktree, so copy a page from another folder into the worktree, publish it, and delete
+  the copy. Each publish makes a new version that never changes: publish to a private project unless the operator
+  names another.
 - **The repo:** commit the tour file, its screen files and its CSS with the model change, in the PR of step 5 of the
   skill. The page is a build output: build it again from them.

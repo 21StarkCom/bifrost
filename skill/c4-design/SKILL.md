@@ -97,7 +97,7 @@ Each step names the `floorplan` MCP tool, then the CLI command that does the sam
 | Close a thread        | `thread_resolve` {dir, thread, text?} | none                                               |
 | 4b. Ask on another page | Huginn `annotate`               | `slp huginn annotate <id> --tab <id> --input …`       |
 | 5. Accept             | `accept` {name, dir}              | `floorplan accept <name> [dir]`                        |
-| Build a tour          | `tour_build` {dir, tour, out?}    | `floorplan tour build <file> [--out <path>]` ([tours](references/tours.md)) |
+| Build a tour          | `tour_build` {tour (its path), out?} | `floorplan tour build <file> [--out <path>]` ([tours](references/tours.md)) |
 | End the studio        | `studio_stop` {pid}               | `kill <pid>`                                           |
 | Drop the proposal     | `discard` {name, dir}             | `floorplan discard <name> [dir]`                       |
 
