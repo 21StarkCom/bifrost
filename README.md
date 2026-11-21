@@ -84,14 +84,14 @@ Codex reads the same skills from a clone: idavoll links them in at session start
 
 | Skill | What it does |
 |---|---|
-| [`/stark-author`](skill/stark-author/SKILL.md) | A human-gated spec and task DAG in one session: recon, a plain-language interview, one advisory pass, your sign-off, then a draft PR. |
+| [`/stark-author`](skill/stark-author/SKILL.md) | A human-gated spec and task DAG in one session: recon, a plain-language interview, one advisory pass, your sign-off, then a spec PR that it merges, and the epic's tickets. |
 | [`/stark-ticket`](skill/stark-ticket/SKILL.md) | A short checklist for a ticket someone else can pick up: a twin check, alfred's headings, prose in ASD-STE100 Simplified Technical English, no guessed claims. Loads on its own before `alfred task start`/`task new`. |
 
 ### stark-implement: autonomous build
 
 | Skill | What it does |
 |---|---|
-| [`/stark-build`](skill/stark-build/SKILL.md) | Implements an accepted spec on a draft PR it opens first: one fresh headless session per task, gated by hooks the agent cannot edit, one commit per green task, one cross-vendor advisory review and exactly one fix round. The PR is marked ready only when everything is green and no medium+ finding is left open. |
+| [`/stark-build`](skill/stark-build/SKILL.md) | Implements an accepted spec on a draft PR it opens first: one fresh headless session per task, gated by hooks the agent cannot edit, one commit per green task, one cross-vendor advisory review and exactly one fix round. The PR is marked ready and merged only when everything is green and no medium+ finding is left open. |
 
 The pipeline has two stages: you gate the spec at `/stark-author`, and checks gate the code in `/stark-build`. There is no LLM-reviewing-LLM loop between them, by design: the loops that used to sit there burned tokens without converging.
 
@@ -111,9 +111,9 @@ The pipeline has two stages: you gate the spec at `/stark-author`, and checks ga
 |---|---|
 | [`/stark-session`](skill/stark-session/SKILL.md) | `start`: context, git state, health checks, a briefing. `end`: tests, merge, push. |
 | [`/stark-handover`](skill/stark-handover/SKILL.md) | Saves and resumes a numbered handover chain per task, so a new session needs no recap. |
-| [`/stark-release`](skill/stark-release/SKILL.md) | CHANGELOG review → version bump → tag → GitHub Release. |
+| [`/stark-release`](skill/stark-release/SKILL.md) | CHANGELOG review → version bump in a release PR → tag on the merge commit → GitHub Release. |
 | [`/stark-gha-cost`](skill/stark-gha-cost/SKILL.md) | Diagnoses and cuts GitHub Actions and Advanced Security billing for an org or enterprise. |
-| [`/stark-bury`](skill/stark-bury/SKILL.md) | Retires code into the nastrond graveyard: bury before delete, and every destructive step waits for the operator. |
+| [`/stark-bury`](skill/stark-bury/SKILL.md) | Retires code into the nastrond graveyard: bury before delete, and every step that cannot be undone waits for the operator. |
 | [`/stark-memory`](skill/stark-memory/SKILL.md) | Audits and tidies Claude Code auto-memory under its load and recall caps. Dry-run by default; `--apply` writes. |
 | [`/gru`](skill/gru/SKILL.md) | Drives an epic or a list of tickets to done, one Minion per ticket, and confirms each `done` from the merged PR and the board. A Gru launched with a muninn leader reports to odin's chief in place of the operator. |
 | [`/super-gru`](skill/super-gru/SKILL.md) | Drives a list of epics to done with one Gru for each epic, one after another or a few at once, as the muninn leader of each Gru. |
@@ -141,9 +141,9 @@ The weekly agent-doc sweep runs on the devbox, not as a Mac job. It triages the 
 |---|---|
 | [`/stark-init-docs`](skill/stark-init-docs/SKILL.md) | Scaffolds a repo's docs layout (`docs/adr/`, `docs/specs/`, `docs/retros/`). Modes: template, backfill, upgrade, clean. |
 | [`/stark-adr`](skill/stark-adr/SKILL.md) | Records and supersedes Architecture Decision Records under `docs/adr/`, through `brain adr`. |
-| [`/stark-rules-optimizer`](skill/stark-rules-optimizer/SKILL.md) | Reviews one repo's agent files, or the memory notes, clause by clause against the agent-doc playbook, and writes a redline for each YELLOW and RED clause. Read-only by default; `--apply` stops at a draft PR, or fixes memory in place after a backup. |
+| [`/stark-rules-optimizer`](skill/stark-rules-optimizer/SKILL.md) | Reviews one repo's agent files, or the memory notes, clause by clause against the agent-doc playbook, and writes a redline for each YELLOW and RED clause. Read-only by default; `--apply` fixes the repo through a PR that it merges, or fixes memory in place after a backup. |
 | [`/stark-agent-docs`](skill/stark-agent-docs/SKILL.md) | How to write anything another agent reads, and where each line belongs: branch protection, a hook or a permission, CLAUDE.md, a `paths:` rule, a skill, memory, or nowhere. Loads on its own when an agent edits an instruction file, a skill or a doc they point to. |
-| [`/stark-persona`](skill/stark-persona/SKILL.md) | Assigns the session a character voice by weighted random selection. |
+| [`/stark-persona`](skill/stark-persona/SKILL.md) | Picks a persona name for the session by weighted random selection; the voice of the session does not change. |
 
 ### stark-write: long-form writing
 
