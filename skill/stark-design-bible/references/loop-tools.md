@@ -25,8 +25,9 @@ later runs.
 
 ## `stark-eye`
 
-- Run `stark-eye` when it is on your `PATH`. Else run
-  `npx -p @21starkcom/tools -p playwright stark-eye`.
+- Run `stark-eye` 0.10.0 or newer (`@21starkcom/tools`) when it is on your
+  `PATH`. Else run `npx -p @21starkcom/tools -p playwright stark-eye`. An
+  older `stark-eye` has no `measure --surface`.
 - The package is on GitHub Packages. `npx` needs the scope line and a token
   with `read:packages` in `~/.npmrc`, as the "Install" section of draupnir's
   README says. When it still fails, print `Missing: stark-eye` and the
@@ -77,7 +78,7 @@ later runs.
 ```sh
 stark-eye flow --tasks <tasks.json> --out <run>/eye/<step>/flow
 stark-eye shoot --tasks <run>/open.json --out <run>/eye/<step>/shoot
-stark-eye measure <run>/eye/<step>/shoot
+stark-eye measure <run>/eye/<step>/shoot --surface <surface>
 stark-eye walk --tasks <run>/open-weekly.json --persona <p> --user "<user>" --out <run>/eye/<step>/walk-<p>
 stark-eye sheet <run>/eye/<step>/shoot
 ```
@@ -89,18 +90,17 @@ stark-eye sheet <run>/eye/<step>/shoot
 
 ## How to read `measure`
 
-- Judge only the floors of the surface: the lines that name it, such as
-  `in popup`. A floor of the shell's own page (its tab strip, its toolbar
-  button, its web page) is not the surface's. Leave it, and say so once
-  under Floors.
-- The `unclipped` floor fails each text with an ellipsis. The `visible`
-  floor can fail the same text, when the centre of its cut end lies under
-  the next element. When the playbook asks for an ellipsis, as on a long
-  label or chat title, keep it, and check its control: the full text must be
-  in a `title` (the tooltip) and in the accessible name.
-  - When both hold, list each such line under Floors as `ellipsis: accepted`.
-  - When one does not, the line is a fail: add the missing `title` or name.
-  - Each other `unclipped` or `visible` fail is a fail.
+- `--surface <surface>` (for the popup, `--surface popup`) judges the floors
+  only in the surface. The shell's own page (its tab strip, its toolbar
+  button, its web page) is not the surface's, and `measure` leaves it out.
+- An ellipsis on one line passes `unclipped` as a `PASS ellipsis` line when
+  its control's `title` (the tooltip) and accessible name hold the full
+  text. `FAIL unclipped … ellipsis with no tooltip` or `… with no full name`
+  is a fail: add the missing `title` or name.
+- The `visible` floor can fail the same ellipsis, when the centre of its cut
+  end lies under the next element. When that text passes `unclipped`, list
+  its `visible` line under Floors as `ellipsis: accepted`. Each other fail is
+  a fail.
 - The diagnostics only advise. Give their numbers to the critic.
 
 ## The agent users
