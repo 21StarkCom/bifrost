@@ -76,7 +76,8 @@ pointers. It exits 3 when a file is RED. `--fleet` reads each repo at
 `origin/HEAD` after a `git fetch`; it reads a repo that it cannot fetch from
 the checkout, and marks that repo stale. `--fleet` leaves out each repo that
 GitHub marks archived. `--json --brief` prints the totals, the flag counts of
-each repo and each RED clause, in under 45,000 chars.
+each repo and each RED clause. It drops the last RED clauses to stay under
+45,000 chars.
 
 - A pointer is a link, an `@import`, or a code path to a Markdown file. A
   path to code needs the review.

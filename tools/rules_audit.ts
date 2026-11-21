@@ -34,7 +34,8 @@
  * `gh api graphql` call for the archived repos of `21StarkCom`; when the call
  * fails, it warns on stderr and reads every repo. `--brief` (with `--json`)
  * prints the totals, one row of flag counts for each repo and each RED
- * clause, in under 45,000 chars: one odin tool answer.
+ * clause; it drops the last RED clauses to stay under 45,000 chars, one odin
+ * tool answer. The rows and the stale list are never cut.
  *
  * `--fleet` alone reads each repo at `origin/HEAD`, not the disk: it runs
  * `git fetch origin`, then lists the tree with `git ls-tree` and reads it
@@ -100,8 +101,9 @@ none, the current repo.
   --brief                 with --json: print only the totals, one row of GREEN,
                           YELLOW and RED counts for each repo or folder, each
                           RED clause (path, line, type, text, detail) and the
-                          stale repos, in under 45,000 chars; when the clauses
-                          do not fit, the last ones go and "more" counts them
+                          stale repos. To stay under 45,000 chars, it drops
+                          the last RED clauses, and "more" counts them; it
+                          never cuts the rows or the stale repos
   --notify                also send a summary with heimdall send: the RED
                           files first, then the files over budget; a triage
                           that fails sends its error
@@ -628,7 +630,7 @@ class UsageError extends Error {}
 
 /** The `owner/name` of a GitHub remote URL, in lower case, or null. */
 export function githubRepoOf(url: string): string | null {
-  const m = /github\.com[:/]+([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/i.exec(url.trim());
+  const m = /^(?:[a-z][a-z+]*:\/\/)?(?:[^@/\s]+@)?github\.com[:/]+([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/i.exec(url.trim());
   return m ? `${m[1]}/${m[2]}`.toLowerCase() : null;
 }
 
@@ -644,7 +646,7 @@ export async function archivedRepos(org: string): Promise<{ repos: Set<string> }
     ], { timeoutMs: ARCHIVED_TIMEOUT_MS, maxBuffer: 1024 * 1024 });
     if (r.status !== 0) {
       const timedOut = (r.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT";
-      return { reason: timedOut ? `gh timed out after ${ARCHIVED_TIMEOUT_MS / 1000}s` : firstLine(r.stderr) || r.error?.message || `gh exit ${r.status}` };
+      return { reason: timedOut ? `gh timed out after ${ARCHIVED_TIMEOUT_MS / 1000}s` : firstLine(r.stderr) || r.error?.message || (r.signal ? `gh killed by ${r.signal}` : `gh exit ${r.status}`) };
     }
     return { repos: new Set(r.stdout.split("\n").map((l) => l.trim().toLowerCase()).filter(Boolean)) };
   } catch (e) {

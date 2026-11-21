@@ -1955,9 +1955,10 @@ export function formatTriage(r: TriageReport): string {
   return out.join("\n");
 }
 
-/** The longest `--brief` output: odin cuts a tool's answer at 46,000 chars,
- *  so this leaves room for a newline and a `notified:` line. */
-export const BRIEF_MAX_CHARS = 45_000;
+/** The longest `--brief` output: odin cuts a tool's answer at 45,000 chars
+ *  (`ANSWER_CHARS`), so this leaves room for the newline and a line of the
+ *  caller, as `--since` does. */
+export const BRIEF_MAX_CHARS = 44_800;
 /** The longest `text` or `detail` of a RED clause in the brief. */
 export const BRIEF_FIELD_CHARS = 300;
 

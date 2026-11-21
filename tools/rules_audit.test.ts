@@ -478,7 +478,7 @@ test("githubRepoOf reads owner/name from each GitHub remote form, in lower case;
     "git@github.com:21StarkCom/Omega.git", "https://github.com/21StarkCom/omega", "https://github.com/21StarkCom/omega.git/",
     "ssh://git@github.com/21StarkCom/omega.git", "https://x-access-token@github.com/21StarkCom/omega.git\n",
   ]) assert.equal(githubRepoOf(url), "21starkcom/omega", url);
-  for (const url of ["", "/tmp/origins/omega.git", "git@gitlab.com:21StarkCom/omega.git"]) assert.equal(githubRepoOf(url), null, url);
+  for (const url of ["", "/tmp/origins/omega.git", "git@gitlab.com:21StarkCom/omega.git", "https://notgithub.com/21StarkCom/omega", "https://gitlab.com/m/github.com/21StarkCom/omega"]) assert.equal(githubRepoOf(url), null, url);
 });
 
 test("--playbook --brief: the totals of the full report, one row per repo or folder, and each RED clause", () => {
