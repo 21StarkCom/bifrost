@@ -15,6 +15,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=531 runId=531 sha=7de58849 -->
+- The rules gate hook now gates `ghx pr-merge` only, because the tap no longer links `njord` to `ghx`; stark-ops goes to 0.68.0.
 <!-- idun:pr-merge pr=529 runId=529 sha=68220e20 -->
 - The stark-ops plugin (0.67.0) now starts the agent-doc merge gate only for `ghx pr-merge`, not for `njord pr-merge`.
 <!-- idun:pr-merge pr=528 runId=528 sha=03a8d532 -->
