@@ -10,7 +10,7 @@
  * block as "Stop hook reported a problem", and context as "Stop hook says:",
  * and both keep the agent going for one more turn. It asks only
  * when the user's Claude config names an MCP server called `librarian`, and
- * never after the session armed `hermod poison-pill` (a Gru, Minion or Agnes
+ * never after the session armed `muxctl poison-pill` (a Gru, Minion or Agnes
  * that stands down): its reaper quits the session and would cut the calls off.
  *
  * Fail-open by design: every fault (no transcript, a line that does not parse,
@@ -48,16 +48,20 @@ export function threshold(env: NodeJS.ProcessEnv = process.env): number {
   return DEFAULT_TURNS;
 }
 
-/** The launchd label prefix that `hermod poison-pill` gives each reaper it arms on macOS. */
+/**
+ * The launchd label prefix that `muxctl poison-pill` gives each reaper it arms
+ * on macOS. mux-control kept hermod's ids when it renamed the command
+ * (0.53.0), so this prefix also matches a reaper that an old `hermod` armed.
+ */
 export const PILL_LABEL = "com.21stark.hermod.poison-pill.";
-/** The systemd unit prefix that `hermod poison-pill` gives each reaper it arms on Linux. */
+/** The systemd unit prefix that `muxctl poison-pill` (or an old `hermod`) gives each reaper it arms on Linux. */
 export const PILL_UNIT = "hermod-poison-pill-";
 
 /** What the hook reads from a transcript. */
 export interface TranscriptScan {
   /** The main agent's model turns. */
   turns: number;
-  /** True when the main agent armed `hermod poison-pill`: its reaper quits the session within seconds. */
+  /** True when the main agent armed `muxctl poison-pill`: its reaper quits the session within seconds. */
   armed: boolean;
 }
 
@@ -113,7 +117,7 @@ function resultText(block: unknown): string {
 
 /**
  * True for tool output whose last line is the ack of an armed pill:
- * `hermod poison-pill --json` prints one JSON object with `"armed":true` and
+ * `muxctl poison-pill --json` prints one JSON object with `"armed":true` and
  * the reaper's `label` (a launchd label on macOS, a systemd unit on Linux). A
  * dry run prints neither. Tool output is not transcript structure, so a last
  * line that does not parse is no arm, not a fault.

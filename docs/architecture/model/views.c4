@@ -17,11 +17,14 @@ views {
       title 'binds, files and closes the tickets with'
       technology ''
     }
-    include bifrost -> hermod with {
+    include bifrost -> muxControl with {
       title 'opens, messages and closes the worker tabs with'
       technology ''
     }
     include bifrost -> idun with {
+      technology ''
+    }
+    include bifrost -> ghx with {
       technology ''
     }
     include bifrost -> urd with {
@@ -73,8 +76,9 @@ views {
       bifrost.questionMods,
       bifrost.progressFiles,
       alfred,
-      hermod,
+      muxControl,
       idun,
+      ghx,
       urd,
       muninn,
       frigg,

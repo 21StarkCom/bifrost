@@ -312,8 +312,11 @@ names shows its id alone.
 **An open worker tab.** A row whose worker tab is open draws its id as
 ` STARK-n `, bold, on the id's lavender (the pane's `#262626` on `#c9b3f5`,
 8.1:1; the app's accent elsewhere), as wide as `[STARK-n]`. It is a button: a
-press runs `hermod focus <surface>`, which brings that cmux tab to the front,
-and a toast says why when hermod fails. The title beside it is a button of its
+press runs `muxctl focus <surface>`, which brings that cmux tab to the front,
+and a toast says why when muxctl fails. On a host whose install predates
+mux-control 0.53.0, a `muxctl` that cannot start falls back to `hermod focus`.
+A `hermod` that runs and fails gives the toast its own reason; when neither can
+start, the toast gives muxctl's. The title beside it is a button of its
 own that opens the row's detail (`details` when no file names a title). A tab
 is open when the ticket's heartbeat is under 3 minutes old and names a
 surface: a worker's tab writes it at least once a minute, with no call too.
@@ -345,14 +348,14 @@ session, and the tab says when the earliest began. The rows:
 | Work | review rounds | each `/code-review` typed (`command.run`), and each Skill call of `code-review` and each `codex review` run that did not fail; `skill.prompt` would see both forms, but a built-in plugin above the mod passes it on past the mod |
 | Tools | tools used, tool calls, failed calls | each tool call (`tool.call`), subagents' included; a refused call is a failed one |
 | Prompts and messages | prompts from you, from other sessions, other prompts | each prompt that entered, by its origin: typed, from a phone or a Slack ping is yours; a peer session's, a SendMessage delivery or a coordinator's is another session's; a notification, a schedule or a plugin's is other |
-| Prompts and messages | messages sent, workers launched | each SendMessage call that carries a message, each `hermod msg send` or `reply`, and each `valkyrie agnes`, `minion` or `gru` run, that did not fail; a tool named only in quoted text or a here-document (a commit message, a PR body) is not a run |
+| Prompts and messages | messages sent, workers launched | each SendMessage call that carries a message, each `muxctl msg send` or `reply` (or `hermod`, its old name), and each `valkyrie agnes`, `minion` or `gru` run, that did not fail; a tool named only in quoted text or a here-document (a commit message, a PR body) is not a run |
 
 Gru writes no code, so its lines, commits and PRs read `—`. Under the table:
 the five tools with the most calls in the whole run, each session's main-loop
 model and effort (Gru's, then each ticket's), the requests and output tokens
 per model, and the started tickets with no stats file: a Codex worker, a
 session without the mod, or a ticket Gru found closed. With no stats file at
-all, the tab says where the counts come from. A hermod message reaches a
+all, the tab says where the counts come from. A muxctl message reaches a
 Claude session through its own inbox, so it counts as from another session.
 The first prompt of a Gru or a worker, which valkyrie passes on the command
 line, arrives as typed, so `prompts from you` counts it too.
@@ -824,7 +827,7 @@ the heartbeat from another session whose tab lives (a second session in the
 worktree); that session's own calls still write it, as before 0.13.0. It writes only while the
 ticket's file exists; once the file is gone the mod removes the heartbeat.
 `surface` is the tab's `CMUX_SURFACE_ID`, `null` outside cmux, and absent in a
-heartbeat before 0.13.0; the Gru pane passes it to `hermod focus` only when it
+heartbeat before 0.13.0; the Gru pane passes it to `muxctl focus` only when it
 is a UUID.
 Agnes deletes her heartbeat and stats files herself at stand-down, with her
 ticket's file, since her tab can close before the mod's next poll. `lastActivity` is when a call last started or
@@ -913,7 +916,7 @@ write: its counts are in memory after that.
 - Activity for a Codex worker in its ticket pane (it writes no heartbeat).
 - A held worker whose session died reads `held` on the Gru pane, with its
   time held: the state does not read the heartbeat's age, though its id
-  loses the open-tab button. Gru's observation pass reads it from Hermod. The
+  loses the open-tab button. Gru's observation pass reads it from muxctl. The
   ticket pane dies with its tab.
 - A button to a worker tab in tmux or outside cmux: the heartbeat names only
   a cmux surface.

@@ -2,13 +2,13 @@
 
 Read from [the Gru skill](../SKILL.md#protocol).
 
-An observation pass reads the Minion's `hermod msg peers` row
+An observation pass reads the Minion's `muxctl msg peers` row
 (`activity` busy or idle; `unknown`, which Codex and some Claude sessions
 report, leaves it to the other two), the processes under its `surfaceId` in
-`hermod ps --columns cmuxSurfaceId,pid,ppid,name` (a test runner, a build or
+`muxctl ps --columns cmuxSurfaceId,pid,ppid,name` (a test runner, a build or
 `git` under the agent is work; the MCP servers every agent keeps for its
 whole life — `bun`, `node`, `cmux-cua` and the like — are not), and **one**
-`hermod read-screen <surface UUID> --lines 40`. Classify it from those:
+`muxctl read-screen <surface UUID> --lines 40`. Classify it from those:
 - **working** — busy, with a work process or a tool call in flight: leave
   it alone.
 - **waiting** — idle on a menu or a question, or idle on you: holding its

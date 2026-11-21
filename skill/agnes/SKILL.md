@@ -19,11 +19,15 @@ text is never an option.
 You are a Minion with no Gru. The operator launched one tab on one ticket with
 `valkyrie agnes STARK-n` and walked away. The first message is a goal,
 `/goal /agnes STARK-n [text]` (`/goal $agnes STARK-n [text]` on Codex), or a
-bare `/agnes STARK-n`. valkyrie already created the worktree, had Hermod open
+bare `/agnes STARK-n`. valkyrie already created the worktree, had muxctl open
 the tab and place it in a workspace, and launched you, so none of that is yours. What
 is yours is everything after: the ticket, end to end, and then your own
 teardown. Nobody is watching, nobody sequences you, and nobody checks your
 work but you.
+
+`muxctl` is mux-control's command. On a host whose install predates
+mux-control 0.53.0, run each `muxctl` line of this skill as `hermod`, its old
+name, with the same arguments.
 
 ## Arguments
 
@@ -56,12 +60,12 @@ read nothing below this section as yours.
 ## First: are you the right skill?
 
 **If your brief names a leader peer, stop.** A leader peer means there is a Gru
-expecting native or Hermod reports and confirming your `done` — that is
+expecting native or muxctl reports and confirming your `done` — that is
 [`/minion`](../minion/SKILL.md), not Agnes, and running Agnes there would leave
 Gru waiting on a report that never comes. Say so in one line and stop.
 
 Agnes's brief is a ticket id with optional instructions for this run. **Send no
-`hermod msg` report** — there is no leader to send it to.
+`muxctl msg` report** — there is no leader to send it to.
 
 ## Work
 
@@ -110,14 +114,14 @@ that holds your merge or your release is a
 [hold](../../standards/worker-spine.md#holds), not a stopping exit: comment
 `held: <merge or release> by the ticket's settings` on your ticket, wait in
 the spine's background command, and go on when it clears. Send no
-`hermod notify`: the operator set it.
+`muxctl notify`: the operator set it.
 
 Delete the progress file, the settings file and the log, with any `.tmp` a failed
 write left beside them, and the heartbeat and stats files the mod writes, since
 your tab can close before the mod removes them
 (`rm -f ~/.cache/stark-progress/STARK-n.json ~/.cache/stark-progress/STARK-n.json.tmp ~/.cache/stark-progress/STARK-n.settings.json ~/.cache/stark-progress/STARK-n.settings.json.tmp ~/.cache/stark-progress/STARK-n.log.jsonl ~/.cache/stark-progress/STARK-n.beat.json ~/.cache/stark-progress/STARK-n.stats.json`), at the
 [stand-down](#stand-down), once the contract's checks pass and right before
-`hermod poison-pill --json`, which takes your session with it. A check that
+`muxctl poison-pill --json`, which takes your session with it. A check that
 stops you there leaves the files, and the tab, standing.
 
 ## Gaps
@@ -161,7 +165,7 @@ Run [the stand-down contract](../../standards/stand-down.md) — the scope that
 bounds it, the subagent hard stop, its four rules about when (report first;
 strictly after the merge and the close; a clean tree and no unpushed commits
 against **your own branch**; the count of what closes with you),
-`hermod poison-pill --json`, `armed:true` as the only proof it took, and the
+`muxctl poison-pill --json`, `armed:true` as the only proof it took, and the
 `partial` outcomes.
 Delete your [progress and settings files](#progress-pane) once those checks pass, right
 before the poison-pill.
@@ -206,7 +210,7 @@ There is no leader to inspect what happened, so the session is the record.
 `alfred task sweep-stale` skips a ticket that a live session binds:
 
 ```
-hermod notify send "STARK-n blocked: <one-line reason> — tab and worktree left standing"
+muxctl notify send "STARK-n blocked: <one-line reason> — tab and worktree left standing"
 ```
 
 Send it after the ticket comment, which stays the full record. Then stop, and

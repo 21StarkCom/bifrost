@@ -14,11 +14,11 @@ It absorbed the stark-skills repo, which is archived.
 
 **The name.** Bifröst (Bilröst in Grímnismál) is the burning, three-coloured rainbow bridge that joins Midgard, the world of humans, to Asgard. Heimdall guards it from Himinbjörg, the gods ride over it daily to hold court at the Well of Urðr, and it is fated to shatter at Ragnarök when the sons of Muspell ride across (Gylfaginning). Its skills /gru, /minion and /agnes come from Despicable Me (2010): Gru the supervillain, his yellow Minions, and Agnes, the youngest of the girls he adopts.
 
-The rainbow bridge is how the gods reach the world, and bifrost is how the operator's craft reaches every agent. One public source tree holds thirty-four skills and the tools they call, served straight from the tree as a seven-plugin Claude Code marketplace, with no build step. Cross the bridge and you meet a crew out of Despicable Me. `/gru` takes an epic and drives it with one Minion per ticket. `/minion` owns a single ticket through the whole spine. `/agnes`, named for the youngest girl Gru adopts and never one of his Minions, carries a ticket alone with no Gru at all. Their board is [alfred](https://github.com/21StarkCom/alfred), their horses are [hermod](https://github.com/21StarkCom/hermod)'s tabs, valkyrie, from [idun](https://github.com/21StarkCom/idun), launches them, their PRs pass through ghx, and [frigg](https://github.com/21StarkCom/frigg) tells them where each repo lives. Beyond them wait a spec-to-code pipeline, a jury of Claude, Codex and Gemini, and a review poster that never posts the same review twice. When code must die, `/stark-bury` carries it down to [nastrond](https://github.com/21StarkCom/nastrond). The quest stepped onto the bridge. Gru called a Minion, and Hermod saddled up.
+The rainbow bridge is how the gods reach the world, and bifrost is how the operator's craft reaches every agent. One public source tree holds thirty-four skills and the tools they call, served straight from the tree as a seven-plugin Claude Code marketplace, with no build step. Cross the bridge and you meet a crew out of Despicable Me. `/gru` takes an epic and drives it with one Minion per ticket. `/minion` owns a single ticket through the whole spine. `/agnes`, named for the youngest girl Gru adopts and never one of his Minions, carries a ticket alone with no Gru at all. Their board is [alfred](https://github.com/21StarkCom/alfred), their horses are [mux-control](https://github.com/21StarkCom/mux-control)'s tabs, valkyrie, from [idun](https://github.com/21StarkCom/idun), launches them, their PRs pass through ghx, and [frigg](https://github.com/21StarkCom/frigg) tells them where each repo lives. Beyond them wait a spec-to-code pipeline, a jury of Claude, Codex and Gemini, and a review poster that never posts the same review twice. When code must die, `/stark-bury` carries it down to [nastrond](https://github.com/21StarkCom/nastrond). The quest stepped onto the bridge. Gru called a Minion, and muxctl saddled up.
 
 **Supporting cast.** Every crossing passes a sentry: [.github](https://github.com/21StarkCom/.github), the org's public front door and home of this saga, hosts the one reusable gitleaks workflow that more than forty fleet repos pin by SHA, scanning only the commits a change brings.
 
-← [yggdrasil](https://github.com/21StarkCom/yggdrasil) · [The saga](https://github.com/21StarkCom/.github/blob/main/fleet/saga.md) · [hermod](https://github.com/21StarkCom/hermod) →
+← [yggdrasil](https://github.com/21StarkCom/yggdrasil) · [The saga](https://github.com/21StarkCom/.github/blob/main/fleet/saga.md) · [mux-control](https://github.com/21StarkCom/mux-control) →
 
 ---
 
@@ -116,9 +116,10 @@ The pipeline has two stages: you gate the spec at `/stark-author`, and checks ga
 | [`/stark-bury`](skill/stark-bury/SKILL.md) | Retires code into the nastrond graveyard: bury before delete, and every destructive step waits for the operator. |
 | [`/stark-memory`](skill/stark-memory/SKILL.md) | Audits and tidies Claude Code auto-memory under its load and recall caps. Dry-run by default; `--apply` writes. |
 | [`/gru`](skill/gru/SKILL.md) | Drives an epic or a list of tickets to done, one Minion per ticket, and confirms each `done` from the merged PR and the board. A Gru launched with a muninn leader reports to odin's chief in place of the operator. |
-| [`/minion`](skill/minion/SKILL.md) | Owns one ticket for Gru through ticket → PR → review → merge → close, and reports through native messaging when available or Hermod fallback. |
+| [`/super-gru`](skill/super-gru/SKILL.md) | Drives a list of epics to done with one Gru for each epic, one after another or a few at once, as the muninn leader of each Gru. |
+| [`/minion`](skill/minion/SKILL.md) | Owns one ticket for Gru through ticket → PR → review → merge → close, and reports through native messaging when available or the `muxctl msg` fallback. |
 | [`/agnes`](skill/agnes/SKILL.md) | Carries one ticket alone and unattended, with no Gru: confirms its own merge and close, then stands down. |
-| [`/lucius`](skill/lucius/SKILL.md) | Opens a Lucius brainstorm in a tab of its own through `hermod lucius`, then stops. |
+| [`/stark-run-list`](skill/stark-run-list/SKILL.md) | Makes a Slack List that mirrors a Gru or Super-Gru run, one row for each epic and each ticket, and keeps it current until the run ends. |
 | [`/stark-rich-text`](skill/stark-rich-text/SKILL.md) | Names the command for rich text: Markdown through `frigg slack send` for Slack and `frigg atlassian issue` for Jira, and Markdown as it is for GitHub. No code that builds Block Kit or ADF. Loads on its own before an agent writes such text. |
 | [`/stark-office`](skill/stark-office/SKILL.md) | Sends Office and PDF work to the plume tools: the `plume-xlsx` recipes to read, edit, prove and make a workbook, and `--help` for `plume-docx`, `plume-pptx`, `plume-pdf` and `plume-font`. No Python. Loads on its own when a task has such a file. |
 
@@ -164,7 +165,7 @@ The weekly agent-doc sweep runs on the devbox, not as a Mac job. It triages the 
 
 ## Architecture
 
-A skill is either protocol-only or a front end to a tool. Most are protocol-only: the SKILL.md carries the whole procedure, and the worker family (/gru, /minion, /agnes) and /lucius drive fleet CLIs such as alfred, hermod and valkyrie from it. Some call a single-purpose tool in `tools/` (`memory_tidy.ts`, `rules_audit.ts`, `stark_session.ts`, …). The multi-agent skills call a TypeScript dispatcher, which resolves the enabled agents from config, spawns each as a headless subprocess with a credential-scrubbed env, parses the structured output, and merges the results:
+A skill is either protocol-only or a front end to a tool. Most are protocol-only: the SKILL.md carries the whole procedure, and the worker family (/gru, /super-gru, /minion, /agnes) drives fleet CLIs such as alfred, muxctl and valkyrie from it. Some call a single-purpose tool in `tools/` (`memory_tidy.ts`, `rules_audit.ts`, `stark_session.ts`, …). The multi-agent skills call a TypeScript dispatcher, which resolves the enabled agents from config, spawns each as a headless subprocess with a credential-scrubbed env, parses the structured output, and merges the results:
 
 ```
 /stark-terraform-review ─┐
@@ -183,7 +184,7 @@ Immutable assets (tools, prompts, config) resolve through `tools/asset_root_lib.
 
 ```
 bifrost/
-├── skill/                        ← one dir per skill (31 × SKILL.md)
+├── skill/                        ← one dir per skill (34 × SKILL.md)
 ├── tools/                        ← TypeScript dispatchers, agent CLIs, meta-tooling, tests
 ├── global/                       ← config.json, config-reference.md, prompts/{iac-review,refactor-planner}/
 ├── standards/                    ← shared worker protocols, doc templates, workflow guidance
@@ -221,26 +222,24 @@ Repos can override the enabled agents and nothing else: the walk above lives onl
 - `python3` for /stark-gha-cost, and for /stark-refactor-plan's JSON check (which falls back to `jq` or `node`)
 - The fleet CLIs, each for the skills that call it:
   - `alfred`: /stark-ticket, /stark-author, /stark-build, /stark-bury, /stark-rules-optimizer, /gru, /minion, /agnes
-  - `hermod`: /gru, /minion, /agnes, /lucius
-  - `valkyrie` 0.1.1 or later (`valkyrie gru`, `valkyrie minion`, `valkyrie agnes` for the worker launches): /gru, /minion, /agnes
+  - `muxctl` from mux-control (`hermod`, its old name, before 0.53.0): /gru, /super-gru, /minion, /agnes, and the stark-progress mod's tab button
+  - `valkyrie` 0.1.1 or later (`valkyrie gru`, `valkyrie minion`, `valkyrie agnes` for the worker launches): /gru, /super-gru, /minion, /agnes
   - `ghx` (`ghx pr-open`, `pr-merge`): /gru, /minion, /agnes, /stark-bury, /stark-rules-optimizer
   - `frigg`: /gru, /minion, /agnes, to find a ticket's repo; /stark-rich-text, to send Slack and Jira text (0.80.0 or later, for the Jira Markdown flags)
   - `plume` 0.10.0 or later (`plume-xlsx read --cells`, `set`, `diff`, `check`): /stark-office
   - atlas's `brain`: /stark-adr
-  - `lucius`: /lucius
 
 ## Fleet Fit
 
 bifrost is the skills layer of the 21StarkCom fleet. The rest of the fleet, by name and role:
 
 - **alfred**: the ticket board every worker binds to.
-- **hermod**: places the agents' tabs, carries their messages and tears them down.
+- **mux-control** (`muxctl`): places the agents' tabs, carries their messages and tears them down.
 - **valkyrie** (in idun): launches the Gru, Minion and Agnes workers.
 - **ghx**: opens and merges PRs.
 - **frigg**: the repo registry.
 - **brain** (in atlas): the second-brain engine /stark-adr writes through.
 - **goldfinger**: the desktop-automation CLI. Its skill ships with goldfinger, in `Goldfinger.app`, and installs with `goldfinger skill install`.
-- **lucius**: the brainstorming app /lucius launches.
 - **nastrond**: the graveyard /stark-bury writes to.
 - **idavoll**: owns machine setup (settings, machine hooks, launchers) and links these skills into Codex.
 - **.github**: `.github/workflows/secret-scan.yml` is a render from the fleet's 21stark repo, calling the reusable gitleaks workflow in `.github`.

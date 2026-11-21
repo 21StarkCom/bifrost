@@ -249,7 +249,7 @@ test("a ticket's tab is open while its heartbeat is under 3 minutes old and name
     'STARK-3.beat.json': beat(0, null),
     'STARK-4.json': ticket('STARK-4', 'pr'),
     'STARK-4.beat.json': JSON.stringify({ updated: iso(0), lastActivity: iso(1), running: null, minutes: [], recent: [] }),
-    // A value that is no surface id never reaches hermod: it could read as a flag.
+    // A value that is no surface id never reaches muxctl: it could read as a flag.
     'STARK-5.json': ticket('STARK-5', 'pr'),
     'STARK-5.beat.json': beat(0, '--help'),
   }

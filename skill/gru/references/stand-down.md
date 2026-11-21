@@ -9,7 +9,7 @@ the contract's "after `ghx pr-merge` and the ticket close":
 
 - **Only in your own worktree.** Your shell can stand in the main checkout
   after step 6's cleanup, so read the path poison-pill aims at. Run
-  `hermod poison-pill --dry-run --json` and read its `worktree`. Then run
+  `muxctl poison-pill --dry-run --json` and read its `worktree`. Then run
   `git -C <that path> rev-parse --show-toplevel`, the path pasted in
   literally. Its last path segment must be your launch id: the epic, or
   `GRU-<n>` for `--tickets`, `<n>` the first ticket's number. valkyrie makes
@@ -28,7 +28,7 @@ the contract's "after `ghx pr-merge` and the ticket close":
   (`alfred task comment --body-file <file> STARK-n`). Write the file under
   `mktemp -d`, outside your worktree: a file inside it fails the contract's
   clean-tree check. Then send one
-  `hermod notify send "<launch id> done: <n> tickets closed; report on STARK-n"`.
+  `muxctl notify send "<launch id> done: <n> tickets closed; report on STARK-n"`.
   Anything you see go wrong in a check or the poison-pill foreground goes
   into one more line of your report before you arm or stop.
 - **Your branch was never pushed**, so the contract's check for unpushed
@@ -38,7 +38,7 @@ the contract's "after `ghx pr-merge` and the ticket close":
   check is work that is not yours: never push it, commit it or delete it.
   Name it in your report, and end on the report: arm nothing, and leave the
   session, the worktree and the tab.
-- **The command** is `hermod poison-pill --delete-branch --json`, by the
+- **The command** is `muxctl poison-pill --delete-branch --json`, by the
   contract's [Flags](../../../standards/stand-down.md#flags).
 - **A `partial` teardown** has no later step 6 to clean up after it. Your
   report names the surface and the path.

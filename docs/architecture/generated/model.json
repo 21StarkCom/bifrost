@@ -234,7 +234,7 @@
         "color": "c4-system"
       },
       "description": {
-        "txt": "The skills layer of the 21Stark fleet: 31 skills in seven Claude Code plugins, the TypeScript tools that they call, three hooks and four mods, served from source as a Claude Code marketplace."
+        "txt": "The skills layer of the 21Stark fleet: 34 skills in seven Claude Code plugins, the TypeScript tools that they call, three hooks and four mods, served from source as a Claude Code marketplace."
       },
       "title": "Bifröst",
       "kind": "softwareSystem",
@@ -255,20 +255,20 @@
       "kind": "externalSystem",
       "id": "alfred"
     },
-    "hermod": {
+    "muxControl": {
       "metadata": {
-        "fleetRepo": "hermod"
+        "fleetRepo": "mux-control"
       },
       "notation": "Software System (external)",
       "style": {
         "color": "c4-external"
       },
       "description": {
-        "txt": "Places the tabs of the agents in cmux, carries their messages, and closes the tabs."
+        "txt": "Holds muxctl, which places the tabs of the agents in cmux or tmux, carries their messages, and closes the tabs."
       },
-      "title": "Hermod",
+      "title": "mux-control",
       "kind": "externalSystem",
-      "id": "hermod"
+      "id": "muxControl"
     },
     "idun": {
       "metadata": {
@@ -279,11 +279,26 @@
         "color": "c4-external"
       },
       "description": {
-        "txt": "Holds njord, which opens and merges the PRs, and valkyrie, which launches the Gru, Minion and Agnes workers."
+        "txt": "Holds valkyrie, which launches the Gru, Minion and Agnes workers."
       },
       "title": "idun",
       "kind": "externalSystem",
       "id": "idun"
+    },
+    "ghx": {
+      "metadata": {
+        "fleetRepo": "github-extended"
+      },
+      "notation": "Software System (external)",
+      "style": {
+        "color": "c4-external"
+      },
+      "description": {
+        "txt": "The GitHub CLI of the fleet, in the github-extended repo: opens and merges the PRs, watches CI, and cleans merged branches and worktrees."
+      },
+      "title": "ghx",
+      "kind": "externalSystem",
+      "id": "ghx"
     },
     "urd": {
       "metadata": {
@@ -454,7 +469,7 @@
         "color": "c4-container"
       },
       "summary": {
-        "txt": "The 31 skills in seven plugins, which a coding agent loads and follows."
+        "txt": "The 34 skills in seven plugins, which a coding agent loads and follows."
       },
       "technology": "Markdown, Claude Code plugins",
       "description": {
@@ -798,7 +813,7 @@
       },
       "technology": "TypeScript, Node.js 24, PreToolUse hook",
       "description": {
-        "txt": "Runs before each njord pr-merge call, triages the agent files that the PR changes, and denies the merge only on a RED clause that the PR adds."
+        "txt": "Runs before each ghx pr-merge call, triages the agent files that the PR changes, and denies the merge only on a RED clause that the PR adds."
       },
       "title": "Agent-doc gate hook",
       "kind": "container",
@@ -971,7 +986,7 @@
     }
   },
   "relations": {
-    "1nb7wrc": {
+    "1jgl3rr": {
       "line": "solid",
       "title": "starts skills by slash command from",
       "source": {
@@ -981,9 +996,9 @@
         "model": "bifrost.skills"
       },
       "kind": "sync",
-      "id": "1nb7wrc"
+      "id": "1jgl3rr"
     },
-    "1hbfq5q": {
+    "4rikpb": {
       "line": "solid",
       "title": "watches the worker runs and sets the ticket settings in",
       "source": {
@@ -993,9 +1008,9 @@
         "model": "bifrost.progressMod"
       },
       "kind": "sync",
-      "id": "1hbfq5q"
+      "id": "4rikpb"
     },
-    "hweg33": {
+    "1l02ked": {
       "line": "solid",
       "title": "answers the questions of the agent in",
       "source": {
@@ -1005,9 +1020,9 @@
         "model": "bifrost.questionMods"
       },
       "kind": "sync",
-      "id": "hweg33"
+      "id": "1l02ked"
     },
-    "1ekfilh": {
+    "1uf1i6c": {
       "line": "solid",
       "title": "loads and follows the skills of",
       "source": {
@@ -1017,9 +1032,9 @@
         "model": "bifrost.skills"
       },
       "kind": "sync",
-      "id": "1ekfilh"
+      "id": "1uf1i6c"
     },
-    "y4s3mb": {
+    "1h0771s": {
       "line": "solid",
       "title": "posts the findings of a code review with",
       "source": {
@@ -1029,9 +1044,9 @@
         "model": "bifrost.reviewPoster"
       },
       "kind": "sync",
-      "id": "y4s3mb"
+      "id": "1h0771s"
     },
-    "1wlawpq": {
+    "1j5bczj": {
       "line": "solid",
       "title": "asks the operator questions with",
       "source": {
@@ -1041,11 +1056,11 @@
         "model": "bifrost.questionMods"
       },
       "kind": "sync",
-      "id": "1wlawpq"
+      "id": "1j5bczj"
     },
-    "ndaub4": {
+    "1jw3653": {
       "line": "solid",
-      "title": "is checked before each njord pr-merge call by",
+      "title": "is checked before each ghx pr-merge call by",
       "source": {
         "model": "agent"
       },
@@ -1053,9 +1068,9 @@
         "model": "bifrost.gateHook"
       },
       "kind": "sync",
-      "id": "ndaub4"
+      "id": "1jw3653"
     },
-    "1vlx1w0": {
+    "1mn3pyp": {
       "line": "solid",
       "title": "is told where a memory fact belongs by",
       "source": {
@@ -1065,9 +1080,9 @@
         "model": "bifrost.factHook"
       },
       "kind": "sync",
-      "id": "1vlx1w0"
+      "id": "1mn3pyp"
     },
-    "hrel3t": {
+    "1rq33lm": {
       "line": "solid",
       "title": "is asked to tell the librarian its lasting facts by",
       "source": {
@@ -1077,9 +1092,9 @@
         "model": "bifrost.stopHook"
       },
       "kind": "sync",
-      "id": "hrel3t"
+      "id": "1rq33lm"
     },
-    "d4khav": {
+    "r69anq": {
       "line": "solid",
       "technology": "Shell command",
       "title": "runs the multi-agent reviews, the refactor plans and the jury with",
@@ -1090,9 +1105,9 @@
         "model": "bifrost.dispatchers"
       },
       "kind": "sync",
-      "id": "d4khav"
+      "id": "r69anq"
     },
-    "17xs9r": {
+    "ug5g28": {
       "line": "solid",
       "technology": "Shell command",
       "title": "lands the PR of a build with",
@@ -1103,9 +1118,9 @@
         "model": "bifrost.buildTools"
       },
       "kind": "sync",
-      "id": "17xs9r"
+      "id": "ug5g28"
     },
-    "11tpna0": {
+    "ggtffd": {
       "line": "solid",
       "technology": "Shell command",
       "title": "opens, closes and hands over the sessions with",
@@ -1116,9 +1131,9 @@
         "model": "bifrost.sessionTools"
       },
       "kind": "sync",
-      "id": "11tpna0"
+      "id": "ggtffd"
     },
-    "t3nowf": {
+    "1dy5vl3": {
       "line": "solid",
       "technology": "Shell command",
       "title": "audits the agent docs and tidies the memory with",
@@ -1129,9 +1144,9 @@
         "model": "bifrost.docTools"
       },
       "kind": "sync",
-      "id": "t3nowf"
+      "id": "1dy5vl3"
     },
-    "18fdhza": {
+    "y2cz0n": {
       "line": "solid",
       "technology": "Shell command",
       "title": "drafts the changelog and the version of a release with",
@@ -1142,9 +1157,9 @@
         "model": "bifrost.releaseTools"
       },
       "kind": "sync",
-      "id": "18fdhza"
+      "id": "y2cz0n"
     },
-    "1qggv4d": {
+    "1t3us6m": {
       "line": "solid",
       "technology": "File write",
       "title": "writes the ticket, run and log files to",
@@ -1155,9 +1170,9 @@
         "model": "bifrost.progressFiles"
       },
       "kind": "sync",
-      "id": "1qggv4d"
+      "id": "1t3us6m"
     },
-    "1ly0i07": {
+    "to3i92": {
       "line": "solid",
       "technology": "Shell command",
       "title": "binds, files, moves and closes the tickets with",
@@ -1168,9 +1183,9 @@
         "model": "alfred"
       },
       "kind": "sync",
-      "id": "1ly0i07"
+      "id": "to3i92"
     },
-    "p878zr": {
+    "ecz5fi": {
       "line": "solid",
       "technology": "Shell command",
       "title": "opens, titles, messages and closes the worker tabs with",
@@ -1178,15 +1193,15 @@
         "model": "bifrost.skills"
       },
       "target": {
-        "model": "hermod"
+        "model": "muxControl"
       },
       "kind": "sync",
-      "id": "p878zr"
+      "id": "ecz5fi"
     },
-    "gx508f": {
+    "2da2jy": {
       "line": "solid",
       "technology": "Shell command",
-      "title": "launches the workers and opens and merges the PRs with",
+      "title": "launches the workers with",
       "source": {
         "model": "bifrost.skills"
       },
@@ -1194,9 +1209,22 @@
         "model": "idun"
       },
       "kind": "sync",
-      "id": "gx508f"
+      "id": "2da2jy"
     },
-    "llgq57": {
+    "6my78s": {
+      "line": "solid",
+      "technology": "Shell command",
+      "title": "opens, watches and merges the PRs with",
+      "source": {
+        "model": "bifrost.skills"
+      },
+      "target": {
+        "model": "ghx"
+      },
+      "kind": "sync",
+      "id": "6my78s"
+    },
+    "1jreo49": {
       "line": "solid",
       "technology": "Shell command",
       "title": "finds the folder of each repo with",
@@ -1207,9 +1235,9 @@
         "model": "urd"
       },
       "kind": "sync",
-      "id": "llgq57"
+      "id": "1jreo49"
     },
-    "3g7zb8": {
+    "1m5nv62": {
       "line": "dotted",
       "technology": "Shell command",
       "title": "reports to a muninn leader through",
@@ -1220,9 +1248,9 @@
         "model": "muninn"
       },
       "kind": "async",
-      "id": "3g7zb8"
+      "id": "1m5nv62"
     },
-    "1rvs5bb": {
+    "1dn5bd": {
       "line": "solid",
       "technology": "Shell command",
       "title": "files and reads the EI tickets, and sends Slack and Jira text, with",
@@ -1233,9 +1261,9 @@
         "model": "frigg"
       },
       "kind": "sync",
-      "id": "1rvs5bb"
+      "id": "1dn5bd"
     },
-    "1jhoqji": {
+    "jg91sh": {
       "line": "solid",
       "technology": "Shell command",
       "title": "records and supersedes the ADRs with",
@@ -1246,9 +1274,9 @@
         "model": "atlas"
       },
       "kind": "sync",
-      "id": "1jhoqji"
+      "id": "jg91sh"
     },
-    "71i00b": {
+    "1a4rrvo": {
       "line": "solid",
       "technology": "Git, PR",
       "title": "buries retired code in",
@@ -1259,9 +1287,9 @@
         "model": "nastrond"
       },
       "kind": "sync",
-      "id": "71i00b"
+      "id": "1a4rrvo"
     },
-    "oz3ugh": {
+    "m0wskz": {
       "line": "solid",
       "technology": "Shell command, MCP",
       "title": "proposes, checks and accepts the C4 models with",
@@ -1272,9 +1300,9 @@
         "model": "floorplan"
       },
       "kind": "sync",
-      "id": "oz3ugh"
+      "id": "m0wskz"
     },
-    "ycg4rx": {
+    "f8svcf": {
       "line": "solid",
       "technology": "Shell command, MCP",
       "title": "asks the operator questions on the diagram with",
@@ -1285,9 +1313,9 @@
         "model": "sleipnir"
       },
       "kind": "sync",
-      "id": "ycg4rx"
+      "id": "f8svcf"
     },
-    "cxlj8d": {
+    "1c1yryz": {
       "line": "solid",
       "technology": "HTTPS (gh CLI)",
       "title": "reads the Actions costs and publishes the releases on",
@@ -1298,9 +1326,9 @@
         "model": "github"
       },
       "kind": "sync",
-      "id": "cxlj8d"
+      "id": "1c1yryz"
     },
-    "layk8i": {
+    "pmlsqc": {
       "line": "solid",
       "technology": "Child process",
       "title": "runs the review panels and the jury on",
@@ -1311,9 +1339,9 @@
         "model": "aiClis"
       },
       "kind": "sync",
-      "id": "layk8i"
+      "id": "pmlsqc"
     },
-    "1uldhe5": {
+    "ypu9e7": {
       "line": "solid",
       "technology": "HTTPS (gh CLI)",
       "title": "posts the IaC review of a PR to",
@@ -1324,9 +1352,9 @@
         "model": "github"
       },
       "kind": "sync",
-      "id": "1uldhe5"
+      "id": "ypu9e7"
     },
-    "1x3r7un": {
+    "646c8t": {
       "line": "solid",
       "technology": "File write",
       "title": "keeps the jury runs in",
@@ -1337,9 +1365,9 @@
         "model": "bifrost.toolState"
       },
       "kind": "sync",
-      "id": "1x3r7un"
+      "id": "646c8t"
     },
-    "1e1xcku": {
+    "1iu50ps": {
       "line": "solid",
       "technology": "HTTPS (gh CLI)",
       "title": "posts one anchored review of the findings to",
@@ -1350,9 +1378,9 @@
         "model": "github"
       },
       "kind": "sync",
-      "id": "1e1xcku"
+      "id": "1iu50ps"
     },
-    "u0q96v": {
+    "10p6t1l": {
       "line": "solid",
       "technology": "Git, HTTPS (gh CLI)",
       "title": "pushes the branch and opens the PR on",
@@ -1363,9 +1391,9 @@
         "model": "github"
       },
       "kind": "sync",
-      "id": "u0q96v"
+      "id": "10p6t1l"
     },
-    "1y8dyz9": {
+    "zqdkqk": {
       "line": "solid",
       "technology": "Child process",
       "title": "stamps the PR on the ticket with",
@@ -1376,9 +1404,9 @@
         "model": "alfred"
       },
       "kind": "sync",
-      "id": "1y8dyz9"
+      "id": "zqdkqk"
     },
-    "1soedki": {
+    "1pg9i7v": {
       "line": "solid",
       "technology": "File read and write",
       "title": "keeps the sessions, the handovers and the healer log in",
@@ -1389,9 +1417,9 @@
         "model": "bifrost.toolState"
       },
       "kind": "sync",
-      "id": "1soedki"
+      "id": "1pg9i7v"
     },
-    "bs8sfd": {
+    "qq7lgr": {
       "line": "solid",
       "technology": "HTTPS (gh CLI)",
       "title": "reads the PR of the branch from",
@@ -1402,9 +1430,9 @@
         "model": "github"
       },
       "kind": "sync",
-      "id": "bs8sfd"
+      "id": "qq7lgr"
     },
-    "rhucd3": {
+    "1ngadn9": {
       "line": "solid",
       "technology": "Child process",
       "title": "sends the summary of an audit with",
@@ -1415,9 +1443,9 @@
         "model": "heimdall"
       },
       "kind": "sync",
-      "id": "rhucd3"
+      "id": "1ngadn9"
     },
-    "1a5z5d1": {
+    "1cvsxr7": {
       "line": "solid",
       "technology": "Child process",
       "title": "tests the descriptions of the skills on",
@@ -1428,9 +1456,9 @@
         "model": "aiClis"
       },
       "kind": "sync",
-      "id": "1a5z5d1"
+      "id": "1cvsxr7"
     },
-    "bd125r": {
+    "zk5xbd": {
       "line": "solid",
       "technology": "File write",
       "title": "keeps the ask-guard log in",
@@ -1441,9 +1469,9 @@
         "model": "bifrost.toolState"
       },
       "kind": "sync",
-      "id": "bd125r"
+      "id": "zk5xbd"
     },
-    "bvfwcz": {
+    "mqws9d": {
       "line": "solid",
       "technology": "Child process",
       "title": "triages the agent files of the PR with",
@@ -1454,9 +1482,9 @@
         "model": "bifrost.docTools"
       },
       "kind": "sync",
-      "id": "bvfwcz"
+      "id": "mqws9d"
     },
-    "1ny5s3x": {
+    "h7i0b3": {
       "line": "solid",
       "technology": "HTTPS (gh CLI)",
       "title": "reads the head and the base of the PR from",
@@ -1467,9 +1495,9 @@
         "model": "github"
       },
       "kind": "sync",
-      "id": "1ny5s3x"
+      "id": "h7i0b3"
     },
-    "1rl23sq": {
+    "woruwk": {
       "line": "solid",
       "technology": "File read",
       "title": "reads the names of the fleet repos from",
@@ -1480,9 +1508,9 @@
         "model": "ecosystemVault"
       },
       "kind": "sync",
-      "id": "1rl23sq"
+      "id": "woruwk"
     },
-    "pnygsz": {
+    "1wlb3rx": {
       "line": "solid",
       "technology": "File read and write",
       "title": "keeps the turn count of the last ask of each session in",
@@ -1493,9 +1521,9 @@
         "model": "bifrost.toolState"
       },
       "kind": "sync",
-      "id": "pnygsz"
+      "id": "1wlb3rx"
     },
-    "8i4cnv": {
+    "17gdzzk": {
       "line": "solid",
       "technology": "File read and write",
       "title": "reads each run and ticket from, and writes the settings to",
@@ -1506,9 +1534,9 @@
         "model": "bifrost.progressFiles"
       },
       "kind": "sync",
-      "id": "8i4cnv"
+      "id": "17gdzzk"
     },
-    "139xnke": {
+    "1o090ud": {
       "line": "solid",
       "technology": "HTTPS (gh GraphQL)",
       "title": "reads the PRs, the Actions runs and the commits of a run from",
@@ -1519,9 +1547,9 @@
         "model": "github"
       },
       "kind": "sync",
-      "id": "139xnke"
+      "id": "1o090ud"
     },
-    "ei8mx": {
+    "1wnj7gb": {
       "line": "solid",
       "technology": "Child process",
       "title": "reads the title of the epic from",
@@ -1532,9 +1560,9 @@
         "model": "alfred"
       },
       "kind": "sync",
-      "id": "ei8mx"
+      "id": "1wnj7gb"
     },
-    "1nfuynt": {
+    "shrt39": {
       "line": "solid",
       "technology": "Child process",
       "title": "brings a worker tab to the front with",
@@ -1542,10 +1570,10 @@
         "model": "bifrost.progressMod"
       },
       "target": {
-        "model": "hermod"
+        "model": "muxControl"
       },
       "kind": "sync",
-      "id": "1nfuynt"
+      "id": "shrt39"
     }
   },
   "globals": {
@@ -1645,7 +1673,7 @@
           }
         ]
       },
-      "hash": "yncvcNcEkK52ZIfBTaY31o-QVqPz-vtSgIbweKK2a4Y",
+      "hash": "Zjj0VYNovpdW0NrKvHLQdMfm8tgr6AefzuNZXYet4vY",
       "bounds": {
         "x": 0,
         "y": 0,
@@ -2051,7 +2079,7 @@
             "size": "md"
           },
           "description": {
-            "txt": "Runs before each njord pr-merge call, triages the agent files that the PR changes, and denies the merge only on a RED clause that the PR adds."
+            "txt": "Runs before each ghx pr-merge call, triages the agent files that the PR changes, and denies the merge only on a RED clause that the PR adds."
           },
           "tags": [],
           "metadata": {
@@ -2401,7 +2429,7 @@
           },
           "parent": "@gr1",
           "relations": [
-            "bvfwcz"
+            "mqws9d"
           ],
           "color": "gray",
           "line": "solid",
@@ -2453,11 +2481,11 @@
           }
         ]
       },
-      "hash": "YO51GSESSFAZpCBuGqqyopAEcQTe8iPfRvAuC8SSHCo",
+      "hash": "M35xgSVyjv1Ad1EUuG1doEBeilHWedQ7QOrbTab_Z8U",
       "bounds": {
         "x": 0,
         "y": 0,
-        "width": 5910,
+        "width": 6340,
         "height": 864
       },
       "nodes": [
@@ -2484,7 +2512,7 @@
           "tags": [],
           "notation": "Person",
           "kind": "person",
-          "x": 2580,
+          "x": 2795,
           "y": 0,
           "width": 320,
           "height": 180,
@@ -2518,7 +2546,7 @@
           "tags": [],
           "notation": "Person",
           "kind": "person",
-          "x": 3010,
+          "x": 3225,
           "y": 0,
           "width": 320,
           "height": 180,
@@ -2540,8 +2568,9 @@
           ],
           "outEdges": [
             "ktexqd",
-            "f6zmzo",
+            "1a52ly2",
             "tatxxn",
+            "1vm3uq2",
             "1vm3cwu",
             "d15ogy",
             "17ox128",
@@ -2563,13 +2592,13 @@
             "size": "md"
           },
           "description": {
-            "txt": "The skills layer of the 21Stark fleet: 31 skills in seven Claude Code plugins, the TypeScript tools that they call, three hooks and four mods, served from source as a Claude Code marketplace."
+            "txt": "The skills layer of the 21Stark fleet: 34 skills in seven Claude Code plugins, the TypeScript tools that they call, three hooks and four mods, served from source as a Claude Code marketplace."
           },
           "tags": [],
           "notation": "Software System",
           "kind": "softwareSystem",
           "navigateTo": "containers",
-          "x": 2795,
+          "x": 3010,
           "y": 342,
           "width": 320,
           "height": 180,
@@ -2618,16 +2647,16 @@
           }
         },
         {
-          "id": "hermod",
+          "id": "muxControl",
           "parent": null,
           "level": 0,
           "children": [],
           "inEdges": [
-            "f6zmzo"
+            "1a52ly2"
           ],
           "outEdges": [],
-          "title": "Hermod",
-          "modelRef": "hermod",
+          "title": "mux-control",
+          "modelRef": "muxControl",
           "shape": "rectangle",
           "color": "c4-external",
           "style": {
@@ -2635,11 +2664,11 @@
             "size": "md"
           },
           "description": {
-            "txt": "Places the tabs of the agents in cmux, carries their messages, and closes the tabs."
+            "txt": "Holds muxctl, which places the tabs of the agents in cmux or tmux, carries their messages, and closes the tabs."
           },
           "tags": [],
           "metadata": {
-            "fleetRepo": "hermod"
+            "fleetRepo": "mux-control"
           },
           "notation": "Software System (external)",
           "kind": "externalSystem",
@@ -2648,9 +2677,9 @@
           "width": 320,
           "height": 180,
           "labelBBox": {
-            "x": 30,
+            "x": 18,
             "y": 47,
-            "width": 260,
+            "width": 283,
             "height": 83
           }
         },
@@ -2672,7 +2701,7 @@
             "size": "md"
           },
           "description": {
-            "txt": "Holds njord, which opens and merges the PRs, and valkyrie, which launches the Gru, Minion and Agnes workers."
+            "txt": "Holds valkyrie, which launches the Gru, Minion and Agnes workers."
           },
           "tags": [],
           "metadata": {
@@ -2685,10 +2714,47 @@
           "width": 320,
           "height": 180,
           "labelBBox": {
-            "x": 15,
-            "y": 47,
-            "width": 290,
-            "height": 83
+            "x": 27,
+            "y": 56,
+            "width": 267,
+            "height": 65
+          }
+        },
+        {
+          "id": "ghx",
+          "parent": null,
+          "level": 0,
+          "children": [],
+          "inEdges": [
+            "1vm3uq2"
+          ],
+          "outEdges": [],
+          "title": "ghx",
+          "modelRef": "ghx",
+          "shape": "rectangle",
+          "color": "c4-external",
+          "style": {
+            "opacity": 15,
+            "size": "md"
+          },
+          "description": {
+            "txt": "The GitHub CLI of the fleet, in the github-extended repo: opens and merges the PRs, watches CI, and cleans merged branches and worktrees."
+          },
+          "tags": [],
+          "metadata": {
+            "fleetRepo": "github-extended"
+          },
+          "notation": "Software System (external)",
+          "kind": "externalSystem",
+          "x": 1290,
+          "y": 684,
+          "width": 320,
+          "height": 180,
+          "labelBBox": {
+            "x": 21,
+            "y": 38,
+            "width": 277,
+            "height": 101
           }
         },
         {
@@ -2717,7 +2783,7 @@
           },
           "notation": "Software System (external)",
           "kind": "externalSystem",
-          "x": 1290,
+          "x": 1720,
           "y": 684,
           "width": 320,
           "height": 180,
@@ -2754,7 +2820,7 @@
           },
           "notation": "Software System (external)",
           "kind": "externalSystem",
-          "x": 1720,
+          "x": 2150,
           "y": 684,
           "width": 320,
           "height": 180,
@@ -2791,7 +2857,7 @@
           },
           "notation": "Software System (external)",
           "kind": "externalSystem",
-          "x": 2150,
+          "x": 2580,
           "y": 684,
           "width": 320,
           "height": 180,
@@ -2828,7 +2894,7 @@
           },
           "notation": "Software System (external)",
           "kind": "externalSystem",
-          "x": 2580,
+          "x": 3010,
           "y": 684,
           "width": 320,
           "height": 180,
@@ -2865,7 +2931,7 @@
           },
           "notation": "Software System (external)",
           "kind": "externalSystem",
-          "x": 3010,
+          "x": 3440,
           "y": 684,
           "width": 320,
           "height": 180,
@@ -2902,7 +2968,7 @@
           },
           "notation": "Software System (external)",
           "kind": "externalSystem",
-          "x": 3440,
+          "x": 3870,
           "y": 684,
           "width": 320,
           "height": 180,
@@ -2939,7 +3005,7 @@
           },
           "notation": "Software System (external)",
           "kind": "externalSystem",
-          "x": 3870,
+          "x": 4300,
           "y": 684,
           "width": 320,
           "height": 180,
@@ -2976,7 +3042,7 @@
           },
           "notation": "Software System (external)",
           "kind": "externalSystem",
-          "x": 4300,
+          "x": 4730,
           "y": 684,
           "width": 320,
           "height": 180,
@@ -3011,7 +3077,7 @@
           "tags": [],
           "notation": "Software System (external)",
           "kind": "externalSystem",
-          "x": 4730,
+          "x": 5160,
           "y": 684,
           "width": 320,
           "height": 180,
@@ -3045,7 +3111,7 @@
           "tags": [],
           "notation": "Software System (external)",
           "kind": "externalSystem",
-          "x": 5160,
+          "x": 5590,
           "y": 684,
           "width": 320,
           "height": 180,
@@ -3079,7 +3145,7 @@
           "tags": [],
           "notation": "Software System (external)",
           "kind": "externalSystem",
-          "x": 5590,
+          "x": 6020,
           "y": 684,
           "width": 320,
           "height": 180,
@@ -3099,45 +3165,45 @@
           "label": "starts skills, watches the runs\nand answers questions with",
           "points": [
             [
-              2779,
+              2994,
               180
             ],
             [
-              2795,
+              3010,
               213
             ],
             [
-              2814,
+              3029,
               250
             ],
             [
-              2835,
+              3050,
               282
             ],
             [
-              2846,
+              3061,
               299
             ],
             [
-              2859,
+              3074,
               317
             ],
             [
-              2872,
+              3087,
               334
             ]
           ],
           "labelBBox": {
-            "x": 2835,
+            "x": 3050,
             "y": 240,
             "width": 198,
             "height": 42
           },
           "parent": null,
           "relations": [
-            "1nb7wrc",
-            "1hbfq5q",
-            "hweg33"
+            "1jgl3rr",
+            "4rikpb",
+            "1l02ked"
           ],
           "color": "gray",
           "line": "solid",
@@ -3152,48 +3218,48 @@
           "label": "follows the skills\nand runs the tools of",
           "points": [
             [
-              3119,
+              3334,
               180
             ],
             [
-              3099,
+              3314,
               212
             ],
             [
-              3077,
+              3292,
               249
             ],
             [
-              3056,
+              3271,
               282
             ],
             [
-              3045,
+              3260,
               299
             ],
             [
-              3034,
+              3249,
               317
             ],
             [
-              3022,
+              3237,
               334
             ]
           ],
           "labelBBox": {
-            "x": 3082,
+            "x": 3297,
             "y": 240,
             "width": 141,
             "height": 42
           },
           "parent": null,
           "relations": [
-            "1ekfilh",
-            "y4s3mb",
-            "1wlawpq",
-            "ndaub4",
-            "1vlx1w0",
-            "hrel3t"
+            "1uf1i6c",
+            "1h0771s",
+            "1j5bczj",
+            "1jw3653",
+            "1mn3pyp",
+            "1rq33lm"
           ],
           "color": "gray",
           "line": "solid",
@@ -3208,27 +3274,27 @@
           "label": "binds, files and closes\nthe tickets with",
           "points": [
             [
-              2795,
-              436
+              3010,
+              434
             ],
             [
-              2439,
-              444
+              2630,
+              440
             ],
             [
-              1555,
-              474
+              1643,
+              465
             ],
             [
-              823,
+              828,
               582
             ],
             [
-              621,
-              612
+              624,
+              611
             ],
             [
-              570,
+              572,
               622
             ],
             [
@@ -3249,16 +3315,16 @@
             ]
           ],
           "labelBBox": {
-            "x": 823,
+            "x": 828,
             "y": 582,
             "width": 150,
             "height": 42
           },
           "parent": null,
           "relations": [
-            "1ly0i07",
-            "1y8dyz9",
-            "ei8mx"
+            "to3i92",
+            "zqdkqk",
+            "1wnj7gb"
           ],
           "color": "gray",
           "line": "solid",
@@ -3268,34 +3334,34 @@
           "isCustomized": true
         },
         {
-          "id": "f6zmzo",
+          "id": "1a52ly2",
           "source": "bifrost",
-          "target": "hermod",
+          "target": "muxControl",
           "label": "opens, messages and\ncloses the worker tabs with",
           "points": [
             [
-              2795,
-              438
+              3010,
+              437
             ],
             [
-              2485,
-              448
+              2676,
+              446
             ],
             [
-              1782,
-              483
+              1882,
+              478
             ],
             [
-              1200,
+              1225,
               582
             ],
             [
-              1021,
+              1035,
               612
             ],
             [
-              977,
-              627
+              988,
+              624
             ],
             [
               805,
@@ -3307,7 +3373,7 @@
             ],
             [
               775,
-              695
+              694
             ],
             [
               759,
@@ -3315,15 +3381,15 @@
             ]
           ],
           "labelBBox": {
-            "x": 1200,
+            "x": 1225,
             "y": 582,
             "width": 184,
             "height": 42
           },
           "parent": null,
           "relations": [
-            "p878zr",
-            "1nfuynt"
+            "ecz5fi",
+            "shrt39"
           ],
           "color": "gray",
           "line": "solid",
@@ -3336,31 +3402,43 @@
           "id": "tatxxn",
           "source": "bifrost",
           "target": "idun",
-          "label": "launches the workers and\nopens and merges the PRs with",
+          "label": "launches the workers with",
           "points": [
             [
-              2795,
-              440
+              3010,
+              441
             ],
             [
-              2535,
-              454
+              2731,
+              456
             ],
             [
-              2004,
-              491
+              2137,
+              496
             ],
             [
-              1564,
+              1642,
               582
             ],
             [
-              1435,
-              609
+              1458,
+              614
             ],
             [
-              1295,
-              658
+              1412,
+              626
+            ],
+            [
+              1235,
+              684
+            ],
+            [
+              1220,
+              689
+            ],
+            [
+              1205,
+              694
             ],
             [
               1189,
@@ -3368,14 +3446,78 @@
             ]
           ],
           "labelBBox": {
-            "x": 1565,
+            "x": 1643,
+            "y": 591,
+            "width": 177,
+            "height": 25
+          },
+          "parent": null,
+          "relations": [
+            "2da2jy"
+          ],
+          "color": "gray",
+          "line": "solid",
+          "head": "normal",
+          "technology": "",
+          "kind": "sync",
+          "isCustomized": true
+        },
+        {
+          "id": "1vm3uq2",
+          "source": "bifrost",
+          "target": "ghx",
+          "label": "opens, watches and\nmerges the PRs with",
+          "points": [
+            [
+              3010,
+              446
+            ],
+            [
+              2787,
+              466
+            ],
+            [
+              2370,
+              510
+            ],
+            [
+              2020,
+              582
+            ],
+            [
+              1859,
+              615
+            ],
+            [
+              1820,
+              630
+            ],
+            [
+              1665,
+              684
+            ],
+            [
+              1650,
+              689
+            ],
+            [
+              1635,
+              695
+            ],
+            [
+              1619,
+              701
+            ]
+          ],
+          "labelBBox": {
+            "x": 2021,
             "y": 582,
-            "width": 209,
+            "width": 141,
             "height": 42
           },
           "parent": null,
           "relations": [
-            "gx508f"
+            "6my78s"
           ],
           "color": "gray",
           "line": "solid",
@@ -3391,55 +3533,43 @@
           "label": "finds the folder of each repo with",
           "points": [
             [
-              2795,
-              444
+              3010,
+              447
             ],
             [
-              2590,
-              461
+              2832,
+              466
             ],
             [
-              2224,
-              501
+              2538,
+              507
             ],
             [
-              1921,
+              2294,
               582
             ],
             [
-              1803,
-              614
+              2211,
+              608
             ],
             [
-              1778,
-              638
+              2123,
+              647
             ],
             [
-              1665,
-              684
-            ],
-            [
-              1650,
-              690
-            ],
-            [
-              1635,
-              696
-            ],
-            [
-              1619,
-              703
+              2049,
+              683
             ]
           ],
           "labelBBox": {
-            "x": 1922,
+            "x": 2295,
             "y": 591,
             "width": 219,
             "height": 25
           },
           "parent": null,
           "relations": [
-            "llgq57"
+            "1jreo49"
           ],
           "color": "gray",
           "line": "solid",
@@ -3455,43 +3585,43 @@
           "label": "reports to a muninn leader through",
           "points": [
             [
-              2795,
-              456
+              3010,
+              464
             ],
             [
-              2653,
-              479
+              2898,
+              488
             ],
             [
-              2442,
-              520
+              2747,
+              528
             ],
             [
-              2265,
+              2621,
               582
             ],
             [
-              2191,
+              2561,
               608
             ],
             [
-              2113,
+              2498,
               645
             ],
             [
-              2046,
+              2445,
               679
             ]
           ],
           "labelBBox": {
-            "x": 2266,
+            "x": 2622,
             "y": 591,
             "width": 231,
             "height": 25
           },
           "parent": null,
           "relations": [
-            "3g7zb8"
+            "1m5nv62"
           ],
           "color": "gray",
           "line": "dotted",
@@ -3507,43 +3637,43 @@
           "label": "files and reads the EI tickets, and\nsends Slack and Jira text, with",
           "points": [
             [
-              2795,
-              489
+              3010,
+              520
             ],
             [
-              2729,
-              514
+              2980,
+              539
             ],
             [
-              2653,
-              546
+              2949,
+              560
             ],
             [
-              2587,
+              2922,
               582
             ],
             [
-              2535,
+              2887,
               610
             ],
             [
-              2482,
+              2852,
               645
             ],
             [
-              2435,
-              678
+              2822,
+              677
             ]
           ],
           "labelBBox": {
-            "x": 2588,
+            "x": 2923,
             "y": 582,
             "width": 221,
             "height": 42
           },
           "parent": null,
           "relations": [
-            "1rvs5bb"
+            "1dn5bd"
           ],
           "color": "gray",
           "line": "solid",
@@ -3559,31 +3689,31 @@
           "label": "records and supersedes\nthe ADRs with",
           "points": [
             [
-              2899,
+              3170,
               522
             ],
             [
-              2869,
-              569
+              3170,
+              568
             ],
             [
-              2832,
-              627
+              3170,
+              626
             ],
             [
-              2802,
-              675
+              3170,
+              674
             ]
           ],
           "labelBBox": {
-            "x": 2861,
+            "x": 3171,
             "y": 582,
             "width": 163,
             "height": 42
           },
           "parent": null,
           "relations": [
-            "1jhoqji"
+            "jg91sh"
           ],
           "color": "gray",
           "line": "solid",
@@ -3599,43 +3729,43 @@
           "label": "sends the summary\nof an audit with",
           "points": [
             [
-              3012,
+              3284,
               522
             ],
             [
-              3024,
+              3309,
               542
             ],
             [
-              3038,
+              3335,
               563
             ],
             [
-              3050,
+              3360,
               582
             ],
             [
-              3069,
-              612
+              3399,
+              613
             ],
             [
-              3090,
-              645
+              3442,
+              647
             ],
             [
-              3109,
-              675
+              3481,
+              678
             ]
           ],
           "labelBBox": {
-            "x": 3076,
+            "x": 3413,
             "y": 582,
             "width": 136,
             "height": 42
           },
           "parent": null,
           "relations": [
-            "rhucd3"
+            "1ngadn9"
           ],
           "color": "gray",
           "line": "solid",
@@ -3651,43 +3781,43 @@
           "label": "buries retired code in",
           "points": [
             [
-              3115,
+              3330,
+              490
+            ],
+            [
+              3405,
               517
             ],
             [
-              3156,
-              538
+              3495,
+              550
             ],
             [
-              3199,
-              561
-            ],
-            [
-              3239,
+              3576,
               582
             ],
             [
-              3302,
-              615
+              3671,
+              619
             ],
             [
-              3370,
-              651
+              3776,
+              663
             ],
             [
-              3431,
-              683
+              3861,
+              700
             ]
           ],
           "labelBBox": {
-            "x": 3318,
+            "x": 3676,
             "y": 591,
             "width": 146,
             "height": 25
           },
           "parent": null,
           "relations": [
-            "71i00b"
+            "1a4rrvo"
           ],
           "color": "gray",
           "line": "solid",
@@ -3703,43 +3833,43 @@
           "label": "proposes, checks and\naccepts the C4 models with",
           "points": [
             [
-              3115,
-              473
+              3330,
+              461
             ],
             [
-              3289,
-              518
+              3542,
+              500
             ],
             [
-              3575,
-              597
+              3927,
+              578
             ],
             [
-              3815,
+              4245,
               684
             ],
             [
-              3830,
+              4260,
               689
             ],
             [
-              3845,
+              4275,
               695
             ],
             [
-              3861,
-              701
+              4291,
+              700
             ]
           ],
           "labelBBox": {
-            "x": 3629,
+            "x": 4043,
             "y": 582,
             "width": 186,
             "height": 42
           },
           "parent": null,
           "relations": [
-            "oz3ugh"
+            "m0wskz"
           ],
           "color": "gray",
           "line": "solid",
@@ -3755,68 +3885,16 @@
           "label": "asks the operator questions\non the diagram with",
           "points": [
             [
-              3115,
-              451
+              3330,
+              444
             ],
             [
-              3362,
-              481
+              3609,
+              466
             ],
             [
-              3850,
-              553
-            ],
-            [
-              4245,
-              684
-            ],
-            [
-              4260,
-              689
-            ],
-            [
-              4275,
-              694
-            ],
-            [
-              4291,
-              700
-            ]
-          ],
-          "labelBBox": {
-            "x": 4040,
-            "y": 582,
-            "width": 187,
-            "height": 42
-          },
-          "parent": null,
-          "relations": [
-            "ycg4rx"
-          ],
-          "color": "gray",
-          "line": "solid",
-          "head": "normal",
-          "technology": "",
-          "kind": "sync",
-          "isCustomized": true
-        },
-        {
-          "id": "m2zguw",
-          "source": "bifrost",
-          "target": "github",
-          "label": "opens, reviews and reads the\nPRs, runs and releases on",
-          "points": [
-            [
-              3115,
-              438
-            ],
-            [
-              3424,
-              453
-            ],
-            [
-              4121,
-              504
+              4201,
+              529
             ],
             [
               4675,
@@ -3836,57 +3914,51 @@
             ]
           ],
           "labelBBox": {
-            "x": 4449,
+            "x": 4436,
             "y": 582,
-            "width": 195,
+            "width": 187,
             "height": 42
           },
           "parent": null,
           "relations": [
-            "cxlj8d",
-            "1uldhe5",
-            "1e1xcku",
-            "u0q96v",
-            "bs8sfd",
-            "1ny5s3x",
-            "139xnke"
+            "f8svcf"
           ],
           "color": "gray",
           "line": "solid",
           "head": "normal",
-          "kind": "sync",
           "technology": "",
+          "kind": "sync",
           "isCustomized": true
         },
         {
-          "id": "kupr40",
+          "id": "m2zguw",
           "source": "bifrost",
-          "target": "aiClis",
-          "label": "runs the reviews and the jury on",
+          "target": "github",
+          "label": "opens, reviews and reads the\nPRs, runs and releases on",
           "points": [
             [
-              3115,
-              439
+              3330,
+              443
             ],
             [
-              3419,
-              453
+              3602,
+              461
             ],
             [
-              4102,
-              491
+              4172,
+              505
             ],
             [
-              4670,
+              4649,
               582
             ],
             [
-              4866,
-              613
+              4854,
+              615
             ],
             [
-              4916,
-              623
+              4907,
+              621
             ],
             [
               5105,
@@ -3906,52 +3978,57 @@
             ]
           ],
           "labelBBox": {
-            "x": 4898,
-            "y": 591,
-            "width": 213,
-            "height": 25
+            "x": 4888,
+            "y": 582,
+            "width": 195,
+            "height": 42
           },
           "parent": null,
           "relations": [
-            "layk8i",
-            "1a5z5d1"
+            "1c1yryz",
+            "ypu9e7",
+            "1iu50ps",
+            "10p6t1l",
+            "qq7lgr",
+            "h7i0b3",
+            "1o090ud"
           ],
           "color": "gray",
           "line": "solid",
           "head": "normal",
-          "technology": "",
           "kind": "sync",
+          "technology": "",
           "isCustomized": true
         },
         {
-          "id": "dp3w0b",
+          "id": "kupr40",
           "source": "bifrost",
-          "target": "ecosystemVault",
-          "label": "reads the names of\nthe fleet repos from",
+          "target": "aiClis",
+          "label": "runs the reviews and the jury on",
           "points": [
             [
-              3115,
-              434
+              3330,
+              437
             ],
             [
-              3477,
-              438
+              3663,
+              446
             ],
             [
-              4387,
-              461
+              4454,
+              479
             ],
             [
-              5137,
+              5109,
               582
             ],
             [
-              5317,
-              611
+              5301,
+              612
             ],
             [
-              5362,
-              626
+              5350,
+              624
             ],
             [
               5535,
@@ -3971,14 +4048,79 @@
             ]
           ],
           "labelBBox": {
-            "x": 5339,
+            "x": 5332,
+            "y": 591,
+            "width": 213,
+            "height": 25
+          },
+          "parent": null,
+          "relations": [
+            "pmlsqc",
+            "1cvsxr7"
+          ],
+          "color": "gray",
+          "line": "solid",
+          "head": "normal",
+          "technology": "",
+          "kind": "sync",
+          "isCustomized": true
+        },
+        {
+          "id": "dp3w0b",
+          "source": "bifrost",
+          "target": "ecosystemVault",
+          "label": "reads the names of\nthe fleet repos from",
+          "points": [
+            [
+              3330,
+              432
+            ],
+            [
+              3717,
+              433
+            ],
+            [
+              4735,
+              449
+            ],
+            [
+              5572,
+              582
+            ],
+            [
+              5750,
+              610
+            ],
+            [
+              5794,
+              627
+            ],
+            [
+              5965,
+              684
+            ],
+            [
+              5980,
+              689
+            ],
+            [
+              5995,
+              695
+            ],
+            [
+              6011,
+              700
+            ]
+          ],
+          "labelBBox": {
+            "x": 5778,
             "y": 582,
             "width": 137,
             "height": 42
           },
           "parent": null,
           "relations": [
-            "1rl23sq"
+            "woruwk"
           ],
           "color": "gray",
           "line": "solid",
@@ -4040,11 +4182,11 @@
           }
         ]
       },
-      "hash": "RyQ2fZ47nY9zR0wVBxSW6CgOue4uTVkISTFYupUjZTo",
+      "hash": "HEwlsXR9xDLEK1vlVXO2c6fYO45ZLQNaVuOXdSs6gaY",
       "bounds": {
         "x": 0,
         "y": 0,
-        "width": 5334,
+        "width": 5699,
         "height": 877
       },
       "nodes": [
@@ -4073,7 +4215,7 @@
           "tags": [],
           "notation": "Person",
           "kind": "person",
-          "x": 2111,
+          "x": 2290,
           "y": 0,
           "width": 320,
           "height": 180,
@@ -4108,12 +4250,12 @@
           "tags": [],
           "notation": "Person",
           "kind": "person",
-          "x": 2743,
+          "x": 2922,
           "y": 0,
           "width": 320,
           "height": 180,
           "labelBBox": {
-            "x": 12,
+            "x": 13,
             "y": 38,
             "width": 295,
             "height": 101
@@ -4130,7 +4272,7 @@
           "outEdges": [
             "ejo2m1",
             "1h63cuo",
-            "17q9yep",
+            "1g9oclr",
             "1ic68zx"
           ],
           "title": "stark-progress mod",
@@ -4158,7 +4300,7 @@
               "title": "code: mods/stark-progress/"
             }
           ],
-          "x": 736,
+          "x": 785,
           "y": 342,
           "width": 320,
           "height": 180,
@@ -4181,8 +4323,9 @@
           "outEdges": [
             "w04j40",
             "1dp5349",
-            "1i4dg4o",
+            "2vmafq",
             "s5uojr",
+            "x51jpi",
             "x5187m",
             "1kyz6cu",
             "5th370",
@@ -4201,7 +4344,7 @@
             "size": "md"
           },
           "description": {
-            "txt": "The 31 skills in seven plugins, which a coding agent loads and follows."
+            "txt": "The 34 skills in seven plugins, which a coding agent loads and follows."
           },
           "tags": [],
           "metadata": {
@@ -4223,7 +4366,7 @@
               "title": "code: standards/"
             }
           ],
-          "x": 2364,
+          "x": 2543,
           "y": 342,
           "width": 320,
           "height": 180,
@@ -4281,7 +4424,7 @@
               "title": "code: mods/needs-you/"
             }
           ],
-          "x": 2869,
+          "x": 3048,
           "y": 342,
           "width": 320,
           "height": 180,
@@ -4317,7 +4460,7 @@
           "notation": "Container: Database",
           "technology": "JSON and JSON Lines files",
           "kind": "database",
-          "x": 39,
+          "x": 0,
           "y": 697,
           "width": 320,
           "height": 180,
@@ -4355,7 +4498,7 @@
           },
           "notation": "Software System (external)",
           "kind": "externalSystem",
-          "x": 654,
+          "x": 576,
           "y": 697,
           "width": 320,
           "height": 180,
@@ -4367,17 +4510,17 @@
           }
         },
         {
-          "id": "hermod",
+          "id": "muxControl",
           "parent": null,
           "level": 0,
           "children": [],
           "inEdges": [
-            "1i4dg4o",
-            "17q9yep"
+            "2vmafq",
+            "1g9oclr"
           ],
           "outEdges": [],
-          "title": "Hermod",
-          "modelRef": "hermod",
+          "title": "mux-control",
+          "modelRef": "muxControl",
           "shape": "rectangle",
           "color": "c4-external",
           "style": {
@@ -4385,22 +4528,22 @@
             "size": "md"
           },
           "description": {
-            "txt": "Places the tabs of the agents in cmux, carries their messages, and closes the tabs."
+            "txt": "Holds muxctl, which places the tabs of the agents in cmux or tmux, carries their messages, and closes the tabs."
           },
           "tags": [],
           "metadata": {
-            "fleetRepo": "hermod"
+            "fleetRepo": "mux-control"
           },
           "notation": "Software System (external)",
           "kind": "externalSystem",
-          "x": 1124,
+          "x": 1079,
           "y": 697,
           "width": 320,
           "height": 180,
           "labelBBox": {
-            "x": 30,
+            "x": 18,
             "y": 47,
-            "width": 260,
+            "width": 283,
             "height": 83
           }
         },
@@ -4422,7 +4565,7 @@
             "size": "md"
           },
           "description": {
-            "txt": "Holds njord, which opens and merges the PRs, and valkyrie, which launches the Gru, Minion and Agnes workers."
+            "txt": "Holds valkyrie, which launches the Gru, Minion and Agnes workers."
           },
           "tags": [],
           "metadata": {
@@ -4430,15 +4573,52 @@
           },
           "notation": "Software System (external)",
           "kind": "externalSystem",
-          "x": 2004,
+          "x": 1939,
           "y": 697,
           "width": 320,
           "height": 180,
           "labelBBox": {
-            "x": 15,
-            "y": 47,
-            "width": 290,
-            "height": 83
+            "x": 27,
+            "y": 56,
+            "width": 267,
+            "height": 65
+          }
+        },
+        {
+          "id": "ghx",
+          "parent": null,
+          "level": 0,
+          "children": [],
+          "inEdges": [
+            "x51jpi"
+          ],
+          "outEdges": [],
+          "title": "ghx",
+          "modelRef": "ghx",
+          "shape": "rectangle",
+          "color": "c4-external",
+          "style": {
+            "opacity": 15,
+            "size": "md"
+          },
+          "description": {
+            "txt": "The GitHub CLI of the fleet, in the github-extended repo: opens and merges the PRs, watches CI, and cleans merged branches and worktrees."
+          },
+          "tags": [],
+          "metadata": {
+            "fleetRepo": "github-extended"
+          },
+          "notation": "Software System (external)",
+          "kind": "externalSystem",
+          "x": 2369,
+          "y": 697,
+          "width": 320,
+          "height": 180,
+          "labelBBox": {
+            "x": 21,
+            "y": 38,
+            "width": 277,
+            "height": 101
           }
         },
         {
@@ -4467,7 +4647,7 @@
           },
           "notation": "Software System (external)",
           "kind": "externalSystem",
-          "x": 2434,
+          "x": 2799,
           "y": 697,
           "width": 320,
           "height": 180,
@@ -4504,7 +4684,7 @@
           },
           "notation": "Software System (external)",
           "kind": "externalSystem",
-          "x": 2864,
+          "x": 3229,
           "y": 697,
           "width": 320,
           "height": 180,
@@ -4541,7 +4721,7 @@
           },
           "notation": "Software System (external)",
           "kind": "externalSystem",
-          "x": 3294,
+          "x": 3659,
           "y": 697,
           "width": 320,
           "height": 180,
@@ -4578,7 +4758,7 @@
           },
           "notation": "Software System (external)",
           "kind": "externalSystem",
-          "x": 3724,
+          "x": 4089,
           "y": 697,
           "width": 320,
           "height": 180,
@@ -4615,7 +4795,7 @@
           },
           "notation": "Software System (external)",
           "kind": "externalSystem",
-          "x": 4154,
+          "x": 4519,
           "y": 697,
           "width": 320,
           "height": 180,
@@ -4652,7 +4832,7 @@
           },
           "notation": "Software System (external)",
           "kind": "externalSystem",
-          "x": 4584,
+          "x": 4949,
           "y": 697,
           "width": 320,
           "height": 180,
@@ -4689,7 +4869,7 @@
           },
           "notation": "Software System (external)",
           "kind": "externalSystem",
-          "x": 5014,
+          "x": 5379,
           "y": 697,
           "width": 320,
           "height": 180,
@@ -4725,7 +4905,7 @@
           "tags": [],
           "notation": "Software System (external)",
           "kind": "externalSystem",
-          "x": 1574,
+          "x": 1509,
           "y": 697,
           "width": 320,
           "height": 180,
@@ -4745,43 +4925,43 @@
           "label": "starts skills by slash\ncommand from",
           "points": [
             [
-              2238,
+              2418,
               180
             ],
             [
-              2232,
+              2411,
               214
             ],
             [
-              2231,
+              2410,
               252
             ],
             [
-              2249,
+              2428,
               282
             ],
             [
-              2273,
+              2452,
               323
             ],
             [
-              2313,
+              2492,
               353
             ],
             [
-              2355,
+              2534,
               375
             ]
           ],
           "labelBBox": {
-            "x": 2249,
+            "x": 2428,
             "y": 240,
             "width": 138,
             "height": 42
           },
           "parent": null,
           "relations": [
-            "1nb7wrc"
+            "1jgl3rr"
           ],
           "color": "gray",
           "line": "solid",
@@ -4795,43 +4975,43 @@
           "label": "loads and follows the skills of",
           "points": [
             [
-              2743,
+              2922,
               107
             ],
             [
-              2656,
+              2836,
               125
             ],
             [
-              2556,
+              2735,
               162
             ],
             [
-              2502,
+              2681,
               240
             ],
             [
-              2484,
+              2663,
               266
             ],
             [
-              2482,
+              2661,
               300
             ],
             [
-              2488,
+              2667,
               332
             ]
           ],
           "labelBBox": {
-            "x": 2502,
+            "x": 2682,
             "y": 249,
             "width": 197,
             "height": 25
           },
           "parent": null,
           "relations": [
-            "1ekfilh"
+            "1uf1i6c"
           ],
           "color": "gray",
           "line": "solid",
@@ -4845,31 +5025,31 @@
           "label": "watches the worker runs and\nsets the ticket settings in",
           "points": [
             [
-              2111,
-              131
+              2290,
+              127
             ],
             [
-              1850,
-              195
+              2004,
+              192
             ],
             [
-              1334,
-              323
+              1408,
+              326
             ],
             [
-              1066,
-              389
+              1115,
+              393
             ]
           ],
           "labelBBox": {
-            "x": 1666,
+            "x": 1788,
             "y": 240,
             "width": 194,
             "height": 42
           },
           "parent": null,
           "relations": [
-            "1hbfq5q"
+            "4rikpb"
           ],
           "color": "gray",
           "line": "solid",
@@ -4883,43 +5063,43 @@
           "label": "answers the questions\nof the agent in",
           "points": [
             [
-              2431,
+              2610,
               134
             ],
             [
-              2519,
+              2698,
               160
             ],
             [
-              2629,
+              2808,
               196
             ],
             [
-              2722,
+              2901,
               240
             ],
             [
-              2780,
+              2959,
               267
             ],
             [
-              2841,
+              3020,
               303
             ],
             [
-              2893,
+              3072,
               337
             ]
           ],
           "labelBBox": {
-            "x": 2801,
+            "x": 2980,
             "y": 240,
             "width": 154,
             "height": 42
           },
           "parent": null,
           "relations": [
-            "hweg33"
+            "1l02ked"
           ],
           "color": "gray",
           "line": "solid",
@@ -4933,43 +5113,43 @@
           "label": "asks the operator questions with",
           "points": [
             [
-              2962,
+              3141,
               180
             ],
             [
-              2973,
+              3152,
               199
             ],
             [
-              2983,
+              3162,
               220
             ],
             [
-              2991,
+              3170,
               240
             ],
             [
-              3002,
+              3181,
               269
             ],
             [
-              3010,
+              3189,
               302
             ],
             [
-              3016,
+              3195,
               332
             ]
           ],
           "labelBBox": {
-            "x": 3005,
+            "x": 3184,
             "y": 249,
             "width": 217,
             "height": 25
           },
           "parent": null,
           "relations": [
-            "1wlawpq"
+            "1j5bczj"
           ],
           "color": "gray",
           "line": "solid",
@@ -4983,43 +5163,43 @@
           "label": "writes the ticket,\nrun and log files to",
           "points": [
             [
-              2364,
+              2543,
               443
             ],
             [
-              1880,
+              2039,
               473
             ],
             [
-              460,
-              562
+              513,
+              565
             ],
             [
-              415,
+              464,
               582
             ],
             [
-              361,
-              605
+              394,
+              606
             ],
             [
-              313,
-              648
+              325,
+              650
             ],
             [
-              276,
-              688
+              270,
+              691
             ]
           ],
           "labelBBox": {
-            "x": 415,
+            "x": 464,
             "y": 583,
             "width": 128,
             "height": 55
           },
           "parent": null,
           "relations": [
-            "1qggv4d"
+            "1t3us6m"
           ],
           "color": "gray",
           "line": "solid",
@@ -5034,43 +5214,43 @@
           "label": "reads each run and ticket from,\nand writes the settings to",
           "points": [
             [
-              736,
+              785,
               436
             ],
             [
-              508,
+              557,
               445
             ],
             [
-              106,
+              155,
               475
             ],
             [
-              15,
+              64,
               582
             ],
             [
-              -17,
-              620
+              38,
+              613
             ],
             [
-              7,
-              660
+              49,
+              652
             ],
             [
-              47,
-              695
+              70,
+              688
             ]
           ],
           "labelBBox": {
-            "x": 15,
+            "x": 64,
             "y": 583,
             "width": 208,
             "height": 55
           },
           "parent": null,
           "relations": [
-            "8i4cnv"
+            "17gdzzk"
           ],
           "color": "gray",
           "line": "solid",
@@ -5085,43 +5265,43 @@
           "label": "binds, files, moves and\ncloses the tickets with",
           "points": [
             [
-              2364,
-              438
+              2543,
+              440
             ],
             [
-              1977,
-              452
+              2137,
+              460
             ],
             [
-              1010,
-              495
+              1086,
+              516
             ],
             [
-              894,
+              943,
               582
             ],
             [
-              860,
-              607
+              891,
+              606
             ],
             [
-              841,
-              648
+              844,
+              649
             ],
             [
-              830,
-              687
+              808,
+              689
             ]
           ],
           "labelBBox": {
-            "x": 894,
+            "x": 944,
             "y": 583,
             "width": 155,
             "height": 55
           },
           "parent": null,
           "relations": [
-            "1ly0i07"
+            "to3i92"
           ],
           "color": "gray",
           "line": "solid",
@@ -5136,43 +5316,43 @@
           "label": "reads the title of the epic from",
           "points": [
             [
-              736,
+              785,
               470
             ],
             [
-              677,
+              726,
               492
             ],
             [
-              616,
+              665,
               527
             ],
             [
-              581,
+              630,
               582
             ],
             [
-              549,
-              633
+              609,
+              616
             ],
             [
-              589,
-              678
+              620,
+              654
             ],
             [
-              645,
-              713
+              642,
+              688
             ]
           ],
           "labelBBox": {
-            "x": 581,
+            "x": 630,
             "y": 591,
             "width": 202,
             "height": 38
           },
           "parent": null,
           "relations": [
-            "ei8mx"
+            "1wnj7gb"
           ],
           "color": "gray",
           "line": "solid",
@@ -5181,49 +5361,49 @@
           "kind": "sync"
         },
         {
-          "id": "1i4dg4o",
+          "id": "2vmafq",
           "source": "bifrost.skills",
-          "target": "hermod",
+          "target": "muxControl",
           "label": "opens, titles, messages and\ncloses the worker tabs with",
           "points": [
             [
-              2364,
-              438
+              2543,
+              440
             ],
             [
-              2095,
-              449
+              2252,
+              455
             ],
             [
-              1566,
-              483
+              1650,
+              495
             ],
             [
-              1412,
+              1461,
               582
             ],
             [
-              1373,
+              1407,
               607
             ],
             [
-              1344,
-              649
+              1357,
+              650
             ],
             [
-              1323,
-              688
+              1319,
+              690
             ]
           ],
           "labelBBox": {
-            "x": 1412,
+            "x": 1461,
             "y": 583,
             "width": 186,
             "height": 55
           },
           "parent": null,
           "relations": [
-            "p878zr"
+            "ecz5fi"
           ],
           "color": "gray",
           "line": "solid",
@@ -5232,49 +5412,49 @@
           "kind": "sync"
         },
         {
-          "id": "17q9yep",
+          "id": "1g9oclr",
           "source": "bifrost.progressMod",
-          "target": "hermod",
+          "target": "muxControl",
           "label": "brings a worker tab\nto the front with",
           "points": [
             [
-              1006,
+              1065,
               522
             ],
             [
-              1030,
-              541
+              1086,
+              540
             ],
             [
-              1054,
-              562
+              1107,
+              561
             ],
             [
-              1076,
+              1125,
               582
             ],
             [
-              1114,
-              616
+              1152,
+              614
             ],
             [
-              1154,
-              655
+              1175,
+              653
             ],
             [
-              1189,
-              690
+              1194,
+              688
             ]
           ],
           "labelBBox": {
-            "x": 1135,
+            "x": 1163,
             "y": 583,
             "width": 133,
             "height": 55
           },
           "parent": null,
           "relations": [
-            "1nfuynt"
+            "shrt39"
           ],
           "color": "gray",
           "line": "solid",
@@ -5286,46 +5466,85 @@
           "id": "s5uojr",
           "source": "bifrost.skills",
           "target": "idun",
-          "label": "launches the workers and\nopens and merges the PRs with",
+          "label": "launches the workers with",
           "points": [
             [
-              2405,
-              522
+              2543,
+              507
             ],
             [
-              2381,
-              541
+              2497,
+              530
             ],
             [
-              2357,
-              561
+              2447,
+              556
             ],
             [
-              2336,
+              2402,
               582
             ],
             [
-              2302,
+              2345,
               615
             ],
             [
-              2268,
-              654
+              2284,
+              655
             ],
             [
-              2239,
-              689
+              2232,
+              691
             ]
           ],
           "labelBBox": {
-            "x": 2336,
+            "x": 2403,
+            "y": 591,
+            "width": 177,
+            "height": 38
+          },
+          "parent": null,
+          "relations": [
+            "2da2jy"
+          ],
+          "color": "gray",
+          "line": "solid",
+          "head": "normal",
+          "technology": "Shell command",
+          "kind": "sync"
+        },
+        {
+          "id": "x51jpi",
+          "source": "bifrost.skills",
+          "target": "ghx",
+          "label": "opens, watches and\nmerges the PRs with",
+          "points": [
+            [
+              2659,
+              522
+            ],
+            [
+              2634,
+              572
+            ],
+            [
+              2603,
+              636
+            ],
+            [
+              2577,
+              688
+            ]
+          ],
+          "labelBBox": {
+            "x": 2627,
             "y": 583,
-            "width": 209,
+            "width": 141,
             "height": 55
           },
           "parent": null,
           "relations": [
-            "gx508f"
+            "6my78s"
           ],
           "color": "gray",
           "line": "solid",
@@ -5340,43 +5559,31 @@
           "label": "finds the folder of each repo with",
           "points": [
             [
-              2556,
+              2767,
               522
             ],
             [
-              2562,
-              541
+              2804,
+              573
             ],
             [
-              2568,
-              562
+              2851,
+              636
             ],
             [
-              2572,
-              582
-            ],
-            [
-              2579,
-              616
-            ],
-            [
-              2584,
-              653
-            ],
-            [
-              2587,
-              687
+              2888,
+              689
             ]
           ],
           "labelBBox": {
-            "x": 2581,
+            "x": 2847,
             "y": 591,
             "width": 219,
             "height": 38
           },
           "parent": null,
           "relations": [
-            "llgq57"
+            "1jreo49"
           ],
           "color": "gray",
           "line": "solid",
@@ -5391,43 +5598,43 @@
           "label": "reports to a muninn leader through",
           "points": [
             [
-              2684,
-              499
+              2863,
+              485
             ],
             [
-              2732,
-              522
+              2935,
+              510
             ],
             [
-              2783,
-              550
+              3019,
+              544
             ],
             [
-              2827,
+              3092,
               582
             ],
             [
-              2869,
+              3151,
               613
             ],
             [
-              2910,
-              653
+              3213,
+              654
             ],
             [
-              2943,
-              689
+              3265,
+              691
             ]
           ],
           "labelBBox": {
-            "x": 2887,
+            "x": 3178,
             "y": 591,
             "width": 231,
             "height": 38
           },
           "parent": null,
           "relations": [
-            "3g7zb8"
+            "1m5nv62"
           ],
           "color": "gray",
           "line": "dotted",
@@ -5442,55 +5649,55 @@
           "label": "files and reads the EI tickets, and\nsends Slack and Jira text, with",
           "points": [
             [
-              2684,
-              486
+              2863,
+              487
             ],
             [
-              2726,
-              499
+              2905,
+              500
             ],
             [
-              2771,
-              512
+              2950,
+              513
             ],
             [
-              2814,
+              2993,
               522
             ],
             [
-              2959,
-              557
+              3187,
+              565
             ],
             [
-              3006,
-              526
+              3246,
+              521
             ],
             [
-              3145,
+              3435,
               582
             ],
             [
-              3212,
-              609
+              3517,
+              608
             ],
             [
-              3280,
+              3603,
               652
             ],
             [
-              3335,
-              691
+              3672,
+              692
             ]
           ],
           "labelBBox": {
-            "x": 3245,
+            "x": 3568,
             "y": 583,
             "width": 221,
             "height": 55
           },
           "parent": null,
           "relations": [
-            "1rvs5bb"
+            "1dn5bd"
           ],
           "color": "gray",
           "line": "solid",
@@ -5505,55 +5712,55 @@
           "label": "records and supersedes\nthe ADRs with",
           "points": [
             [
-              2684,
+              2863,
               489
             ],
             [
-              2726,
-              501
+              2905,
+              502
             ],
             [
-              2771,
+              2950,
               514
             ],
             [
-              2814,
+              2993,
               522
             ],
             [
-              3111,
-              580
+              3353,
+              589
             ],
             [
-              3202,
-              497
+              3461,
+              489
             ],
             [
-              3493,
+              3815,
               582
             ],
             [
-              3578,
+              3909,
               607
             ],
             [
-              3666,
+              4008,
               651
             ],
             [
-              3737,
+              4087,
               692
             ]
           ],
           "labelBBox": {
-            "x": 3628,
+            "x": 3964,
             "y": 583,
             "width": 163,
             "height": 55
           },
           "parent": null,
           "relations": [
-            "1jhoqji"
+            "jg91sh"
           ],
           "color": "gray",
           "line": "solid",
@@ -5568,55 +5775,55 @@
           "label": "buries retired code in",
           "points": [
             [
-              2684,
-              489
+              2863,
+              490
             ],
             [
-              2726,
+              2905,
               502
             ],
             [
-              2771,
+              2950,
               514
             ],
             [
-              2814,
+              2993,
               522
             ],
             [
-              3254,
-              601
+              3502,
+              612
             ],
             [
-              3382,
-              483
+              3648,
+              478
             ],
             [
-              3818,
+              4154,
               582
             ],
             [
-              3931,
-              608
+              4277,
+              607
             ],
             [
-              4051,
-              657
+              4409,
+              659
             ],
             [
-              4145,
-              700
+              4510,
+              704
             ]
           ],
           "labelBBox": {
-            "x": 3987,
+            "x": 4332,
             "y": 591,
             "width": 146,
             "height": 38
           },
           "parent": null,
           "relations": [
-            "71i00b"
+            "1a4rrvo"
           ],
           "color": "gray",
           "line": "solid",
@@ -5631,55 +5838,55 @@
           "label": "proposes, checks and\naccepts the C4 models with",
           "points": [
             [
-              2684,
+              2863,
               490
             ],
             [
-              2726,
+              2905,
               503
             ],
             [
-              2771,
+              2950,
               515
             ],
             [
-              2814,
+              2993,
               522
             ],
             [
-              3404,
-              624
+              3656,
+              635
             ],
             [
-              3570,
-              479
+              3841,
+              473
             ],
             [
-              4160,
+              4505,
               582
             ],
             [
-              4304,
+              4656,
               607
             ],
             [
-              4460,
-              663
+              4821,
+              665
             ],
             [
-              4575,
-              710
+              4940,
+              712
             ]
           ],
           "labelBBox": {
-            "x": 4374,
+            "x": 4726,
             "y": 583,
             "width": 186,
             "height": 55
           },
           "parent": null,
           "relations": [
-            "oz3ugh"
+            "m0wskz"
           ],
           "color": "gray",
           "line": "solid",
@@ -5694,55 +5901,55 @@
           "label": "asks the operator questions\non the diagram with",
           "points": [
             [
-              2684,
+              2863,
               490
             ],
             [
-              2726,
+              2905,
               503
             ],
             [
-              2771,
+              2950,
               515
             ],
             [
-              2814,
+              2993,
               522
             ],
             [
-              3592,
-              652
+              3847,
+              664
             ],
             [
-              3809,
-              451
+              4085,
+              444
             ],
             [
-              4587,
+              4939,
               582
             ],
             [
-              4732,
+              5089,
               606
             ],
             [
-              4889,
-              663
+              5252,
+              664
             ],
             [
-              5004,
-              710
+              5370,
+              711
             ]
           ],
           "labelBBox": {
-            "x": 4802,
+            "x": 5159,
             "y": 583,
             "width": 187,
             "height": 55
           },
           "parent": null,
           "relations": [
-            "ycg4rx"
+            "f8svcf"
           ],
           "color": "gray",
           "line": "solid",
@@ -5757,43 +5964,43 @@
           "label": "reads the Actions costs and\npublishes the releases on",
           "points": [
             [
-              2364,
-              476
+              2543,
+              464
             ],
             [
-              2276,
-              502
+              2421,
+              490
             ],
             [
-              2167,
-              539
+              2250,
+              530
             ],
             [
-              2073,
+              2105,
               582
             ],
             [
-              2005,
-              613
+              2015,
+              614
             ],
             [
-              1934,
-              654
+              1918,
+              658
             ],
             [
-              1875,
-              692
+              1838,
+              698
             ]
           ],
           "labelBBox": {
-            "x": 2073,
+            "x": 2106,
             "y": 583,
             "width": 185,
             "height": 55
           },
           "parent": null,
           "relations": [
-            "cxlj8d"
+            "1c1yryz"
           ],
           "color": "gray",
           "line": "solid",
@@ -5808,43 +6015,43 @@
           "label": "reads the PRs, the Actions runs\nand the commits of a run from",
           "points": [
             [
-              1056,
-              450
+              1105,
+              443
             ],
             [
-              1242,
-              472
+              1298,
+              458
             ],
             [
-              1537,
-              516
+              1604,
+              496
             ],
             [
-              1625,
+              1674,
               582
             ],
             [
-              1660,
-              608
+              1698,
+              611
             ],
             [
-              1685,
-              649
+              1701,
+              650
             ],
             [
-              1702,
-              688
+              1697,
+              687
             ]
           ],
           "labelBBox": {
-            "x": 1672,
+            "x": 1696,
             "y": 583,
             "width": 208,
             "height": 55
           },
           "parent": null,
           "relations": [
-            "139xnke"
+            "1o090ud"
           ],
           "color": "gray",
           "line": "solid",
@@ -5905,7 +6112,7 @@
           }
         ]
       },
-      "hash": "rZqxfNx0HIqE1Al1vPhYZLD3ikJB1lYrbmBUHkBJBe0",
+      "hash": "Ztgx6Wmw329wFDtCC0rp6vRTwyBLe_5UJzz9I0VzODM",
       "bounds": {
         "x": 0,
         "y": 0,
@@ -5977,7 +6184,7 @@
             "size": "md"
           },
           "description": {
-            "txt": "The 31 skills in seven plugins, which a coding agent loads and follows."
+            "txt": "The 34 skills in seven plugins, which a coding agent loads and follows."
           },
           "tags": [],
           "metadata": {
@@ -6086,7 +6293,7 @@
             "size": "md"
           },
           "description": {
-            "txt": "Runs before each njord pr-merge call, triages the agent files that the PR changes, and denies the merge only on a RED clause that the PR adds."
+            "txt": "Runs before each ghx pr-merge call, triages the agent files that the PR changes, and denies the merge only on a RED clause that the PR adds."
           },
           "tags": [],
           "metadata": {
@@ -6869,7 +7076,7 @@
           },
           "parent": null,
           "relations": [
-            "1ekfilh"
+            "1uf1i6c"
           ],
           "color": "gray",
           "line": "solid",
@@ -6931,7 +7138,7 @@
           },
           "parent": null,
           "relations": [
-            "d4khav"
+            "r69anq"
           ],
           "color": "gray",
           "line": "solid",
@@ -6970,7 +7177,7 @@
           },
           "parent": null,
           "relations": [
-            "y4s3mb"
+            "1h0771s"
           ],
           "color": "gray",
           "line": "solid",
@@ -7020,7 +7227,7 @@
           },
           "parent": null,
           "relations": [
-            "17xs9r"
+            "ug5g28"
           ],
           "color": "gray",
           "line": "solid",
@@ -7071,7 +7278,7 @@
           },
           "parent": null,
           "relations": [
-            "11tpna0"
+            "ggtffd"
           ],
           "color": "gray",
           "line": "solid",
@@ -7122,7 +7329,7 @@
           },
           "parent": null,
           "relations": [
-            "t3nowf"
+            "1dy5vl3"
           ],
           "color": "gray",
           "line": "solid",
@@ -7173,7 +7380,7 @@
           },
           "parent": null,
           "relations": [
-            "18fdhza"
+            "y2cz0n"
           ],
           "color": "gray",
           "line": "solid",
@@ -7185,7 +7392,7 @@
           "id": "ivqczi",
           "source": "agent",
           "target": "bifrost.gateHook",
-          "label": "is checked before each\nnjord pr-merge call by",
+          "label": "is checked before each\nghx pr-merge call by",
           "points": [
             [
               3260,
@@ -7212,7 +7419,7 @@
           },
           "parent": null,
           "relations": [
-            "ndaub4"
+            "1jw3653"
           ],
           "color": "gray",
           "line": "solid",
@@ -7250,7 +7457,7 @@
           },
           "parent": null,
           "relations": [
-            "bvfwcz"
+            "mqws9d"
           ],
           "color": "gray",
           "line": "solid",
@@ -7301,7 +7508,7 @@
           },
           "parent": null,
           "relations": [
-            "1vlx1w0"
+            "1mn3pyp"
           ],
           "color": "gray",
           "line": "solid",
@@ -7351,7 +7558,7 @@
           },
           "parent": null,
           "relations": [
-            "hrel3t"
+            "1rq33lm"
           ],
           "color": "gray",
           "line": "solid",
@@ -7401,7 +7608,7 @@
           },
           "parent": null,
           "relations": [
-            "1x3r7un"
+            "646c8t"
           ],
           "color": "gray",
           "line": "solid",
@@ -7464,7 +7671,7 @@
           },
           "parent": null,
           "relations": [
-            "1soedki"
+            "1pg9i7v"
           ],
           "color": "gray",
           "line": "solid",
@@ -7515,7 +7722,7 @@
           },
           "parent": null,
           "relations": [
-            "bd125r"
+            "zk5xbd"
           ],
           "color": "gray",
           "line": "solid",
@@ -7578,7 +7785,7 @@
           },
           "parent": null,
           "relations": [
-            "pnygsz"
+            "1wlb3rx"
           ],
           "color": "gray",
           "line": "solid",
@@ -7629,7 +7836,7 @@
           },
           "parent": null,
           "relations": [
-            "cxlj8d"
+            "1c1yryz"
           ],
           "color": "gray",
           "line": "solid",
@@ -7704,7 +7911,7 @@
           },
           "parent": null,
           "relations": [
-            "1uldhe5"
+            "ypu9e7"
           ],
           "color": "gray",
           "line": "solid",
@@ -7767,7 +7974,7 @@
           },
           "parent": null,
           "relations": [
-            "1e1xcku"
+            "1iu50ps"
           ],
           "color": "gray",
           "line": "solid",
@@ -7818,7 +8025,7 @@
           },
           "parent": null,
           "relations": [
-            "u0q96v"
+            "10p6t1l"
           ],
           "color": "gray",
           "line": "solid",
@@ -7881,7 +8088,7 @@
           },
           "parent": null,
           "relations": [
-            "bs8sfd"
+            "qq7lgr"
           ],
           "color": "gray",
           "line": "solid",
@@ -7968,7 +8175,7 @@
           },
           "parent": null,
           "relations": [
-            "1ny5s3x"
+            "h7i0b3"
           ],
           "color": "gray",
           "line": "solid",
@@ -8019,7 +8226,7 @@
           },
           "parent": null,
           "relations": [
-            "layk8i"
+            "pmlsqc"
           ],
           "color": "gray",
           "line": "solid",
@@ -8070,7 +8277,7 @@
           },
           "parent": null,
           "relations": [
-            "1a5z5d1"
+            "1cvsxr7"
           ],
           "color": "gray",
           "line": "solid",
@@ -8121,7 +8328,7 @@
           },
           "parent": null,
           "relations": [
-            "1ly0i07"
+            "to3i92"
           ],
           "color": "gray",
           "line": "solid",
@@ -8172,7 +8379,7 @@
           },
           "parent": null,
           "relations": [
-            "1y8dyz9"
+            "zqdkqk"
           ],
           "color": "gray",
           "line": "solid",
@@ -8223,7 +8430,7 @@
           },
           "parent": null,
           "relations": [
-            "rhucd3"
+            "1ngadn9"
           ],
           "color": "gray",
           "line": "solid",
@@ -8262,7 +8469,7 @@
           },
           "parent": null,
           "relations": [
-            "1rl23sq"
+            "woruwk"
           ],
           "color": "gray",
           "line": "solid",

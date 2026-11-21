@@ -81,8 +81,10 @@ function stage(
     isMvFailing: false,
     /** Files that stay listed but whose read fails, as a read of a file mid-swap can. */
     failReads: new Set<string>(),
-    /** What `hermod focus` answers. */
-    hermod: { exitCode: 0, stderr: '' },
+    /** What `muxctl focus` answers, or `null` when muxctl cannot start, as on a host with an old install. */
+    muxctl: { exitCode: 0, stderr: '' } as { exitCode: number; stderr: string } | null,
+    /** What `hermod focus`, muxctl's old name, answers, or `null` when it cannot start. */
+    hermod: { exitCode: 0, stderr: '' } as { exitCode: number; stderr: string } | null,
     /** What `alfred task show --json` answers: by default, no such ticket. */
     alfred: { exitCode: 1, stdout: '' },
     /** What `gh api graphql` answers. */
@@ -124,8 +126,10 @@ function stage(
   on('process.run', (_$, e) => {
     const argv = [...e.argv]
     seen.runs.push(argv)
-    if (argv[0] === 'hermod') {
-      return { value: { ...seen.hermod, stdout: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    if (argv[0] === 'muxctl' || argv[0] === 'hermod') {
+      const answer = seen[argv[0]]
+      if (answer === null) throw new Error(`Executable not found in $PATH: "${argv[0]}"`)
+      return { value: { ...answer, stdout: '', isStdoutTruncated: false, isStderrTruncated: false } }
     }
     if (argv[0] === 'alfred') {
       return { value: { ...seen.alfred, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
@@ -706,26 +710,56 @@ test("a ticket whose worker tab is open draws its id as a button that brings tha
   expect(await pane.find({ type: 'Text', text: /^In this step since/ })).toBeDefined()
 
   await pane.press({ key: 'tab-STARK-1' })
-  expect(seen.runs).toContainEqual(['hermod', 'focus', SURFACE])
+  expect(seen.runs.filter(argv => argv[1] === 'focus')).toEqual([['muxctl', 'focus', SURFACE]])
   expect(seen.toasts).toEqual([])
   // No button for a closed tab.
   expect((await pane.findAll({ type: 'Button' })).map(b => b.key)).not.toContain('tab-STARK-2')
 })
 
-test('a press on a tab that hermod cannot bring to the front says why', async ($, on) => {
+/** A Gru board with one open tab, STARK-1's, and the pane drawn. */
+async function oneOpenTab($: Engine, on: On) {
   const disk: Record<string, string> = {
     'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1'] }),
     'STARK-1.json': ticket('STARK-1', 'pr'),
     'STARK-1.beat.json': JSON.stringify({ updated: new Date(T0).toISOString(), lastActivity: null, running: null, minutes: [], recent: [], surface: SURFACE }),
   }
   const seen = stage(on, disk, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
-  seen.hermod = { exitCode: 2, stderr: 'surface not found\nmore' }
   const clock = mock.clock(on, { now: T0 })
   await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
   await clock.advance(1000)
-  const pane = await $.ui.mount(PANE)
+  return { seen, pane: await $.ui.mount(PANE) }
+}
+
+test('a press on a tab that muxctl cannot bring to the front says why, with no second try', async ($, on) => {
+  const { seen, pane } = await oneOpenTab($, on)
+  seen.muxctl = { exitCode: 2, stderr: 'surface not found\nmore' }
   await pane.press({ key: 'tab-STARK-1' })
   expect(seen.toasts).toEqual(['The tab of STARK-1 did not come to the front: surface not found'])
+  expect(seen.runs.filter(argv => argv[1] === 'focus')).toEqual([['muxctl', 'focus', SURFACE]])
+})
+
+test('a host with an old install and no muxctl brings the tab to the front with hermod', async ($, on) => {
+  const { seen, pane } = await oneOpenTab($, on)
+  seen.muxctl = null
+  await pane.press({ key: 'tab-STARK-1' })
+  expect(seen.runs.filter(argv => argv[1] === 'focus')).toEqual([
+    ['muxctl', 'focus', SURFACE],
+    ['hermod', 'focus', SURFACE],
+  ])
+  expect(seen.toasts).toEqual([])
+})
+
+test('a host with neither muxctl nor hermod tries both, then says the tab did not come to the front', async ($, on) => {
+  const { seen, pane } = await oneOpenTab($, on)
+  seen.muxctl = null
+  seen.hermod = null
+  await pane.press({ key: 'tab-STARK-1' })
+  expect(seen.runs.filter(argv => argv[1] === 'focus')).toEqual([
+    ['muxctl', 'focus', SURFACE],
+    ['hermod', 'focus', SURFACE],
+  ])
+  expect(seen.toasts).toHaveLength(1)
+  expect(seen.toasts[0]).toStartWith('The tab of STARK-1 did not come to the front: ')
 })
 
 test("a worker's tab writes its cmux surface into its heartbeat, and a keep-alive once a minute with no call", async ($, on) => {
@@ -1981,7 +2015,7 @@ test("a worker's tab counts its requests, prompts, calls and reviews, writes its
   await $.prompt.submit({ text: 'go on', wait: false, origin: { kind: 'composer' } })
   await $.prompt.submit({ text: 'unblocked', wait: false, origin: { kind: 'peer' } })
   await $.prompt.submit({ text: 'a task ended', wait: false, isMeta: true, origin: { kind: 'task-notification' } })
-  await $.tool.call({ tool: 'Bash', command: "hermod msg send --to gru --kind note -- 'done'" })
+  await $.tool.call({ tool: 'Bash', command: "muxctl msg send --to gru --kind note -- 'done'" })
   await $.tool.call({ tool: 'Bash', command: 'false' })
   await $.tool.call({ tool: 'Read', file_path: '/r/a.ts' })
   // A review round typed, and one the model runs with the Skill tool; another skill or command is none.

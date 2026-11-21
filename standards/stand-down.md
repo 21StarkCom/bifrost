@@ -6,11 +6,16 @@ tmux without cmux (the Linux devbox) its tmux pane, and with it the window
 when the pane is the window's only one.
 `/minion` and `/agnes` run this at the end of a ticket, and `/gru` at the end
 of a finished run; none restates it.
-The full hermod behaviour below was live-verified against hermod's TS engine
-(`close-session.ts`, `poison-pill.ts`, `bin/hermod.ts`) plus an observed real
-run under STARK-6166 — it is spec, not hints. The tmux facts were measured on
-tmux 3.8 and hermod's tmux transport, and the reaper's timing on Claude Code
-2.1.296 with hermod built at `e1f2c5a`.
+The full muxctl behaviour below was live-verified against mux-control's TS
+engine (`close-session.ts`, `poison-pill.ts` and the CLI entry, then named
+hermod) plus an observed real run under STARK-6166 — it is spec, not hints.
+The tmux facts were measured on tmux 3.8 and muxctl's tmux transport, and the
+reaper's timing on Claude Code 2.1.296 with mux-control built at `e1f2c5a`.
+
+`muxctl` is the command of mux-control, which was named hermod before 0.53.0.
+A host whose install predates 0.53.0 has only `hermod`: run each `muxctl` line
+of this doc as `hermod` there, with the same arguments. Its reaper labels and
+log files keep the `hermod` name on every version.
 
 This doc is runtime-neutral and is shipped byte-identical to both runtimes, so
 read two conventions into it throughout. **The repo's agent instructions file**
@@ -21,7 +26,7 @@ launch or a brief naming one names the other.
 One thing is the calling skill's, and this doc calls it by name:
 
 - **your report** — where the outcome goes before you die (a Minion's
-  native or Hermod message to its leader, or its line in its own tab under
+  native or muxctl message to its leader, or its line in its own tab under
   `leader operator`; Agnes's comment on the ticket; Gru's `report:` to its
   muninn leader, or its comment on the epic).
   Whatever it is, it is a completed act before you arm, and it is never the
@@ -68,7 +73,7 @@ stands down; you do, from your own session.
 ## The command
 
 ```
-hermod poison-pill --json
+muxctl poison-pill --json
 ```
 
 It targets your own tab (your cmux surface, `$CMUX_SURFACE_ID`, else your tmux
@@ -84,8 +89,8 @@ worktree in place, and a failed removal comes after the tab is gone. Measured
 on Claude, the quit landed inside a running `sleep 120`, and the teardown was
 done about a second after the arm. In tmux, closing it kills your pane, and
 with it the window when your pane is that window's only one. The quit verb is
-hermod's problem, not yours (`/exit` on Claude, `/quit` on Codex), so both
-runtimes run this identical line. The tmux pane needs a hermod after v0.37.0
+muxctl's problem, not yours (`/exit` on Claude, `/quit` on Codex), so both
+runtimes run this identical line. The tmux pane needs a mux-control after v0.37.0
 (STARK-11364, merge commit `e1f2c5a`): v0.37.0 and earlier refuse a tmux pane
 in the foreground, exit 2, which is the report-and-stop in
 [It can still fall short](#it-can-still-fall-short-and-no-answer-to-that-is---force).
@@ -101,7 +106,7 @@ in the foreground, exit 2, which is the report-and-stop in
   which is safe only because everything you did is pushed and merged by then. It
   is never a generic "I'm finished" reflex.
 - **Confirm that yourself, against the worktree poison-pill is actually aimed
-  at** — the path `hermod poison-pill --dry-run --json` reports, which is not
+  at** — the path `muxctl poison-pill --dry-run --json` reports, which is not
   necessarily the directory your shell is standing in (nor, per the section
   below, that worktree's root — but it is inside it, which is all these two
   checks need), so run both checks with `git -C <that path>`: `git -C <that path> status --porcelain` must print
@@ -128,25 +133,25 @@ in the foreground, exit 2, which is the report-and-stop in
   are in cmux, even inside tmux: count the surfaces in your pane, because cmux
   refuses to close a window's only one and that failure is invisible until
   after you are dead (see `partial`, below). It is two steps, because
-  `hermod panes` lists only the workspace `$CMUX_WORKSPACE_ID` names and that
-  stamp goes stale the moment a tab is moved between workspaces (`hermod v0.19.0`, measured: a moved
-  tab's bare `hermod panes` check printed nothing, rc 0, over a real count of
+  `muxctl panes` lists only the workspace `$CMUX_WORKSPACE_ID` names and that
+  stamp goes stale the moment a tab is moved between workspaces (`mux-control v0.19.0`, measured: a moved
+  tab's bare `muxctl panes` check printed nothing, rc 0, over a real count of
   2). First ask where you really are — `whoami` resolves `$CMUX_SURFACE_ID`
   against the live tree, so its answer is right even under a stale stamp:
 
   ```
-  hermod whoami --json
+  muxctl whoami --json
   ```
 
   If the `id` it prints is a pane id (`%` and a number) rather than the UUID
-  you echoed, hermod is on its tmux transport, where cmux is not installed: it
+  you echoed, muxctl is on its tmux transport, where cmux is not installed: it
   ignores that UUID, an outer cmux's stamp, and aims at your tmux pane, so
   count as in tmux, below.
 
   Then count, pasting the `workspaceId` it printed as a **literal**:
 
   ```
-  CMUX_WORKSPACE_ID=<workspaceId from whoami> hermod panes --json | jq '.panes[]
+  CMUX_WORKSPACE_ID=<workspaceId from whoami> muxctl panes --json | jq '.panes[]
     | select(.surface_ids | index(env.CMUX_SURFACE_ID)) | .surface_count'
   ```
 
@@ -155,14 +160,14 @@ in the foreground, exit 2, which is the report-and-stop in
   measured (Claude Code 2.1.278) on the quoted `VAR="$(…)"` form, while the
   unquoted one got through, a distinction too fine to rest a mandatory step on
   — and the pasted literal works on either runtime, whatever a guard thinks.
-  `hermod panes --pane <paneRef>` is no shortcut either — under a stale stamp
+  `muxctl panes --pane <paneRef>` is no shortcut either — under a stale stamp
   it answers `not_found`.
 
-  This is a workaround with an end date. From `hermod v0.20.0`, `panes` resolves
+  This is a workaround with an end date. From `mux-control v0.20.0`, `panes` resolves
   from the live tree itself (STARK-7262; measured there: a bogus stamp on the
   literal prefix is ignored and the count comes back right). The two steps stay
-  correct there — the pasted id is simply what hermod would have found — so keep
-  them until this contract pins a minimum hermod version. On that hermod the
+  correct there — the pasted id is simply what muxctl would have found — so keep
+  them until this contract pins a minimum mux-control version. On that version the
   stamp is ignored once your surface resolves, so a wrongly pasted id produces
   neither the `not_found` shape below nor the silent one; either then means
   your surface did not resolve, which the `whoami` step already reports.
@@ -182,7 +187,7 @@ in the foreground, exit 2, which is the report-and-stop in
   one-step check was silent. An unset one means you are not in cmux: count as
   in tmux, below. A gone surface poison-pill refuses on itself, so there is
   nothing left to arm: report it and stop. Or the second step
-  **errors** — hermod answers `not_found: Workspace not found`, exit 1, and jq
+  **errors** — muxctl answers `not_found: Workspace not found`, exit 1, and jq
   dies on `Cannot iterate over null`, exit 5 — because what you pasted is not
   a workspace id: `whoami` prints three UUIDs (`id`, `workspaceId`,
   `windowId`) and only `workspaceId` will do, whole. Or the second step prints
@@ -207,8 +212,8 @@ in the foreground, exit 2, which is the report-and-stop in
   **In tmux without cmux**, `$CMUX_SURFACE_ID` printed nothing (or `whoami`
   named a pane id); run `echo "$TMUX_PANE"` as its own command. If it prints
   a pane id (`%` and a number), count the panes in your window instead. The cmux steps cannot do it
-  there: hermod's tmux transport makes every tmux pane a cmux pane of one
-  surface, so `hermod panes` reports a `surface_count` of 1 and no
+  there: muxctl's tmux transport makes every tmux pane a cmux pane of one
+  surface, so `muxctl panes` reports a `surface_count` of 1 and no
   `surface_ids` for every pane, two that share a window included, and the jq
   above dies on `Cannot index null with null`, exit 5; and the `workspaceId`
   `whoami` prints is a tmux session id such as `$1`, which a shell expands.
@@ -248,22 +253,22 @@ in the foreground, exit 2, which is the report-and-stop in
 ## What it aims at
 
 Poison-pill removes the worktree your **session** was launched in — in cmux
-the cwd hermod recorded in its session store, in tmux (where hermod keeps none)
+the cwd muxctl recorded in its session store, in tmux (where muxctl keeps none)
 the cwd of the Claude or Codex process in your pane, never the directory your
 shell happens to be standing in — and it resolves that cwd up to the git
 toplevel, so a subdirectory is never what gets *removed* and there is no `cd`
 ritual to do. (Measured on Claude: its process stayed at the worktree root
 while its shell worked in a subdirectory.)
 
-**But on `hermod v0.19.0` the path it PRINTS is not that toplevel** — it is the
+**But on `mux-control v0.19.0` the path it PRINTS is not that toplevel** — it is the
 raw recorded cwd, which drifts into a subdirectory the moment anything in your
 session runs there (measured: a session that had been in `<worktree>/tools`
 reported `"worktree":"<worktree>/tools"` and
 `"detail":"…remove worktree <worktree>/tools…"`, while the removal would still
-have correctly targeted `<worktree>`). That was STARK-6168, a hermod bug, fixed
-in `hermod v0.20.0` (`845787e`: the ack reports the resolved toplevel). On
+have correctly targeted `<worktree>`). That was STARK-6168, a mux-control bug, fixed
+in `mux-control v0.20.0` (`845787e`: the ack reports the resolved toplevel). On
 v0.19.0 **never read the reported path as the worktree root**; until this
-contract pins a minimum hermod version, do not rest anything on it on any
+contract pins a minimum mux-control version, do not rest anything on it on any
 version. It is still guaranteed to be *inside* your worktree, which is all the
 preflight's `git -C` checks need — `git status` and `git log` are repo-wide
 from any subdirectory. When you want the root itself, ask git
@@ -271,7 +276,7 @@ from any subdirectory. When you want the root itself, ask git
 
 If the reported path is not inside your worktree at all, pass
 `--cwd <worktree root>` rather than `cd`-ing, because moving your shell does not
-move what hermod recorded. Passing `--cwd` explicitly also makes the ack honest:
+move what muxctl recorded. Passing `--cwd` explicitly also makes the ack honest:
 with it, the reported path is the one you named.
 
 ## Flags
@@ -285,13 +290,13 @@ disk, your session, and you are the one who knows you are finished — so it goe
 with you.
 
 Gru is the one exception, and passes `--delete-branch`:
-`hermod poison-pill --delete-branch --json`. Its branch has no PR, so no
+`muxctl poison-pill --delete-branch --json`. Its branch has no PR, so no
 `ghx cleanup` deletes it, and on Codex a leftover branch refuses the next
 Gru on the same launch id. Gru's form of the unpushed check proves first that
 the branch holds no commit a remote does not have.
 
 A `done` with follow-ups filed and a `done` without stand down the same way:
-report, then `hermod poison-pill --json`. Filing follow-ups is no exception —
+report, then `muxctl poison-pill --json`. Filing follow-ups is no exception —
 file them as [the spine](worker-spine.md#6-gaps) says and comment the links on
 your ticket; the ids live on the ticket, not in your `done` line.
 
@@ -321,7 +326,7 @@ foreground goes into your report before you stop.
 ## It can still fall short, and no answer to that is `--force`
 
 If poison-pill fails in the foreground — neither `$CMUX_SURFACE_ID` nor
-`$TMUX_PANE` beside `$TMUX`, a hermod too old for a tmux pane, or a session
+`$TMUX_PANE` beside `$TMUX`, a muxctl too old for a tmux pane, or a session
 store (in tmux, your pane's processes) that cannot
 tell which worktree is yours — you are still alive: say so in your report, then
 stop and leave everything in place. If it arms and the teardown comes back
@@ -354,7 +359,8 @@ Report the surface and the path; stop there.
 
 A skill cannot self-approve its own shell call, so the stand-down runs only in a
 session whose permission settings already let it through unprompted — on Claude
-a bypass-mode session or a `Bash(hermod poison-pill:*)` allowlist entry, on
+a bypass-mode session or a `Bash(muxctl poison-pill:*)` allowlist entry
+(`Bash(hermod poison-pill:*)` on a host with an old install), on
 Codex a sandbox + approval policy that permits it. Either way that latitude lets
 any skill or stray reasoning step kill the tab unprompted. If the command is
 refused, that is a refusal, not an obstacle: report and stop.

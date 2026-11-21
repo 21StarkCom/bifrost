@@ -38,7 +38,7 @@ function fixture() {
   const home = path.join(dir, "home"); fs.mkdirSync(home);
   const bin = path.join(dir, "bin"); fs.mkdirSync(bin);
   const log = path.join(dir, "effects"); fs.writeFileSync(log, "");
-  for (const name of ["gh", "git", "gcloud", "direnv", "alfred", "hermod", "idun", "claude", "codex", "gemini", "node", "python3", "curl", "osascript", "open", "bash", "sh", "jq", "date", "cat", "dirname", "grep", "sed", "mkdir", "rm", "cp"]) {
+  for (const name of ["gh", "git", "gcloud", "direnv", "alfred", "muxctl", "hermod", "idun", "claude", "codex", "gemini", "node", "python3", "curl", "osascript", "open", "bash", "sh", "jq", "date", "cat", "dirname", "grep", "sed", "mkdir", "rm", "cp"]) {
     fs.writeFileSync(path.join(bin, name), '#!/bin/sh\nprintf "process:' + name + '\\n" >> "$HELP_AUDIT_LOG"\nexit 91\n', { mode: 0o755 });
   }
   const env = { HOME: home, PATH: bin, TMPDIR: dir, XDG_CONFIG_HOME: home, XDG_STATE_HOME: home,

@@ -4,12 +4,12 @@ Read from [the Gru skill](../SKILL.md#protocol).
 
 ## When a peer is dead
 
-A peer is dead only when Hermod reports its `liveness` dead or its `pid`
+A peer is dead only when muxctl reports its `liveness` dead or its `pid`
 gone, never because it is missing from the list (a fresh Claude session is
 absent for its first moments, and a relaunch then would attach a second
 session to the same worktree). Read the board before you read a corpse: a
 Minion that reported `done` goes dead on purpose moments later — it stands
-down with `hermod poison-pill`, which exits it, removes its worktree and
+down with `muxctl poison-pill`, which exits it, removes its worktree and
 closes its tab — and step 2 confirms and skips its now-`done` ticket. So read
 the ticket, not the corpse: a dead peer whose ticket is already `done`/`Closed`
 is a missing report, not a death — confirm it under step 5 and move on. A dead
@@ -27,7 +27,7 @@ death is a blocker.
 ## Reap a dead Minion's tab
 
 A dead Minion's tab is yours to reap, with
-`hermod close-session <surface UUID> --json`, never `poison-pill` —
+`muxctl close-session <surface UUID> --json`, never `poison-pill` —
 poison-pill only ever targets the caller's own surface, and close-session is
 the mirror of it, refusing that one alone. Reap it only once step 4 is done
 with it (its ticket confirmed under step 5, or its death a blocker), never

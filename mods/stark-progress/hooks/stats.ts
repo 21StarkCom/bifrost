@@ -125,7 +125,8 @@ export function addReview(s: Stats, now: number): void {
 
 // A word of a shell command starts the line or follows a space or a shell operator.
 const LEAD = String.raw`(?:^|[\s;&|(])`
-const SENT = new RegExp(`${LEAD}hermod\\s+msg\\s+(?:send|reply)\\b`, 'g')
+// muxctl is mux-control's command; `hermod` is its old name, which an old install still runs.
+const SENT = new RegExp(`${LEAD}(?:muxctl|hermod)\\s+msg\\s+(?:send|reply)\\b`, 'g')
 const LAUNCH = new RegExp(`${LEAD}valkyrie\\s+(?:agnes|minion|gru)\\b`, 'g')
 const CODEX_REVIEW = new RegExp(`${LEAD}codex\\s+(?:exec\\s+)?review\\b`, 'g')
 const HELP = /(?:^|\s)(?:--help|-h)(?=\s|$)/

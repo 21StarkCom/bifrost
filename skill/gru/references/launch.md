@@ -26,7 +26,7 @@ it with its repo name, leave it alone on later passes, escalate it under
 [Authority](../SKILL.md#authority) when it happens, and keep every other ticket moving. `--repo` and `--cwd` are mutually exclusive,
 so the fallback replaces `--repo`: never send both, and never reach for
 `--cwd` for a repo that resolves by name. After a `--cwd` launch, confirm
-the Minion landed where you meant — `hermod msg peers`, that peer's `cwd`
+the Minion landed where you meant — `muxctl msg peers`, that peer's `cwd`
 under the intended repo — because step 2's ownership rule matches on the
 ticket id alone, so a misrouted Minion otherwise reads as a correctly-owned
 one. Once a guessed path proves out, register it with
@@ -36,11 +36,11 @@ one. Once a guessed path proves out, register it with
 
 The brief valkyrie writes invokes `/minion` (`$minion` on Codex), names
 the ticket and your peer id, and gives the route from
-[Coordination route](../SKILL.md#coordination-route) with a Hermod fallback. valkyrie
+[Coordination route](../SKILL.md#coordination-route) with a muxctl fallback. valkyrie
 takes your peer id from your own
 `$CLAUDE_CODE_SESSION_ID` (`$CODEX_THREAD_ID` on Codex), and refuses the
 launch (exit 2) when it finds neither or both. **Your peer id** is the `id` of the
-`hermod msg peers` row whose `sessionId` is yours — the whole
+`muxctl msg peers` row whose `sessionId` is yours — the whole
 `<provider>:<id>` address (`claude:<uuid>`), never the bare session id,
 which the fallback bridge may not resolve. Look it up before your first launch, so
 you know what the ack has to say. Then read the first ack's `prompt` before
@@ -65,7 +65,7 @@ follow-up comments on it, but `blocked` leaves no mark on either, so that
 Minion's peer going idle with its ticket still open is your only sign — ask
 it what happened through [Coordination route](../SKILL.md#coordination-route):
 `STARK-n: report your status to me.` Its answer reaches you whatever its
-brief said — `hermod msg reply` goes to the sender, and a native answer
+brief said — `muxctl msg reply` goes to the sender, and a native answer
 goes to your `from`. Count the ticket blocked, not owned, until it
 answers.
 
@@ -76,7 +76,7 @@ is a launch: append it to the run's [log](../SKILL.md#progress-pane). **1**: som
 and valkyrie's stderr names what it left standing. When the tab opened, that
 is the tab and the worktree, and under `--json` stdout still carries a
 complete ack whose only tells are `verified: false` and an `error` field,
-on either runtime; when Hermod could not place the tab, or a Codex
+on either runtime; when muxctl could not place the tab, or a Codex
 worktree could not be cut, stdout carries no ack at all. The ticket is
 blocked: reap the tab stderr named as [deaths.md](deaths.md#reap-a-dead-minions-tab) reaps a dead
 Minion's tab, name what stays in your report, and never relaunch over it. **2**: refused before anything was
@@ -90,7 +90,7 @@ tickets moving. **4**: a live agent or tab holds the id, and valkyrie's stderr
 lists each holder. Never relaunch it. A holder that step 2 counts — a live
 peer whose `cwd` ends in the ticket id — owns the ticket; count it owned.
 Any other holder — a tab only titled with the id, such as a dead Minion's
-that never retitled itself, or a session that is no Hermod peer — makes the
+that never retitled itself, or a session that is no muxctl peer — makes the
 ticket blocked, not owned, since step 2 would read it ready again on the
 next pass: escalate it with the holders valkyrie printed.
 **128+n**: interrupted; report it.

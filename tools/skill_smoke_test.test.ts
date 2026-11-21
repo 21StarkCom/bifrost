@@ -570,11 +570,11 @@ for (const { label, file, res } of LINK_SOURCES) {
 }
 
 // The stand-down pane-count check must not depend on `$CMUX_WORKSPACE_ID`
-// (STARK-7263). `hermod panes` lists only the workspace that stamp names, and
-// the stamp goes stale when a tab is moved — so a bare `hermod panes` check
+// (STARK-7263). `muxctl panes` lists only the workspace that stamp names, and
+// the stamp goes stale when a tab is moved — so a bare `muxctl panes` check
 // printed nothing over a real count of 2, and a finished Minion read "check
 // failed", did not arm, and left agent, worktree and tab behind. The fix is two
-// steps (`hermod whoami --json`, then `hermod panes` under the literal
+// steps (`muxctl whoami --json`, then `muxctl panes` under the literal
 // workspaceId it printed). The one-line `$(…)` form reads as equivalent and is
 // not: Claude Code's worktree-isolation guard refused the quoted `VAR="$(…)"`
 // spelling and passed the unquoted one (measured, 2.1.278), so whether a fold
@@ -582,10 +582,10 @@ for (const { label, file, res } of LINK_SOURCES) {
 // or drops the prefix — has to hit a red test.
 //
 // Commands are read out of the FENCED blocks, not every line. Keyed on the
-// literal `hermod panes --json` across the whole file, the guard could not tell
+// literal `muxctl panes --json` across the whole file, the guard could not tell
 // a check from a sentence about one — prose quoting the old command was a
 // false red — while a bare check under the `list-panes` alias or the `--plain`
-// porcelain (the spelling hermod's own session-start block recommends) matched
+// porcelain (the spelling muxctl's own session-start block recommends) matched
 // nothing and passed. `stripCodeFences` blanks fenced lines in place, so the
 // lines it changed are exactly the fenced ones — the fence markers included,
 // which are not commands, so they are dropped rather than handed to a caller
@@ -604,17 +604,18 @@ for (const dir of SHARED_DOC_DIRS) {
       "utf8",
     );
     const commands = fencedLines(text);
-    const panesLines = commands.filter((line) => /\bhermod\s+(list-)?panes\b/.test(line));
+    // `hermod` is muxctl's old name: a check under it is held to the same form.
+    const panesLines = commands.filter((line) => /\b(muxctl|hermod)\s+(list-)?panes\b/.test(line));
     assert.ok(panesLines.length > 0, "the pane-count check is gone");
     for (const line of panesLines) {
       assert.match(
         line,
-        /^\s*CMUX_WORKSPACE_ID=<[^>$]+> hermod (list-)?panes\b/,
-        `bare or computed-env \`hermod panes\` check: ${line.trim()}`,
+        /^\s*CMUX_WORKSPACE_ID=<[^>$]+> muxctl (list-)?panes\b/,
+        `bare, computed-env or old-name \`muxctl panes\` check: ${line.trim()}`,
       );
     }
     assert.ok(
-      commands.some((line) => /^\s*hermod whoami --json\s*$/.test(line)),
+      commands.some((line) => /^\s*muxctl whoami --json\s*$/.test(line)),
       "step 1 (whoami) is gone",
     );
     // ANY runtime-computed value, not just `$(…)`: backticks and `$ws` fold the
@@ -644,7 +645,7 @@ for (const dir of SHARED_DOC_DIRS) {
 // A worker in a tmux window on the Linux devbox stands down by the same doc. The
 // count tries cmux first, then tmux, in the order the spine's Title your tab uses,
 // and the tmux count reads back its own pane id: over a pane id that names no pane,
-// `tmux display` prints a blank line and exits 0 (tmux 3.8). hermod's cmux count
+// `tmux display` prints a blank line and exits 0 (tmux 3.8). muxctl's cmux count
 // cannot stand in for it, since its tmux transport makes every pane a cmux pane of
 // one surface. Claude's worktree guard refuses a `tmux` line carrying a variable,
 // and a subagent inherits `$TMUX_PANE` as it does `$CMUX_SURFACE_ID`.
@@ -652,7 +653,7 @@ for (const dir of SHARED_DOC_DIRS) {
   test(`skill smoke: ${dir}/stand-down.md — the count tries cmux, then tmux`, () => {
     const text = fs.readFileSync(path.join(REPO_ROOT, ...dir.split("/"), "stand-down.md"), "utf8");
     const commands = fencedLines(text).map((line) => line.trim());
-    const whoami = commands.indexOf("hermod whoami --json");
+    const whoami = commands.indexOf("muxctl whoami --json");
     const tmux = commands.indexOf(`tmux display -p -t <pane id> '#{pane_id} #{window_panes}'`);
     assert.ok(tmux >= 0, "stand-down.md lost its tmux pane count, which reads back the pane id");
     assert.ok(whoami >= 0 && whoami < tmux, "stand-down.md must count in cmux first, then in tmux");
@@ -716,14 +717,15 @@ test("skill smoke: the worker skills point --new-tab at the one launch doc", () 
   }
 });
 
-// The worker launchers moved from `hermod ticket` to idun (STARK-10154), then
-// to valkyrie (STARK-13714). A fenced `hermod ticket` line left in any of the
-// worker skills would launch on a hermod path that bypasses valkyrie's
-// exit-code contract and idun's managed Codex account.
+// The worker launchers moved from `muxctl ticket` (then `hermod ticket`) to
+// idun (STARK-10154), then to valkyrie (STARK-13714). A fenced `muxctl ticket`
+// line, or one under its old name `hermod`, left in any of the worker skills
+// would launch on a mux-control path that bypasses valkyrie's exit-code
+// contract and idun's managed Codex account.
 for (const file of ["skill/agnes/SKILL.md", "skill/gru/SKILL.md", "skill/minion/SKILL.md", "standards/launch.md"]) {
-  test(`skill smoke: ${file} — no fenced \`hermod ticket\` launch line`, () => {
-    const lines = fencedLaunchLines(path.join(REPO_ROOT, ...file.split("/")), /^\s*hermod ticket\b/);
-    assert.deepEqual(lines, [], `${file} still launches through hermod ticket`);
+  test(`skill smoke: ${file} — no fenced \`muxctl ticket\` launch line`, () => {
+    const lines = fencedLaunchLines(path.join(REPO_ROOT, ...file.split("/")), /^\s*(muxctl|hermod) ticket\b/);
+    assert.deepEqual(lines, [], `${file} still launches through muxctl ticket`);
   });
 }
 
@@ -824,7 +826,7 @@ test("skill smoke: standards — the progress-file rule lives in the spine", () 
 // then tmux (the Linux devbox has no cmux), so neither path can drop out of
 // the step the skills anchor. A tmux window is the worker's own tab only when
 // it holds one pane, so the pane count is read before the rename. Claude's
-// worktree guard refuses a `hermod` or `tmux` line carrying a variable, so no
+// worktree guard refuses a `muxctl` or `tmux` line carrying a variable, so no
 // line of the step may hold a `$`. Each skill's `#title-your-tab` link alone proves nothing: every launcher
 // paragraph cites the anchor for the guard measurement, so the step itself is
 // pinned (Gru's own line; Minion and Agnes run the spine whole).
@@ -833,14 +835,14 @@ test("skill smoke: standards — the spine titles a cmux tab, else a tmux window
   assert.match(spine, /^### Title your tab$/m, "worker-spine.md lost its Title your tab heading, which the worker skills anchor");
   const section = /^### Title your tab\n([\s\S]*?)^### /m.exec(spine)?.[1] ?? "";
   const lines = section.split("\n").map((line) => line.trim());
-  const cmux = lines.indexOf(`hermod rename <surface UUID> "<ROLE> (<n>)"`);
+  const cmux = lines.indexOf(`muxctl rename <surface UUID> "<ROLE> (<n>)"`);
   const panes = lines.indexOf(`tmux display -p -t <pane id> '#{window_panes}'`);
   const tmux = lines.indexOf(`tmux rename-window -t <pane id> "<ROLE> (<n>)"`);
   assert.ok(cmux >= 0, "worker-spine.md's Title your tab lost its cmux rename");
   assert.ok(panes >= 0, "worker-spine.md's Title your tab lost its tmux pane count");
   assert.ok(tmux >= 0, "worker-spine.md's Title your tab lost its tmux rename");
   assert.ok(cmux < panes && panes < tmux, "worker-spine.md's Title your tab must try cmux, then count the tmux window's panes, then rename it");
-  for (const line of lines.filter((l) => l.startsWith("hermod ") || l.startsWith("tmux "))) {
+  for (const line of lines.filter((l) => l.startsWith("muxctl ") || l.startsWith("hermod ") || l.startsWith("tmux "))) {
     assert.ok(!line.includes("$"), `worker-spine.md's Title your tab line carries a variable, which Claude's worktree guard refuses: ${line}`);
   }
   const step: Record<string, string> = {
@@ -972,7 +974,7 @@ test("skill smoke: gru — stands down only in its own worktree, after a finishe
   }
   assert.ok(section.includes("only in the worktree valkyrie made for your launch id"), "gru's Stand down lost its own-worktree rule");
   assert.ok(terms.includes("Its last path segment must be your launch id"), "gru stands down outside its own worktree again");
-  assert.ok(terms.includes("`hermod poison-pill --delete-branch --json`"), "gru's stand-down no longer deletes its branch");
+  assert.ok(terms.includes("`muxctl poison-pill --delete-branch --json`"), "gru's stand-down no longer deletes its branch");
   assert.ok(gru.replace(/\s+/g, " ").includes("Then [stand down](#stand-down)."), "gru's step 6 no longer ends in the stand-down");
   assert.ok(standDown.includes("`git -C <that path> log --oneline HEAD --not --remotes`"), "stand-down.md lost Gru's unpushed check");
   assert.ok(standDown.includes("`/gru` at the end of a finished run"), "stand-down.md no longer names /gru as a caller");

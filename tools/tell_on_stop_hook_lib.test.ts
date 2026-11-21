@@ -125,7 +125,11 @@ test("scanTranscript throws on any line that does not parse", () => {
 
 // ── the armed pill ──────────────────────────────────────────────────────────
 
-/** The stdout of `hermod poison-pill --json` that armed a reaper (hermod 0.47.3). */
+/**
+ * The stdout of `muxctl poison-pill --json` that armed a reaper, as hermod
+ * 0.47.3 printed it. muxctl 0.53.0 keeps the same label and log names, so one
+ * fixture stands for both the new command and an old install.
+ */
 const ARM_ACK = JSON.stringify({
   surface: "%101",
   agent: "claude",
@@ -144,7 +148,7 @@ const ARM_ACK = JSON.stringify({
   logPath: "/tmp/hermod-poison-pill-26675-1794648114187.log",
 });
 
-/** The stdout of `hermod poison-pill --dry-run --json`: no `armed`, no `label`. */
+/** The stdout of `muxctl poison-pill --dry-run --json`: no `armed`, no `label`. */
 const DRY_ACK = JSON.stringify({
   surface: "%101",
   agent: "claude",
@@ -196,7 +200,7 @@ test("scanTranscript finds no arm in a dry run, a subagent, or text that only na
   }
 });
 
-test("decide never asks after the session armed hermod poison-pill, and writes no file", () => {
+test("decide never asks after the session armed muxctl poison-pill, and writes no file", () => {
   withBox((b) => {
     const run = () => decide(b.payload(), { env: {}, home: b.home, root: b.root });
     b.write(`${transcript(500)}${result(ARM_ACK)}\n${turn("msg_last")}\n`);

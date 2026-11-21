@@ -9,6 +9,9 @@ Minion you launch ([step 6](#6-after-the-launch)).
 Never fall back to doing the worker's job in this session: the operator asked
 for a new tab.
 
+`muxctl` is mux-control's command; on a host whose install predates
+mux-control 0.53.0, run its line as `hermod`, its old name.
+
 ## 1. Name the id
 
 - **Minion and Agnes:** the `STARK-n` given, else the `ticket` field of
@@ -66,7 +69,7 @@ A flag you omit falls to idun's config, which valkyrie reads
   Without `--leader`, valkyrie names you as the leader from your session stamp
   (`claude:$CLAUDE_CODE_SESSION_ID` or `codex:$CODEX_THREAD_ID`), and exits 2
   when it finds neither stamp or both. Then pass the `id` of the
-  `hermod msg peers` row whose `sessionId` is yours as `--leader`.
+  `muxctl msg peers` row whose `sessionId` is yours as `--leader`.
 - **Agnes:** pass the run text after `--`, with every valkyrie flag before it.
   Pass only words the operator wrote, on one line, as one single-quoted word
   with each `'` inside it written `'\''` (`-- 'don'\''t cut a release'`).
@@ -90,7 +93,7 @@ around it.
 - **1**: something started and did not come up, and valkyrie's stderr names
   what it left standing. Trap: when the tab opened, stdout under `--json` still
   carries a normal ack whose only signs are `verified: false` and an `error`
-  field. When Hermod could not place the tab, or a Codex worktree could not be
+  field. When muxctl could not place the tab, or a Codex worktree could not be
   cut, stdout carries no ack.
 - **2**: refused before anything was made. Causes: a bad argument (for Agnes,
   run text with a control character, a goal over 4,000 characters, or a
@@ -113,7 +116,7 @@ around it.
   `name`, `sessionId`, `peerId`, `coordination` and `prompt`, and stop. Give
   the native address to that leader. For Claude to Claude, that leader sends
   the first `SendMessage` to `name`; until then the Minion reports through
-  Hermod.
+  muxctl.
 - **Minion, `leader operator`:** print the ack's `surface`, `workspace`, `name`
   and `prompt`, and stop. The Minion prints each report in its own tab, and
   after its `done` waits there for the operator's `stand down`.

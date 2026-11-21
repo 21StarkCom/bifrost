@@ -26,7 +26,7 @@ graph TB
   BifrostSkills -- "`opens, closes and hands over the sessions with`" --> BifrostSessionTools
   BifrostSkills -- "`audits the agent docs and tidies the memory with`" --> BifrostDocTools
   BifrostSkills -- "`drafts the changelog and the version of a release with`" --> BifrostReleaseTools
-  Agent -- "`is checked before each njord pr-merge call by`" --> BifrostGateHook
+  Agent -- "`is checked before each ghx pr-merge call by`" --> BifrostGateHook
   BifrostGateHook -- "`triages the agent files of the PR with`" --> BifrostDocTools
   Agent -- "`is told where a memory fact belongs by`" --> BifrostFactHook
   Agent -- "`is asked to tell the librarian its lasting facts by`" --> BifrostStopHook
