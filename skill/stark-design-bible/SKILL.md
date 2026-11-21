@@ -126,6 +126,11 @@ end of each step in the report.
 
    Stop when the punch list has no item of severity 2 or 3, after round 4,
    or when 20 minutes of the time cap are left.
+
+   A walk or a floor outranks a critic's fix: when a fix makes a weekly job
+   slower, a walk miss, or a floor fail, undo it, and answer the item in the
+   report. An item of severity 2 or 3 that is left at the stop goes to the
+   report as open, with its reason.
 8. **Finish green.** Run the tests that the playbook names, and the repo's
    own test of the tasks file. Each must pass. Stop the flow shells that you
    started. Then finish the report, with these headings:

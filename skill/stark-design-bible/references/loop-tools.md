@@ -93,13 +93,14 @@ stark-eye sheet <run>/eye/<step>/shoot
   `in popup`. A floor of the shell's own page (its tab strip, its toolbar
   button, its web page) is not the surface's. Leave it, and say so once
   under Floors.
-- The `unclipped` floor fails each text with an ellipsis. When the playbook
-  asks for an ellipsis, as on a long label or chat title, keep it, and check
-  its control: the full text must be in a `title` (the tooltip) and in the
-  accessible name.
-  - When both hold, list the line under Floors as `ellipsis: accepted`.
+- The `unclipped` floor fails each text with an ellipsis. The `visible`
+  floor can fail the same text, when the centre of its cut end lies under
+  the next element. When the playbook asks for an ellipsis, as on a long
+  label or chat title, keep it, and check its control: the full text must be
+  in a `title` (the tooltip) and in the accessible name.
+  - When both hold, list each such line under Floors as `ellipsis: accepted`.
   - When one does not, the line is a fail: add the missing `title` or name.
-  - Each other `unclipped` fail is a fail.
+  - Each other `unclipped` or `visible` fail is a fail.
 - The diagnostics only advise. Give their numbers to the critic.
 
 ## The agent users
@@ -118,8 +119,10 @@ An agent user is a small model of your own vendor, never your own model:
    `critic.md` and `challenge.md`, and the playbook's "The questions of the
    critic". `critic.md` sends the critic to the questions and the known
    answers of `challenge.md`. In step 3, add the challenge table. In step 4,
-   add the shots and the numbers of each structure. Put in no code, and none
-   of your reasons.
+   add the shots and the numbers of each structure. From round 2 of step 7,
+   add `rounds.md`: each finding of the earlier rounds, and what the walks
+   and the floors showed of its fix. Put in no code, and none of your
+   reasons.
 2. Write the prompt in `prompt.md` in that folder: "You are the critic of the
    design bible. Read critic.md. Judge only what a person sees and does in
    these files. Write a punch list in the format of critic.md, worst first,
