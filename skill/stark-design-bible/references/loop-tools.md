@@ -92,10 +92,12 @@ stark-eye sheet <run>/eye/<step>/shoot
   button, its web page) is not the surface's. Leave it, and say so once
   under Floors.
 - The `unclipped` floor fails each text with an ellipsis. When the playbook
-  asks for an ellipsis, as on a long label or chat title, keep it. Then check
-  that the full text is in its tooltip and its accessible name, and list the
-  line under Floors as `ellipsis: accepted`. Each other `unclipped` fail is a
-  fail.
+  asks for an ellipsis, as on a long label or chat title, keep it, and check
+  its control: the full text must be in a `title` (the tooltip) and in the
+  accessible name.
+  - When both hold, list the line under Floors as `ellipsis: accepted`.
+  - When one does not, the line is a fail: add the missing `title` or name.
+  - Each other `unclipped` fail is a fail.
 - The diagnostics only advise. Give their numbers to the critic.
 
 ## The agent users
