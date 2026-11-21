@@ -15,6 +15,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=527 runId=527 sha=268b3836 -->
+- Add the agentic design bible spec (revision 4), with its plain-English brief and its visual; Huginn's popup is the first surface.
 <!-- idun:pr-merge pr=526 runId=526 sha=313530ca -->
 - Apply the agent-doc review to bifrost's CLAUDE.md, AGENTS.md and skills: remove gates the root rules cover, fix stale facts and root-rule conflicts, and move large skill text into references.
 <!-- idun:pr-merge pr=524 runId=524 sha=70ac0c03 -->
