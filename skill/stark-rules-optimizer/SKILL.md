@@ -1,10 +1,11 @@
 ---
 name: stark-rules-optimizer
 description: >-
-  Review one repo's agent files (CLAUDE.md, AGENTS.md, rules, SKILL.md) or the
-  auto-memory notes clause by clause against the agent-doc playbook: flag each
-  clause GREEN, YELLOW or RED and write its redline. Read-only by default;
-  --apply fixes them. Use to review, audit or trim agent files.
+  Review one repo's agent files (CLAUDE.md, AGENTS.md, rules, REVIEW.md,
+  RULES.md, SKILL.md) or the auto-memory notes clause by clause against the
+  agent-doc playbook: flag each clause GREEN, YELLOW or RED and write its
+  redline. Read-only; --apply fixes them. Use to review, audit or trim agent
+  files.
 argument-hint: "[--repo <path>] [--files <path,…>] [--memory] [--apply] [--always <rule,…>] [--file-budget <bytes>] [--always-budget <bytes>]"
 disable-model-invocation: true
 ---
@@ -22,7 +23,9 @@ Review agent files the way a legal team reviews a contract. The
 position for each kind of clause. This skill reads each file clause by clause,
 gives each clause a GREEN, YELLOW or RED flag, and writes the exact redline for
 each YELLOW and RED clause. An agent file is a CLAUDE.md, an AGENTS.md, a
-`.claude/rules/*.md`, a SKILL.md, a `MEMORY.md` or a memory note.
+`.claude/rules/*.md`, a `REVIEW.md`, a `RULES.md`, a SKILL.md, a `MEMORY.md`
+or a memory note. A `REVIEW.md` or a `RULES.md` takes the budget of a rule
+file, and does not load at start-up.
 
 Two runs of `tools/rules_audit.ts` measure first, with no model:
 

@@ -7,7 +7,8 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import { absolutePath, buildView, contextLines, fitSince, loadSaved, originView, sinceDiff, type SavedReport, type SinceDiff, formatSince, SINCE_MAX_CHARS, readModelSettings, selfUpdate } from "./rules_audit.ts";
+import { absolutePath, buildView, contextLines, fitSince, githubRepoOf, loadSaved, originView, sinceDiff, type SavedReport, type SinceDiff, formatSince, SINCE_MAX_CHARS, readModelSettings, selfUpdate } from "./rules_audit.ts";
+import type { BriefReport, TriageReport } from "./rules_audit_lib.ts";
 
 const CLI = path.join(import.meta.dirname, "rules_audit.ts");
 
@@ -67,8 +68,24 @@ function pushToOrigin(home: string, bare: string, files: Record<string, string>)
   gitOk(up, "push", "-q", "origin", "HEAD");
 }
 
+/** A stand-in for `gh` in `<dir>/bin`, first on PATH: it records its argv as
+ *  one JSON line in `gh-calls.jsonl`; with a `gh-fail` file it prints that
+ *  file on stderr and exits 1, else it prints the `gh-archived` file, if any. */
+function fakeGh(dir: string): string {
+  const bin = path.join(dir, "bin");
+  fs.mkdirSync(bin, { recursive: true });
+  fs.writeFileSync(path.join(bin, "gh"), [
+    `#!${process.execPath}`,
+    `const fs = require("node:fs"); const p = (n) => require("node:path").join(${JSON.stringify(bin)}, n);`,
+    `fs.appendFileSync(p("gh-calls.jsonl"), JSON.stringify(process.argv.slice(2)) + "\\n");`,
+    `if (fs.existsSync(p("gh-fail"))) { process.stderr.write(fs.readFileSync(p("gh-fail"), "utf8")); process.exit(1); }`,
+    `if (fs.existsSync(p("gh-archived"))) process.stdout.write(fs.readFileSync(p("gh-archived"), "utf8"));`,
+  ].join("\n"), { mode: 0o755 });
+  return bin;
+}
+
 /** A home with a fleet folder of one repo at its origin, the root rules, and
- *  one memory folder. */
+ *  one memory folder. Its env puts a `fakeGh` first on PATH. */
 function home(): { dir: string; env: NodeJS.ProcessEnv } {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "rules-audit-home-")));
   const write = (rel: string, text: string) => writeAll(dir, { [rel]: text });
@@ -87,7 +104,7 @@ function home(): { dir: string; env: NodeJS.ProcessEnv } {
   write(".claude/projects/-p1/memory/MEMORY.md", "# Memory index\n\n- [Note](note.md) — a hint\n");
   write(".claude/projects/-p1/memory/note.md", "---\nname: note\n---\n\nThe build used to take an hour.\n");
   fs.mkdirSync(path.join(dir, ".claude", "projects", "-p2"));
-  return { dir, env: { ...process.env, HOME: dir } };
+  return { dir, env: { ...process.env, HOME: dir, PATH: `${fakeGh(dir)}${path.delimiter}${process.env.PATH}` } };
 }
 
 test("a gitignored .claude/ is still audited, and labelled as local-only", () => {
@@ -373,7 +390,7 @@ test("--playbook --fleet: a repo that fails its fetch, or has no origin/HEAD, is
     assert.equal(staleOf["~/Code/21Stark/alpha/CLAUDE.md"], undefined);
     assert.deepEqual(json.stale.map((s) => s.repo), ["~/Code/21Stark/delta", "~/Code/21Stark/gamma"]);
 
-    const notify = run(["--playbook", "--fleet", "--notify"], "/", bin.env({ HOME: h.dir }));
+    const notify = run(["--playbook", "--fleet", "--notify"], "/", bin.env({ HOME: h.dir, PATH: h.env.PATH }));
     assert.equal(notify.status, 3, notify.stderr);
     const body = bin.calls().at(-1)![3].split("\n");
     assert.deepEqual(body.slice(1, 3), ["Stale, read from the checkout, not origin/HEAD (2):", "- ~/Code/21Stark/delta: origin/HEAD is not set"]);
@@ -410,6 +427,78 @@ test("--playbook --fleet: a moved tag on origin does not fail the fetch of a clo
     assert.equal(r.status, 3, r.stderr);
     const report = JSON.parse(r.stdout) as { stale: { repo: string; reason: string }[] };
     assert.deepEqual(report.stale, []);
+  } finally {
+    fs.rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("--playbook --fleet: a repo whose origin GitHub marks archived is left out; a gh call that fails warns and reads every repo", () => {
+  const h = home();
+  try {
+    const fleet = path.join(h.dir, "Code", "21Stark");
+    const omega = path.join(fleet, "omega");
+    const bare = path.join(h.dir, "origins", "omega.git");
+    gitOk(fleet, "init", "-q", "omega");
+    writeAll(omega, { "CLAUDE.md": "# Omega\n\n- Keep it lean.\n", "REVIEW.md": "# Review\n\n- Check the tests.\n" });
+    publish(omega, bare);
+    // The origin reads as GitHub, and its fetch goes to the local bare repo.
+    const url = "git@github.com:21StarkCom/omega.git";
+    gitOk(omega, "config", "remote.origin.url", url);
+    gitOk(omega, "config", `url.${bare}.insteadOf`, url);
+    const bin = path.join(h.dir, "bin");
+    fs.writeFileSync(path.join(bin, "gh-archived"), "21StarkCom/Omega\n21StarkCom/gone\n");
+
+    const r = run(["--playbook", "--fleet", "--json"], "/", h.env);
+    assert.equal(r.status, 3, r.stderr);
+    assert.equal(r.stderr, "");
+    const paths = (JSON.parse(r.stdout) as { files: { path: string }[] }).files.map((f) => f.path);
+    assert.ok(paths.includes("~/Code/21Stark/alpha/CLAUDE.md"), paths.join(", "));
+    assert.ok(!paths.some((p) => p.includes("omega")), paths.join(", "));
+    const calls = fs.readFileSync(path.join(bin, "gh-calls.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l) as string[]);
+    assert.equal(calls.length, 1, "one gh call");
+    assert.deepEqual(calls[0].slice(0, 5), ["api", "graphql", "--paginate", "-f", "owner=21StarkCom"]);
+    assert.match(calls[0][6], /repositories\(first: 100, isArchived: true, after: \$endCursor\)/);
+
+    fs.writeFileSync(path.join(bin, "gh-fail"), "HTTP 401: Bad credentials\n");
+    const failed = run(["--playbook", "--fleet", "--json"], "/", h.env);
+    assert.equal(failed.status, 3, failed.stderr);
+    assert.equal(failed.stderr, "rules_audit: --fleet: could not list the archived repos of 21StarkCom, so every repo is read: HTTP 401: Bad credentials\n");
+    const report = JSON.parse(failed.stdout) as { files: { path: string; kind: string }[]; stale: unknown[] };
+    assert.deepEqual(report.files.filter((f) => f.path.includes("omega")).map((f) => [f.path, f.kind]), [
+      ["~/Code/21Stark/omega/CLAUDE.md", "root"], ["~/Code/21Stark/omega/REVIEW.md", "rule"],
+    ]);
+    assert.deepEqual(report.stale, []);
+  } finally {
+    fs.rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("githubRepoOf reads owner/name from each GitHub remote form, in lower case; null for another host or a path", () => {
+  for (const url of [
+    "git@github.com:21StarkCom/Omega.git", "https://github.com/21StarkCom/omega", "https://github.com/21StarkCom/omega.git/",
+    "ssh://git@github.com/21StarkCom/omega.git", "https://x-access-token@github.com/21StarkCom/omega.git\n",
+  ]) assert.equal(githubRepoOf(url), "21starkcom/omega", url);
+  for (const url of ["", "/tmp/origins/omega.git", "git@gitlab.com:21StarkCom/omega.git", "https://notgithub.com/21StarkCom/omega", "https://gitlab.com/m/github.com/21StarkCom/omega"]) assert.equal(githubRepoOf(url), null, url);
+});
+
+test("--playbook --brief: the totals of the full report, one row per repo or folder, and each RED clause", () => {
+  const h = home();
+  try {
+    const args = ["--playbook", "--fleet", "--memory", "--json"];
+    const full = JSON.parse(run(args, "/", h.env).stdout) as TriageReport;
+    const r = run([...args, "--brief"], "/", h.env);
+    assert.equal(r.status, 3, r.stderr);
+    assert.ok(r.stdout.length < 45_000, `${r.stdout.length}`);
+    const brief = JSON.parse(r.stdout) as BriefReport;
+    assert.deepEqual(Object.keys(brief), ["totals", "repos", "red", "stale"]);
+    assert.deepEqual(brief.totals, full.totals);
+    assert.deepEqual(brief.repos.map((x) => x.repo), ["~/Code/21Stark", "~/Code/21Stark/alpha", "~/.claude/projects/-p1/memory"]);
+    for (const flag of ["GREEN", "YELLOW", "RED"] as const) {
+      assert.equal(brief.repos.reduce((s, x) => s + x[flag], 0), full.totals[flag], flag);
+    }
+    const fullRed = full.files.flatMap((f) => f.clauses.filter((c) => c.flag === "RED").map((c) => [f.path, c.line, c.type, c.text, c.detail]));
+    assert.ok(fullRed.length >= 2);
+    assert.deepEqual(brief.red.map((c) => [c.path, c.line, c.type, c.text, c.detail]), fullRed);
   } finally {
     fs.rmSync(h.dir, { recursive: true, force: true });
   }
@@ -542,7 +631,7 @@ function fakeBin(codes: { heimdall?: number; launchctl?: number } = {}) {
   }
   return {
     dir,
-    env: (extra: NodeJS.ProcessEnv = {}) => ({ ...process.env, ...extra, PATH: `${dir}${path.delimiter}${process.env.PATH}` }),
+    env: (extra: NodeJS.ProcessEnv = {}) => ({ ...process.env, ...extra, PATH: `${dir}${path.delimiter}${extra.PATH ?? process.env.PATH}` }),
     calls: (): string[][] => (fs.existsSync(log) ? fs.readFileSync(log, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []),
   };
 }
@@ -578,7 +667,7 @@ test("--playbook --notify: one heimdall send with the summary; the exit stays th
   }
 });
 
-test("--notify, --settings, --save, --since and --self-update need --playbook; --self-update needs --fleet", () => {
+test("--notify, --settings, --save, --since, --self-update and --brief need --playbook; --self-update needs --fleet; --brief needs --json", () => {
   const bin = fakeBin();
   try {
     for (const [args, re] of [
@@ -586,6 +675,9 @@ test("--notify, --settings, --save, --since and --self-update need --playbook; -
       [["--since", "/tmp/x.json", "--save", "/tmp/x.json"], /--save, --since need --playbook/],
       [["--settings"], /--settings needs --playbook/],
       [["--playbook", "--self-update"], /--self-update needs --fleet/],
+      [["--json", "--brief"], /--brief needs --playbook/],
+      [["--playbook", "--brief"], /--brief needs --json/],
+      [["--playbook", "--json", "--brief", "--since", "/tmp/x.json"], /--brief does not apply with --since/],
     ] as const) {
       const r = run([...args], os.tmpdir(), bin.env({}));
       assert.equal(r.status, 2, `${args.join(" ")}: ${r.stderr}`);

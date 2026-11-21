@@ -79,7 +79,7 @@ test("playbook: the size budgets match PLAYBOOK_BUDGETS", () => {
   const chars = (v: string | undefined) => (v?.endsWith("k") ? Number(v.slice(0, -1)) * 1000 : Number(v));
   const expected: [string, number][] = [
     ["A repo's root CLAUDE.md or AGENTS.md", PLAYBOOK_BUDGETS.rootFile],
-    ["A package CLAUDE.md or a rule file", PLAYBOOK_BUDGETS.packageFile],
+    ["A package CLAUDE.md, a rule file, a `REVIEW.md` or a `RULES.md`", PLAYBOOK_BUDGETS.packageFile],
     ["A SKILL.md core (the rest goes to `references/`)", PLAYBOOK_BUDGETS.skillCore],
     ["A skill `description:`", PLAYBOOK_BUDGETS.skillDescription],
     [`A \`MEMORY.md\` index (each line ${PLAYBOOK_BUDGETS.memoryIndexLine} or fewer)`, PLAYBOOK_BUDGETS.memoryIndex],
