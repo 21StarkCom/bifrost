@@ -6,7 +6,7 @@ graph TB
   Agent@{ icon: "fa:user", shape: rounded, label: "Coding agent" }
   Bifrost@{ shape: rectangle, label: "Bifröst" }
   Alfred@{ shape: rectangle, label: "alfred" }
-  Hermod@{ shape: rectangle, label: "Hermod" }
+  MuxControl@{ shape: rectangle, label: "mux-control" }
   Idun@{ shape: rectangle, label: "idun" }
   Urd@{ shape: rectangle, label: "urd" }
   Muninn@{ shape: rectangle, label: "muninn" }
@@ -22,7 +22,7 @@ graph TB
   Operator -- "`starts skills, watches the runs and answers questions with`" --> Bifrost
   Agent -- "`follows the skills and runs the tools of`" --> Bifrost
   Bifrost -- "`binds, files and closes the tickets with`" --> Alfred
-  Bifrost -- "`opens, messages and closes the worker tabs with`" --> Hermod
+  Bifrost -- "`opens, messages and closes the worker tabs with`" --> MuxControl
   Bifrost -- "`launches the workers and opens and merges the PRs with`" --> Idun
   Bifrost -- "`finds the folder of each repo with`" --> Urd
   Bifrost -. "`reports to a muninn leader through`" .-> Muninn
@@ -38,5 +38,5 @@ graph TB
   classDef c4_system fill:#0D74CE,stroke:#0052a6,color:#e0ffff
   class Bifrost c4_system
   classDef c4_external fill:#F1F0EF,stroke:#c8c7c6,color:#504f4e
-  class Alfred,Hermod,Idun,Urd,Muninn,Frigg,Atlas,Heimdall,Nastrond,Floorplan,Sleipnir,Github,AiClis,EcosystemVault c4_external
+  class Alfred,MuxControl,Idun,Urd,Muninn,Frigg,Atlas,Heimdall,Nastrond,Floorplan,Sleipnir,Github,AiClis,EcosystemVault c4_external
   linkStyle 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 stroke:#8D8D8D

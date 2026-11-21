@@ -118,7 +118,6 @@ Read `skill/<name>/SKILL.md` before you change or run a skill. By plugin, as in 
   - `stark-run-list` — to mirror a Gru or Super-Gru run in a Slack List.
   - `minion` — to work one ticket for a leader.
   - `agnes` — to work one ticket alone, unattended.
-  - `lucius` — to open a Lucius brainstorm in its own tab.
   - `stark-rich-text` — before you write Slack, Jira or GitHub text.
   - `stark-office` — to read, write or edit an Office or PDF file with plume.
 - **stark-constitution**

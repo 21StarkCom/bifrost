@@ -138,10 +138,10 @@ model {
     }
   }
 
-  hermod = externalSystem 'Hermod' {
-    description 'Places the tabs of the agents in cmux, carries their messages, and closes the tabs.'
+  muxControl = externalSystem 'mux-control' {
+    description 'Holds muxctl, which places the tabs of the agents in cmux or tmux, carries their messages, and closes the tabs.'
     metadata {
-      fleetRepo 'hermod'
+      fleetRepo 'mux-control'
     }
   }
 
@@ -257,7 +257,7 @@ model {
   bifrost.skills -[sync]-> alfred 'binds, files, moves and closes the tickets with' {
     technology 'Shell command'
   }
-  bifrost.skills -[sync]-> hermod 'opens, titles, messages and closes the worker tabs with' {
+  bifrost.skills -[sync]-> muxControl 'opens, titles, messages and closes the worker tabs with' {
     technology 'Shell command'
   }
   bifrost.skills -[sync]-> idun 'launches the workers and opens and merges the PRs with' {
@@ -347,7 +347,7 @@ model {
   bifrost.progressMod -[sync]-> alfred 'reads the title of the epic from' {
     technology 'Child process'
   }
-  bifrost.progressMod -[sync]-> hermod 'brings a worker tab to the front with' {
+  bifrost.progressMod -[sync]-> muxControl 'brings a worker tab to the front with' {
     technology 'Child process'
   }
 }

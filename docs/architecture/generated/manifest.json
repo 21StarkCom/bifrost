@@ -1,27 +1,27 @@
 {
-  "floorplan": "0.11.0",
+  "floorplan": "0.15.1",
   "inputs": {
     "floorplan.config.json": "3fadb3fc49f0030bdd90e94c613382a9c9fedb632f0a6194810c74a7f31c56ee",
-    "kit/spec.c4": "59491868eda1db988f78dc28af027ba771ea3569262a3a547b5c87233dad0baa",
-    "model/model.c4": "2431c59c5af2825e755fb2e87212929b903a79ad35657a572992603cca640bd0",
+    "kit/spec.c4": "5d450681d0b3a3ba7ee782a433ba78e624b5c519fc8de80af3c2152724e20ac4",
+    "model/model.c4": "2d0f141b4191baeb360b5032495e4d52013bf3f895404d0c2690abec6dcf29d4",
     "model/scan/links.c4": "70eabca318819d2e00b630700ee8e0388eb1a62c658a03f9d5fefee1fab92103",
     "model/scan/logos.c4": "6400f6645e3a49cdcb5cf9ca90ca572f71eefc39ccb731eca471200a780cfc05",
     "model/scan/stack-views.c4": "d47a69bcafe911a326a667b19db85c9a6a1358fbe0d063509952df9961ac4377",
     "model/scan/stack.c4": "4bfdbdec829b2d799a9ca845eaba412b8450b4c6c2685a6310932cc5e4bb2d01",
-    "model/views.c4": "5cc9f9b2468ae538fe83fc2f5f9ee9fe6a1e66bd2e8078cf093e6be4b40a1a27"
+    "model/views.c4": "b68af50b0dd4d8ad94692ae66c0e62a61388020fcab210ef125d43f58c66c343"
   },
   "outputs": {
-    "generated/llms.txt": "c2e03b69515d6a708ffbb7f441b590af5656e430ca5250973a49c64082a3fe9c",
-    "generated/mermaid/containers.mmd": "07b3099847a4abb49168cdb2c1103bf56ba5b4928b798382a740b8f082a0d899",
-    "generated/mermaid/index.mmd": "6eaf8f1c9d127bb497b48dd035bab7f667d049f4b72fcfb1912b61c30cd7660a",
+    "generated/llms.txt": "5cd31250460e2562573b7a1f6811d4bb411362f5dd552b6914221eeeb12effa9",
+    "generated/mermaid/containers.mmd": "e52bb05d7b70ef50cfc266eef060b12132b96375af3d4af0d95ec46d2b19e706",
+    "generated/mermaid/index.mmd": "1ed3582746632c5c5086c851d31a6c2c656ed67d5ae3883030f8017a56099d5f",
     "generated/mermaid/stack.mmd": "519c71f13fec91943cf2124249719ff209ae09645da82a38b08f161b8a7e63a4",
     "generated/mermaid/tools.mmd": "d5941efee1649e97f88a69acac44ff3b181bf2a28433e4b982de05b1939b9587",
-    "generated/model.json": "aa86e9c79b827a6708c9f04c12ded8291fb700e5c25676c3f119bfdeac5b8b06",
-    "generated/png/containers.png": "4cc2107d4aeb72d3b9bfb6c5ad586a678c0b7323e16b2dba50fc7f1136bcd3f2",
-    "generated/png/index.png": "047e5c66f6f08952d4964c5cb72e4b8d1f51634162678e157bc43df03ad76f85",
-    "generated/png/stack.png": "8cae4ae9a806bde9adac52321d8ddb67fe0bd73ea4968b14f7d6b299fd7bac4c",
-    "generated/png/tools.png": "fdf49025433a78e9be1f110e4e49894dd90fef79d3ead9e7767b5aa443ebfbde",
-    "generated/site/404.html": "181994ebb83741aa50521b5b258dc688b13fb8737f58d5aa3bc0013fe35739cd",
-    "generated/site/index.html": "181994ebb83741aa50521b5b258dc688b13fb8737f58d5aa3bc0013fe35739cd"
+    "generated/model.json": "f036475b2de43923f36814e98e93ba846d88869b70a86b3a1c0bc7ca29d33dd6",
+    "generated/png/containers.png": "aa65f23b7048a0075c2f23719e812b8c56f9e70e8a19d2d1054059a174b4a7b7",
+    "generated/png/index.png": "8be2f8313f0d28b25f201946f6773faeef6b0a70ad9f192a3fad22284fee8d58",
+    "generated/png/stack.png": "96dafeae44e068e90d7538866acae322b223bc078d40b8a54b6578a58769454e",
+    "generated/png/tools.png": "66f5c20a9e40ec9069372e9a9223beca665ef452e1a6350d1522ea5ce2f077ca",
+    "generated/site/404.html": "979d32980a48dad3769f23f9f9ecd7a98f47a071af3e233c05b922804c6461e0",
+    "generated/site/index.html": "979d32980a48dad3769f23f9f9ecd7a98f47a071af3e233c05b922804c6461e0"
   }
 }

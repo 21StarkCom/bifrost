@@ -647,10 +647,15 @@ export const register: Register = on => {
           await $.ui.toast(`The tab of ${id} is not open.`)
           return
         }
-        const focused = await $.process.run(['hermod', 'focus', tab], { timeoutMs: 10_000 }).catch((err: unknown) => ({
-          exitCode: -1,
-          stderr: err instanceof Error ? err.message : String(err),
-        }))
+        // muxctl is mux-control's command. A host whose install predates 0.53.0 has only `hermod`,
+        // so a muxctl that cannot start falls back to it; when both fail, the toast gives muxctl's reason.
+        const focus = (bin: string) => $.process.run([bin, 'focus', tab], { timeoutMs: 10_000 })
+        const focused = await focus('muxctl').catch((err: unknown) =>
+          focus('hermod').catch(() => ({
+            exitCode: -1,
+            stderr: err instanceof Error ? err.message : String(err),
+          })),
+        )
         if (focused.exitCode !== 0) {
           const why = focused.stderr.trim().split('\n')[0] ?? ''
           await $.ui.toast(`The tab of ${id} did not come to the front${why === '' ? '.' : `: ${why}`}`)

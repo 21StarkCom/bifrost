@@ -16,7 +16,8 @@ and no message. Parts 2 and 3 run only at a `tick`.
    so a `parallel` that the pane raised starts a Gru now.
 2. **Screens.** Read the screen of each Gru tab and each Minion tab of the
    run: `tmux capture-pane -p -t <pane>` in tmux,
-   `hermod read-screen <surface UUID> --lines 20` in cmux. A Gru whose run
+   `muxctl read-screen <surface UUID> --lines 20` in cmux (`hermod`, its old
+   name, on a host whose install predates mux-control 0.53.0). A Gru whose run
    finished closes its own tab after its `report:`, by its stand-down. A Gru
    that reported a blocked or held ticket or an open question keeps its tab,
    and so does a Gru whose stand-down stopped on a check. So skip only a Gru

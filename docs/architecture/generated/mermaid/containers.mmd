@@ -9,7 +9,7 @@ graph TB
   BifrostQuestionMods@{ shape: rectangle, label: "Question mods" }
   BifrostProgressFiles@{ shape: disk, label: "Progress files" }
   Alfred@{ shape: rectangle, label: "alfred" }
-  Hermod@{ shape: rectangle, label: "Hermod" }
+  MuxControl@{ shape: rectangle, label: "mux-control" }
   Idun@{ shape: rectangle, label: "idun" }
   Urd@{ shape: rectangle, label: "urd" }
   Muninn@{ shape: rectangle, label: "muninn" }
@@ -28,8 +28,8 @@ graph TB
   BifrostProgressMod -- "`reads each run and ticket from, and writes the settings to`" --> BifrostProgressFiles
   BifrostSkills -- "`binds, files, moves and closes the tickets with`" --> Alfred
   BifrostProgressMod -- "`reads the title of the epic from`" --> Alfred
-  BifrostSkills -- "`opens, titles, messages and closes the worker tabs with`" --> Hermod
-  BifrostProgressMod -- "`brings a worker tab to the front with`" --> Hermod
+  BifrostSkills -- "`opens, titles, messages and closes the worker tabs with`" --> MuxControl
+  BifrostProgressMod -- "`brings a worker tab to the front with`" --> MuxControl
   BifrostSkills -- "`launches the workers and opens and merges the PRs with`" --> Idun
   BifrostSkills -- "`finds the folder of each repo with`" --> Urd
   BifrostSkills -. "`reports to a muninn leader through`" .-> Muninn
@@ -43,5 +43,5 @@ graph TB
   classDef c4_container fill:#5EB1EF,stroke:#2a8bc6,color:#000000
   class BifrostProgressMod,BifrostSkills,BifrostQuestionMods,BifrostProgressFiles c4_container
   classDef c4_external fill:#F1F0EF,stroke:#c8c7c6,color:#504f4e
-  class Alfred,Hermod,Idun,Urd,Muninn,Frigg,Atlas,Nastrond,Floorplan,Sleipnir,Github c4_external
+  class Alfred,MuxControl,Idun,Urd,Muninn,Frigg,Atlas,Nastrond,Floorplan,Sleipnir,Github c4_external
   linkStyle 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20 stroke:#8D8D8D

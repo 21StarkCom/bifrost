@@ -106,7 +106,7 @@ export type StatsFile = {
   models: Record<string, Tokens & { requests: number }>
   /** Prompts by where they came from: the operator, another session, or neither (a notification, a schedule). */
   prompts: { operator: number; peer: number; other: number }
-  /** SendMessage calls, and `hermod msg send` or `reply` runs. */
+  /** SendMessage calls, and `muxctl msg send` or `reply` runs (or `hermod`, its old name). */
   sent: number
   /** `valkyrie agnes`, `minion` or `gru` runs. */
   launches: number

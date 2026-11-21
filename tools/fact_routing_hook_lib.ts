@@ -160,7 +160,8 @@ export const SCAFFOLD_NAMES: ReadonlySet<string> = new Set(["contributing", "ind
 
 /** The fleet slugs to match when no corpus checkout answers (CI, a fresh
  *  machine): a snapshot of the vault-ecosystem entity folders, plus
- *  `folkvang`, added by hand because the corpus has no folder for it yet.
+ *  `folkvang` and `mux-control` (formerly `hermod`), added by hand because
+ *  the corpus has no folder for them yet.
  *  The hook reads this list only when the corpus yields no slugs, so where a
  *  corpus is checked out it matches a slug only once the corpus has its
  *  folder; memory_tidy unions this list with the corpus and always matches it. */
@@ -168,7 +169,7 @@ export const FALLBACK_SLUGS: readonly string[] = [
   "21stark", "alfred", "apple-developer", "atlas", "bifrost", "draupnir",
   "ev-infra-group", "folkvang", "frigg", "heimdall", "hermod", "homebrew-tap",
   "idun", "infra-ai-platform", "infra-sentinel", "kotodama", "lumiere", "meridian",
-  "mimir", "mimir-automations", "nastrond", "plume", "sleipnir", "stark-clickup",
+  "mimir", "mimir-automations", "mux-control", "nastrond", "plume", "sleipnir", "stark-clickup",
   "stark-engineering-labs", "stark-invoices-collector", "stark-personal",
   "stark-showcase", "stark-skills", "stark-slack-indexer", "stark-stream-deck-sdk",
   "stark-tui", "stark-workspace", "tyr", "user-management-agent",

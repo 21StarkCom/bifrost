@@ -107,6 +107,9 @@ test("a prompt is the operator's, another session's, or neither, by its origin",
 })
 
 test('a Bash command counts its messages to other sessions, its worker launches and its Codex reviews', () => {
+  expect(bashCounts("muxctl msg send --to gru --kind note -- 'done'")).toEqual({ sent: 1, launches: 0, reviews: 0 })
+  expect(bashCounts('muxctl msg reply -- ok && muxctl msg ack')).toEqual({ sent: 1, launches: 0, reviews: 0 })
+  // `hermod` is muxctl's old name, which a host with an old install still runs.
   expect(bashCounts("hermod msg send --to gru --kind note -- 'done'")).toEqual({ sent: 1, launches: 0, reviews: 0 })
   expect(bashCounts('hermod msg reply -- ok && hermod msg ack')).toEqual({ sent: 1, launches: 0, reviews: 0 })
   expect(bashCounts('cd ~/Code/x && valkyrie minion STARK-1 --json; valkyrie minion STARK-2 --json')).toEqual({
@@ -119,11 +122,12 @@ test('a Bash command counts its messages to other sessions, its worker launches 
   expect(bashCounts('codex exec review --base main -c model_reasoning_effort=high')).toEqual({ sent: 0, launches: 0, reviews: 1 })
   // A `--help` run does nothing, and a word inside another word is not the tool.
   expect(bashCounts('valkyrie minion --help')).toEqual({ sent: 0, launches: 0, reviews: 0 })
-  expect(bashCounts('hermod msg peers && myvalkyrie minion x && hermod msg ls')).toEqual({ sent: 0, launches: 0, reviews: 0 })
+  expect(bashCounts('muxctl msg peers && myvalkyrie minion x && muxctl msg ls')).toEqual({ sent: 0, launches: 0, reviews: 0 })
+  expect(bashCounts('mymuxctl msg send --to gru -- x')).toEqual({ sent: 0, launches: 0, reviews: 0 })
   // A `-h` in another command of the line does not stop this one.
   expect(bashCounts('valkyrie minion STARK-1 --json; du -h .')).toEqual({ sent: 0, launches: 1, reviews: 0 })
   // A tool named in a quoted string or a here-document is not run.
-  expect(bashCounts('git commit -m "docs: launch with valkyrie minion STARK-1; then hermod msg send"')).toEqual({
+  expect(bashCounts('git commit -m "docs: launch with valkyrie minion STARK-1; then muxctl msg send"')).toEqual({
     sent: 0,
     launches: 0,
     reviews: 0,
@@ -275,7 +279,7 @@ test("the Gru pane's stats are Gru's own column and the whole run's, which adds 
   noteModel(gru, 'claude-opus-5-5', 'high')
   const one = newStats()
   addUsage(one, usage('claude-opus-5-5', 10, 20, 300, 40), T0 - 10 * MIN)
-  addCall(one, { tool: 'Bash', command: "hermod msg send --to gru -- 'done'" }, false, T0)
+  addCall(one, { tool: 'Bash', command: "muxctl msg send --to gru -- 'done'" }, false, T0)
   addCall(one, { tool: 'Edit' }, false, T0)
   addReview(one, T0)
   noteModel(one, 'claude-opus-5-5', 'xhigh')

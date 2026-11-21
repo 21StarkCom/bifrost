@@ -3,7 +3,7 @@
 // Floorplan has no fixed element kinds, so this file defines the C4 ones.
 // Colours are the C4 roles of the draupnir house theme: a fixed blue scale and
 // the theme's own neutral. The studio, the site and the PNGs paint them from the
-// theme on each stone (`@21starkcom/likec4/bridge.css`). The hex values are the
+// theme on each stone (`@21starkcom/c4-diagrams/bridge.css`). The hex values are the
 // light stone, for Floorplan's colour maths and for the Miro plan, draw.io and
 // Mermaid. `packages/floorplan/src/__tests__/kit-colors.spec.ts` holds them to the theme.
 

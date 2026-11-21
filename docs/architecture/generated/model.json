@@ -255,20 +255,20 @@
       "kind": "externalSystem",
       "id": "alfred"
     },
-    "hermod": {
+    "muxControl": {
       "metadata": {
-        "fleetRepo": "hermod"
+        "fleetRepo": "mux-control"
       },
       "notation": "Software System (external)",
       "style": {
         "color": "c4-external"
       },
       "description": {
-        "txt": "Places the tabs of the agents in cmux, carries their messages, and closes the tabs."
+        "txt": "Holds muxctl, which places the tabs of the agents in cmux or tmux, carries their messages, and closes the tabs."
       },
-      "title": "Hermod",
+      "title": "mux-control",
       "kind": "externalSystem",
-      "id": "hermod"
+      "id": "muxControl"
     },
     "idun": {
       "metadata": {
@@ -1170,7 +1170,7 @@
       "kind": "sync",
       "id": "1ly0i07"
     },
-    "p878zr": {
+    "1dutfqx": {
       "line": "solid",
       "technology": "Shell command",
       "title": "opens, titles, messages and closes the worker tabs with",
@@ -1178,10 +1178,10 @@
         "model": "bifrost.skills"
       },
       "target": {
-        "model": "hermod"
+        "model": "muxControl"
       },
       "kind": "sync",
-      "id": "p878zr"
+      "id": "1dutfqx"
     },
     "gx508f": {
       "line": "solid",
@@ -1534,7 +1534,7 @@
       "kind": "sync",
       "id": "ei8mx"
     },
-    "1nfuynt": {
+    "t9rvbb": {
       "line": "solid",
       "technology": "Child process",
       "title": "brings a worker tab to the front with",
@@ -1542,10 +1542,10 @@
         "model": "bifrost.progressMod"
       },
       "target": {
-        "model": "hermod"
+        "model": "muxControl"
       },
       "kind": "sync",
-      "id": "1nfuynt"
+      "id": "t9rvbb"
     }
   },
   "globals": {
@@ -2453,7 +2453,7 @@
           }
         ]
       },
-      "hash": "YO51GSESSFAZpCBuGqqyopAEcQTe8iPfRvAuC8SSHCo",
+      "hash": "sQ-W3dWeYg1ZlxWaQcWxK8gV026jjizVy7JmULKsbnA",
       "bounds": {
         "x": 0,
         "y": 0,
@@ -2540,7 +2540,7 @@
           ],
           "outEdges": [
             "ktexqd",
-            "f6zmzo",
+            "1a52ly2",
             "tatxxn",
             "1vm3cwu",
             "d15ogy",
@@ -2618,16 +2618,16 @@
           }
         },
         {
-          "id": "hermod",
+          "id": "muxControl",
           "parent": null,
           "level": 0,
           "children": [],
           "inEdges": [
-            "f6zmzo"
+            "1a52ly2"
           ],
           "outEdges": [],
-          "title": "Hermod",
-          "modelRef": "hermod",
+          "title": "mux-control",
+          "modelRef": "muxControl",
           "shape": "rectangle",
           "color": "c4-external",
           "style": {
@@ -2635,11 +2635,11 @@
             "size": "md"
           },
           "description": {
-            "txt": "Places the tabs of the agents in cmux, carries their messages, and closes the tabs."
+            "txt": "Holds muxctl, which places the tabs of the agents in cmux or tmux, carries their messages, and closes the tabs."
           },
           "tags": [],
           "metadata": {
-            "fleetRepo": "hermod"
+            "fleetRepo": "mux-control"
           },
           "notation": "Software System (external)",
           "kind": "externalSystem",
@@ -2648,9 +2648,9 @@
           "width": 320,
           "height": 180,
           "labelBBox": {
-            "x": 30,
+            "x": 18,
             "y": 47,
-            "width": 260,
+            "width": 283,
             "height": 83
           }
         },
@@ -3268,9 +3268,9 @@
           "isCustomized": true
         },
         {
-          "id": "f6zmzo",
+          "id": "1a52ly2",
           "source": "bifrost",
-          "target": "hermod",
+          "target": "muxControl",
           "label": "opens, messages and\ncloses the worker tabs with",
           "points": [
             [
@@ -3322,8 +3322,8 @@
           },
           "parent": null,
           "relations": [
-            "p878zr",
-            "1nfuynt"
+            "1dutfqx",
+            "t9rvbb"
           ],
           "color": "gray",
           "line": "solid",
@@ -4040,7 +4040,7 @@
           }
         ]
       },
-      "hash": "RyQ2fZ47nY9zR0wVBxSW6CgOue4uTVkISTFYupUjZTo",
+      "hash": "iEEFh8TqBOWvM03scR7Np9ObYWbvfi2IFfVcNs68opY",
       "bounds": {
         "x": 0,
         "y": 0,
@@ -4130,7 +4130,7 @@
           "outEdges": [
             "ejo2m1",
             "1h63cuo",
-            "17q9yep",
+            "1g9oclr",
             "1ic68zx"
           ],
           "title": "stark-progress mod",
@@ -4181,7 +4181,7 @@
           "outEdges": [
             "w04j40",
             "1dp5349",
-            "1i4dg4o",
+            "2vmafq",
             "s5uojr",
             "x5187m",
             "1kyz6cu",
@@ -4367,17 +4367,17 @@
           }
         },
         {
-          "id": "hermod",
+          "id": "muxControl",
           "parent": null,
           "level": 0,
           "children": [],
           "inEdges": [
-            "1i4dg4o",
-            "17q9yep"
+            "2vmafq",
+            "1g9oclr"
           ],
           "outEdges": [],
-          "title": "Hermod",
-          "modelRef": "hermod",
+          "title": "mux-control",
+          "modelRef": "muxControl",
           "shape": "rectangle",
           "color": "c4-external",
           "style": {
@@ -4385,11 +4385,11 @@
             "size": "md"
           },
           "description": {
-            "txt": "Places the tabs of the agents in cmux, carries their messages, and closes the tabs."
+            "txt": "Holds muxctl, which places the tabs of the agents in cmux or tmux, carries their messages, and closes the tabs."
           },
           "tags": [],
           "metadata": {
-            "fleetRepo": "hermod"
+            "fleetRepo": "mux-control"
           },
           "notation": "Software System (external)",
           "kind": "externalSystem",
@@ -4398,9 +4398,9 @@
           "width": 320,
           "height": 180,
           "labelBBox": {
-            "x": 30,
+            "x": 18,
             "y": 47,
-            "width": 260,
+            "width": 283,
             "height": 83
           }
         },
@@ -5181,9 +5181,9 @@
           "kind": "sync"
         },
         {
-          "id": "1i4dg4o",
+          "id": "2vmafq",
           "source": "bifrost.skills",
-          "target": "hermod",
+          "target": "muxControl",
           "label": "opens, titles, messages and\ncloses the worker tabs with",
           "points": [
             [
@@ -5223,7 +5223,7 @@
           },
           "parent": null,
           "relations": [
-            "p878zr"
+            "1dutfqx"
           ],
           "color": "gray",
           "line": "solid",
@@ -5232,9 +5232,9 @@
           "kind": "sync"
         },
         {
-          "id": "17q9yep",
+          "id": "1g9oclr",
           "source": "bifrost.progressMod",
-          "target": "hermod",
+          "target": "muxControl",
           "label": "brings a worker tab\nto the front with",
           "points": [
             [
@@ -5274,7 +5274,7 @@
           },
           "parent": null,
           "relations": [
-            "1nfuynt"
+            "t9rvbb"
           ],
           "color": "gray",
           "line": "solid",

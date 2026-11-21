@@ -2,7 +2,7 @@ element operator | person | Operator |  | Starts the skills with slash commands,
 element agent | person | Coding agent |  | A Claude Code or Codex session that loads the skill plugins, follows a skill step by step, and runs the tools and the fleet CLIs that it names.
 element bifrost | softwareSystem | Bifröst |  | The skills layer of the 21Stark fleet: 31 skills in seven Claude Code plugins, the TypeScript tools that they call, three hooks and four mods, served from source as a Claude Code marketplace.
 element alfred | externalSystem | alfred |  | The ticket CLI of the fleet: binds a ticket to a session, and reads, files and moves the ClickUp tickets.
-element hermod | externalSystem | Hermod |  | Places the tabs of the agents in cmux, carries their messages, and closes the tabs.
+element muxControl | externalSystem | mux-control |  | Holds muxctl, which places the tabs of the agents in cmux or tmux, carries their messages, and closes the tabs.
 element idun | externalSystem | idun |  | Holds njord, which opens and merges the PRs, and valkyrie, which launches the Gru, Minion and Agnes workers.
 element urd | externalSystem | urd |  | The local registry of the fleet: tells a launcher the folder of each repo on the Mac.
 element muninn | externalSystem | muninn |  | Carries messages between agents. A Gru with a muninn leader reports to the chief of odin through it.

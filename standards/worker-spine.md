@@ -27,7 +27,7 @@ In cmux or tmux, rename your own tab, since its name does not say what is
 running in it: cmux's `cmux-autoname` SessionStart hook named it after its
 worktree folder — the bare ticket id — and tmux names a window for whatever
 its launcher chose or the program running in it. Paste each id in literally —
-on Claude, a worktree session's guard refuses a `hermod` or `tmux` line
+on Claude, a worktree session's guard refuses a `muxctl` or `tmux` line
 carrying a variable — and quote the title, since its parentheses are shell
 syntax.
 
@@ -35,10 +35,12 @@ syntax.
    UUID, run this and stop, even inside tmux:
 
    ```
-   hermod rename <surface UUID> "<ROLE> (<n>)"
+   muxctl rename <surface UUID> "<ROLE> (<n>)"
    ```
 
-   Pass the bare UUID — cmux refuses `surface:<UUID>`.
+   Pass the bare UUID — cmux refuses `surface:<UUID>`. On a host whose
+   install predates mux-control 0.53.0, the command is `hermod`, muxctl's
+   old name, with the same arguments.
 2. **tmux.** Otherwise `echo "$TMUX_PANE"` as its own command. If it prints a
    pane id (`%` and a number), the window that holds that pane is your tab
    only while it holds no other pane, so read its pane count:
@@ -155,7 +157,7 @@ approval to make it.
 ## 2. Implement
 
 In the worktree valkyrie cut for you, in the tab it placed through
-Hermod. Do not `cd` out of it.
+muxctl. Do not `cd` out of it.
 
 ## 3. Verify live
 
