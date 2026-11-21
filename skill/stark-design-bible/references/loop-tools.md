@@ -84,6 +84,8 @@ stark-eye sheet <run>/eye/<step>/shoot
 
 - Run the 4 personas of a walk at the same time, one process each.
 - In step 4, walk only with `hurried` and `careful`.
+- The five-second test sees the whole window, the shell's page too. Judge
+  only what each answer says about the surface.
 
 ## How to read `measure`
 
@@ -112,10 +114,12 @@ An agent user is a small model of your own vendor, never your own model:
 ## The fresh critic
 
 1. Make a folder, `<run>/critic/<step>/`, with only these files: the PNG
-   shots, the output of `measure` and `flow`, a copy of the bible's
-   `critic.md`, and the playbook's "The questions of the critic". In step 3,
-   add the challenge table. In step 4, add the shots and the numbers of each
-   structure. Put in no code, and none of your reasons.
+   shots, the output of `measure` and `flow`, copies of the bible's
+   `critic.md` and `challenge.md`, and the playbook's "The questions of the
+   critic". `critic.md` sends the critic to the questions and the known
+   answers of `challenge.md`. In step 3, add the challenge table. In step 4,
+   add the shots and the numbers of each structure. Put in no code, and none
+   of your reasons.
 2. Write the prompt in `prompt.md` in that folder: "You are the critic of the
    design bible. Read critic.md. Judge only what a person sees and does in
    these files. Write a punch list in the format of critic.md, worst first,
