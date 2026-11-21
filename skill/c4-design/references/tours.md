@@ -1,6 +1,6 @@
 # Tours
 
-Read from [the c4-design skill](../SKILL.md#tours).
+Read from [the c4-design skill](../SKILL.md#code-keys-flows-deployments-and-logos).
 
 A **tour** is one page with numbered steps: the diagram of one flow, the screens of the app, the choices, before and
 after. `floorplan tour build` writes it as one HTML file. The page opens from disk, on Folkvang and in the studio, with
