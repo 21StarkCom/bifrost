@@ -132,8 +132,9 @@ end of each step in the report.
    report. An item of severity 2 or 3 that is left at the stop goes to the
    report as open, with its reason.
 8. **Finish green.** Run the tests that the playbook names, and the repo's
-   own test of the tasks file. Each must pass. Stop the flow shells that you
-   started. Then finish the report, with these headings:
+   own test of the tasks file. Each must pass, except a test that failed on
+   the baseline in step 2. Stop the flow shells that you started. Then finish
+   the report, with these headings:
    - **Job**: the sentence of step 1, and the clock of each step.
    - **Challenge table**: the table of step 3, with the critic's findings
      and your answers.
