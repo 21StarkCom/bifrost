@@ -40,7 +40,7 @@ then shapes the look with reference panels and measured checks. Huginn's popup i
 - **The jobs** (the operator's use, 2026-11-21; no usage data exists): weekly — start a new chat, go back to a past
   chat, copy the browser ID, open Settings; rare — screenshot, record and stop, the recordings, Quiet reads, the label,
   fix "No host". Each arm of the proof gets them as `jobs.md`.
-- **What stays:** each job keeps a path; the kit rule (`packages/huginn/CLAUDE.md:67-69`); the MV3 CSP; the tests of
+- **What stays:** each job keeps a path; the kit rule (`packages/huginn/CLAUDE.md:66-69`); the MV3 CSP; the tests of
   `packages/huginn` green. The kit is frozen for the proof; a build lists the parts it wishes for.
 - **What a builder may challenge:** everything else, with the code a flow needs outside the popup.
 - **Who depends on an element:** the live proofs, the messages that name it, and the tests that pin it. A move fixes
