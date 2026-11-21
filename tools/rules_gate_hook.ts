@@ -8,7 +8,8 @@
  * inline on PreToolUse through ${CLAUDE_PLUGIN_ROOT}, with an `if` gate that
  * starts node only for a Bash call that runs `ghx pr-merge`.
  *
- * For each `ghx pr-merge` (or `njord pr-merge`) in the command, the hook:
+ * For each `ghx pr-merge` in the command (and each `njord pr-merge` in a line
+ * that the `if` gate let in, while MERGE_CLIS keeps `njord`), the hook:
  *   1. finds the PR: the number in the command, else the PR of the branch
  *      (`gh pr view`, in the folder the command runs in);
  *   2. lists the agent files the PR adds or changes (`agentKind`);
