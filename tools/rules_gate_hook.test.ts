@@ -21,46 +21,37 @@ const BIG_SKILL = "---\nname: big\ndescription: d\n---\n" +
   Array.from({ length: 1300 }, (_, i) => `Line ${i} of the long skill.`).join("\n") + "\n";
 
 test("shellCommands splits at operators and resolves quotes", () => {
-  assert.deepEqual(shellCommands(`git push && njord pr-merge 12; echo "a b" 'c;d' e\\ f # njord pr-merge 9`), [
+  assert.deepEqual(shellCommands(`git push && ghx pr-merge 12; echo "a b" 'c;d' e\\ f # ghx pr-merge 9`), [
     ["git", "push"],
-    ["njord", "pr-merge", "12"],
+    ["ghx", "pr-merge", "12"],
     ["echo", "a b", "c;d", "e f"],
   ]);
-  assert.deepEqual(shellCommands(`njord pr-merge --force-reason "fix \\"12\\" now" | tee x`), [
-    ["njord", "pr-merge", "--force-reason", 'fix "12" now'],
+  assert.deepEqual(shellCommands(`ghx pr-merge --force-reason "fix \\"12\\" now" | tee x`), [
+    ["ghx", "pr-merge", "--force-reason", 'fix "12" now'],
     ["tee", "x"],
   ]);
 });
 
 test("findMerges reads the PR, skips option values, and follows cd", () => {
   const at = (pr: number | null, cwd = "/r", help = false) => ({ cwd, pr, help });
-  assert.deepEqual(findMerges("njord pr-merge", "/r"), [at(null)]);
-  assert.deepEqual(findMerges("njord pr-merge 412 --skip-changelog", "/r"), [at(412)]);
-  assert.deepEqual(findMerges("njord pr-merge --pr 7", "/r"), [at(7)]);
-  assert.deepEqual(findMerges("njord pr-merge --watch-timeout 2", "/r"), [at(null)]);
-  assert.deepEqual(findMerges('njord pr-merge --force --force-reason "see 12" 30', "/r"), [at(30)]);
-  assert.deepEqual(findMerges("njord pr-merge --help", "/r"), [at(null, "/r", true)]);
-  assert.deepEqual(findMerges("STARK=1 env X=2 /opt/bin/njord pr-merge 5", "/r"), [at(5)]);
-  assert.deepEqual(findMerges("cd sub && njord pr-merge 3", "/r"), [at(3, "/r/sub")]);
-  assert.deepEqual(findMerges("cd ~/x && njord pr-merge", "/r", "/h"), [at(null, "/h/x")]);
-  assert.deepEqual(findMerges('cd "$HOME/x" && njord pr-merge; cd ${HOME} && njord pr-merge', "/r", "/h"), [at(null, "/h/x"), at(null, "/h")]);
-  assert.deepEqual(findMerges('echo "njord pr-merge 5"; njord pr-list; git log', "/r"), []);
-  // A cd inside a subshell or a $( … ) ends with it.
-  assert.deepEqual(findMerges("(cd ../o && njord pr-merge 3); njord pr-merge 4", "/r/b"), [at(3, "/r/o"), at(4, "/r/b")]);
-  assert.deepEqual(findMerges('x=$(cd /t; pwd) && njord pr-merge 6', "/r"), [at(6)]);
-  assert.deepEqual(findMerges("(cd a); (njord pr-merge 7)", "/r"), [at(7)]);
-});
-
-test("findMerges finds a ghx pr-merge as it finds a njord pr-merge, the tap's link to ghx", () => {
-  const at = (pr: number | null, cwd = "/r", help = false) => ({ cwd, pr, help });
   assert.deepEqual(findMerges("ghx pr-merge", "/r"), [at(null)]);
   assert.deepEqual(findMerges("ghx pr-merge 412 --skip-changelog", "/r"), [at(412)]);
   assert.deepEqual(findMerges("ghx pr-merge --pr 7", "/r"), [at(7)]);
+  assert.deepEqual(findMerges("ghx pr-merge --watch-timeout 2", "/r"), [at(null)]);
+  assert.deepEqual(findMerges('ghx pr-merge --force --force-reason "see 12" 30', "/r"), [at(30)]);
   assert.deepEqual(findMerges("ghx pr-merge --skip-changelog --release-as 0.4.2", "/r"), [at(null)]);
   assert.deepEqual(findMerges("ghx pr-merge --help", "/r"), [at(null, "/r", true)]);
+  assert.deepEqual(findMerges("STARK=1 env X=2 /opt/homebrew/bin/ghx pr-merge 5", "/r"), [at(5)]);
   assert.deepEqual(findMerges("STARK=1 env X=2 /home/linuxbrew/.linuxbrew/bin/ghx pr-merge 5", "/r"), [at(5)]);
-  assert.deepEqual(findMerges("cd sub && ghx pr-merge 3; njord pr-merge 4", "/r"), [at(3, "/r/sub"), at(4, "/r/sub")]);
-  assert.deepEqual(findMerges('echo "ghx pr-merge 5"; ghx pr-list; gh pr merge 5; ghxx pr-merge 5', "/r"), []);
+  assert.deepEqual(findMerges("cd sub && ghx pr-merge 3", "/r"), [at(3, "/r/sub")]);
+  assert.deepEqual(findMerges("cd sub && ghx pr-merge 3; ghx pr-merge 4", "/r"), [at(3, "/r/sub"), at(4, "/r/sub")]);
+  assert.deepEqual(findMerges("cd ~/x && ghx pr-merge", "/r", "/h"), [at(null, "/h/x")]);
+  assert.deepEqual(findMerges('cd "$HOME/x" && ghx pr-merge; cd ${HOME} && ghx pr-merge', "/r", "/h"), [at(null, "/h/x"), at(null, "/h")]);
+  assert.deepEqual(findMerges('echo "ghx pr-merge 5"; ghx pr-list; gh pr merge 5; ghxx pr-merge 5; git log', "/r"), []);
+  // A cd inside a subshell or a $( … ) ends with it.
+  assert.deepEqual(findMerges("(cd ../o && ghx pr-merge 3); ghx pr-merge 4", "/r/b"), [at(3, "/r/o"), at(4, "/r/b")]);
+  assert.deepEqual(findMerges('x=$(cd /t; pwd) && ghx pr-merge 6', "/r"), [at(6)]);
+  assert.deepEqual(findMerges("(cd a); (ghx pr-merge 7)", "/r"), [at(7)]);
 });
 
 test("shellCommands marks each subshell's start and end", () => {
@@ -244,7 +235,7 @@ test("a PR that adds a RED clause to an agent file is denied, with the clause", 
     const base = f.commit({ "CLAUDE.md": CLEAN });
     const sha = f.commit({ "CLAUDE.md": CLEAN + RED_LINE, "tools/x.ts": "x\n" });
     f.pr(view(sha, base, [["CLAUDE.md", "MODIFIED"], ["tools/x.ts", "ADDED"]]));
-    const r = f.run("git push && njord pr-merge 5 --skip-changelog");
+    const r = f.run("git push && ghx pr-merge 5 --skip-changelog");
     assert.equal(r.status, 0, r.stderr);
     const reason = denied(r);
     assert.match(reason, /^agent-doc gate: PR #5 adds a RED clause to an agent file/);
@@ -261,21 +252,22 @@ test("the deny reason names only the new RED clauses, and counts the ones on the
     const base = f.commit({ "CLAUDE.md": CLEAN + OLD_RED });
     const sha = f.commit({ "CLAUDE.md": RED_LINE + CLEAN + OLD_RED });
     f.pr(view(sha, base, [["CLAUDE.md", "MODIFIED"]]));
-    const reason = denied(f.run("njord pr-merge 5"));
+    const reason = denied(f.run("ghx pr-merge 5"));
     assert.match(reason, /New RED clauses:\n {2}CLAUDE\.md:1 {2}GATE .*This is the operator's call\.\n\n1 RED clause was on the base already; it does not stop the merge\.$/);
     assert.doesNotMatch(reason, /Merging needs a GO/);
   });
 });
 
-test("a ghx pr-merge of a PR that adds a RED clause is denied, as a njord pr-merge is", () => {
+test("a njord pr-merge gets no gate, even for a PR that adds a RED clause: the tap has no njord link", () => {
+  assert.deepEqual(findMerges("njord pr-merge 5; /opt/homebrew/bin/njord pr-merge", "/r"), []);
   withFixture((f) => {
     const base = f.commit({ "CLAUDE.md": CLEAN });
     const sha = f.commit({ "CLAUDE.md": CLEAN + RED_LINE });
     f.pr(view(sha, base, [["CLAUDE.md", "MODIFIED"]]));
-    const r = f.run("ghx pr-merge 5");
+    const r = f.run("njord pr-merge 5");
     assert.equal(r.status, 0, r.stderr);
-    assert.match(denied(r), /^agent-doc gate: PR #5 adds a RED clause to an agent file/);
-    assert.deepEqual(r.gh, [["pr", "view", "5", "--json", PR_FIELDS]]);
+    assert.equal(r.stdout, "");
+    assert.deepEqual(r.gh, []);
   });
 });
 
@@ -284,7 +276,7 @@ test("a PR that keeps a base RED and adds none is allowed in silence, even when 
     const base = f.commit({ "CLAUDE.md": CLEAN + OLD_RED });
     const sha = f.commit({ "CLAUDE.md": "# Repo\n\nIntro line.\n\n" + OLD_RED + "Run `npm test` first.\n" });
     f.pr(view(sha, base, [["CLAUDE.md", "MODIFIED"]]));
-    const r = f.run("njord pr-merge 5");
+    const r = f.run("ghx pr-merge 5");
     assert.equal(r.status, 0, r.stderr);
     assert.equal(r.stdout, "");
     assert.deepEqual(fs.readdirSync(f.tmp), []);
@@ -296,7 +288,7 @@ test("a one-line change to a file RED for size on the base, at the same size, is
     const base = f.commit({ "skill/big/SKILL.md": BIG_SKILL });
     const sha = f.commit({ "skill/big/SKILL.md": BIG_SKILL.replace("Line 7 of", "Line 7 at") });
     f.pr(view(sha, base, [["skill/big/SKILL.md", "MODIFIED"]]));
-    const r = f.run("njord pr-merge 5");
+    const r = f.run("ghx pr-merge 5");
     assert.equal(r.status, 0, r.stderr);
     assert.equal(r.stdout, "");
   });
@@ -307,7 +299,7 @@ test("a PR that makes a file RED for size on the base larger is denied, with the
     const base = f.commit({ "skill/big/SKILL.md": BIG_SKILL });
     const sha = f.commit({ "skill/big/SKILL.md": BIG_SKILL + "One more line.\n" });
     f.pr(view(sha, base, [["skill/big/SKILL.md", "MODIFIED"]]));
-    const reason = denied(f.run("njord pr-merge 5"));
+    const reason = denied(f.run("ghx pr-merge 5"));
     assert.match(reason, /New RED clauses:\n {2}skill\/big\/SKILL\.md:1 {2}SIZE {2}over the 15k budget twice over, grown from (\d+) to (\d+) chars: [\d.]+k chars\n\n0 RED clauses were/);
     const [, from, to] = /grown from (\d+) to (\d+)/.exec(reason)!;
     assert.equal(Number(to) - Number(from), "One more line.\n".length);
@@ -319,7 +311,7 @@ test("a PR that adds an agent file with a RED clause is denied", () => {
     const base = f.commit({ "CLAUDE.md": CLEAN + OLD_RED });
     const sha = f.commit({ "pkg/CLAUDE.md": "# Pkg\n\n" + OLD_RED });
     f.pr(view(sha, base, [["pkg/CLAUDE.md", "ADDED"]]));
-    const reason = denied(f.run("njord pr-merge 5"));
+    const reason = denied(f.run("ghx pr-merge 5"));
     assert.match(reason, /New RED clauses:\n {2}pkg\/CLAUDE\.md:3 {2}GATE .*Merging needs a GO\.\n\n0 RED clauses were/);
   });
 });
@@ -329,7 +321,7 @@ test("a merge run from a subfolder still copies and triages the whole tree", () 
     const base = f.commit({ "CLAUDE.md": CLEAN, "tools/x.ts": "x\n" });
     const sha = f.commit({ "CLAUDE.md": CLEAN + RED_LINE });
     f.pr(view(sha, base, [["CLAUDE.md", "MODIFIED"]]));
-    const reason = denied(f.run("cd tools && njord pr-merge 5"));
+    const reason = denied(f.run("cd tools && ghx pr-merge 5"));
     assert.match(reason, /New RED clauses:\n {2}CLAUDE\.md:4 {2}GATE .*This is the operator's call\./);
   });
 });
@@ -340,7 +332,7 @@ test("a PR that only renames an agent file with REDs is allowed in silence", () 
     const base = f.commit({ "skill/old/SKILL.md": text });
     const sha = f.commit({ "skill/old/SKILL.md": null, "skill/new/SKILL.md": text });
     f.pr(view(sha, base, [["skill/new/SKILL.md", "RENAMED"]]));
-    const r = f.run("njord pr-merge 5");
+    const r = f.run("ghx pr-merge 5");
     assert.equal(r.status, 0, r.stderr);
     assert.equal(r.stdout, "");
     assert.deepEqual(fs.readdirSync(f.tmp), []);
@@ -353,7 +345,7 @@ test("the head commit is read, not the working tree, and a PR with no RED passes
     const sha = f.commit({ "CLAUDE.md": CLEAN });
     f.commit({ "CLAUDE.md": CLEAN + RED_LINE }); // later than the PR head
     f.pr(view(sha, base, [["CLAUDE.md", "MODIFIED"]]));
-    const r = f.run("njord pr-merge");
+    const r = f.run("ghx pr-merge");
     assert.equal(r.status, 0, r.stderr);
     assert.equal(r.stdout, "");
     assert.deepEqual(r.gh, [["pr", "view", "--json", PR_FIELDS]]);
@@ -364,9 +356,9 @@ test("a PR that changes no agent file, deletes one, or is not open passes withou
   withFixture((f) => {
     const sha = f.commit({ "tools/x.ts": "x\n" });
     f.pr(view(sha, sha, [["tools/x.ts", "MODIFIED"], ["CLAUDE.md", "DELETED"]]));
-    assert.equal(f.run("njord pr-merge 5").stdout, "");
+    assert.equal(f.run("ghx pr-merge 5").stdout, "");
     f.pr(view("0".repeat(40), sha, [["CLAUDE.md", "MODIFIED"]], { state: "MERGED" }));
-    assert.equal(f.run("njord pr-merge 5").stdout, "");
+    assert.equal(f.run("ghx pr-merge 5").stdout, "");
   });
 });
 
@@ -378,7 +370,7 @@ test("a PR to the repo that holds the root rules triages them as the root rules,
     const base = f.commit({ "CLAUDE.md": CLEAN });
     const sha = f.commit({ "CLAUDE.md": CLEAN + RED_LINE });
     f.pr(view(sha, base, [["CLAUDE.md", "MODIFIED"]]));
-    const r = f.run("njord pr-merge 5");
+    const r = f.run("ghx pr-merge 5");
     assert.equal(r.status, 0, r.stderr);
     assert.equal(r.stdout, "", "the root rules define the gates and copy nothing");
     assert.deepEqual(fs.readdirSync(f.tmp), []);
@@ -405,7 +397,7 @@ test("a head commit and a base tip that are not local are fetched", () => {
     git(f.repo, "gc", "--quiet", "--prune=now");
     for (const c of [tip, sha]) assert.notEqual(spawnSync("git", ["cat-file", "-e", `${c}^{commit}`], { cwd: f.repo }).status, 0);
     f.pr(view(sha, tip, [["skill/demo/SKILL.md", "MODIFIED"]]));
-    const reason = denied(f.run("njord pr-merge 5"));
+    const reason = denied(f.run("ghx pr-merge 5"));
     assert.match(reason, /New RED clauses:\n {2}skill\/demo\/SKILL\.md:6 {2}GATE .*This is the operator's call\.\n\n1 RED clause was on the base already/);
   });
 });
@@ -415,7 +407,7 @@ test("a PR with more files than gh pr view lists is listed through the REST API"
     const base = f.commit({ "README.md": "r\n" });
     const sha = f.commit({ "CLAUDE.md": RED_LINE });
     f.pr(view(sha, base, [["tools/x.ts", "MODIFIED"]], { changedFiles: 101 }));
-    const r = f.run("njord pr-merge 5", { FAKE_GH_API_TEXT: "tools/x.ts\nCLAUDE.md\n" });
+    const r = f.run("ghx pr-merge 5", { FAKE_GH_API_TEXT: "tools/x.ts\nCLAUDE.md\n" });
     assert.equal(JSON.parse(r.stdout).hookSpecificOutput.permissionDecision, "deny");
     assert.deepEqual(r.gh[1], ["api", "--paginate", "repos/{owner}/{repo}/pulls/5/files", "--jq", '.[] | select(.status != "removed") | .filename']);
   });
@@ -423,20 +415,20 @@ test("a PR with more files than gh pr view lists is listed through the REST API"
 
 test("a tool error lets the merge go on, with one warning line", () => {
   withFixture((f) => {
-    const noPr = JSON.parse(f.run("njord pr-merge", { FAKE_GH_FAIL: "1" }).stdout);
+    const noPr = JSON.parse(f.run("ghx pr-merge", { FAKE_GH_FAIL: "1" }).stdout);
     assert.equal(noPr.hookSpecificOutput.permissionDecision, undefined);
     assert.equal(noPr.systemMessage, 'agent-doc gate: could not read the PR of this branch (no pull requests found for branch "x"); the merge goes on unchecked.');
     assert.equal(noPr.hookSpecificOutput.additionalContext, noPr.systemMessage);
 
     const gone = path.join(f.dir, "gone");
-    const noDir = f.run(`cd ${gone} && njord pr-merge`);
+    const noDir = f.run(`cd ${gone} && ghx pr-merge`);
     assert.equal(JSON.parse(noDir.stdout).systemMessage, `agent-doc gate: the merge runs in ${gone}, which is not a folder here; the merge goes on unchecked.`);
     assert.deepEqual(noDir.gh, []);
 
     // The PR names an agent file that its head commit does not hold: triage exits 2.
     const sha = f.commit({ "tools/x.ts": "x\n" });
     f.pr(view(sha, sha, [["CLAUDE.md", "MODIFIED"]]));
-    const broken = JSON.parse(f.run("njord pr-merge 5").stdout);
+    const broken = JSON.parse(f.run("ghx pr-merge 5").stdout);
     assert.equal(broken.hookSpecificOutput.permissionDecision, undefined);
     assert.match(broken.systemMessage, /^agent-doc gate: triage of the head of PR #5 failed \(exit 2: rules_audit: CLAUDE\.md: no such file\); the merge goes on unchecked\.$/);
     assert.deepEqual(fs.readdirSync(f.tmp), []);
@@ -448,7 +440,7 @@ test("a head RED with a base the hook cannot read lets the merge go on, with one
     const sha = f.commit({ "CLAUDE.md": CLEAN + RED_LINE });
     const warned = (over: object) => {
       f.pr(view(sha, "f".repeat(40), [["CLAUDE.md", "MODIFIED"]], over));
-      const r = f.run("njord pr-merge 5");
+      const r = f.run("ghx pr-merge 5");
       assert.equal(r.status, 0, r.stderr);
       const out = JSON.parse(r.stdout);
       assert.equal(out.hookSpecificOutput.permissionDecision, undefined);
@@ -468,7 +460,6 @@ test("a head RED with a base the hook cannot read lets the merge go on, with one
 test("other tools, other commands and a help call never reach gh", () => {
   withFixture((f) => {
     for (const [command, tool] of [
-      ["njord pr-merge 5", "Write"], ["njord pr-list", "Bash"], ["njord pr-merge --help", "Bash"],
       ["ghx pr-merge 5", "Write"], ["ghx pr-list", "Bash"], ["ghx pr-merge --help", "Bash"],
     ]) {
       const r = f.run(command, {}, tool);

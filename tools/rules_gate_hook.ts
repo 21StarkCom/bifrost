@@ -8,8 +8,7 @@
  * inline on PreToolUse through ${CLAUDE_PLUGIN_ROOT}, with an `if` gate that
  * starts node only for a Bash call that runs `ghx pr-merge`.
  *
- * For each `ghx pr-merge` in the command (and each `njord pr-merge` in a line
- * that the `if` gate let in, while MERGE_CLIS keeps `njord`), the hook:
+ * For each `ghx pr-merge` in the command, the hook:
  *   1. finds the PR: the number in the command, else the PR of the branch
  *      (`gh pr view`, in the folder the command runs in);
  *   2. lists the agent files the PR adds or changes (`agentKind`);
@@ -53,8 +52,8 @@ export const PR_FIELDS = "number,state,headRefOid,baseRefName,baseRefOid,changed
 
 /** `ghx pr-merge` options that take a value, from its argument parser. */
 const VALUE_FLAGS = new Set(["--pr", "--changelog-section", "--force-reason", "--watch-timeout", "--release-as"]);
-/** The names that run the merge: `njord` is the tap's link to `ghx`. */
-const MERGE_CLIS = new Set(["ghx", "njord"]);
+/** The names that run the merge. */
+const MERGE_CLIS = new Set(["ghx"]);
 /** Words that run the next word as the command. */
 const WRAPPERS = new Set(["env", "command", "time", "nohup", "exec"]);
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
@@ -144,7 +143,7 @@ function mergeArgs(args: string[], cwd: string): MergeCall {
   return { cwd, pr, help };
 }
 
-/** Each `ghx pr-merge` or `njord pr-merge` in a Bash command line, with the folder it runs in. */
+/** Each `ghx pr-merge` in a Bash command line, with the folder it runs in. */
 export function findMerges(line: string, cwd: string, home = os.homedir()): MergeCall[] {
   const out: MergeCall[] = [];
   let dir = cwd;
