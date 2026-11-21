@@ -24,6 +24,9 @@ views {
     include bifrost -> idun with {
       technology ''
     }
+    include bifrost -> ghx with {
+      technology ''
+    }
     include bifrost -> urd with {
       technology ''
     }
@@ -75,6 +78,7 @@ views {
       alfred,
       muxControl,
       idun,
+      ghx,
       urd,
       muninn,
       frigg,

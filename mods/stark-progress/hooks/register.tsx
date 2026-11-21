@@ -648,7 +648,8 @@ export const register: Register = on => {
           return
         }
         // muxctl is mux-control's command. A host whose install predates 0.53.0 has only `hermod`,
-        // so a muxctl that cannot start falls back to it; when both fail, the toast gives muxctl's reason.
+        // so a muxctl run that throws (as one that cannot start does) falls back to it. A hermod that runs
+        // gives the toast its own reason; when neither can start, the toast gives muxctl's.
         const focus = (bin: string) => $.process.run([bin, 'focus', tab], { timeoutMs: 10_000 })
         const focused = await focus('muxctl').catch((err: unknown) =>
           focus('hermod').catch(() => ({

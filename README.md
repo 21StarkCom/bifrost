@@ -223,7 +223,7 @@ Repos can override the enabled agents and nothing else: the walk above lives onl
 - The fleet CLIs, each for the skills that call it:
   - `alfred`: /stark-ticket, /stark-author, /stark-build, /stark-bury, /stark-rules-optimizer, /gru, /minion, /agnes
   - `muxctl` from mux-control (`hermod`, its old name, before 0.53.0): /gru, /super-gru, /minion, /agnes, and the stark-progress mod's tab button
-  - `valkyrie` 0.1.1 or later (`valkyrie gru`, `valkyrie minion`, `valkyrie agnes` for the worker launches): /gru, /minion, /agnes
+  - `valkyrie` 0.1.1 or later (`valkyrie gru`, `valkyrie minion`, `valkyrie agnes` for the worker launches): /gru, /super-gru, /minion, /agnes
   - `ghx` (`ghx pr-open`, `pr-merge`): /gru, /minion, /agnes, /stark-bury, /stark-rules-optimizer
   - `frigg`: /gru, /minion, /agnes, to find a ticket's repo; /stark-rich-text, to send Slack and Jira text (0.80.0 or later, for the Jira Markdown flags)
   - `plume` 0.10.0 or later (`plume-xlsx read --cells`, `set`, `diff`, `check`): /stark-office

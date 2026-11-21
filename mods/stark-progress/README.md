@@ -314,8 +314,9 @@ names shows its id alone.
 8.1:1; the app's accent elsewhere), as wide as `[STARK-n]`. It is a button: a
 press runs `muxctl focus <surface>`, which brings that cmux tab to the front,
 and a toast says why when muxctl fails. On a host whose install predates
-mux-control 0.53.0, a `muxctl` that cannot start falls back to `hermod focus`;
-when both fail, the toast gives muxctl's reason. The title beside it is a button of its
+mux-control 0.53.0, a `muxctl` that cannot start falls back to `hermod focus`.
+A `hermod` that runs and fails gives the toast its own reason; when neither can
+start, the toast gives muxctl's. The title beside it is a button of its
 own that opens the row's detail (`details` when no file names a title). A tab
 is open when the ticket's heartbeat is under 3 minutes old and names a
 surface: a worker's tab writes it at least once a minute, with no call too.

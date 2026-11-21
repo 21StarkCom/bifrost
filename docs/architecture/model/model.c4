@@ -14,11 +14,11 @@ model {
   }
 
   bifrost = softwareSystem 'Bifröst' {
-    description 'The skills layer of the 21Stark fleet: 31 skills in seven Claude Code plugins, the TypeScript tools that they call, three hooks and four mods, served from source as a Claude Code marketplace.'
+    description 'The skills layer of the 21Stark fleet: 34 skills in seven Claude Code plugins, the TypeScript tools that they call, three hooks and four mods, served from source as a Claude Code marketplace.'
 
     skills = container 'Skill plugins' {
       technology 'Markdown, Claude Code plugins'
-      summary 'The 31 skills in seven plugins, which a coding agent loads and follows.'
+      summary 'The 34 skills in seven plugins, which a coding agent loads and follows.'
       description 'Hold the procedures that a coding agent follows: tickets, specs, builds, reviews, sessions, releases, the Gru, Minion and Agnes workers, and the docs, writing and design skills. Claude Code installs them from the marketplace manifest; Codex reads the same tree.'
       metadata {
         // Not 'skill/': its one Go example file (stark-logging) makes the scan call the skills Go.
@@ -79,7 +79,7 @@ model {
 
     gateHook = container 'Agent-doc gate hook' {
       technology 'TypeScript, Node.js 24, PreToolUse hook'
-      description 'Runs before each njord pr-merge call, triages the agent files that the PR changes, and denies the merge only on a RED clause that the PR adds.'
+      description 'Runs before each ghx pr-merge call, triages the agent files that the PR changes, and denies the merge only on a RED clause that the PR adds.'
       metadata {
         code 'tools/rules_gate_hook.ts'
       }
@@ -146,9 +146,16 @@ model {
   }
 
   idun = externalSystem 'idun' {
-    description 'Holds njord, which opens and merges the PRs, and valkyrie, which launches the Gru, Minion and Agnes workers.'
+    description 'Holds valkyrie, which launches the Gru, Minion and Agnes workers.'
     metadata {
       fleetRepo 'idun'
+    }
+  }
+
+  ghx = externalSystem 'ghx' {
+    description 'The GitHub CLI of the fleet, in the github-extended repo: opens and merges the PRs, watches CI, and cleans merged branches and worktrees.'
+    metadata {
+      fleetRepo 'github-extended'
     }
   }
 
@@ -229,7 +236,7 @@ model {
   agent -[sync]-> bifrost.skills 'loads and follows the skills of'
   agent -[sync]-> bifrost.reviewPoster 'posts the findings of a code review with'
   agent -[sync]-> bifrost.questionMods 'asks the operator questions with'
-  agent -[sync]-> bifrost.gateHook 'is checked before each njord pr-merge call by'
+  agent -[sync]-> bifrost.gateHook 'is checked before each ghx pr-merge call by'
   agent -[sync]-> bifrost.factHook 'is told where a memory fact belongs by'
   agent -[sync]-> bifrost.stopHook 'is asked to tell the librarian its lasting facts by'
 
@@ -260,7 +267,10 @@ model {
   bifrost.skills -[sync]-> muxControl 'opens, titles, messages and closes the worker tabs with' {
     technology 'Shell command'
   }
-  bifrost.skills -[sync]-> idun 'launches the workers and opens and merges the PRs with' {
+  bifrost.skills -[sync]-> idun 'launches the workers with' {
+    technology 'Shell command'
+  }
+  bifrost.skills -[sync]-> ghx 'opens, watches and merges the PRs with' {
     technology 'Shell command'
   }
   bifrost.skills -[sync]-> urd 'finds the folder of each repo with' {
