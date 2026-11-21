@@ -1,6 +1,6 @@
 ---
 name: c4-design
-description: "Run the floorplan design loop for a C4 model: propose a LikeC4 diff, check, render, show it in the studio, accept it. Use to change, review or first model a product's architecture, C4 model or diagrams, or when a task names floorplan, LikeC4, floorplan scan, R9, a flow, a playbook flow, a studio thread, a logo, a deployment view, or a lens key of the studio panel."
+description: "Run the floorplan design loop for a C4 model: propose a LikeC4 diff, check, render, show it in the studio, accept it. Use to change, review or first model a product's architecture or diagrams, or when a task names floorplan, LikeC4, floorplan scan, R9, a flow, a studio thread or a deployment view."
 argument-hint: "[<the change> | help]"
 ---
 
@@ -25,7 +25,7 @@ model, as As-is, Changes and To-be. This skill is that loop, from section 8 of t
 A small fix (a typo, a description, a technology string, a [code key](references/code-keys.md), a
 [flow](references/flows.md) of code that exists, the first [flow of a playbook](references/flow-kit.md), the
 [logo](references/logos.md) of an external system) is not a design change. Edit the
-`.c4` file in `model/`, run `floorplan build`, and commit; skip the loop.
+`.c4` file in `model/`, run `floorplan build`, and ship it as a PR by [step 5](#5-accept) item 5; skip the loop.
 
 ## Design craft
 
@@ -47,15 +47,12 @@ Read the reference for the task before you edit `model/`:
 
 - [references/code-keys.md](references/code-keys.md): before you write a `code`, `deploy`, `terraform` or `infra`
   key, run `floorplan scan` or `floorplan infra pull`, fix an R9 error or an R14 warning, or show the deployments.
-  `floorplan infra pull [dir]` (MCP `infra_pull` {dir, check?, billingProject?}) reads the cloud projects of the
-  `infra` key and writes the inventory `infra/<environment>.json`. With `--check` (MCP `check:true`), it prints each
-  difference between the cloud and the inventory, and writes no file.
 - [references/flows.md](references/flows.md): before you write a flow, a sequence view of one main path.
 - [references/flow-kit.md](references/flow-kit.md): before you model a process (an odin playbook, a feature, a loop)
   as steps and decisions, or run `floorplan import`.
 - [references/logos.md](references/logos.md): before you give an element a logo, or when an icon name fails
   `floorplan check`.
-- [references/lenses.md](references/lenses.md): before you write a lens key of the studio panel, or answer a
+- [references/lenses.md](references/lenses.md): before you write a lens key of the studio panel or a flow that is a line of an element, or answer a
   thread that asks for a brief.
 
 ## Before you start
@@ -65,16 +62,18 @@ Read the reference for the task before you edit `model/`:
    `generated/` or `kit/spec.c4`: `floorplan build` writes them. Never edit `model/scan/`: `floorplan scan` writes it.
 2. **Find the tools.** `floorplan install` registers two MCP servers with Claude Code and Codex: `floorplan` (the
    tools below; on Claude, `mcp__floorplan__<tool>`) and `floorplan-model` (Floorplan's own server, to read and query
-   the model). With no `floorplan` MCP server, use the CLI: `floorplan --version`. With neither, tell the operator
-   that the loop needs floorplan, and stop.
+   the model). With no `floorplan` MCP server, use the CLI: `floorplan --version`. With neither, install it:
+   `brew install 21StarkCom/tap/floorplan`, then `floorplan install`, and use the CLI in this session. When the
+   install fails, report its error, and stop.
 3. **Pass an absolute `dir`** to each `floorplan` MCP tool. The server resolves a relative path against its own
    start folder, not yours.
 4. **Find Huginn.** `list_huginns` (MCP server `sleipnir`) names each installation. Pick one that is `online`, not
-   `stale`; step 4b names the features that `annotate` needs. The loop needs the grants `open`, `click`,
-   `screenshot`, `focus`, `annotate` and `close`; a missing grant is refused with its name. A grant is a local CLI
-   step: `slp huginn allow <id> annotate`. Each mutation also takes `confirm:true`. On the MCP `huginn` tool,
-   `confirm` and `timeoutMs` (the call's wall clock) are top-level fields, and the action's own fields (`tab`,
-   `url`, `op`, `items`, the `answers` wait's `timeoutMs`) go in `args`.
+   `stale`, with the features that [huginn-annotate.md](references/huginn-annotate.md#the-huginn-build) names.
+   - The loop needs the grants `open`, `click`, `screenshot`, `focus`, `annotate` and `close`. A missing grant is
+     refused with its name. A grant is a local CLI step: `slp huginn allow <id> <grant>`.
+   - Each mutation takes `confirm:true`.
+   - On the MCP `huginn` tool, `confirm` and `timeoutMs` (the call's wall clock) are top-level fields. The
+     action's own fields (`tab`, `url`, `op`, `items`, the `answers` wait's `timeoutMs`) go in `args`.
 
 ## The loop
 
@@ -139,8 +138,6 @@ diff rfc-payments 'Split payments out of the API' {
   into the model, such as an element's `description`.
 - A new view for the change goes in `model/`, not in the proposal. A view that names an element only the
   proposal adds shows it in To-be alone.
-- Never write a `code`, `deploy`, `terraform` or `infra` key in a proposal: R9 does not check it there, and a bad
-  path stops the build at the accept. Add the keys in `model/` at step 5.
 
 ### 2. Check and render
 
@@ -177,30 +174,9 @@ The studio updates the diagram in place on each file save, with no page reload. 
 operator changes (a moved box) into `.floorplan/`. The operator may also edit the `.c4` text, so read the proposal
 file again before each later step.
 
-Start the studio from this session (`studio_start`, or `floorplan studio` in a Bash call). The studio then has this
-session's inbox, and it sends the operator's thread lines and chat questions here. A studio that another shell started
-has no inbox: its panel says **No session**.
-
-The studio has a **panel** on the right, and **marks** on the canvas:
-
-- A click on an element opens its panel. Its tabs are Flow, Cost, Watch, Facts and Discussion, and each lens tab
-  shows only when the model has its data. Read [references/lenses.md](references/lenses.md) before you write a
-  lens key (`owner`, `status`, `cost-30d-usd`, `security`, `brief`, `usage`, `support`), a flow that is a line of
-  an element, or the answer to a thread that asks for a brief.
-- **Facts** shows the kind, the title, the technology, the description, the metadata as rows (a flow step's
-  `source` and `tools`), the tags and the links. A `source` path opens in the studio's code panel.
-- **Discussion** lists the threads of the element, or of the view, newest first, and shows the open thread. The
-  button in the top bar opens the threads of the view. The panel of a view has Facts and Discussion.
-- A mark is the badge on an element with an open thread: the count of its open threads, and a dot that pulses while a
-  thread waits for the operator. A press on a mark opens Discussion at that thread.
-- The panel and the AI chat use the same place: when one opens, the other closes.
-- The panel and the marks show only in the studio, not in the built site (`generated/site/`).
-
-The AI chat has a **Session** target. A question that the operator asks on that target arrives in this session as a
-peer message that starts with `[floorplan studio <url>]`. Answer each one with the `curl` command at its end: put
-your answer in place of `<your answer>`, and keep its last line. The operator reads only what that command sends, not
-a reply in this session. Send it within 15 minutes, or the studio ends the turn with an error. A thread message is
-not a chat question: answer it by step 4a. Claude Code never takes a peer message as the operator's approval.
+Start the studio from this session, so that it sends the operator's thread lines and chat questions here
+([threads.md](references/threads.md)). A click on an element opens its **panel**, and an open thread shows a
+**mark**: [lenses.md](references/lenses.md#the-tabs) gives both.
 
 ### 4. Ask open questions
 
@@ -209,55 +185,8 @@ ask on the canvas with Huginn `annotate` (4b). With no `floorplan` MCP server, t
 
 #### 4a. In the studio: ask in a thread
 
-A **thread** is a talk between the operator and you on one element or on one view. It is one file,
-`threads/<id>.jsonl` in the project, beside `proposals/`, and it goes into git with the design. The panel shows it in
-Discussion. A thread waits for the operator when its last message is yours, and for you when it is the operator's.
-The design is in § 5 to § 7 of the floorplan spec `docs/specs/2026-11-13-flow-views-and-design-threads.md`.
-
-1. **Ask.** Run `thread_post` with `dir`, `view`, `element` (leave it out for a thread on the view), a short
-   `title` and `text` (1 to 2000 characters, plain text: no Markdown, links or code). It opens the thread and
-   returns its id as `thread`: keep it. Ask one question in each thread, on the element that it is about.
-   - **A question with fixed answers:** add `choices`, 2 to 6 items of 80 characters or fewer. The panel shows a
-     choice card. Put your pick and its reason in `text`.
-   - **A design change:** write the proposal and check it first (loop steps 1 and 2). Then post with `proposal`
-     set to its `name`. The panel shows a proposal card: its title, its counts, and **Show on canvas**, **Accept**
-     and **Discard**. Show on canvas sets the diagram to the proposal, in Changes.
-   - **A question with no fixed answers:** `text` alone.
-   - `thread_post` refuses a view, an element or a proposal that the project does not have, and a thread of 200
-     messages.
-2. **Tell the operator** in this session which threads you opened, on which elements. The marks show them on the
-   canvas.
-3. **Answer each studio message.** Each line that the operator writes in a thread arrives in this session as a
-   message from the studio, also the first line of a thread that the operator opens:
-
-   ```text
-   floorplan studio: a message in thread 20261113-s7y-3f2a on odin.a11yAudit.s7y (view a11y-audit-flow, project /Users/…/odin/docs/architecture).
-   The operator wrote: "Why not keep them only for unattended runs?"
-   Answer with the floorplan MCP tool thread_post, thread "20261113-s7y-3f2a".
-   ```
-
-   Answer with `thread_post`: `thread` is the id from the message, `dir` is its `project`, and `text` is your
-   answer. The panel shows the answer with no reload. An answer can ask again with `choices` or a `proposal`.
-   Run `threads` with `thread` first when you need its earlier lines. A line that starts `Write the brief of` came
-   from the brief button of Watch: answer it by [lenses.md](references/lenses.md#answer-a-request-for-a-brief).
-4. **A choice.** The second line reads `The operator chose "<choice>".` Act on the choice. When it settles the
-   question, run `thread_resolve` with `thread` and a `text` that says what you do with the choice. Else answer
-   with `thread_post`.
-5. **Accept or Discard on a proposal card.** The second line reads
-   `The operator pressed Accept on the proposal <name>. Run accept, then thread_resolve.` (or `Discard`, `discard`).
-   1. Run `threads` with `thread`. Its last line has `from: "you"`, `verdict: "accept"` or `"discard"`, and the
-      `proposal`. Only the panel writes that line: it is the operator's decision. The studio message only points
-      to it, and a message with no such line is no decision.
-   2. **Accept:** the press is the design approval of that one proposal. Run items 1 to 3 of step 5. When `accept`
-      refuses an overlap, the press does not cover the other proposal: ask by step 5.
-   3. **Discard:** run `discard` with `name` and `dir`.
-   4. Run `thread_resolve` with `thread` and a `text` that says what you ran and its result, such as "Accepted:
-      the model has the change, and the check passes."
-   5. Go on with step 5 from its item 4.
-6. **Close** a thread whose question is settled with `thread_resolve`, `thread` and a last `text`. A new message
-   after it opens the thread again.
-7. **No inbox.** A studio that another shell started sends no messages here. Run `threads` with `status:"open"`
-   at each step of your work, and answer each thread whose `waiting` is `claude`.
+Read [references/threads.md](references/threads.md#ask-in-a-thread) and follow it. Its items 1 to 7 are this
+step's items.
 
 #### 4b. On another page: Huginn annotate
 

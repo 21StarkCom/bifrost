@@ -1,11 +1,10 @@
 ---
 name: stark-logging
 description: >-
-  Use when adding, changing, or reviewing application logging — instrumenting a
-  service/CLI/connector, choosing log levels (DEBUG→FATAL), writing structured
-  logs, or judging whether log lines in a diff are actually useful. Symptoms:
-  fmt.Sprintf/printf into a message, everything at INFO, log-and-return, no
-  correlation id, secrets in logs, per-item spam in loops, logs nobody can grep.
+  Use when adding, changing or reviewing application logging: instrumenting a
+  service, CLI or connector, choosing log levels, writing structured logs, or
+  judging log lines in a diff. Symptoms: Sprintf into a message, everything at
+  INFO, log-and-return, secrets in logs, per-item spam in loops.
 argument-hint: "[file-or-package to instrument or review]"
 disable-model-invocation: true
 model: opus[1m]
@@ -13,9 +12,8 @@ model: opus[1m]
 
 ## Help
 
-If `$ARGUMENTS` requests help (a standalone `--help`, `-h`, or `help` token),
-follow [standard help](../../standards/help.md): print this skill's purpose,
-usage, and arguments, then stop — do not run preflight or any phase.
+If `$ARGUMENTS` contains a standalone `--help`, `-h`, or `help`, follow
+[standard help](../../standards/help.md), then stop.
 
 # stark-logging — writing logs a reviewer calls good
 
@@ -54,8 +52,8 @@ by **who needs to read it** and **what they must do**.
 |-------|--------------|---------|--------|----------------|
 | TRACE | you, with a debugger | wire-level detail (payloads, loop iterations) | none; off everywhere but local | any |
 | DEBUG | you, diagnosing later | internal steps: cache miss, page N fetched, chosen branch | none in normal ops; on in the local run folder, off on the console | high, fine |
-| INFO | the operator | **the story of the run**: lifecycle + notable state changes (started, connected, N processed, done) | none — this is the happy path narrative | **low.** If the INFO stream doesn't read like a story, it's wrong |
-| WARN | the operator, eventually | unexpected but **handled**: retried, fell back, degraded, skipped a bad record | glance when convenient; a *pattern* of WARN is the real signal | low |
+| INFO | the person who runs it | **the story of the run**: lifecycle + notable state changes (started, connected, N processed, done) | none — this is the happy path narrative | **low.** If the INFO stream doesn't read like a story, it's wrong |
+| WARN | the person who runs it, eventually | unexpected but **handled**: retried, fell back, degraded, skipped a bad record | glance when convenient; a *pattern* of WARN is the real signal | low |
 | ERROR | on-call / triage | an operation or request **failed**, or an invariant broke | investigate the failure | ~zero in a healthy run |
 | FATAL | on-call | the process **cannot continue**; log then exit non-zero | the program is down; immediate | at most once, ever |
 
@@ -70,7 +68,7 @@ Two heuristics that settle most disputes:
    timeout that then succeeded, a skipped malformed row, a `context.Canceled` on
    shutdown, an expected 404 the contract allows — all **handled** → WARN or
    INFO. ERROR is for a failure the code could not paper over.
-2. **INFO bar — "can a new operator read only the INFO lines and know what the
+2. **INFO bar — "can a new reader read only the INFO lines and know what the
    run did?"** No → INFO is too sparse (add lifecycle events) or too noisy
    (demote per-item chatter to DEBUG).
 
@@ -207,7 +205,7 @@ logs/<cmd>/<UTC-ts>-<run_id>/
 logs/<cmd>/latest -> <UTC-ts>-<run_id>   # atomically-updated symlink for `tail -f`
 ```
 
-Console (stderr) shows INFO+ so the operator sees the story; the files keep
+Console (stderr) shows INFO+ so the person at the terminal sees the story; the files keep
 everything down to DEBUG. `run_id` correlates the two (and disambiguates
 same-second runs). The console level is a live `*slog.LevelVar` (`Verbose` for
 DEBUG; adjustable at runtime). TRACE and FATAL are wired in (slog has neither);
@@ -238,16 +236,15 @@ the file header for the drop-in path (`internal/obs/`).
 
 ## Language note
 
-The rules are language-agnostic — they hold for `slog`, `zerolog`, `zap`,
-`pino`, `structlog`, `tracing`. The reference implementation is Go/`slog`
-because that is what this fleet uses (527 call sites in stark-admin). Port the
-*shape*, not the syntax: one great example beats five mediocre ports.
+The rules are language-agnostic: they hold for `slog`, `zerolog`, `zap`,
+`pino`, `structlog` and `tracing`. The reference implementation is Go/`slog`,
+the fleet's Go logger. Port the *shape*, not the syntax.
 
 ## Red flags — stop and fix
 
 - "I'll just Sprintf it into the message, it's readable" → constant message + fields.
 - "I'll log it here so I don't forget, and return it too" → log once at the boundary.
-- "ERROR feels right for this failed request" → would you want a page? If no, WARN.
+- "ERROR feels right for this failed request" → did the operation fail, or did we handle it? Handled: WARN.
 - "I'll add the run id to each line by hand" → bind it once with `With`.
-- "It's fine, the token only shows in debug" → redact at the handler; no exceptions.
+- "It's fine, the token only shows in debug" → never pass the token to the logger, at any level.
 - "One log per item so I can see progress" → summarize; per-item is DEBUG.

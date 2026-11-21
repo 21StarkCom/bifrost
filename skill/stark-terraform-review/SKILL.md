@@ -1,14 +1,10 @@
 ---
 name: stark-terraform-review
 description: >-
-  Multi-agent code review of Terraform / OpenTofu (HCL) — modules, root configs,
-  .tf/.tfvars/.tftest.hcl — for security, correctness, state safety,
-  module-contract quality, and testing gaps. Runs the review across one or more
-  configurable LLMs (claude/codex/gemini), each as its own subagent, then merges
-  + cross-validates findings. Use whenever the user wants to review, audit, or
-  sanity-check Terraform/OpenTofu code, asks "is this .tf safe/correct/idiomatic",
-  or points at a module/directory and wants findings. Review-only. For Terragrunt
-  orchestration use stark-terragrunt-review.
+  Multi-model review (claude, codex, gemini) of Terraform and OpenTofu HCL
+  (.tf, .tfvars, .tftest.hcl) for security, correctness, state safety, module
+  contracts and test gaps. Use to review or audit Terraform code. Review-only.
+  Terragrunt goes to stark-terragrunt-review.
 argument-hint: "[path] [--agents claude,codex,gemini] [--changed] [--no-tools] [--min-severity ...] [--pr N --repo O/R] [--dry-run] [--json]"
 disable-model-invocation: true
 model: opus
@@ -16,9 +12,8 @@ model: opus
 
 ## Help
 
-If `$ARGUMENTS` requests help (a standalone `--help`, `-h`, or `help` token),
-follow [standard help](../../standards/help.md): print this skill's purpose,
-usage, and arguments, then stop — do not run preflight or any phase.
+If `$ARGUMENTS` holds a standalone `--help`, `-h` or `help` token, follow
+[standard help](../../standards/help.md), then stop.
 
 # stark-terraform-review
 
@@ -38,7 +33,7 @@ The reviewers are configurable. Precedence: **`--agents` flag > config
 # per-invocation
 … --agents gemini,codex
 
-# or persist in ~/.claude/code-review/config.json (or a repo .code-review/config.json)
+# or set it in the global config.json (bifrost global/config.json); a repo .code-review/config.json does not change it
 { "iac_review": { "agents": ["gemini", "codex"] } }
 ```
 
@@ -72,7 +67,7 @@ The dispatcher:
 3. Runs whatever read-only scanners are installed (`terraform fmt/validate`, `tflint`, `trivy config`, `checkov`) as evidence — unless `--no-tools`.
 4. Dispatches every agent in parallel with the canonical rubric (`global/prompts/iac-review/terraform.md`) + the line-numbered file context.
 5. Parses each agent's JSON findings, dedups across agents (cross-validation), applies `--min-severity`.
-6. Prints the report (and `--pr` posts it). Exits non-zero (2) if any critical/high remain — usable as a gate.
+6. Prints the report (and `--pr` posts it). Exits 2 when a critical or high finding remains, so it can serve as a check.
 
 ## What it checks
 

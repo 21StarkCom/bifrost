@@ -1,6 +1,14 @@
-# The run's scope: joins and splits
+# The run's scope: joins, splits and dependencies
 
 Read from [the Gru skill](../SKILL.md#protocol).
+
+## A ticket that waits on a dependency
+
+A ticket is ready only once each of its dependencies is finished: confirmed
+under step 5, not reported. Idle capacity never makes a ticket ready. Do not
+start a ticket that still waits on a dependency early as "prework". Never pin
+what the dependency will land for a Minion in a brief or a message: the spec
+holds it. A contract two tickets share that the spec lacks is an escalation.
 
 ## A ticket that joins the run
 

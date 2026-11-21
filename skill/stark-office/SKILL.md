@@ -32,9 +32,8 @@ a file.
 Do not write Python, or any other script, that reads or writes an Office or
 PDF file: no openpyxl, python-docx, python-pptx or pypdf, and no one-time
 converter. Filter the JSON that plume prints with `jq`, never with Python.
-When a plume tool cannot do a step, file a ticket on plume with
-`/stark-ticket` (`$stark-ticket` on Codex), and say so in your report. Do not
-work around the gap.
+When a plume tool cannot do a step, stop that step, and name the gap and the
+plume command in your report. Do not work around the gap.
 
 Your own file-read tool can show the pages of a PDF, such as a scanned PDF
 that has no text. It runs no script, so use it when it does the step.
@@ -126,11 +125,10 @@ plume-xlsx read --cells <file.xlsx>
   for each edit of an existing file. Use `build` only for a new file.
 - `plume-xlsx set --help` lists the edits that it refuses. `plume-xlsx schema`
   gives each style field, in its `CellStyle` shape.
-- A value edit does not compute the formulas: each formula cell keeps its old
-  cached `value` until Excel opens the file. To get a new result, run
-  `plume-xlsx eval <file.xlsx> <Sheet!A1>`. Do not run `recalc` on a file that
-  `set` wrote: `recalc` writes the workbook again, and can lose the parts that
-  `set` kept.
+- A value edit leaves each formula's old cached `value` until Excel opens the
+  file. Run `plume-xlsx eval <file.xlsx> <Sheet!A1>` for a new result.
+- Never run `recalc` on a file that `set` wrote: it writes the workbook again,
+  and can lose the parts that `set` kept.
 
 ### Prove an edit
 
@@ -150,10 +148,9 @@ plume-xlsx read --cells <file.xlsx>
    plume-xlsx check <after.xlsx>
    ```
 
-   - Exit 0 means that no checked cell breaks its rule. `check` skips the
-     cells that the `skipped` count gives, and it does not see a rule in
-     `extLst`: Excel often puts a list from another sheet there. Do not
-     report those cells as valid.
+   - Exit 0 means that no checked cell breaks its rule. Do not report the
+     `skipped` cells, or the cells under an `extLst` rule (often a list from
+     another sheet), as valid.
    - Exit 1 means a broken cell, or a file that `check` cannot read. The last
      line on stderr says which. On a broken cell, run `check` on the before
      file too. A broken cell that the before file has is not yours: name it

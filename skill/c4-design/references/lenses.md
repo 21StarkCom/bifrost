@@ -23,6 +23,14 @@ A tab shows only when the model has its data. The panel shows no empty block and
 - The tabs come in that order, and the panel opens on the first one.
 - The head of the panel shows the id, the owner and the state badge.
 - The panel of a view, with no element, has Facts and Discussion.
+- **Facts** shows the metadata as rows (a flow step's `source` and `tools`). A `source` path opens in the studio's
+  code panel.
+- **Discussion** lists the threads of the element, or of the view, newest first, and shows the open thread. The
+  button in the top bar opens the threads of the view.
+- A **mark** is the badge on an element with an open thread: the count of its open threads, and a dot that pulses
+  while a thread waits for the operator. A press on a mark opens Discussion at that thread.
+- The panel and the AI chat use the same place: when one opens, the other closes.
+- The panel and the marks show only in the studio, not in the built site (`generated/site/`).
 
 ## The lens keys
 

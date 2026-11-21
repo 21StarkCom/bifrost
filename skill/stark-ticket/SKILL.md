@@ -24,8 +24,9 @@ follow [standard help](../../standards/help.md), then stop.
 
 A ticket is a work order for someone who was not in the room. Write its prose
 in ASD-STE100 Simplified Technical English, so that each sentence has one
-meaning for the reader, a person or an agent. Write a line or two per heading
-for a small change.
+meaning for the reader, a person or an agent.
+
+For a small change, write a line or two per heading.
 
 ## Pick the tracker first
 
@@ -63,29 +64,27 @@ below that differs in EI says so.
 
 ## The steps
 
-1. **Twin check.** `alfred task find` in the target repo. In EI, search the
-   project instead: `frigg atlassian search jql 'project = EI AND
-   statusCategory != Done AND summary ~ "<words>"'`. If a live ticket covers
+1. **Twin check.** `alfred task find` in the target repo; in EI, the search
+   in [EI tickets](references/ei.md#where-to-file). If a live ticket covers
    it, comment there instead of filing.
 
 2. **Write** it from `alfred task start --template` in a file under
    `mktemp -d`, never inside a checkout. A bug's Goal names what broke,
-   where, and the error text. Verification is commands and what they should
-   print, or a required check by its name. A live write there names what
-   it writes and how the run puts it back, or that it cannot. It runs on the
-   operator's standing GO, so the step asks for no GO. A worker (a Minion,
-   Agnes) runs every write the ticket needs on its launch, the root rules'
-   kept gates included. An interactive session keeps those gates, as the
-   root rules say. Write no gate anywhere in the body: no text that gives a
-   step or a choice to the operator, in any words ("needs a GO", "with a
-   GO", "the operator's call", "the operator's word", "ask each run"), and
-   no hold or soak step that the request does not name. Write each step as
-   a step; the root rules decide who takes it. Unmerged work it needs:
-   `Blocked by STARK-n` (`EI-n` in EI), then `alfred task link` both.
-   The Verification of a slice of an epic checks live only what that slice
-   changes. Put the epic's one full sweep of the surface (each screen, each
-   theme, each mode) in the Verification of its last slice. Mark that slice
-   `Blocked by` each other slice, so the sweep runs on the whole epic.
+   where, and the error text.
+   - **Verification** is commands and what they should print, or a required
+     check by its name. A live write there names what it writes and how the
+     run puts it back, or that it cannot. Write no gate anywhere in the body:
+     no text that gives a step or a choice to the operator, in any words
+     ("needs a GO", "with a GO", "the operator's call", "the operator's
+     word", "ask each run"), and no hold or soak step that the request does
+     not name. Write each step as a step; the root rules decide who takes it.
+   - **Unmerged work** it needs: `Blocked by STARK-n` (`EI-n` in EI), then
+     `alfred task link` both.
+   - **An epic's sweep:** the Verification of a slice of an epic checks live
+     only what that slice changes. Put the epic's one full sweep of the
+     surface (each screen, each theme, each mode) in the Verification of its
+     last slice. Mark that slice `Blocked by` each other slice, so the sweep
+     runs on the whole epic.
 
 3. **Order Scope IN by dependency.** A step whose answer decides whether a
    later step is safe is a precondition, not a sibling. Put it first, and say
@@ -94,32 +93,31 @@ below that differs in EI says so.
    from the bottom up. For each item, ask what must be true before it starts,
    and move that item above it.
 
-4. **Carry the dates and the owner.** A ticket that comes from a todo, a
-   message or a calendar item keeps that source's deadline. Put the earliest
-   real deadline in the due date field, not only in the Goal prose. No create
-   verb sets a due date, in either tracker: run `alfred task set-dates --due
-   <when> <id>` after the create (on EI it takes `--due` alone, and
-   `--field duedate=…` refuses, because alfred owns that field). Name one
-   owner, and set that person as the assignee: `--field
-   'assignee={"accountId":"<id>"}'` on an EI create, and `alfred task edit
-   <id> --add-assignee <who>` after a ClickUp create, which has no assignee
-   flag. A body that names an owner and a ticket with an empty assignee do
-   not agree.
+4. **Carry the dates.** A ticket that comes from a todo, a message or a
+   calendar item keeps that source's deadline. Put the earliest real deadline
+   in the due date field, not only in the Goal prose. No create verb sets a
+   due date, in either tracker: run `alfred task set-dates --due <when> <id>`
+   after the create (EI: [EI tickets](references/ei.md#fields)).
 
-5. **Don't guess.** Claims about code or a tool come from output you ran or
+5. **Name one owner,** and set that person as the assignee: `alfred task edit
+   <id> --add-assignee <who>` after a ClickUp create, which has no assignee
+   flag (EI: [EI tickets](references/ei.md#fields)). A body that names an
+   owner and a ticket with an empty assignee do not agree.
+
+6. **Don't guess.** Claims about code or a tool come from output you ran or
    source you read, never `--help`, docs or memory. Paste output, never
    retype it, and never paste credentials or auth/env output. Mark anything
    unchecked `unverified: <claim> — check: <command>`.
 
-6. **Give each unverified claim a path for a failed check.** The most likely
+7. **Give each unverified claim a path for a failed check.** The most likely
    way a ticket stalls is a precondition that turns out false. Write the next
    move on one line, next to the mark: who to ask, what to file, or that the
    work stops. Write `unverified: a credential for the dev tenant exists —
    check: <command>. If none: stop, and report the ticket blocked on the
    missing credential.`, not the mark alone.
 
-7. **Fresh eyes.** The author cannot review the draft: you re-read your intent,
-   not the text. Dispatch ONE read-only subagent with **zero shared context** —
+8. **Fresh eyes.** The author cannot review the draft: you re-read your intent,
+   not the text. Dispatch one read-only subagent with **zero shared context** —
    it gets the draft's path and this contract, never your reasoning:
 
    > Read <path>. You have NO other context — that is deliberate. This is a
@@ -147,18 +145,18 @@ below that differs in EI says so.
    **accept-as-known** — then apply every fix in one edit round. Do not
    dispatch again to confirm the fixes. The pass is spent.
 
-8. **File** with `--desc-file <draft>`: `alfred task start` (your own work),
+9. **File** with `--desc-file <draft>`: `alfred task start` (your own work),
    `alfred task new` (a follow-up, unbound; `--on-repo <repo>` for another
    repo's, ClickUp only), `alfred task edit <id>` (a rewrite). In EI, set
-   every field from [EI tickets](references/ei.md) on the create, and put
-   `TYR_JIRA_ISSUE_WRITES_ENABLE=1` on the command.
+   every field and the write switch that [EI tickets](references/ei.md)
+   names, on the create.
 
-9. **Validate what you filed.** The fields that live outside the description
-   are the ones that fail quietly. Read the ticket back — `alfred task show
-   <id>`, or `frigg atlassian issue get EI-<n> --json` — and confirm the due
-   date, the assignee, the priority, the parent or epic link, each
-   `Blocked by` link, and, in EI, each field in the reference table. Repair a
-   ClickUp ticket with `alfred task edit` or `alfred task set-dates`, and an
-   EI ticket as [EI tickets](references/ei.md#read-it-back) says. Then read it
-   back again. Report the filed id only once the read-back agrees with the
-   draft.
+10. **Validate what you filed.** The fields that live outside the description
+    are the ones that fail quietly. Read the ticket back — `alfred task show
+    <id>`, or `frigg atlassian issue get EI-<n> --json` — and confirm the due
+    date, the assignee, the priority, the parent or epic link, each
+    `Blocked by` link, and, in EI, each field in the reference table. Repair a
+    ClickUp ticket with `alfred task edit` or `alfred task set-dates`, and an
+    EI ticket as [EI tickets](references/ei.md#read-it-back) says. Then read it
+    back again. Report the filed id only once the read-back agrees with the
+    draft.

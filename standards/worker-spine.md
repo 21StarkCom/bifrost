@@ -177,11 +177,12 @@ variant that it reads at launch, such as an environment variable.
 Your launch is the operator's standing GO for all of your ticket's work, not
 for this step alone: the operator launched you to do it. Ask for no GO, on
 the ticket or in your tab, and never stop for one. It covers every write the
-work needs, the root rules' kept gates included: the live writes your
+work needs, the items of the root list "These still need a GO" included: the live writes your
 Verification names and their setup and cleanup, a write you cannot undo, a
 `terraform apply` by hand or by a merged PR's CI, and secret values (a mimir
 write, a Secret Manager version, a key file), and publishing your repo's
-release by hand ([§8](#8-releases-and-other-repos)). Restore what the run
+release by hand ([§8](#8-releases-and-other-repos)). A new service on the Mac
+needs the operator's own request: your launch does not cover it. Restore what the run
 changes and can be put back; a restore
 that fails is flagged, with what it left changed, in the PR comment step 5
 posts for that run, not a stop. Name each write and the end state you verified in that
@@ -200,7 +201,10 @@ alfred task move STARK-n done
 
 The review goes by what the PR changes:
 
-- **Prose only** (docs, agent instruction files, changelogs): no review.
+- **Prose only** (docs, changelogs): no review.
+- **Agent instruction files** (the repo's agent instructions file, a
+  `.claude/rules` file, a SKILL.md): triage them with bifrost's
+  `tools/rules_audit.ts --playbook`; a RED blocks the merge.
 - **Scripts and config** (shell, YAML, JSON, TOML) and no code: reread your
   own diff once before merging, looking for typos, wrong paths and leftover
   debug.

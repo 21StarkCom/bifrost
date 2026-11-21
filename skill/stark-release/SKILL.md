@@ -11,14 +11,14 @@ revision_date: 2026-04-27T18:17:48Z
 
 ## Help
 
-If `$ARGUMENTS` requests help (a standalone `--help`, `-h`, or `help` token),
-follow [standard help](../../standards/help.md): print this skill's purpose,
-usage, and arguments, then stop — do not run preflight or any phase.
+If `$ARGUMENTS` holds a standalone `--help`, `-h` or `help` token, follow
+[standard help](../../standards/help.md), then stop.
 
 # Release Management
 
-Reviews accumulated changes in CHANGELOG.md, bumps the version, creates a git tag,
-and optionally publishes a GitHub Release. Version source of truth is git tags (semver).
+Reviews accumulated changes in CHANGELOG.md, bumps the version through a release
+PR, tags the merge commit, and optionally publishes a GitHub Release. Version
+source of truth is git tags (semver).
 
 ## Prerequisites
 
@@ -33,17 +33,15 @@ git checkout main && git pull --rebase origin main
 git status --porcelain  # must be empty
 ```
 
-Abort if uncommitted changes or not on main. Stash or commit first.
-
 ## Versioning Rules
 
 - **Source of truth:** Git tags. Format: `v{major}.{minor}.{patch}` (e.g., `v0.1.3`).
 - **Version file(s):** Auto-detect and update every supported version file found in the repo (Python, Node, Rust). If no version file exists, the git tag alone carries the version.
-- **Baseline:** If no tags exist, baseline is `0.1.0` from pyproject.toml.
+- **Baseline:** with no tag, the current version is `0.1.0`.
 - **Bump semantics:**
   - `patch` — bug fixes, small corrections (0.1.2 → 0.1.3)
   - `minor` — new features, session deliverables, and breaking changes (0.1.3 → 0.2.0)
-  - `major` — bumps the first number (0.2.0 → 1.0.0, 1.4.0 → 2.0.0). Every product stays at `0.x.y`, so a major happens only on the operator's direct, explicit instruction.
+  - `major` — bumps the first number (0.2.0 → 1.0.0, 1.4.0 → 2.0.0). Step 4 says when to use it.
 
 ---
 
@@ -58,7 +56,7 @@ Verify clean tree:
 git status --porcelain
 ```
 
-If not clean → abort with message to user.
+If the tree is not clean, use the "Dirty working tree" row of Failure Modes.
 
 ---
 
@@ -66,10 +64,11 @@ If not clean → abort with message to user.
 
 Skip this step entirely if the repo has no `infra/terraform/` directory.
 
-If commits since `$LAST_TAG` (or all commits if there is no tag yet) touched
-`infra/terraform/`, an un-applied plan will block CD's drift gate AFTER
-the migration has already run — leaving the env in a half-deployed state.
-Catch it here, before the tag exists.
+When commits since `$LAST_TAG` (or any commit, with no tag yet) touch
+`infra/terraform/`, run the drift check below before the tag exists.
+
+CD's drift check runs after `alembic upgrade head`, so drift found there leaves
+the DB migrated and the deploy undone, with minutes before config caches expire.
 
 ```bash
 if [ -d infra/terraform ]; then
@@ -120,12 +119,6 @@ EOF
   fi
 fi
 ```
-
-Why this is here, not in CD: CD's drift gate runs *after* the
-`alembic upgrade head` step. By the time it fails, the DB is already
-migrated and the only safe recovery is to apply TF and re-run the
-deploy under time pressure (config caches expire in minutes). Catching
-the drift before the tag exists keeps the migration + deploy atomic.
 
 ---
 
@@ -189,7 +182,7 @@ A bare `### Removed` entry is a patch: many removals (docs, dead tooling,
 internal churn) are non-breaking. Mark a genuinely breaking removal with a
 `**BREAKING:**` prefix so it bumps the minor. Auto-select never picks `major`.
 
-Calculate `$NEXT_VERSION` accordingly. Do NOT ask for confirmation — proceed automatically.
+Calculate `$NEXT_VERSION`, and go on with no confirmation.
 
 ---
 
@@ -215,7 +208,7 @@ The tool auto-detects every supported version file and rewrites each one:
 - `src/*/__init__.py` or `*/__init__.py` containing `__version__` (Python)
 - `pyproject.toml` with `version = "X.Y.Z"` (skipped when `[tool.setuptools-scm]` is present)
 - `package.json` with `"version"` (Node — preserves indentation)
-- `Cargo.toml` `[package]` `version =` (Rust — does NOT touch dep versions)
+- `Cargo.toml` `[package]` `version =` (Rust; dependency versions stay as they are)
 - a plain top-level `VERSION` / `VERSION.txt` (Terraform / Go infra repos — rewrites the first semver token, preserving an optional `v` prefix and the trailing newline; a non-semver file is silently skipped)
 - Go projects without a `VERSION` file have none; the git tag alone carries the version.
 
@@ -224,7 +217,7 @@ filesSkipped[{path, reason}] }`. If `filesUpdated` is empty AND `filesSkipped`
 is empty, warn: "No version file detected — only the git tag will carry the
 version." and continue.
 
-For monorepos the tool updates ALL detected files for consistency.
+For a monorepo, the tool updates each detected file.
 
 ---
 
@@ -253,43 +246,60 @@ After:
 - Bug B (#43)
 ```
 
-Commit the changelog and any updated version files together:
-```bash
-git add CHANGELOG.md ${VERSION_FILES}
-git commit -m "release: v${NEXT_VERSION}
+Commit the changelog and the updated version files on a release branch, never
+on `main`. End the commit message with the attribution line that the session
+gives.
 
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
+```bash
+git switch -c "release/v${NEXT_VERSION}"
+git add CHANGELOG.md ${VERSION_FILES}
+git commit -m "release: v${NEXT_VERSION}" -m "<the session's attribution line>"
 ```
 
 ---
 
-## Step 7: Create Tag
+## Step 7: Release PR
+
+Open the release PR with the new CHANGELOG section as its body, then merge it.
+A release PR needs no ticket.
 
 ```bash
-git tag -a v${NEXT_VERSION} -m "Release v${NEXT_VERSION}
+NOTES=$(mktemp)   # write the CHANGELOG section of v${NEXT_VERSION} into this file
+ghx pr-open --no-ticket --title "release: v${NEXT_VERSION}" --body-file "$NOTES"
+PR=$(gh pr view --json number -q .number)
+gh pr diff "$PR" --name-only   # only CHANGELOG.md and the version files
+ghx pr-merge "$PR" --skip-changelog
+```
+
+- Reread the diff once before the merge: it touches only `CHANGELOG.md` and
+  the version files.
+- `--skip-changelog` keeps `ghx pr-merge` from drafting a second CHANGELOG
+  bullet: this PR already wrote the version section.
+
+---
+
+## Step 8: Tag the merge commit, and push the tag
+
+```bash
+git fetch origin main
+MERGE_SHA=$(gh pr view "$PR" --json mergeCommit -q .mergeCommit.oid)
+git merge-base --is-ancestor "$MERGE_SHA" origin/main   # must succeed
+git tag -a "v${NEXT_VERSION}" "$MERGE_SHA" -m "Release v${NEXT_VERSION}
 
 Changes:
 [bullet list from CHANGELOG for this version]"
+git push origin "v${NEXT_VERSION}"
 ```
 
----
-
-## Step 8: Push
-
-```bash
-git push origin main
-git push origin v${NEXT_VERSION}
-```
+Push only the tag. Never push `main`.
 
 ---
 
 ## Step 9: GitHub Release
 
-If the repo has a release-publishing workflow that triggers on `v*.*.*`
-tag push (`.github/workflows/release.yml` with `on: push: tags: - "v*.*.*"`),
-**skip this step** — the workflow creates the Release from the CHANGELOG
-itself. Manually creating the release in parallel produces a `view → create`
-race that fails the workflow run with HTTP 422 `already_exists`.
+**Skip this step** when a workflow creates the Release on a `v*.*.*` tag push
+(`.github/workflows/release.yml` with `on: push: tags: - "v*.*.*"`): a second
+create fails that run with HTTP 422 `already_exists`.
 
 ```bash
 # Detect: does a tag-triggered release workflow exist?
@@ -306,9 +316,6 @@ else
 fi
 ```
 
-Repos with a release workflow today: `stark-night-watch`.
-Repos without one (skill still creates the release): everything else.
-
 ---
 
 ## Step 10: Summary
@@ -321,7 +328,8 @@ Tag:        v${NEXT_VERSION}
 Previous:   v${CURRENT_VERSION}
 Changes:    N fixed, N added, N changed
 GH Release: [URL or "skipped"]
-Commit:     [hash]
+PR:         [URL]
+Tagged:     [merge commit hash]
 ```
 
 ---
@@ -330,13 +338,14 @@ Commit:     [hash]
 
 | Failure | Recovery |
 |---------|----------|
-| Not on main | Prompt to `git checkout main` |
-| Dirty working tree | Prompt to stash or commit |
+| Not on main | Run `git checkout main`, as Step 1 does. When another worktree holds `main`, use the next row's worktree. |
+| Dirty working tree | Leave the files as they are. Cut the release in a new worktree off `origin/main` (`git worktree add --detach <dir> origin/main`), and skip Step 1's checkout there. |
 | No CHANGELOG.md | Abort — nothing to release |
 | Empty [Unreleased] | Auto-generate entries from git log since last tag (see Step 3) |
 | Empty [Unreleased] AND no commits since last tag | Abort — nothing to release |
-| Tag already exists | Error — that version is taken, suggest next |
-| Push fails | `git pull --rebase origin main`, retry |
+| Tag already exists | When it points at `origin/main`, stop: the release exists. Otherwise take the next free version of the same bump, and name the taken tag in the summary. |
+| `ghx pr-merge` fails (red check, conflict) | Fix the cause on the release branch, push with `ghx pr-open`, and run `ghx pr-merge` again. |
+| Tag push fails | Run `git fetch --tags origin`. When the tag is there, use the "Tag already exists" row; otherwise push the tag again. |
 | `gh` auth fails | Verify `gh auth status` — user's PAT must be active |
 | Release workflow + skill both try to create the GH Release | Skill must skip Step 9 when `.github/workflows/*.yml` has a `v*.*.*` tag trigger that runs `gh release create`. See Step 9. |
-| TF drift detected (Step 1.5) | `cd infra/terraform && terraform apply`, then re-run `/stark-release`. Do NOT skip — CD will fail the drift gate *after* migrating, leaving the env half-deployed. |
+| TF drift detected (Step 1.5) | Stop. A `terraform apply` run by hand needs the operator's GO: end on `Needs you (GO: terraform apply in infra/terraform)`, then re-run `/stark-release`. Do not skip the check: CD's drift check runs after the migration and leaves the env half-deployed. |

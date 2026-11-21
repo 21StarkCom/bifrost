@@ -2,11 +2,10 @@
 name: stark-handover
 disable-model-invocation: true
 description: >-
-  Use when pausing or splitting work across sessions — before /clear, when
-  context runs low, end of day, switching tasks — or when resuming after one.
-  Triggers: "handover", "save context", "save progress", "resume",
-  "continue where we left off", "what was I doing". Persists a numbered
-  handover chain + PROGRESS.md tracker per task; resume needs no recap.
+  Use to pause work across sessions (before /clear, on low context, at end of
+  day, on a task switch) or to resume it. Triggers: "handover", "save
+  context", "resume", "what was I doing". Saves a numbered handover chain and
+  a PROGRESS.md tracker per task.
 argument-hint: "[save|resume|status] [--task slug]"
 ---
 
@@ -90,7 +89,7 @@ re-discovers the hard way:
 - [ ] Approaches tried, **including failed ones + why they failed**
 - [ ] Decisions made + rejected alternatives
 - [ ] Evidence with real numbers ("21/21 pass", "exit 2"), never "it works"
-- [ ] User feedback & preferences, verbatim — this calibrates the next session
+- [ ] Operator feedback & preferences, verbatim — this calibrates the next session
 - [ ] Next steps, ordered; risks; open questions
 - [ ] Commands to verify state on resume
 
@@ -117,7 +116,7 @@ handover save --task "<slug>" --handover-file "$HB" --progress-file "$PB"
 
 Self-check first: line count in budget, ≥1 failed approach or explicit
 "none", next action is concrete (not "continue working"). Expand before
-reporting if thin. Then tell the user:
+reporting if thin. Then tell the operator:
 
 - Saved `handover_{N}.md` (+ chain length) and `PROGRESS.md` + paths
 - Done/remaining counts from the tracker
@@ -140,8 +139,8 @@ work on. Otherwise the JSON carries `handover_content` (latest in chain),
 
 ### Phase 2 — Ingest + brief
 
-Read both contents fully — they are your context now. Do **not** dump them
-at the user; render a 5–8 line brief: task + seq, goal one-liner, where we
+Read both contents fully — they are your context now. Do not dump them at
+the operator; render a 5–8 line brief: task + seq, goal one-liner, where we
 are, what's done vs left (counts), the next action. If `chain` has prior
 seqs and the latest references them, read earlier files from `dir` only as
 needed.
@@ -150,9 +149,11 @@ needed.
 
 Recreate the tracker's **Next** items as session tasks (TaskCreate, in
 order; skip Done). Run the handover's *Verify state* command if one is
-listed. Then start on the first Next item immediately — the whole point is
-zero recap friction. Pause only if the handover's *Open questions* block the
-first step; ask exactly those.
+listed. Then start on the first Next item at once — the whole point is zero
+recap friction. Decide each of the handover's *Open questions* yourself. The
+exception is a question whose answer belongs to the operator (scope, taste,
+money, people, words sent in their name) and that blocks the first step: ask
+it on one `Needs you (Yours: <topic>)` line, with your recommendation.
 
 ---
 

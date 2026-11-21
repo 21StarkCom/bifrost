@@ -12,9 +12,8 @@ disable-model-invocation: true
 
 ## Help
 
-If `$ARGUMENTS` requests help (a standalone `--help`, `-h`, or `help` token),
-follow [standard help](../../standards/help.md): print this skill's purpose,
-usage, and arguments, then stop — do not run any phase.
+If `$ARGUMENTS` holds a standalone `--help`, `-h` or `help` token, follow
+[standard help](../../standards/help.md), then stop.
 
 # stark-rules-optimizer
 
@@ -22,10 +21,7 @@ Review agent files the way a legal team reviews a contract. The
 [playbook](../stark-agent-docs/references/playbook.md) holds the standard
 position for each kind of clause. This skill reads each file clause by clause,
 gives each clause a GREEN, YELLOW or RED flag, and writes the exact redline for
-each YELLOW and RED clause. An agent file is a CLAUDE.md, an AGENTS.md, a
-`.claude/rules/*.md`, a `REVIEW.md`, a `RULES.md`, a SKILL.md, a `MEMORY.md`
-or a memory note. A `REVIEW.md` or a `RULES.md` takes the budget of a rule
-file, and does not load at start-up.
+each YELLOW and RED clause.
 
 Two runs of `tools/rules_audit.ts` measure first, with no model:
 
@@ -43,7 +39,7 @@ The review starts from both outputs and judges what code cannot.
 | `--repo <path>` | cwd | The target repo (any path inside it). One repo per run. |
 | `--files <path,…>` | every agent file | Review only these agent files of the target. |
 | `--memory` | off | Review the auto-memory notes in each `~/.claude/projects/*/memory/`, not a repo. It takes no `--repo`. |
-| `--apply` | off | Fix the findings. For a repo: on a branch, through a reviewed **draft** PR in that repo. With `--memory`: in place, after a backup. Never merges, never commits to `main`. |
+| `--apply` | off | Fix the findings. For a repo: on a branch, through a reviewed PR that `ghx pr-merge` merges. With `--memory`: in place, after a backup. Never commits to `main`. |
 | `--always <rule,…>` | read from the repo | For the load audit: the rules the repo means to load at each start-up, when its CLAUDE.md or AGENTS.md does not say so in words the tool can read ("always-loaded `x.md`"). |
 | `--file-budget <bytes>` | 16384 | The load audit's advisory budget for each file. |
 | `--always-budget <bytes>` | 32768 | The load audit's advisory budget for all files that load at start-up. |
@@ -152,19 +148,10 @@ Print the report, and write the same text to `$OUT/review.md`:
 ```
 # Agent-doc review: {repo name, or memory}   load model {loadModel}{, claude now X.Y.Z if different}
 {n} files · GREEN {g} · YELLOW {y} · RED {r} · {c} REDs changed in verification
-
-## Agent-doc review: {path}
-Size {chars} / {budget} · {loads at start-up | loads on demand | never loads} · GREEN {n} · YELLOW {n} · RED {n}
-
-### RED 1 · {TYPE} · {path}:{line}
-Clause: "{the clause}"
-Playbook: {the playbook rule, and its evidence}.
-Redline: {the exact new text, or "delete the clause"}.
-Fallback: {the second position, or "none (Tier 1)"}.
-
-### YELLOW 1 · {TYPE} · {path}:{line}
-…
 ```
+
+Then one section for each file, in the form of
+[the method](references/review.md#write-the-entry).
 
 - The second line counts files by their flag after the review.
 - A file section lists its RED entries, then its YELLOW entries, each set
@@ -180,9 +167,9 @@ folder changed.
 
 ## Phase 5: Apply to a repo (only with `--apply`)
 
-`--apply` edits on a branch of the target repo and opens a draft PR. The
-target repo's own agent instructions file governs each step below. Where it
-and this list disagree, it wins.
+`--apply` edits on a branch of the target repo, opens a draft PR and merges
+it. The target repo's own agent instructions file governs each step below.
+Where it and this list disagree, it wins.
 
 1. **Choose the fix set** by the playbook's tiers: each RED (Tier 1), each
    YELLOW in a file that loads at start-up (Tier 2), and each other YELLOW in
@@ -216,12 +203,13 @@ and this list disagree, it wins.
    default) and a plain title, e.g. `docs: apply the agent-doc review`. Put the
    report's first two lines and the proposals in the body.
 7. **Review by what the PR changes**, per the root rules' tiers: a PR of
-   agent instruction files and rules only is prose and takes none. One that
-   also changes a script, config or code takes that tier (for code,
-   `/code-review xhigh --fix <full PR URL>`: the full URL, or it reviews the
-   wrong repo's diff), then fix or answer every finding, push with
+   agent instruction files takes the triage of step 5, and a RED blocks the
+   merge. One that also changes a script, config or code takes that tier too
+   (for code, `/code-review xhigh --fix <full PR URL>`: the full URL, or it
+   reviews the wrong repo's diff), then fix or answer every finding, push with
    `ghx pr-open`, and re-run step 5.
-8. **Stop at the draft PR**, and print its URL. `--apply` never merges and
+8. **Merge** with `ghx pr-merge` once the checks are green, and print the PR
+   URL. With a ticket, close it: `alfred task move STARK-<n> done`. `--apply`
    never commits to `main`.
 
 ## Phase 5: Apply to memory (only with `--memory --apply`)
@@ -255,4 +243,4 @@ A memory note is in no repo, so the fix is in place, with no PR.
 | `claude --version` differs from `loadModel` | Report it. Treat the glob and frontmatter findings as open until a live check. |
 | A subagent returns no entry for a file | Review that file in the main session. |
 | The memory backup fails | Stop before any edit. Report the folder. |
-| The worktree branch already exists (`--apply`) | Someone is on it. Stop and say so; never `--force`. |
+| The worktree branch already exists (`--apply`) | Leave it, add a date suffix to `<branch>`, and go on; never `--force`. |

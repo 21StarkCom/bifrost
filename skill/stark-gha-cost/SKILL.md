@@ -11,9 +11,8 @@ model: opus
 
 ## Help
 
-If `$ARGUMENTS` requests help (a standalone `--help`, `-h`, or `help` token),
-follow [standard help](../../standards/help.md): print this skill's purpose,
-usage, and arguments, then stop — do not run preflight or any phase.
+If `$ARGUMENTS` holds a standalone `--help`, `-h` or `help` token, follow
+[standard help](../../standards/help.md), then stop.
 
 # stark-gha-cost — GHA + GHAS cost optimizer
 
@@ -24,21 +23,19 @@ is usually one repo, one workflow, or one wrong seat.
 
 ## The mental model (read `references/levers.md` for the full version)
 
-GitHub bills two unrelated meters: **Actions minutes** (compute) and **GHAS
-seats** (per-committer: Secret Protection ~$19, Code Security ~$30). Dependabot +
-dependency graph are **free**. Self-hosting runners touches *only* Actions
-minutes — never the seat bill. Don't conflate them; the user often will.
+GitHub bills two meters: Actions minutes (compute), and GHAS seats per
+committer (Secret Protection ~$19, Code Security ~$30). Dependabot and the
+dependency graph are free.
+
+Self-hosted runners cut only Actions minutes, never the seat bill.
 
 ## Workflow
 
 ### 0. Check repo visibility FIRST — public Actions are free
 
-Before calling any Actions usage "expensive," check whether the repo is public.
-**Public repos get unlimited free GitHub-hosted Actions minutes AND storage** —
-a busy public repo costs $0 no matter how many runs. `gh api repos/OWNER/REPO
---jq .visibility`. If it's public and a bill still looks high, the runs aren't
-the cost — jump to "chase the resource" below. Skipping this step is how you end
-up optimizing a $0 line item.
+Public repos get free GitHub-hosted Actions minutes and storage, so check
+visibility first: `gh api repos/OWNER/REPO --jq .visibility`. When a public
+repo's bill still looks high, chase the resource (step 2).
 
 ### 1. Diagnose — find where the money actually goes
 
@@ -50,13 +47,18 @@ GH_TOKEN=<admin:enterprise or admin:org PAT> \
 # or --org <login> for one org inside an enterprise
 ```
 
-Read the PAT into the env; never print it. This ranks one month's spend
-(default: the current UTC month) by product → SKU → repo, gross and net, and
-shows GHAS seat usage. Almost always one or two repos dominate. Rank by
-**gross**: net is gross minus the included minutes, a pool the enterprise draws
-down through the month, so the same run nets $0 on the 2nd and full price on
-the 28th. Public repos bill gross but net $0, so they are listed apart from the
-ranking. Each repo's minutes are split by runner SKU, since macOS bills 10× Linux.
+Read the PAT into the env; never print it.
+
+The script ranks one month's spend (default: the current UTC month) by product
+→ SKU → repo, gross and net, and shows GHAS seat usage. Public repos bill gross
+but net $0, so it lists them apart from the ranking. It splits each repo's
+minutes by runner SKU, since macOS bills 10× Linux. One or two repos usually
+dominate.
+
+Rank by gross: net is gross minus the included minutes, a pool the enterprise
+draws down through the month, so the same run nets $0 on the 2nd and full price
+on the 28th.
+
 Run a few months to see the trend.
 
 Then drill the top repo:
@@ -68,24 +70,20 @@ GH_TOKEN=<pat> scripts/gha-repo-actions-drill.sh <owner/repo> [since=YYYY-MM-DD]
 This classifies the driver: high run **volume**, matrix **fan-out** (jobs ≫ 1),
 a few **long** runs, or **none of the above**. The script prints how to read it.
 
-**Expect one thing to dominate (Pareto).** Usually a single workflow/matrix is
-80–98% of the bill and everything else is rounding error — don't spread effort
-evenly. Pull **real per-job timings** with `gh run view <run-id>` (not vibes) to
-find it. If the driver is a **test matrix**, the cost is almost always per-job
-*setup* (token mint, dep download, cold compilation, no cache sharing) × job
-count — not test logic. Read `references/matrix-runners.md` before optimizing it.
+One workflow or matrix is usually 80–98% of the bill. Find it with per-job
+timings from `gh run view <run-id>`, and spend the effort there.
+
+When the driver is a test matrix, read `references/matrix-runners.md` first:
+the cost is per-job setup (token mint, dependency download, cold compilation,
+no cache sharing) × job count, not the test logic.
 
 **Measure the right number** (`references/advanced-practices.md §1`):
-- **billed ≠ runtime ≠ cost** — every job rounds UP to a whole minute; included
-  minutes carry OS multipliers (Linux 1× / Windows 2× / **macOS 10×**). Summing
-  durations understates spend; a `billed-minutes ÷ actual-runtime` ratio per
-  workflow is the rounding-waste detector.
-- **The dominant CI cost is often developer WAIT time, not runner minutes**
-  (wait-to-compute ratios of 25–100×). For a team, the true unit is
-  **cost-per-merged-PR including loaded wait** — so queue-time and pipeline
-  duration are usually the real levers, not $/minute. Free org-wide **Actions
-  Insights** (queue time + failure rate, UI-only) and `self-actuated/actions-usage`
-  (sees free-tier + self-hosted minutes billing hides) are the fast lenses.
+- Billing rounds each job up to a whole minute, with OS multipliers (Linux 1×,
+  Windows 2×, macOS 10×). Compare billed minutes ÷ runtime per workflow to find
+  the rounding waste.
+- For a team, wait time often costs more than runner minutes. Measure cost per
+  merged PR, queue time included; Actions Insights and
+  `self-actuated/actions-usage` show it.
 
 ### 2. Decide — Actions minutes, a downstream resource, or a billing anomaly?
 
@@ -139,55 +137,38 @@ is availability-only and won't toggle off).
 
 ### 4. Ship it — every change via branch + PR
 
-These are workflow/config/Terraform edits; land them on a branch and open a PR
-per the workspace rules (`/branch → /pr → /merge-to-main`). Test live where you
-can — check that the path filter actually skips (the PR touching only workflow
-files should NOT trigger the macOS/expensive job), and confirm 0 drift after a
-Terraform apply. Config actions that aren't files (disabling CodeQL default
-setup, backfilling secret scanning) are API calls — note them in the PR body.
+These are workflow, config and Terraform edits: ship each one through the root
+spine (`ghx pr-open`, review, `ghx pr-merge`). Test live where you can: a PR
+that touches only workflow files must not trigger the macOS job, and a
+Terraform apply must show 0 drift. Config actions that are not files (disabling
+CodeQL default setup, backfilling secret scanning) are API calls: note them in
+the PR body.
 
-**Then keep it cut.** A cut regresses the moment attention moves on. Set a GitHub
-**budget** (with a %-alert, or a hard-stop) and/or the org **spending limit** so
-the next regression stops *before* the invoice, and re-check the `billed÷actual`
-ratio after the change to confirm the drop landed. Governance (budgets, cost
-centers, org allowed-actions + SHA-pin policy) is in `references/advanced-practices.md §2`.
+**Then keep it cut.** Re-check the `billed÷actual` ratio after the change to
+confirm the drop landed. A GitHub budget (a %-alert or a hard stop) or the org
+spending limit stops the next regression before the invoice. Its amount is the
+operator's money: end on `Needs you (Yours: money): <recommended amount>`.
+Governance (budgets, cost centers, org allowed-actions and SHA-pin policy) is in
+`references/advanced-practices.md §2`.
 
 ## Level up — the "done right" playbook
 
-The steps above stop the bleeding. For the durable craft — quality practices that
-cut cost *and* improve speed/reliability/security — read
-**`references/advanced-practices.md`** (themed, with a table of contents):
-measurement & FinOps discipline (§1–2), caching architecture (§3), pipeline
-architecture that skips work without breaking merges (the **gate job**, merge
-queues, test-impact analysis) (§4), storage/registry lifecycle + the downstream-
-resource trap (§5), and the security⇒cost levers (OIDC, `harden-runner`,
-SHA-pin policy, flaky-test economics) (§6). Runner selection lives in
-`references/matrix-runners.md`.
+For practices that cut cost and add speed, reliability and security, read
+`references/advanced-practices.md` (it opens with a table of contents). Runner
+selection is in `references/matrix-runners.md`.
 
 ## Guardrails
 
-- **Validating a CI cost-fix can itself cost a full run (chicken-and-egg).** An
-  infra/CI PR often trigger-alls the very matrix you're trimming, so you pay one
-  expensive run to prove the reduction. Sequence deliberately: land the **trigger
-  narrowing first** so later cost PRs don't re-run the matrix; accept one costly
-  validation when unavoidable. You pay once to stop paying forever.
-- **local-green ≠ CI-green.** A warm local module/build cache hides problems CI
-  hits cold (e.g. a dependency that stopped resolving after a module move). A
-  broken CI blocks *both* cost work and correctness work — fix the correctness
-  break first, or they mask each other.
-- **Disabling / path-filtering a workflow that feeds a REQUIRED status check
-  freezes the repo.** A *skipped workflow* leaves its required check **Pending
-  forever** → nothing merges (worse with `enforce_admins: true`). Note the
-  asymmetry: a skipped **job** reports *Success*, but a skipped **workflow** stays
-  Pending. Two fixes: (a) before disabling, inspect branch protection (`gh api
-  repos/O/R/branches/BRANCH/protection`) and **remove the check from
-  `required_status_checks` in the same change**; (b) the durable pattern — make the
-  *only* required check a **gate job** that `needs: [all real jobs]`, `if: always()`,
-  aggregating via `re-actors/alls-green`, and un-require the individual jobs. The
-  gate job also closes a **security gap**: GitHub counts a *skipped job as passing*,
-  so a required scan skipped by a path filter / upstream failure / `[skip ci]`
-  merges as if it passed — `if: always()` converts skips to an explicit fail.
-  (`references/advanced-practices.md §4`.)
+- A CI cost PR can trigger the matrix it trims. Land the trigger narrowing
+  first, so that later cost PRs do not re-run the matrix.
+- A warm local cache hides breaks that cold CI hits, such as a dependency that
+  stopped resolving after a module move. Fix a CI correctness break before cost
+  work, or one masks the other.
+- A skipped workflow leaves its required check Pending, and nothing merges; a
+  skipped job reports Success. Before you disable or path-filter a workflow,
+  remove its check from `required_status_checks` in the same change, or make
+  one aggregate check job (`needs:` all jobs, `if: always()`) the only required
+  check (`references/advanced-practices.md §4`).
 - **`default_workflow_permissions: read` can break writers.** Scan for workflows
   that push/release/comment via the implicit token and lack an explicit
   `permissions:` block *before* flipping — fix those first.

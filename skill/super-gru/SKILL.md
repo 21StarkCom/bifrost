@@ -85,9 +85,8 @@ holds the run.
    1. Write `~/.cache/stark-progress/run-<epic>.settings.json` by
       [the run-file doc](references/run-file.md#the-settings-file-of-each-epic):
       `maxWorkers`, `followUps`, `decideForMe` and `minionAgent`.
-      The operator chose `followUps` and `decideForMe` true for every
-      Super-Gru run on 2026-11-13; only the pane's settings file sets them
-      false.
+      `followUps` and `decideForMe` are true for every Super-Gru run; only
+      the pane's settings file sets them false.
    2. Join the Gru's member `gru-<m>` (`<m>` the epic's number) before the
       launch, as `valkyrie gru --help` says, with the Gru's worktree as its
       path:
@@ -129,7 +128,8 @@ holds the run.
    2. Tell each `live` Gru by muninn that its native wake is now its only
       route to you.
    3. Ask for the restart on one
-      `Needs you (Yours: restart of the listener)` line in the same message.
+      `Needs you (Your hands: restart of the listener)` line in the same
+      message.
 
    Until the operator asks for the restart, a Gru's native wake and an
    operator message are your only wakes. Arm the listener again when the
@@ -145,8 +145,11 @@ holds the run.
    - `progress: STARK-n done <PR url>`: check the shared blocks by step 6.
    - `question:`: answer it with `answer:` when the operator's defaults
      answer it: the settings of step 3, the root rules, the repo's rules.
-     Put each other question on one `Needs you (Yours: …)` line, all in one
-     batch, and keep the other Grus moving.
+     Put each other question on one `Needs you (<tag>): …` line, with the
+     root tag that fits it (`Your hands` for a trust or a permission prompt,
+     `Yours` for scope or taste) and your recommendation. Batch them by the
+     root rules' "Ask once, in one batch", which caps a message at three
+     lines. Keep the other Grus moving.
    - `report:`: the Gru's run ended. Set the epic `reported`, unless part 1
      of the tick set it `ended` already.
 6. **Relay a cleared shared block.** When a shared-block ticket reaches done,

@@ -30,8 +30,7 @@ command converts the Markdown to the format of the surface and sends it.
 
 Do not write code that builds Block Kit or ADF: no script, no one-time
 converter, no JSON made by a program. When the commands below cannot make a
-result, file a ticket on frigg with `/stark-ticket` (`$stark-ticket` on
-Codex), and say so in your report.
+result, name the gap and the frigg command in your report.
 
 ## The commands
 
@@ -52,7 +51,8 @@ Codex), and say so in your report.
   sends nothing.
   - `--dry-run` in place of `--confirm` prints the target and the blocks.
   - `--thread <ts>` replies in a thread.
-  - `--as-user` posts as the user. Its switch is
+  - `--as-user` posts as the operator. Words in the operator's name are the
+    operator's: send them only when the request names them. Its switch is
     `TYR_SLACK_USER_WRITES_ENABLE=1`, in place of `TYR_SLACK_WRITES_ENABLE`.
   - A mention in Markdown stays literal text. Use the raw blocks row for a
     mention that notifies.

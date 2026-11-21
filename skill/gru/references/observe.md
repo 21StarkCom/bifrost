@@ -2,6 +2,22 @@
 
 Read from [the Gru skill](../SKILL.md#protocol).
 
+## When to observe
+
+Run one observation pass on each live Minion once a tick, then wait for its
+next report or the next pass, whichever comes first.
+
+- **Claude:** while a Minion of yours is live, keep one 10-minute timer
+  armed: a Bash `sleep 600` with `run_in_background`, which wakes you when it
+  exits. Arm it after the first launch, re-arm it on each tick, and let it
+  lapse once no Minion is live. With a muninn leader, the listener of
+  [leader-muninn.md](leader-muninn.md#wait) is this timer.
+- **Codex:** a Codex Gru has no timer. It runs the pass on a live Minion
+  that has sent nothing for over 30 minutes, since `/minion` sends a
+  progress note at least that often.
+
+## The pass
+
 An observation pass reads the Minion's `muxctl msg peers` row
 (`activity` busy or idle; `unknown`, which Codex and some Claude sessions
 report, leaves it to the other two), the processes under its `surfaceId` in
@@ -31,3 +47,17 @@ whole life — `bun`, `node`, `cmux-cua` and the like — are not), and **one**
   [Coordination route](../SKILL.md#coordination-route) that names the step and tells
   it to carry on; never type it into its terminal. A second lazy pass on
   the same step is a blocker: escalate it.
+
+## A held Minion
+
+A Minion can report `held: <merge or release> by the ticket's settings`: the
+operator's ticket settings hold that step
+([the spine's holds](../../../standards/worker-spine.md#holds)). It is not a
+block. Do not stamp its file, do not escalate it, and send no `unblocked`:
+the Minion goes on by itself once the operator clears the setting.
+
+On a no-queue repo ([Authority](../SKILL.md#authority)), a `held: merge`
+gives up its merge turn: let the next Minion there merge. When the hold
+clears, the held Minion's `ghx pr-merge` rebases through any merge that ran
+meanwhile. A `held: release` keeps the turn, since two release chains never
+run there at once. Name the Minions it holds in your report.
