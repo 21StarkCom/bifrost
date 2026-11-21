@@ -1603,12 +1603,19 @@ export interface TriageInput {
   stale?: StaleRepo[];
 }
 
+/** Agent files that no loader reads at start-up, which a review or an agent
+ *  reads as rules when a task names them. They take the `rule` kind, and
+ *  stay out of `instructionKind`, which models the start-up loads. */
+export const RULE_FILE_NAMES: readonly string[] = ["REVIEW.md", "RULES.md"];
+
 /** The playbook kind of a repo-relative path, or null for no agent file. A
  *  memory file has its kind from its folder, so the caller names it. */
 export function agentKind(rel: string): AgentKind | null {
   const k = instructionKind(rel);
   if (k) return k.kind === "rule" ? "rule" : k.owner === "." ? "root" : "package";
-  return path.posix.basename(rel) === "SKILL.md" ? "skill" : null;
+  const base = path.posix.basename(rel);
+  if (RULE_FILE_NAMES.includes(base)) return "rule";
+  return base === "SKILL.md" ? "skill" : null;
 }
 
 function budgetOf(kind: AgentKind): number | null {
@@ -1946,6 +1953,83 @@ export function formatTriage(r: TriageReport): string {
   const t = r.totals;
   out.push("", `${r.files.length} agent file${r.files.length === 1 ? "" : "s"}: GREEN ${t.GREEN} · YELLOW ${t.YELLOW} · RED ${t.RED}`);
   return out.join("\n");
+}
+
+/** The longest `--brief` output: odin cuts a tool's answer at 46,000 chars,
+ *  so this leaves room for a newline and a `notified:` line. */
+export const BRIEF_MAX_CHARS = 45_000;
+/** The longest `text` or `detail` of a RED clause in the brief. */
+export const BRIEF_FIELD_CHARS = 300;
+
+/** The flag counts of one triage group: a repo, a memory folder or the workspace. */
+export interface BriefRow {
+  repo: string;
+  GREEN: number;
+  YELLOW: number;
+  RED: number;
+}
+
+export interface BriefClause {
+  path: string;
+  line: number;
+  type: ClauseType;
+  text: string;
+  detail: string;
+}
+
+/** The short form of a triage report, for one tool answer. */
+export interface BriefReport {
+  totals: Record<Flag, number>;
+  repos: BriefRow[];
+  red: BriefClause[];
+  /** The RED clauses that `formatBrief` left out to stay under its limit. */
+  more?: number;
+  stale: StaleRepo[];
+}
+
+/** The totals, one row of flag counts for each group in the order of the
+ *  report, and each RED clause. `repoOf` names the group of a file's path. */
+export function briefReport(r: TriageReport, repoOf: (path: string) => string): BriefReport {
+  const rows = new Map<string, BriefRow>();
+  const red: BriefClause[] = [];
+  for (const f of r.files) {
+    const repo = repoOf(f.path);
+    let row = rows.get(repo);
+    if (!row) rows.set(repo, (row = { repo, GREEN: 0, YELLOW: 0, RED: 0 }));
+    row[f.flag]++;
+    for (const c of f.clauses) {
+      if (c.flag !== "RED") continue;
+      red.push({ path: f.path, line: c.line, type: c.type, text: clip(c.text, BRIEF_FIELD_CHARS), detail: clip(c.detail, BRIEF_FIELD_CHARS) });
+    }
+  }
+  return { totals: r.totals, repos: [...rows.values()], red, stale: r.stale };
+}
+
+/** The brief as JSON, each list item on its own line, in under `max` chars:
+ *  when it is longer, the last RED clauses go, and `more` counts them. Keys
+ *  past the brief's own (`settings`) print after them. */
+export function formatBrief(b: BriefReport & { settings?: unknown }, max = BRIEF_MAX_CHARS): string {
+  const render = (keep: number): string => {
+    const { totals, repos, red, more: _more, stale, ...rest } = b;
+    const left = red.length - keep;
+    const ordered: Record<string, unknown> = { totals, repos, red: red.slice(0, keep), ...(left ? { more: left } : {}), stale, ...rest };
+    const parts = Object.entries(ordered).map(([k, v]) => {
+      const body = Array.isArray(v) && v.length ? `[\n${v.map((e) => `  ${JSON.stringify(e)}`).join(",\n")}\n]` : JSON.stringify(v);
+      return `${JSON.stringify(k)}: ${body}`;
+    });
+    return `{\n${parts.join(",\n")}\n}`;
+  };
+  const all = render(b.red.length);
+  if (all.length <= max) return all;
+  // The most RED clauses that fit: the length grows with the count kept.
+  let lo = 0;
+  let hi = b.red.length - 1;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (render(mid).length <= max) lo = mid;
+    else hi = mid - 1;
+  }
+  return render(lo);
 }
 
 /** The lines of each list in `notifySummary`: a push body has little room. */

@@ -1,10 +1,12 @@
 # Agent-doc playbook
 
 The standard position for each kind of clause in an agent file: a CLAUDE.md,
-an AGENTS.md, a `.claude/rules/*.md`, a SKILL.md and its `description:`, a
-memory note or a `MEMORY.md`. A review types each clause, gives it a GREEN,
-YELLOW or RED flag, and writes the redline. The terms are in the
-[glossary](glossary.md). A change to this file is a PR to bifrost.
+an AGENTS.md, a `.claude/rules/*.md`, a `REVIEW.md`, a `RULES.md`, a SKILL.md
+and its `description:`, a memory note or a `MEMORY.md`. No loader reads a
+`REVIEW.md` or a `RULES.md` at start-up: a review or an agent reads it when a
+task names it. A review types each clause, gives it a GREEN, YELLOW or RED
+flag, and writes the redline. The terms are in the [glossary](glossary.md).
+A change to this file is a PR to bifrost.
 
 ## Order of precedence
 
@@ -58,7 +60,7 @@ budget is RED.
 | File | Budget |
 |---|---|
 | A repo's root CLAUDE.md or AGENTS.md | 15k |
-| A package CLAUDE.md or a rule file | 10k |
+| A package CLAUDE.md, a rule file, a `REVIEW.md` or a `RULES.md` | 10k |
 | A SKILL.md core (the rest goes to `references/`) | 15k |
 | A skill `description:` | 300 |
 | A `MEMORY.md` index (each line 150 or fewer) | 8k |
@@ -72,7 +74,9 @@ seconds. Its inputs are `--repo <path>`, `--fleet`, `--memory` and
 copies (of `~/Code/CLAUDE.md` RED, of another agent file YELLOW), and dead
 pointers. It exits 3 when a file is RED. `--fleet` reads each repo at
 `origin/HEAD` after a `git fetch`; it reads a repo that it cannot fetch from
-the checkout, and marks that repo stale.
+the checkout, and marks that repo stale. `--fleet` leaves out each repo that
+GitHub marks archived. `--json --brief` prints the totals, the flag counts of
+each repo and each RED clause, in under 45,000 chars.
 
 - A pointer is a link, an `@import`, or a code path to a Markdown file. A
   path to code needs the review.

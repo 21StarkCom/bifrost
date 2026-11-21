@@ -4,7 +4,8 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 
 import {
-  agentKind, auditRules, formatText, formatTriage, injectedText, notifySummary, skillDescription, triage,
+  agentKind, auditRules, BRIEF_FIELD_CHARS, briefReport, formatBrief, formatText, formatTriage, injectedText, instructionKind,
+  notifySummary, skillDescription, triage,
   type AgentKind, type AuditInput, type RepoView, type TriageGroup, type TriageInput,
 } from "./rules_audit_lib.ts";
 
@@ -562,6 +563,63 @@ test("triage: size is YELLOW over the budget and RED over twice it, by the kind'
   assert.equal(fileOf(r, "CLAUDE.md").clauses[0].chars, 15_501);
   assert.equal(fileOf(r, "CLAUDE.md").clauses[0].measure, "core");
   assert.equal(fileOf(r, "skill/s/SKILL.md").clauses[0].chars, fileOf(r, "skill/s/SKILL.md").chars);
+});
+
+test("triage: REVIEW.md and RULES.md are rule files with the 10k budget; no loader reads them at start-up", () => {
+  for (const rel of ["REVIEW.md", "RULES.md", "pkg/REVIEW.md", "a/b/RULES.md"]) {
+    assert.equal(agentKind(rel), "rule", rel);
+    assert.equal(instructionKind(rel), null, rel);
+  }
+  for (const rel of ["review.md", "rules.md", "GEMINI.md", "docs/REVIEW.mdx", "REVIEW.md.bak"]) assert.equal(agentKind(rel), null, rel);
+  const body = (n: number) => `${"x".repeat(n)}\n`;
+  const r = tri({ "REVIEW.md": body(10_500), "pkg/RULES.md": body(21_000), "CLAUDE.md": "# Rules\n\n- Run the tests.\n" }, { repo: true });
+  assert.equal(fileOf(r, "REVIEW.md").kind, "rule");
+  assert.equal(fileOf(r, "REVIEW.md").budget, 10_000);
+  assert.deepEqual(clauses(r, "REVIEW.md"), ["YELLOW SIZE :1"]);
+  assert.deepEqual(clauses(r, "pkg/RULES.md"), ["RED SIZE :1"]);
+  // Neither loads at start-up, so neither counts in the load set.
+  assert.deepEqual(clauses(r, "CLAUDE.md"), []);
+});
+
+test("briefReport: the totals, one row per group with its flag counts, and each RED clause clipped", () => {
+  const long = `This is the operator's call, ${"and more words ".repeat(40)}.`;
+  const r = triage({
+    groups: [
+      { root: "/a", view: view({ "CLAUDE.md": `- ${long}\n`, "pkg/CLAUDE.md": "- Run the tests.\n" }), repo: false, files: [
+        { rel: "CLAUDE.md", kind: "root", path: "a/CLAUDE.md" }, { rel: "pkg/CLAUDE.md", kind: "package", path: "a/pkg/CLAUDE.md" },
+      ] },
+      { root: "/b", view: view({ "CLAUDE.md": "- Keep it lean.\n- The build used to take an hour.\n" }), repo: false, files: [
+        { rel: "CLAUDE.md", kind: "root", path: "b/CLAUDE.md" },
+      ] },
+    ],
+  });
+  const b = briefReport(r, (p) => p.split("/")[0]);
+  assert.deepEqual(b.totals, r.totals);
+  assert.deepEqual(b.repos, [{ repo: "a", GREEN: 1, YELLOW: 0, RED: 1 }, { repo: "b", GREEN: 0, YELLOW: 0, RED: 1 }]);
+  assert.deepEqual(b.red.map((c) => [c.path, c.line, c.type]), [["a/CLAUDE.md", 1, "GATE"], ["b/CLAUDE.md", 2, "HISTORY"]]);
+  assert.ok(b.red.every((c) => c.text.length <= BRIEF_FIELD_CHARS && c.detail.length <= BRIEF_FIELD_CHARS));
+  assert.deepEqual(b.stale, []);
+  const parsed = JSON.parse(formatBrief(b));
+  assert.deepEqual(parsed, JSON.parse(JSON.stringify(b)));
+  assert.equal(formatBrief(b).split("\n").filter((l) => l.startsWith("  {")).length, 4, "one line per row and clause");
+});
+
+test("formatBrief: over the limit, the last RED clauses go and more counts them; the totals and rows stay", () => {
+  const red = Array.from({ length: 50 }, (_, i) => ({ path: `f${i}.md`, line: i + 1, type: "GATE" as const, text: "t".repeat(200), detail: "d" }));
+  const b = { totals: { GREEN: 0, YELLOW: 0, RED: 50 }, repos: [{ repo: "r", GREEN: 0, YELLOW: 0, RED: 50 }], red, stale: [] };
+  const full = formatBrief(b);
+  assert.equal(JSON.parse(full).more, undefined);
+  const out = formatBrief(b, 3_000);
+  assert.ok(out.length <= 3_000, `${out.length}`);
+  const parsed = JSON.parse(out);
+  assert.ok(parsed.red.length > 0 && parsed.red.length < 50);
+  assert.equal(parsed.red.length + parsed.more, 50);
+  assert.deepEqual(parsed.red, red.slice(0, parsed.red.length));
+  assert.deepEqual([parsed.totals, parsed.repos], [b.totals, b.repos]);
+  // One more clause would not fit.
+  const one = formatBrief(b, out.length + 10);
+  assert.equal(JSON.parse(one).red.length, parsed.red.length);
+  assert.deepEqual(JSON.parse(formatBrief({ ...b, settings: { model: "m" } })).settings, { model: "m" });
 });
 
 test("triage: a skill description is measured as YAML reads it", () => {

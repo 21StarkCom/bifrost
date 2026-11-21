@@ -30,6 +30,12 @@
  * `--self-update` (`--fleet` only) fast-forwards the checkout that holds
  * this tool to `origin/main` and runs again on the new code.
  *
+ * `--fleet` leaves out each repo that GitHub marks archived, from one
+ * `gh api graphql` call for the archived repos of `21StarkCom`; when the call
+ * fails, it warns on stderr and reads every repo. `--brief` (with `--json`)
+ * prints the totals, one row of flag counts for each repo and each RED
+ * clause, in under 45,000 chars: one odin tool answer.
+ *
  * `--fleet` alone reads each repo at `origin/HEAD`, not the disk: it runs
  * `git fetch origin`, then lists the tree with `git ls-tree` and reads it
  * with `git cat-file`. That moves remote refs only, never a checkout, its
@@ -49,14 +55,14 @@ import { precheckCli } from "./cli_args_lib.ts";
 import { heimdallSend } from "./launchd_lib.ts";
 import { isMainModule } from "./main_module_lib.ts";
 import {
-  agentKind, auditRules, formatText, formatTriage, instructionKind, newReds, notifySummary, triage,
+  agentKind, auditRules, briefReport, formatBrief, formatText, formatTriage, instructionKind, newReds, notifySummary, triage,
   type AgentKind, type Clause, type Flag, type RepoView, type StaleRepo, type TriageGroup, type TriageReport,
 } from "./rules_audit_lib.ts";
 
 const USAGE = `usage: rules_audit.ts [--repo <path>] [--json] [--always <rule,…>]
                       [--file-budget <bytes>] [--always-budget <bytes>]
        rules_audit.ts --playbook [--repo <path>] [--fleet] [--memory]
-                      [--files <path,…>] [--json] [--notify] [--settings]
+                      [--files <path,…>] [--json] [--brief] [--notify] [--settings]
                       [--save <file>] [--since <file>] [--self-update]
        rules_audit.ts --commit <file>
 
@@ -75,19 +81,27 @@ judgement. Read-only.
   -h, --help              print this and exit
 
 --playbook triages agent files (CLAUDE.md, AGENTS.md, .claude/rules/*.md,
-SKILL.md, MEMORY.md and memory notes) by the agent-doc playbook, with no
-model: size against budget, gate, growth and history phrases, copies of a
-sibling file or of ~/Code/CLAUDE.md, and dead pointers. It prints one GREEN,
-YELLOW or RED line per file, then each RED clause as path:line. Exit 0 for
-GREEN or YELLOW, 3 for RED. The inputs combine; with none, the current repo.
+REVIEW.md, RULES.md, SKILL.md, MEMORY.md and memory notes) by the agent-doc
+playbook, with no model: size against budget, gate, growth and history
+phrases, copies of a sibling file or of ~/Code/CLAUDE.md, and dead pointers.
+It prints one GREEN, YELLOW or RED line per file, then each RED clause as
+path:line. Exit 0 for GREEN or YELLOW, 3 for RED. The inputs combine; with
+none, the current repo.
 
   --repo <path>           the agent files of one repo
   --fleet                 every repo under ~/Code/21Stark, and its own CLAUDE.md,
                           at origin/HEAD after a git fetch; a repo that cannot
                           be fetched or read is read from its checkout and
-                          marked stale
+                          marked stale. It leaves out each repo that GitHub
+                          marks archived (one gh api graphql call); when that
+                          call fails, it warns on stderr and reads every repo
   --memory                every ~/.claude/projects/*/memory/ folder
   --files <path,…>        these agent files only
+  --brief                 with --json: print only the totals, one row of GREEN,
+                          YELLOW and RED counts for each repo or folder, each
+                          RED clause (path, line, type, text, detail) and the
+                          stale repos, in under 45,000 chars; when the clauses
+                          do not fit, the last ones go and "more" counts them
   --notify                also send a summary with heimdall send: the RED
                           files first, then the files over budget; a triage
                           that fails sends its error
@@ -131,6 +145,10 @@ const MAX_READ_BYTES = 8 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 60_000;
 /** The fleet repos that fetch at one time. */
 const FETCH_CONCURRENCY = 8;
+/** The GitHub org whose archived repos `--fleet` leaves out. */
+const FLEET_ORG = "21StarkCom";
+/** How long the `gh` call that lists the archived repos may run. */
+const ARCHIVED_TIMEOUT_MS = 30_000;
 /** Folders of a fleet repo whose agent files never load: nastrond's buried code. */
 const FLEET_SKIP: Readonly<Record<string, readonly string[]>> = { nastrond: ["graves/"] };
 /** A link `walkRepo` follows into a directory: one inside a rules dir. */
@@ -563,8 +581,17 @@ class Collector {
   async addFleet(fleet: string): Promise<void> {
     if (!fs.existsSync(fleet)) throw new UsageError(`no fleet folder at ${fleet}`);
     const entries = fs.readdirSync(fleet, { withFileTypes: true });
-    const repos = entries.filter((e) => e.isDirectory() && fs.existsSync(path.join(fleet, e.name, ".git")))
+    const listed = entries.filter((e) => e.isDirectory() && fs.existsSync(path.join(fleet, e.name, ".git")))
       .map((e) => e.name).sort((a, b) => a.localeCompare(b));
+    const archived = listed.length ? await archivedRepos(FLEET_ORG) : { repos: new Set<string>() };
+    if ("reason" in archived) {
+      process.stderr.write(`rules_audit: --fleet: could not list the archived repos of ${FLEET_ORG}, so every repo is read: ${archived.reason}\n`);
+    }
+    // A repo is archived by its origin's `owner/name`, not by its folder's name.
+    const repos = "reason" in archived ? listed : listed.filter((name) => {
+      const gh = githubRepoOf(git(path.join(fleet, name), ["config", "--get", "remote.origin.url"]).stdout ?? "");
+      return gh === null || !archived.repos.has(gh);
+    });
     const failed = await fetchAll(repos.map((name) => path.join(fleet, name)));
     for (const name of repos) {
       const root = path.join(fleet, name);
@@ -598,6 +625,32 @@ class Collector {
 }
 
 class UsageError extends Error {}
+
+/** The `owner/name` of a GitHub remote URL, in lower case, or null. */
+export function githubRepoOf(url: string): string | null {
+  const m = /github\.com[:/]+([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/i.exec(url.trim());
+  return m ? `${m[1]}/${m[2]}`.toLowerCase() : null;
+}
+
+/** The `owner/name` of each archived repo of `org`, in lower case, from one
+ *  `gh api graphql --paginate` call; or why the call failed. */
+export async function archivedRepos(org: string): Promise<{ repos: Set<string> } | { reason: string }> {
+  const query = "query($owner: String!, $endCursor: String) { organization(login: $owner) { "
+    + "repositories(first: 100, isArchived: true, after: $endCursor) { nodes { nameWithOwner } pageInfo { hasNextPage endCursor } } } }";
+  try {
+    const r = await spawnBounded("gh", [
+      "api", "graphql", "--paginate", "-f", `owner=${org}`, "-f", `query=${query}`,
+      "--jq", ".data.organization.repositories.nodes[].nameWithOwner",
+    ], { timeoutMs: ARCHIVED_TIMEOUT_MS, maxBuffer: 1024 * 1024 });
+    if (r.status !== 0) {
+      const timedOut = (r.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT";
+      return { reason: timedOut ? `gh timed out after ${ARCHIVED_TIMEOUT_MS / 1000}s` : firstLine(r.stderr) || r.error?.message || `gh exit ${r.status}` };
+    }
+    return { repos: new Set(r.stdout.split("\n").map((l) => l.trim().toLowerCase()).filter(Boolean)) };
+  } catch (e) {
+    return { reason: (e as Error).message };
+  }
+}
 
 /** `git fetch origin` in each repo, `FETCH_CONCURRENCY` at a time and each
  *  within `FETCH_TIMEOUT_MS`: root → why the fetch failed, for each that did.
@@ -951,7 +1004,13 @@ async function playbookMain(flags: Map<string, string | true>, extraStale: Stale
     }
   }
   let code = report.totals.RED ? 3 : 0;
-  if (base === undefined) {
+  if (base === undefined && flags.has("brief")) {
+    // A file's row is its group's root: a repo, a memory folder or the workspace.
+    const rootOf = new Map<string, string>();
+    for (const g of c.groups.values()) for (const f of g.files) rootOf.set(f.path, displayPath(g.root));
+    const brief = briefReport(report, (p) => rootOf.get(p) ?? p);
+    process.stdout.write(`${formatBrief(report.settings ? { ...brief, settings: report.settings } : brief)}\n`);
+  } else if (base === undefined) {
     process.stdout.write(flags.has("json") ? `${JSON.stringify(report, null, 2)}\n` : `${formatTriage(report)}\n`);
     if (report.settings && !flags.has("json")) process.stdout.write(`settings: ${JSON.stringify(report.settings)}\n`);
   } else if ("reason" in base) {
@@ -995,7 +1054,7 @@ function playbookFailed(flags: Map<string, string | true>, e: unknown, code: num
 export async function main(argv: string[]): Promise<number> {
   const { flags } = precheckCli(argv, {
     values: ["--repo", "--always", "--file-budget", "--always-budget", "--files", "--save", "--since", "--commit"],
-    switches: ["--json", "--playbook", "--fleet", "--memory", "--notify", "--settings", "--self-update"],
+    switches: ["--json", "--brief", "--playbook", "--fleet", "--memory", "--notify", "--settings", "--self-update"],
   }, USAGE);
   if (flags.has("commit")) {
     if (flags.size > 1) {
@@ -1006,13 +1065,21 @@ export async function main(argv: string[]): Promise<number> {
     (code ? process.stderr : process.stdout).write(`${line}\n`);
     return code;
   }
-  const needPlaybook = ["notify", "settings", "save", "since", "self-update"].filter((k) => flags.has(k));
+  const needPlaybook = ["notify", "settings", "save", "since", "self-update", "brief"].filter((k) => flags.has(k));
   if (needPlaybook.length && !flags.has("playbook")) {
     process.stderr.write(`rules_audit: ${needPlaybook.map((k) => `--${k}`).join(", ")} need${needPlaybook.length === 1 ? "s" : ""} --playbook\n`);
     return 2;
   }
   if (flags.has("self-update") && !flags.has("fleet")) {
     process.stderr.write("rules_audit: --self-update needs --fleet\n");
+    return 2;
+  }
+  if (flags.has("brief") && !flags.has("json")) {
+    process.stderr.write("rules_audit: --brief needs --json\n");
+    return 2;
+  }
+  if (flags.has("brief") && flags.has("since")) {
+    process.stderr.write("rules_audit: --brief does not apply with --since, which prints only the change\n");
     return 2;
   }
   if (flags.has("playbook")) {
