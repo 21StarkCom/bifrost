@@ -15,6 +15,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=526 runId=526 sha=313530ca -->
+- Apply the agent-doc review to bifrost's CLAUDE.md, AGENTS.md and skills: remove gates the root rules cover, fix stale facts and root-rule conflicts, and move large skill text into references.
 <!-- idun:pr-merge pr=524 runId=524 sha=70ac0c03 -->
 - `rules_audit.ts` now flags `REVIEW.md` and `RULES.md`, skips archived repos in `--fleet`, and adds `--brief` for a compact JSON report.
 <!-- idun:pr-merge pr=523 runId=523 sha=779a294a -->
