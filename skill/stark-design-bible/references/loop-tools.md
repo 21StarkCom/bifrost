@@ -62,6 +62,10 @@ later runs.
   click lands in it, and `measure` ranks the attention of the weekly
   controls in it, not the toolbar button.
 
+  When the shell prints `Open: <path>`, that file is the open plan: a state
+  can open the surface in its own seed, and only the shell knows it. Else
+  make the open plan from the toolbar plan:
+
   ```sh
   jq '.states |= map(.eval = ((if .eval then .eval + "; " else "" end) + "flowShell.toggle()")) | .tasks |= map(.path |= .[1:])' <tasks.json> > <run>/open.json
   jq '.tasks |= map(select(.frequency == "weekly"))' <run>/open.json > <run>/open-weekly.json
