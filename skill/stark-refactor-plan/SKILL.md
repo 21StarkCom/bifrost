@@ -1,14 +1,10 @@
 ---
 name: stark-refactor-plan
 description: >-
-  Plan a codebase refactor without touching code. Inspect a repository and
-  produce two artifacts — REFACTOR_PLAN.md and REFACTOR_BACKLOG.json — an
-  evidence-based, phased, file-by-file restructuring plan another agent can
-  execute. Use whenever the user wants to refactor, restructure, reorganize,
-  modularize, clean up, de-duplicate, untangle, find dead code, or assess the
-  architecture of a codebase, or asks for a refactor plan / backlog / roadmap —
-  even if they don't say "plan" explicitly. Planning only: never modifies,
-  moves, renames, or deletes source.
+  Plan a refactor without touching code: inspect a repo and write
+  REFACTOR_PLAN.md and REFACTOR_BACKLOG.json, an evidence-based, phased,
+  file-by-file plan that another agent can run. Use to refactor, restructure,
+  de-duplicate, find dead code or assess architecture. Never edits source.
 argument-hint: "[target-dir] (defaults to current repo root)"
 disable-model-invocation: true
 model: opus
@@ -16,9 +12,8 @@ model: opus
 
 ## Help
 
-If `$ARGUMENTS` requests help (a standalone `--help`, `-h`, or `help` token),
-follow [standard help](../../standards/help.md): print this skill's purpose,
-usage, and arguments, then stop — do not run preflight or any phase.
+If `$ARGUMENTS` contains a standalone `--help`, `-h`, or `help`, follow
+[standard help](../../standards/help.md), then stop.
 
 # stark-refactor-plan
 
@@ -38,7 +33,7 @@ docs; do not change behavior, apply refactors, or bump dependencies.
 **You may** read files; run *static* read-only analysis (directory listing,
 `rg`, manifest parsing); and create only the two output files below.
 
-**Running the project's own commands is NOT free.** `npm test`, `npm run
+**Running the project's own commands is not free.** `npm test`, `npm run
 build`, `make`, `pytest`, a `postinstall` hook — on an untrusted repo these
 execute arbitrary, attacker-controllable code (package scripts, build hooks,
 test fixtures). They are not "read-only" just because they don't write to git.
@@ -46,16 +41,13 @@ So:
 
 - **Default to command *discovery*, not command *execution*.** Read the
   commands out of the manifests; you do not need to run them to write the plan.
-- **Before running any project command, get explicit user approval** and prefer
-  a sandbox with no network and no credential access. Treat a repo you didn't
-  author as untrusted.
-- Never run a command sourced from a file the repo controls without confirming
-  what it does first.
+- **Run no project command.** The plan needs the commands, not their output:
+  read them from the manifests. Treat a repo you did not author as untrusted.
 
 The *only* writes allowed are `REFACTOR_PLAN.md` and `REFACTOR_BACKLOG.json` at
-the repo root. If either already exists, show the user a diff-style summary of
-what you'd overwrite and confirm before clobbering — these may be a prior run's
-work or hand-authored.
+the repo root. If either exists and git holds no clean committed copy of it, ask
+before you overwrite it: that write cannot be undone. Overwrite a clean tracked
+copy: git restores it.
 
 ## Arguments
 
@@ -65,7 +57,7 @@ work or hand-authored.
   repo. Resolve the root with `git rev-parse --show-toplevel` (fall back to the
   given dir / `pwd` if not a git repo) and run everything from there. Do **not**
   assume the target is bifrost — this skill runs against whatever repo the
-  user points it at.
+  operator points it at.
 
 ## Two ways to run this
 
@@ -171,14 +163,20 @@ config) — then synthesize their reports into one evidence set. Keep subagents
 read-only; they inspect, they don't write.
 
 Apply these principles throughout, and bake them into your recommendations:
-preserve behavior; prefer incremental change over rewrites; identify/add tests
-*before* moving risky logic; don't invent abstractions without repeated
-patterns; make ownership obvious from directory structure; keep dependency
-direction simple and enforceable; consolidate duplicated utilities into a
-canonical module; remove dead code only on strong evidence; separate domain
-logic from infrastructure; centralize config; avoid unscoped
-`misc`/`helpers`/`utils` dumping grounds; prefer domain-scoped shared modules
-over global ones; make future agent work local and verifiable.
+
+- Preserve behavior.
+- Prefer incremental change over rewrites.
+- Identify or add tests *before* you move risky logic.
+- Invent no abstraction without a repeated pattern.
+- Make ownership obvious from the directory structure.
+- Keep the dependency direction simple and enforceable.
+- Consolidate duplicated utilities into one canonical module.
+- Remove dead code only on strong evidence.
+- Separate domain logic from infrastructure.
+- Centralize config.
+- Avoid unscoped `misc`/`helpers`/`utils` dumping grounds.
+- Prefer domain-scoped shared modules over global ones.
+- Make future agent work local and verifiable.
 
 ### Phase 4 — Write `REFACTOR_PLAN.md`
 
@@ -230,11 +228,6 @@ source was modified; the JSON validates; every referenced path/command is real
 (or explicitly marked `unknown` with the missing evidence); steps are
 file-specific and executable; duplicate/dead-code claims carry evidence; risky
 areas are called out; and the first recommended PR is small and low-risk.
-
-A bad step reads "clean up utils." A good step reads: "Move
-`src/helpers/date.ts` to `src/shared/date/date-utils.ts`, update imports in
-`src/api/orders.ts` and `src/jobs/sync.ts`, then delete the old file once
-`npm test` passes."
 
 ## Final response
 

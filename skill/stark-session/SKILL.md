@@ -23,7 +23,7 @@ Run [standard preflight](../../standards/preflight.md) with `--workflow stark-se
 
 Session lifecycle management: **start** (context load + briefing) and **end** (test + merge + commit + push).
 
-A single TS CLI gathers every fact you need into one JSON blob; you render the briefing/summary directly. No ANSI, no box-drawing, no fallback path — when a collector fails, its slot is `null` and the failure is logged into `errors[]`.
+A single TS CLI gathers every fact you need into one JSON blob; you render the briefing/summary directly. No ANSI, no box-drawing — when a collector fails, its slot is `null` and the failure is logged into `errors[]`.
 
 ## Arguments
 
@@ -44,15 +44,12 @@ session() { node --no-warnings "$TOOLS/stark_session.ts" "$@"; }
 
 ## Config
 
-Path: `.code-review/config.json` (hierarchical: global → org → repo). Reading is handled inside the TS CLI; you only need to know the keys that affect **end-mode dialogue**:
+The end-mode keys are in the `session` section of the global `config.json`. A repo's `.code-review/config.json` overrides none of them. You read them yourself:
 
 | Key | Default | Notes |
 |-----|---------|-------|
-| `build_command` | `null` | Build command for end |
-| `test_command` | `null` | Falls back to top-level |
 | `doc_paths` | `["docs/", "CLAUDE.md"]` | Paths to stage on end |
 | `devlog_path` | `null` | Devlog directory |
-| `pr_merge_strategy` | `"squash"` | squash/merge/rebase |
 
 `session.health_checks` is consumed by the TS CLI directly — you don't run these yourself.
 
@@ -70,7 +67,7 @@ STARTED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 ### Phase 1 — Gather context (silent)
 
-Read and internalize — do NOT display:
+Read these, and do not display them:
 - `CLAUDE.md` from current directory and each parent up to `~`
 - Memory files: `~/.claude/projects/*/memory/` matching current project path
 
@@ -99,7 +96,6 @@ STATE_JSON=$(session start \
   "board": { "in_flight", "blocked", "needs_attention" } | null,
   "alerts": { "unacknowledged": [{ "level", "message", "context" }] } | null,
   "health": [{ "name", "passed", "detail", "duration" }],
-  "queue": { "pending", "dead_letter", "max_created_at" } | null,
   "healer": { "categories": [{ "name", "count" }],
               "canary": { "circuits_open", "near_promotion" } } | null,
   "skills": { "available": [...], "suggestions": [{ "name", "reason" }] },
@@ -118,19 +114,18 @@ node --no-warnings \
 
 ### Phase 4 — Render briefing
 
-Render `STATE_JSON` as a concise briefing for the user. Layout guidance:
+Render `STATE_JSON` as a concise briefing for the operator. Layout guidance:
 
 1. **Header line:** `Session {session.session_id[:8]} · {session.branch} · {session.repo}`
 2. **Persona line** (if `persona`): `Persona: {name} ({source}) — "{catchphrase}"`
-3. **Alerts** (if `alerts.unacknowledged` non-empty): surface FIRST and prominently — each as `[{level}] {message}` with context underneath.
+3. **Alerts** (if `alerts.unacknowledged` is not empty): put them above every other section, each as `[{level}] {message}` with its context below it.
 4. **Git**: branch, ahead/behind, uncommitted count, stashes, last 5 commits.
 5. **PRs**: open PRs (`mine`), then the current branch PR with check rollup if present.
 6. **Board**: `in_flight`, `needs_attention`, `blocked` (omit empty buckets).
 7. **Health**: render each result on one line — pass/fail/timeout, name, duration, short detail.
-8. **Queue**: `pending`/`dead_letter` — warn if `dead_letter > 0` or `pending > 10`.
-9. **Healer**: top categories from `healer.categories`; flag any `circuits_open` and `near_promotion`.
-10. **Skills**: skill `suggestions` (cap 2). Available skills list is for your awareness; don't dump it on the user.
-11. **Errors** (if non-empty): brief one-liner at the bottom — *"Couldn't read: X, Y"*.
+8. **Healer**: top categories from `healer.categories`; flag any `circuits_open` and `near_promotion`.
+9. **Skills**: skill `suggestions` (cap 2). The available skills list is for your awareness; do not print it for the operator.
+10. **Errors** (if non-empty): brief one-liner at the bottom — *"Couldn't read: X, Y"*.
 
 Omit entire sections that are `null` or empty. Prefer brief, scannable formatting over walls of text.
 
@@ -144,9 +139,9 @@ Build a prioritized task list from the briefing data in this order, including on
 4. **Board items in flight** assigned to Claude
 5. **Alerts** still unacknowledged
 
-Ask: **"Task list look right? Say 'go' to start from the top, or tell me what to focus on."**
+End on one line: `Needs you (Yours: scope): start the list from the top, or another focus? I recommend <first item>.`
 
-On "go", work sequentially without prompting between tasks — only pause for genuine decisions (merge conflict, ambiguous review, failing test). If everything is empty: "Everything looks clean. What are we working on?"
+When the operator picks the list, work it in order with no stop between tasks. Resolve merge conflicts, review findings and failing tests yourself. If every bucket is empty, end on `Needs you (Yours: scope): what do we work on?`
 
 ---
 
@@ -159,13 +154,13 @@ if [ -f "$HOME/.stark-persona/active.json" ]; then
   node "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/code-review}/tools/stark_persona.ts" session-end 2>/dev/null || true
 fi
 ```
-Display the 20% fun-fact callout AFTER the summary (if any).
+Show the 20% fun-fact callout, if there is one, after the summary.
 
 ### Phase 1 — Tests
 
-Read `test_command` and `build_command` from `.code-review/config.json` (`session.*` first, then top-level). Run them.
+Run the repo's build and test commands, as its agent instructions file names them.
 
-On failure: warn and ask **"Proceed anyway?"**
+On failure, fix it in this session when you can. Otherwise, skip Phase 2's merge and report the failure.
 
 ### Phase 2 — Merge open PRs
 
@@ -174,11 +169,14 @@ gh auth status   # skip with warning if fails
 gh pr list --head "$(git branch --show-current)" --json number,title,state
 ```
 
-For each open PR: offer to merge via `gh pr merge <number> --<pr_merge_strategy>`. On failure: report and ask "Skip this PR?". Uses the existing `gh` login as `aryeh-stark`.
+Carry each open PR of this branch through the spine: the review its change needs, a fix or an answer for each finding, then `ghx pr-merge`. When a merge fails, report why and go on. Use the existing `gh` login as `aryeh-stark`.
 
 ### Phase 3 — Commit docs
 
-Stage paths from `session.doc_paths`. If `session.devlog_path` is set, prompt for a one-line summary, create `<devlog_path>/YYYY-MM-DD.md`, stage it. Always ask for a summary for the commit message.
+Never commit on `main`, or on a branch whose PR Phase 2 merged. In either case, first run `git fetch origin`, then
+`git switch -c docs/session-<YYYY-MM-DD> origin/<default branch>`: the uncommitted doc changes move with you.
+
+Stage paths from `session.doc_paths`. If `session.devlog_path` is set, write a one-line summary of the session to `<devlog_path>/YYYY-MM-DD.md`, and stage it. Write the commit summary yourself.
 
 Skip the commit if `git diff --cached --stat` is empty. Otherwise:
 
@@ -203,7 +201,7 @@ If `.github/project-config.json` exists: pull issue numbers from this session's 
 
 ### Phase 5 — Push
 
-If the branch has an upstream, or you're on `main` ahead of `origin`: `git push`. On failure: report and ask how to proceed. If no upstream and not on `main`: ask **"Push to origin?"**
+Never push `main`: on `main`, Phase 3 commits on a new branch. Push the branch when it has commits that `origin` lacks: `git push -u origin <branch>` when it has no upstream, else `git push`. When the branch has no open PR, open one with `ghx pr-open --no-ticket`. `ghx pr-open` stages every change in the tree, so run it only when `git status --porcelain` prints nothing; otherwise report the open changes and open no PR. On failure, report it and go on.
 
 ### Phase 5.5 — Derive session name
 
@@ -244,7 +242,7 @@ Schema:
 Render the end summary:
 
 1. **Header**: `Session {name} · {duration} · {branch}`
-2. **Receipt** (from your in-memory accumulator through phases 1–5.5): Tests, Build, PRs merged, Docs committed, Push — each as pass/fail with a detail and duration.
+2. **Receipt** (from your in-memory accumulator through phases 1–5.5): Tests, Build, PRs merged, Docs committed, Push and the PR it opened — each as pass/fail with a detail and duration.
 3. **Diff**: `{added}+ / {removed}- across {file_count} files` + the key files list. Warn if `diff.approximate` is true (start HEAD wasn't recorded).
 4. **Branch**: ahead/behind vs upstream, PR link if `has_pr`.
 5. **Errors** (if non-empty): brief one-liner.
@@ -262,14 +260,15 @@ node --no-warnings \
 
 | Failure | Recovery |
 |---------|----------|
-| `STATE_JSON` empty / `{}` | CLI crashed — read stderr, fall back to plain `git status` + `gh pr list` |
+| `STATE_JSON` empty / `{}` | CLI crashed: run `session start …` again without `2>/dev/null` to read the error, then use `git status` and `gh pr list` |
 | Specific slot is `null` | Note in `errors[]`; omit that section from briefing |
 | `gh` auth fails | `prs` slot null, skip PR sections |
 | Not a git repo | `git` and `prs` slots null |
-| Test/build fails | Warn, ask whether to proceed |
-| PR merge fails | Report, offer to skip |
-| Push fails | Report, ask how to proceed |
+| Test/build fails | Fix it, or skip the merge and report it |
+| PR merge fails | Report why, and go on |
+| Push fails | Report it, and go on |
+| Tree not clean at Phase 5 | Report the open changes; open no PR |
 | Project config missing | `board` slot null silently |
 | Config missing | Health checks empty, defaults applied for end-mode keys |
 
-> **Warning:** Every command in a parallel batch must exit 0 — one non-zero exit cancels the entire batch. Use `|| true` on the few shell commands that remain in the SKILL itself. The TS CLI is failure-safe by construction; no `|| true` needed when calling it.
+> **Trap:** one Bash call in a parallel batch that exits non-zero cancels the whole batch. Add `|| true` to this skill's shell commands; the TS CLI needs none.

@@ -13,9 +13,8 @@ model: opus
 
 ## Help
 
-If `$ARGUMENTS` requests help (a standalone `--help`, `-h`, or `help` token),
-follow [standard help](../../standards/help.md): print this skill's purpose,
-usage, and arguments, then stop — do not run any phase.
+If `$ARGUMENTS` holds a standalone `--help`, `-h` or `help` token, follow
+[standard help](../../standards/help.md), then stop.
 
 # stark-memory
 
@@ -71,20 +70,10 @@ tidy() { node --no-warnings "$TOOLS/memory_tidy.ts" "$@"; }
 tidy $ARGUMENTS   # --project/--all pass through; --dry-run/--apply are no-ops to the tool
 ```
 
-The report shape:
-
-```
-{ generatedFor, projectsDir, capSourceVersion, corpusPresent, fleetSlugCount,
-  projects: [ { slug, memoryDir, ownSlug, empty, hasIndex,
-    index: { lines, chars, overLineCap, overCharCap, firstDroppedLine, entries,
-             longLines:[{line,chars,text}], strayLines, hasFrontmatter,
-             orphans, dangling },
-    files: [{ name, bytes, lines, overByteCap, overLineCap, recallTruncated }],
-    overCapFiles: [ ... ],
-    crossRepo: [{ file, name, foreignSlugs, strength }] } ],
-  summary: { projectsScanned, projectsEmpty, indexesOverCap, filesOverCap,
-             crossRepoStrong, crossRepoWeak } }
-```
+The report gives `corpusPresent`, and for each project `index` (`chars`,
+`lines`, `firstDroppedLine`, `longLines`, `strayLines`, `orphans`,
+`dangling`), `overCapFiles` and `crossRepo` (`foreignSlugs`, `strength`), and a
+`summary`. `TreeReport` in `tools/memory_tidy_lib.ts` types the rest.
 
 If `corpusPresent` is false the fleet-slug list is the built-in fallback — say so,
 since a niche repo slug may be missed.
@@ -110,33 +99,36 @@ apply and end.
 
 ## Phase 3: Apply (only with `--apply`)
 
-Rewrite to fit the caps. Every write goes through the **Write/Edit tools**. The
-fact-routing PostToolUse hook can answer a rewrite with an advisory to move the
-fact to the corpus: this skill is tidy-only, so keep the fact in memory.
-Work one project at a time; on `--all`, say so and proceed project by project.
+Rewrite to fit the caps.
+
+Every write goes through the Write and Edit tools.
+
+The fact-routing PostToolUse hook may advise moving a fact to the corpus: this
+skill only tidies, so keep the fact in memory.
+
+Work one project at a time; on `--all`, say so and go project by project.
 
 1. **Shorten index lines** over 150 chars to `- [Title](file.md) — one hook`
    (a title and a single-clause hook, ~150 chars max). The detail already lives in
    the topic file — the index is a pointer, not a summary. Preserve each line's
    link target; never drop an entry.
-2. **Over-cap files — verify or flag, never blind-tighten.** A file over 4 KB has
-   an invisible tail. You MAY tighten its prose to fit **only if** you can drop
-   nothing load-bearing (every id, path, Mímir reference, STARK number, decision)
-   **and** land under 4,096 bytes — check the rewrite against the original before
-   writing it. If the note is too fact-dense to tighten losslessly (measured: dense
-   recipe / credential notes usually are), do **not** rewrite it: either split it
-   into separate one-fact files (new file via Write, new index line, retire the old
-   line), or leave the original and flag it for a manual split. A lossy auto-rewrite
-   over a real note is the failure mode here — keeping the over-cap original beats
-   silently dropping a fact.
+2. **Over-cap files.** A file over 4 KB has an invisible tail. Tighten it only
+   when the rewrite keeps every id, path, Mímir reference, STARK number and
+   decision, and lands under 4,096 bytes. Check the rewrite against the
+   original before you write it. A dense recipe or credential note often
+   cannot shrink that way: split it into one-fact files (new file via Write,
+   new index line, retire the old line), or leave it and flag it for a manual
+   split. Keep an over-cap original rather than drop a fact.
 3. **Move a strong cross-repo fact** into the target repo's memory dir:
    `~/.claude/projects/<target-slug>/memory/`. Resolve `<target-slug>` by listing
    `~/.claude/projects` and matching the foreign slug (create `MEMORY.md` there if
    absent — no frontmatter, just `- [Title](file.md) — hook` lines). Write the
    file in the target, add its index line there, then remove the source file and
-   its index line here. Confirm the target with the operator before moving.
-4. **Retire stale entries** — a memory superseded by a newer one, or a done-and-
-   merged ticket note with no lasting lesson. Present each before removing; when in
+   its index line here. Name each move and its target in the report.
+4. **Retire stale entries:** a memory that a newer one supersedes, or a merged
+   ticket note with no lasting lesson. Copy each one to
+   `${STARK_STATE_ROOT:-$HOME/.claude/code-review}/history/memory-tidy/<UTC time>/<slug>/`,
+   then remove it and its index line, and print its restore `cp` line. When in
    doubt, keep it.
 
 Re-run Phase 1 after applying and confirm the index is back under cap.

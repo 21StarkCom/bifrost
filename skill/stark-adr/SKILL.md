@@ -11,9 +11,8 @@ disable-model-invocation: true
 
 ## Help
 
-If `$ARGUMENTS` requests help (a standalone `--help`, `-h`, or `help` token),
-follow [standard help](../../standards/help.md): print this skill's purpose,
-usage, and arguments, then stop — do not run preflight or any phase.
+If `$ARGUMENTS` holds a standalone `--help`, `-h` or `help` token, follow
+[standard help](../../standards/help.md), then stop.
 
 # stark-adr
 
@@ -36,8 +35,10 @@ the skill share one tested engine.
 brain adr list   # verify brain is on PATH and the adr group is available
 ```
 
-If `brain` is missing, stop and tell the user to install it (build the Atlas engine and put
-its `brain` on PATH) — don't hand-roll the ADR file, the whole point is one engine.
+If `brain` is missing, install it: `brew install 21StarkCom/tap/brain`. The
+formula is for macOS on Apple silicon only; elsewhere, build `atlas/apps/cli`
+and put its `brain` on PATH. Do not hand-roll the ADR file: one engine writes
+each ADR.
 
 ## Operations
 
@@ -74,10 +75,11 @@ Then fill in the new ADR's body. Never edit an accepted ADR in place — superse
 
 ## When to write one
 
-Per the convention's tiering, write an ADR only for **non-obvious or hard-to-
-reverse** decisions with real trade-offs (architectural choices, tech selection,
-cross-cutting policy) — not routine work. Trivial → just the PR; feature → a
-plan; architectural → an ADR (+ plan).
+Per the convention's tiers, write an ADR only for a non-obvious or
+hard-to-reverse decision with real trade-offs (an architectural choice, a tech
+selection, a cross-cutting policy), not for routine work. Trivial → the PR
+alone; feature → a spec, which carries the plan; architectural → an ADR and a
+spec.
 
 ## Notes
 

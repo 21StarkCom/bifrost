@@ -1,13 +1,10 @@
 ---
 name: stark-story-edit
 description: >-
-  Full-pass storytelling editor for long-form posts (blog, essays, site copy)
-  in Aryeh's voice. Use when a draft has the facts but not the story - reads
-  flat, buries its hook, over-explains, lands on a maxim, or needs humor and
-  narrative pull - or when asked to "make this land / tell it as a story /
-  punch this up / make it worth reading". Returns the whole post rewritten for
-  the author to diff; every fact frozen. Pairs with stark-blog-sharpen
-  (cut-only padding/AI-tell pass) and stark-voice (register source of truth).
+  Storytelling rewrite of a long-form post in Aryeh's voice, every fact frozen.
+  Use when a draft has the facts but reads flat, buries its hook or lacks pull,
+  or when asked to "make this land" or "tell it as a story". Returns the whole
+  post. Pairs with stark-blog-sharpen and stark-voice.
 disable-model-invocation: true
 model: opus
 argument-hint: "<post-path-or-draft> [--diagnose]"
@@ -24,7 +21,7 @@ usage, and arguments, then stop - do not run any phase.
 Take a draft that has the material and give it the story. This is the **rewrite
 pass**: you return the complete improved post and the author diffs it.
 `stark-blog-sharpen` cuts; this skill re-tells. `stark-voice` owns the register -
-read its **Long-form register** section first when it's available; this skill
+read the **Long-form register** section of [stark-voice](../stark-voice/SKILL.md) first; this skill
 carries the essentials so it also works standalone.
 
 Stance: **the story is already in the draft.** Your job is to find it, move it
@@ -56,7 +53,7 @@ Violating the letter of these rules is violating their spirit.
    name, place, quote: exactly as the draft wrote it. Inventory them before you
    touch a sentence; diff the inventory against your output after.
 2. **No new numbers, including derived ones.** If the draft says "38%, from
-   €4,200", the tempting "about €2,600" is a NEW fact - the author never
+   €4,200", the tempting "about €2,600" is a new fact - the author never
    published it and you cannot verify it. Arithmetic is authorship.
 3. **Nothing happened that the draft doesn't say happened.** No invented
    quotes, dialog, reactions, scene dressing, or outcomes. No interior states
@@ -81,7 +78,7 @@ Violating the letter of these rules is violating their spirit.
    the arc it already contains, not a template. The buried best line usually
    marks it. No fixed skeleton: a confession, a number that shouldn't be
    possible, a promise ("deleting the tenth is the best part; I'll get there") -
-   whatever THIS post is, commit to it. Two stories fighting = two posts;
+   whatever this post is, commit to it. Two stories fighting = two posts;
    say so.
 2. **Inventory the frozen facts** (rule 1). Keep the list.
 3. **Rewrite.**
@@ -90,8 +87,10 @@ Violating the letter of these rules is violating their spirit.
      charge; scenery doesn't.
    - **Blunt spine, story flesh.** Short declarative sentences carry the
      argument; scenes get room to breathe. Vary the rhythm - short, short,
-     long. Bold the load-bearing numbers and terms, one anchor per beat, never
-     whole sentences. Verdict first inside each section.
+     long.
+   - **Bold the load-bearing numbers and terms,** one anchor per beat, never
+     whole sentences.
+   - **Verdict first** inside each section.
    - **Tighten by default; expand only a starved beat** - one the reader needs
      that the draft rushes - and only with material already in the draft or an
      `[ASK]` slot. Most posts come back shorter.
@@ -116,9 +115,11 @@ Violating the letter of these rules is violating their spirit.
    still stings", "Let me explain", section previews, "Thanks for reading");
    corporate/LinkedIn voice ("thrilled to share", "key takeaways", "best
    practices"). **Hedges are voice, not slop** - "I think", "I assume",
-   "probably" stay when they carry honesty. **Em-dashes: zero.** Use ` - `
-   (spaced hyphen), parens, or commas; grep to verify. Backtick tech nouns.
-   No emoji.
+   "probably" stay when they carry honesty.
+   - **Em-dashes: zero.** Use ` - ` (spaced hyphen), parens, or commas; grep
+     to verify.
+   - Backtick tech nouns.
+   - No emoji.
 6. **Verify before you emit:** fact inventory diffs clean (all present,
    byte-identical, nothing new); first line costs; at most 3 humor beats;
    ending is lesson-then-coda; em-dash grep returns zero.
@@ -137,7 +138,9 @@ Violating the letter of these rules is violating their spirit.
      lesson), for rotating-title blogs; harmless to skip publishing.
 4. **`## Moves`** - the change ledger: one line per move, what + why, so the
    diff reads fast.
-5. **`## Need from the author`** - every `[ASK]` slot, or "Nothing."
+5. **`## Need from the author`** - every `[ASK]` slot, or "Nothing." After it,
+   end the message with one `Needs you (Yours: the post's facts): <ask>` line
+   for each of the first three slots.
 
 `--diagnose` emits 1, a ranked findings list (quote + what's wrong + the fix),
 and 5 - no rewrite.

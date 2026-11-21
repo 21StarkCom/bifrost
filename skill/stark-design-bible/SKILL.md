@@ -37,20 +37,19 @@ web page. It lives in the vault-docs clone, in `design-bible/`:
   part. The cards are in `principles/`, `foundations/`, `patterns/`
   and `content/`.
 
-Do not edit the bible: the vault-docs repo owns it. A rule that is missing or
-wrong is a ticket on vault-docs, written with `/stark-ticket`
-(`$stark-ticket` on Codex).
+Do not edit the bible: the vault-docs repo owns it. Name each rule that is
+missing or wrong in your report.
 
 ## 1. Load the bible
 
 The clone is `~/Code/21Stark/vault-docs`. Each path below is relative to it.
 
-1. When `~/Code/21Stark/vault-docs` does not exist, print
-   `Missing: ~/Code/21Stark/vault-docs`, and stop. When
-   `design-bible/ATLAS.md` does not exist in it, print
-   `Missing: ~/Code/21Stark/vault-docs/design-bible/ATLAS.md`, and stop: the
-   clone is older than the bible. Do not clone or pull it yourself: the
-   machine's owner keeps that clone.
+1. When `~/Code/21Stark/vault-docs` does not exist, clone it:
+   `gh repo clone aryeh-stark/vault-docs ~/Code/21Stark/vault-docs`. When
+   `design-bible/ATLAS.md` does not exist in it, the clone is older than the
+   bible: run `git pull --ff-only` in the clone. When the clone or the pull
+   fails, or `ATLAS.md` is still missing, print `Missing: <path>` and the
+   error, and stop.
 2. Read `design-bible/ATLAS.md`. Print `Read: design-bible/ATLAS.md`.
 3. Find the playbook. The page type is a playbook only when it holds only
    lowercase letters, digits and hyphens, and

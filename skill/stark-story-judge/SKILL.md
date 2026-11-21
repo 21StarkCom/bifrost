@@ -21,7 +21,7 @@ usage, and arguments, then stop - do not run any phase.
 The judge is the reader the author cannot be. Your session knows the author,
 the edit history, the intent behind every paragraph - which is exactly why your
 session must not do the grading. **That knowledge is the contamination.** You
-prepare a clean payload, dispatch ONE cold subagent with no tools and no
+prepare a clean payload, dispatch one cold subagent for each judge, with no tools and no
 context beyond the rubric, and relay its scorecard verbatim.
 
 Grades, never edits. A fix is named, not written.
@@ -38,7 +38,7 @@ Grades, never edits. A fix is named, not written.
 - Ranking drafts: which of these two posts runs first?
 - **Not** for: fixing anything (that's `stark-story-edit` /
   `stark-blog-sharpen`), reviewing publish readiness (covers, title variants,
-  frontmatter - the CMS gate owns those), or code/spec review
+  frontmatter - the CMS publish check owns those), or code/spec review
   (`stark-fresh-eyes` owns docs).
 
 ## The zero-context protocol
@@ -48,15 +48,15 @@ Grades, never edits. A fix is named, not written.
    (readers see them). Nothing else.
 2. **Contamination list - none of this enters the payload or the prompt:**
    author identity or reputation beyond what the text says, edit history,
-   prior grades, the desired outcome, repo paths, CMS/publish-gate rules, and
+   prior grades, the desired outcome, repo paths, CMS and publish-check rules, and
    especially "this is our best post" or any other anchor. If the judge's
    scorecard mentions your infrastructure, you leaked.
 3. **The judge gets no tools.** Say so in the dispatch: everything it needs is
    in the prompt. A cold reader does not grep your repo or google you.
-4. **ONE dispatch per revision PER JUDGE.** Findings are dispositioned once -
+4. **One dispatch per revision per judge.** Findings are dispositioned once -
    fix, reject, or accept. Re-rolling the same judge on the same text is
    noise with a different seed; a re-grade of the same judge is legal only
-   after the text changed. A SECOND OPINION is legal only as a different
+   after the text changed. A second opinion is legal only as a different
    vendor's model (see The second judge below) - that is method difference,
    which is how fresh eyes work (`stark-fresh-eyes` law). There is no third
    judge and no tiebreaker.
@@ -70,7 +70,7 @@ Grades, never edits. A fix is named, not written.
 | "The two judges disagree - a third breaks the tie" | No tiebreakers. Two scorecards plus your written disposition is the process; a third roll is shopping for the answer you prefer. |
 | "The first judge said A, skip the second" | On a publish call the second judge exists precisely to catch the first one's blind spots. |
 | "I'll just mention the author so it calibrates" | You just anchored the grade. The payload carries no author. |
-| "I'll add the house publish rules for completeness" | Machinery is not reading. The gate has its own tool. |
+| "I'll add the house publish rules for completeness" | Machinery is not reading. The publish check has its own tool. |
 
 ## The rubric (goes in the judge prompt)
 
@@ -149,8 +149,8 @@ Body:
 
 ## The second judge (cross-vendor)
 
-A second opinion is a DIFFERENT vendor's model reading the same payload -
-never a re-roll. Run it when the grade gates a publish decision or when the
+A second opinion is a different vendor's model reading the same payload -
+never a re-roll. Run it when the grade decides a publish or when the
 author asks for another round; skip it for quick draft checks. The default
 second judge is the `codex` CLI at **xhigh** reasoning effort (grading is a
 hard-reasoning task and the CLI's ambient default is often low; the model id
@@ -163,11 +163,16 @@ Dispatch shape - keep every detail:
 CODEX_MODEL="$(node \
   "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/code-review}/tools/stark_config_lib.ts" \
   --model codex 2>/dev/null || true)"
-cd "$(mktemp -d)" && codex exec --skip-git-repo-check -s read-only \
+cd "$(mktemp -d)" && env -i PATH="$PATH" HOME="$HOME" USER="$USER" \
+  LANG="${LANG:-}" LC_ALL="${LC_ALL:-}" TMPDIR="${TMPDIR:-/tmp}" \
+  codex exec --skip-git-repo-check -s read-only \
   ${CODEX_MODEL:+-m "$CODEX_MODEL"} -c model_reasoning_effort="xhigh" \
   "$(cat /path/to/judge-prompt.txt)" </dev/null > scorecard.txt 2> stderr.txt
 ````
 
+- **Only the allowlist env reaches the judge** (`tools/agent_env_lib.ts::AGENT_ENV_ALLOWLIST`):
+  no GitHub, Anthropic or OpenAI credential enters a process that reads the
+  prompt. `codex` reads its login from `HOME`.
 - **The judge prompt is byte-identical for every judge.** Same template, same
   payload, same rubric - a grade difference must come from the judge, never
   from a prompt difference.
@@ -196,9 +201,9 @@ cd "$(mktemp -d)" && codex exec --skip-git-repo-check -s read-only \
 
 ## The audience lens (optional - a different question)
 
-Craft judges answer "is this good". A lens answers **"would THIS reader read,
+Craft judges answer "is this good". A lens answers **"would this reader read,
 finish, and share it"**. Different question, so it does not count against the
-judge limits - but a lens is NOT a judge: it outputs **no dimension scores and
+judge limits - but a lens is not a judge: it outputs **no dimension scores and
 no letter grade, and it can never move the craft grade**. Its verdict is a
 separate row; when lens and judge disagree (a skimmable block the craft judge
 dinged may be exactly what the audience wants), that disagreement is signal,
@@ -206,7 +211,7 @@ dispositioned by the author.
 
 Run a lens when distribution matters (a post whose channel is LinkedIn, a
 targeted audience) or on request. Same discipline as judges: cold dispatch,
-byte-identical payload, no tools, the contamination list applies, ONE dispatch
+byte-identical payload, no tools, the contamination list applies, one dispatch
 per revision per lens. A lens is a **simulation of a reader type** - useful
 directional signal on register and format, never ground truth about real
 audience behavior; channel analytics stay the measure.
@@ -218,11 +223,11 @@ bluntness is normal, softened corporate phrasing reads as evasive, hedged
 praise reads as spin. Reads English tech content on LinkedIn mobile between
 meetings; skims first, reads only if captured; time budget about 90 seconds
 unless held. Allergic to AI vocabulary and guru formats (humble-brags,
-engagement bait) but VALUES skimmable structure - bold anchors and tight
+engagement bait) but values skimmable structure - bold anchors and tight
 lists are native reading when they are earned. Shares what makes them look
 sharp and is defensible in the comments.
 
-Add personas as data blocks like this one; a run names which persona it used.
+A run names the persona that it used.
 
 ### The lens prompt (template - fill the slots, send as-is)
 
@@ -269,8 +274,8 @@ Body:
 
 - A score arrived without a quote.
 - Every dimension scored 2 or higher on a first draft.
-- The scorecard mentions your repo, gates, frontmatter, or tooling.
-- You dispatched the SAME judge twice on the same revision.
+- The scorecard mentions your repo, publish checks, frontmatter, or tooling.
+- You dispatched the same judge twice on the same revision.
 - A third judge broke a tie.
 - Two totals were averaged into one number.
 - The judge returned rewritten prose.

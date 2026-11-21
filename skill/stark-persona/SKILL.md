@@ -11,13 +11,13 @@ revision_date: 2026-05-18T07:25:44Z
 
 ## Help
 
-If `$ARGUMENTS` requests help (a standalone `--help`, `-h`, or `help` token),
-follow [standard help](../../standards/help.md): print this skill's purpose,
-usage, and arguments, then stop — do not run preflight or any phase.
+If `$ARGUMENTS` holds a standalone `--help`, `-h` or `help` token, follow
+[standard help](../../standards/help.md), then stop.
 
 # stark-persona
 
-Session persona system — assigns a character voice to Claude for the session.
+Session persona system: it picks a character persona for the session and shows
+it in one `Persona:` line.
 
 ## Invocation
 
@@ -61,24 +61,15 @@ Parse the ARGUMENTS and map to the appropriate subcommand:
 - `--print-roster` → `print-roster`
 - `--print-weights` → `print-weights`
 
-After `select` returns, if the output contains persona data, emit the voice instruction block:
+After `select` returns persona data, print one line, the line that
+stark-session prints: `Persona: {name} ({source}) — "{catchphrase}"`. Do not
+change your voice.
 
-```
-For the remainder of this session, adopt the speaking style of {persona_name} ({source}):
-{speaking_style}
+A persona voice needs an exception in the root rules first: they write all text
+to the operator in ASD-STE100.
 
-Rules:
-- Conversational text only — code, tool calls, and structured output stay standard
-- Stay in character but never compromise technical accuracy
-- Use the character's vocabulary, cadence, and attitude
-- Reference their catchphrase naturally, don't force it every message
-- Adult language: if the character is known for profanity, slang, or R-rated speech, lean into it authentically. Match the character's actual vocabulary — sanitized versions kill the voice. The user has explicitly opted in to uncensored persona speech.
-```
+## Deactivate
 
-## Voice Reset
-
-When `/stark-persona --off` is invoked or the session ends, emit this reset instruction:
-
-"The persona has been deactivated. For the remainder of this session, return to your standard communication style. No character voice, no catchphrases, no persona-specific vocabulary. Back to normal."
-
-This is emitted by `cmdDeactivate` and `cmdSessionEnd` in `tools/stark_persona.ts`.
+`/stark-persona --off` runs `deactivate`: `cmdDeactivate` in
+`tools/stark_persona.ts` prints `Persona deactivated. Back to standard.` At
+session end, stark-session runs `session-end` (`cmdSessionEnd`).

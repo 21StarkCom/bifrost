@@ -4,12 +4,10 @@ runtimes:
   - claude
   - codex
 description: >-
-  Use when retiring 21Stark code into the Náströnd graveyard — burying a
-  subsystem of a living repo (partial burial) or putting down a whole repo
-  (full retirement). Symptoms: "bury X", "retire the <feature>", "kill this
-  service and keep the memory", "new corpse for nastrond", "dig a grave",
-  "tombstone", "exhume". Runs the full ritual: footprint verification,
-  interment PR, deletion PR, optional sealed data dump and table drop.
+  Use when retiring 21Stark code into the Náströnd graveyard: burying a
+  subsystem of a living repo or retiring a whole repo ("bury X", "retire the
+  <feature>", "tombstone", "exhume"). Runs the footprint check, interment PR,
+  deletion PR, and an optional sealed dump and table drop.
 argument-hint: "[corpse — the subsystem or repo to bury]"
 disable-model-invocation: true
 model: opus[1m]
@@ -17,9 +15,8 @@ model: opus[1m]
 
 ## Help
 
-If `$ARGUMENTS` requests help (a standalone `--help`, `-h`, or `help` token),
-follow [standard help](../../standards/help.md): print this skill's purpose,
-usage, and arguments, then stop — do not run preflight or any phase.
+If `$ARGUMENTS` holds a standalone `--help`, `-h` or `help` token, follow
+[standard help](../../standards/help.md), then stop.
 
 # stark-bury — the Náströnd burial ritual
 
@@ -30,37 +27,38 @@ first shovel of dirt.
 
 **The laws (non-negotiable):**
 
-1. **Bury before delete.** The nastrond interment PR merges BEFORE any code is
-   deleted from the living repo. Nothing dies before it is safely in the ground.
+1. **Bury before delete.** The nastrond interment PR merges before any code
+   leaves the living repo.
 2. **The dead stay dead.** Never import from nastrond. Exhumation is a
    deliberate copy back into a living repo.
 3. **The living repo stays green.** The deletion PR passes build + vet + lint +
    tests before merge.
-4. **Destructive steps are gated.** Dropping live tables, deleting live
-   secrets, or any prod mutation needs the operator's explicit go — and a
-   sealed dump must exist BEFORE a drop.
+4. **Irreversible steps need the operator's GO.** Dropping live tables and
+   deleting live secrets are writes you cannot undo. Make a sealed dump before
+   a drop.
 5. **Never commit** a raw `.bundle`, an unencrypted sensitive dump, or an age
    private identity. The private identity lives only in the Mímir vault.
 
 ## Phase 0 — preflight
 
-- If the corpse is still running live (cron enabled, tokens active), **turn it
-  off first** and park credentials; disabling is not burying, but nothing gets
-  buried while it is still breathing.
-- One alfred ticket per phase, in the repo that phase's PR lands in
-  (`alfred task new …`); every PR title is `type(STARK-<n>): subject`.
+- If the corpse still runs live (cron on, tokens active), turn it off first,
+  and disable its tokens at the vendor. A token write in Mímir is a secret
+  write: it needs the operator's GO. Disabling is not burying, but nothing is
+  buried while it still runs.
+- Open one ticket for the burial with `/stark-ticket`, because it spans two
+  PRs. Each PR title is `type(STARK-<n>): subject`.
 
 ## Phase 1 — verify the footprint
 
-Never trust a name-based file list — not the operator's, not a brief's, not
-grep's. A matching filename can belong to a DIFFERENT living subsystem — verify
-each file's ownership before burial.
+Verify each file's ownership by imports, never by name, whoever gave the list:
+a matching filename can belong to a different living subsystem.
 
 For every candidate file:
 
-- **Classify by imports and symbols, not filenames.** What does it import?
-  Who imports IT? A candidate that living code imports is NOT part of the
-  corpse — leave it alive and say so in the tombstone.
+- **Classify by imports and symbols, not filenames:** what it imports, and
+  who imports it.
+- A candidate that living code imports is not part of the corpse. Leave it,
+  and say so in the tombstone.
 - Sweep for the corpse's hidden limbs in shared files: the binary's `main.go`
   wiring, config structs + env loads, job/rule registries, **metrics
   registrations** (the classic miss), alert rules (all copies), deploy/startup
@@ -78,8 +76,9 @@ For every candidate file:
    docs (runbooks/specs/plans), and the schema DDL that defined its tables —
    carved into a self-contained `.sql` when the source migration is a shared
    baseline that must not be edited.
-3. Write `TOMBSTONE.md` from the template. `cause_of_death` = why it was
-   KILLED; "What it was" = why it EXISTED. Record footprint corrections.
+3. Write `TOMBSTONE.md` from the template. `cause_of_death` says why it was
+   killed, and "What it was" says why it existed. Record footprint
+   corrections.
 4. Append one row to `INDEX.md`.
 5. PR via `ghx pr-open` → merge. The grave is filled.
 
@@ -88,11 +87,11 @@ For every candidate file:
 1. `git rm` the verified dedicated files (code + tests + feature docs).
 2. Unwire the shared files found in Phase 1. Remove the corpse's metrics,
    alerts, env defaults, config fields, registry entries, CLAUDE.md sections.
-3. **Split by what each artifact follows:** code-docs follow the CODE (delete
-   here); schema-docs, `layers.yml` entries, and migration history follow the
-   SCHEMA (they leave only WITH a drop migration, never before).
-4. Green gate: build + vet + lint + affected tests, then PR → merge. Add a
-   CHANGELOG bullet when the repo keeps one.
+3. **Split by what each artifact follows.** Code docs follow the code: delete
+   them here. Schema docs, `layers.yml` entries and migration history follow
+   the schema: they leave only with a drop migration, never before.
+4. Checks: build, vet, lint and the affected tests pass, then PR → merge. Add
+   a CHANGELOG bullet when the repo keeps one.
 
 ## Phase 4 — the data (optional, gated)
 
@@ -100,7 +99,7 @@ For every candidate file:
   sensitive (`age -R ~/Code/21Stark/nastrond/.age-recipients -o
   graves/<repo>/<corpse>/data/<name>-YYYY-MM-DD.sql.age <dump>.sql`), commit only the
   `.age` file, shred the plaintext. Conversation transcripts and personal data
-  are ALWAYS sensitive.
+  are sensitive.
 - Dropping the live tables is a separate, operator-gated decision: sealed dump
   first, then a forward DROP migration in the living repo (FK dependency
   order), taking the schema-docs + `layers.yml` entries with it.
@@ -111,8 +110,8 @@ For every candidate file:
 
 `git bundle create /tmp/<repo>.bundle --all` in the dead repo → age-seal it to
 `graves/<repo>/<repo>/backups/<repo>.bundle.age` (a full retirement is the plot's last grave, slugged after the repo itself) → delete the plaintext bundle →
-tombstone + INDEX row → archive the GitHub repo. A full history resurrects
-every secret ever committed — the bundle is NEVER committed raw.
+tombstone + INDEX row → archive the GitHub repo. A full history holds every
+secret ever committed: never commit the bundle raw.
 
 ## Exhume
 

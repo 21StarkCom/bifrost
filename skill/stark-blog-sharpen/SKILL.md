@@ -1,12 +1,10 @@
 ---
 name: stark-blog-sharpen
 description: >-
-  Adversarial editor for long-form posts (blog, personal-site essays, longer
-  internal notes) in Aryeh's voice. Use after drafting OR expanding a post, or
-  when asked to "make this post matter / cut the padding / make it sound like a
-  real person wrote it / does this read AI / tighten this essay". Two jobs: kill
-  filler so the post earns every word, and scrub the AI tells so it reads like a
-  human manager. Editing/diagnosis only - pairs with stark-voice (which drafts).
+  Cut-only editor for long-form posts in Aryeh's voice. Use after drafting or
+  expanding a post, or when asked to "cut the padding", "does this read AI" or
+  "tighten this essay". Kills filler and scrubs AI tells. Diagnoses by default;
+  edits in place on request. Pairs with stark-voice.
 disable-model-invocation: true
 model: opus
 ---
@@ -19,7 +17,7 @@ usage, and arguments, then stop — do not run preflight or any phase.
 
 # stark-blog-sharpen
 
-Take a long-form post and make it do two things at once: **matter** (one non-obvious idea per post, no padding) and **read human** (no AI tells, the voice of a blunt engineering manager, not a content team). This skill is the editing pass; `stark-voice` is the drafting voice and the source of truth for register. Read that skill's **Long-form register** section before you start - this skill assumes it.
+Take a long-form post and make it do two things at once: **matter** (one non-obvious idea per post, no padding) and **read human** (no AI tells, the voice of a blunt engineering manager, not a content team). This skill is the editing pass; `stark-voice` is the drafting voice and the source of truth for register. Read the **Long-form register** section of [stark-voice](../stark-voice/SKILL.md) before you start - this skill assumes it.
 
 Stance: **guilty of padding until proven otherwise.** The most common failure is a post that got longer without getting smarter - it restates one idea three times, signposts its own insight, and lands on a tidy maxim. Your job is to find and cut that, then verify the post still sounds like a person.
 
@@ -92,7 +90,7 @@ The "but don't overcorrect into the opposite failure" paragraph. Defensible **on
 A sentence true of everything, attached to nothing. "This isn't easy." "People are complicated." "Context matters." "Every team is different." Delete - it's word count pretending to be wisdom. If a generality must stay, make it specific: *whose* team, *which* context, *what* breaks.
 
 ### 6. Throat-clearing openers
-The first sentence warms up instead of landing. The voice opens **conclusion-first** (`stark-voice` rule 4). "In today's fast-paced engineering environment…" is the cardinal sin, but milder versions exist: "There are many ways to think about…", "It's worth considering…". Cut to the blunt claim.
+The first sentence warms up instead of landing. The voice opens **conclusion-first** (`stark-voice` rule 5). "In today's fast-paced engineering environment…" is the cardinal sin, but milder versions exist: "There are many ways to think about…", "It's worth considering…". Cut to the blunt claim.
 
 ### Per-post rule
 Even if a post is otherwise clean, **name its single weakest paragraph** and say why. There is always one. Forcing the call prevents lazy "looks fine" passes.
@@ -103,12 +101,12 @@ A post can be padding-free and still read like a machine. Scrub these. (Full reg
 
 | Tell | What to do |
 |---|---|
-| **Em-dash `—`** | **ZERO tolerance.** Flag every one. Replace with ` - ` (spaced hyphen), parens, or a comma. Grep for it: `grep -n '—' file`. |
+| **Em-dash `—`** | **Zero tolerance.** Flag every one. Replace with ` - ` (spaced hyphen), parens, or a comma. Grep for it: `grep -n '—' file`. |
 | **Rule-of-three rhythm** | "fast, cheap, and reliable" / "planning it, testing it, shipping it." Real once or twice; a tell when every list is a triad. Break the rhythm - use two items, or four, or a fragment. |
 | **"It's not X, it's Y" stacking** | The voice *uses* this (it's on-brand once or twice). It's a tell when 3+ sections each pivot on it. Vary the pivot. |
 | **Tidy balanced parallelism** | "The fake-senior hoards… the real one gives away." Beautiful and bot-shaped when stacked. One per post; flatten the rest. |
 | **Thesaurus-prose** | "utilize", "leverage" (as verb), "myriad", "plethora", "delve", "robust", "seamless". Replace with the plain word. |
-| **Banned words** (from stark-voice) | "colleague" → a name / "teammate". "pennies" → "a rounding error" / "cents". Add to the list as they surface. |
+| **Banned words** | the list "Words he does not use" in [stark-voice](../stark-voice/SKILL.md). |
 | **Meta-commentary** | see padding #2 - it's both filler and an AI tell. |
 | **Emoji / smileys** | none in long-form. |
 

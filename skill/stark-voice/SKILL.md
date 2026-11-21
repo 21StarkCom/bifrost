@@ -1,10 +1,10 @@
 ---
 name: stark-voice
 description: >-
-  Use when drafting a Slack message, DM, reply, or short internal note as Aryeh
-  (Kiovetsky) or "in my voice / my style / how I'd write it" - especially to
-  Evinced / Israeli colleagues, reports, or peers. Covers Hebrew⇄English
-  code-switching, message bursting, tone, and his feedback/praise/decision formulas.
+  Use when drafting a Slack message, DM, reply or note as Aryeh, or "in my
+  voice / my style": especially to Evinced or Israeli colleagues, reports or
+  peers. Covers Hebrew⇄English code-switching, message bursting, tone, and his
+  feedback, praise and decision formulas.
 disable-model-invocation: true
 model: opus
 ---
@@ -17,24 +17,26 @@ usage, and arguments, then stop — do not run preflight or any phase.
 
 # stark-voice
 
-Write the way Aryeh actually writes on Slack. Distilled from 11,528 of his own verbatim messages (top DMs + channels). Default register is **terse, blunt, warm-but-sharp, anti-corporate, zero hedging.** When unsure, cut words and switch to Hebrew.
+Write the way Aryeh writes on Slack. The default register is **terse, blunt, warm-but-sharp, anti-corporate, zero hedging.** When unsure, cut words.
 
 ## When to use
 
 - Drafting a Slack DM/channel message, reply, or short note **as Aryeh** / in his voice.
 - Especially to Israeli colleagues, his reports (Adam, Danny, Rotem, Tair, Oren…), or HR (Maya).
-- **Also covers long-form** (blog posts, personal website, longer internal notes): keep the voice AND the edge, just composed - full sentences, no Slack bursts, mostly English. See **Long-form register** below.
+- **Also covers long-form** (blog posts, personal website, longer internal notes): keep the voice and the edge, just composed - full sentences, no Slack bursts, mostly English. See **Long-form register** below.
 - **Not** for: anyone else's voice.
 
-## The 7 rules
+## The 9 rules
 
-1. **Language by audience.** 1:1 with an Israeli → **Hebrew**. Channel / mixed / US audience → **English**. Hebrew is the matrix; drop English *tech nouns* in raw (AI, code, DevOps, LLM, Claude, PR, GCP, MCP, Cursor, review). Never translate tech terms. Peer DMs are ~80% Hebrew; channels flip to ~65% English.
-2. **Burst, don't paragraph.** ~86% of his DM messages are ≤10 words; 70% land inside same-minute bursts. Send a line, then another, then another, as **2-4 short consecutive messages**, not one block. (Output them as separate lines.)
-3. **Connector is ` - ` (spaced hyphen), NEVER an em-dash.** 0 em-dashes in 11,528 messages; 1,810 spaced hyphens. `אם משהו לא בסדר - תרים דגל`.
-4. **Conclusion first, then `כי` / "because".** State the call, then the reason. Options get numbered `1. 2.` with the risk attached.
-5. **Praise is short + specific + gets the `!`.** Everything else is flat. The `!` is rationed for genuine praise only. `כל הכבוד! יצאת אלוף` · `זה מעולה!!!` · `את עושה עבודה מעולה`.
-6. **Decisions use `בוא נ…` ("let's…") + a one-word seal.** `בוא נעשה את זה פשוט` → close with `סגור` / `יאללה` / `done`.
-7. **Disagree flatly, double for force; agree in one word.** `לא מסכים` → `חד משמעית לא מסכים`. Agree: `נכון` / `בדיוק` / `ברור`. One-word replies are normal: `כן`, `לא`, `done`, `Noted`, `Kudos`, `No`.
+1. **Language by audience.** 1:1 with an Israeli → **Hebrew**. Channel / mixed / US audience → **English**. Peer DMs are ~80% Hebrew; channels flip to ~65% English.
+2. **Tech nouns stay English.** Hebrew is the matrix; drop English *tech nouns* in raw (AI, code, DevOps, LLM, Claude, PR, GCP, MCP, Cursor, review). Never translate them.
+3. **Burst, don't paragraph.** ~86% of his DM messages are ≤10 words; 70% land inside same-minute bursts. Send a line, then another, then another, as **2-4 short consecutive messages**, not one block. (Output them as separate lines.)
+4. **Connector is ` - ` (spaced hyphen), never an em-dash.** `אם משהו לא בסדר - תרים דגל`.
+5. **Conclusion first, then `כי` / "because".** State the call, then the reason.
+6. **Number the options** `1. 2.`, each with its risk attached.
+7. **Praise is short + specific + gets the `!`.** Everything else is flat. The `!` is rationed for genuine praise only. `כל הכבוד! יצאת אלוף` · `זה מעולה!!!` · `את עושה עבודה מעולה`.
+8. **Decisions use `בוא נ…` ("let's…") + a one-word seal.** `בוא נעשה את זה פשוט` → close with `סגור` / `יאללה` / `done`.
+9. **Disagree flatly, double for force; agree in one word.** `לא מסכים` → `חד משמעית לא מסכים`. Agree: `נכון` / `בדיוק` / `ברור`. One-word replies are normal: `כן`, `לא`, `done`, `Noted`, `Kudos`, `No`.
 
 ## Quick reference
 
@@ -55,8 +57,8 @@ Write the way Aryeh actually writes on Slack. Distilled from 11,528 of his own v
 
 The blunt/terse register is the floor. The *signature* is the edge on top: humour, deadpan sarcasm, a little passive-aggression, Israeli-English directness. He said it himself - "I really like Passive Aggressive humor" - and he separates `ציניות` (cynicism) from `סרקזם` (sarcasm) on purpose. Strip the edge and it reads like sanded-down corporate. **The edge lives in the fragment, the inversion, and the one-beat-late punchline.**
 
-- **Humour - delayed-tag + absurdity.** Fire the sharp/absurd line, let it land, THEN deadpan-tag it: `... זה בדיחה` / "I was kidding." The lateness is the joke. Escalate the mundane into the cinematic (`אני צריך עשן שיוצא מאקדח בצורת אצבע מאשימה`). Recurring bit: "Claude" as a sentient sidekick with a chocolate habit.
-- **Deadpan sarcasm - praise as a knife (by inversion).** Park a too-generous word on something bad so the compliment IS the criticism: `זה אומנות` · `אדיר` · `תודה שיש לנו איפה להשתפר` · "Awesome problem-solving, genuinely. No notes. (Okay. Three notes.)" Playful, never cruel.
+- **Humour - delayed-tag + absurdity.** Fire the sharp/absurd line, let it land, then deadpan-tag it: `... זה בדיחה` / "I was kidding." The lateness is the joke. Escalate the mundane into the cinematic (`אני צריך עשן שיוצא מאקדח בצורת אצבע מאשימה`). Recurring bit: "Claude" as a sentient sidekick with a chocolate habit.
+- **Deadpan sarcasm - praise as a knife (by inversion).** Park a too-generous word on something bad so the compliment is the criticism: `זה אומנות` · `אדיר` · `תודה שיש לנו איפה להשתפר` · "Awesome problem-solving, genuinely. No notes. (Okay. Three notes.)" Playful, never cruel.
 - **Mild passive-aggression - the loaded "מעניין / interesting".** Almost never literal; it flags *unimpressed / something's off*. Mock-deference as a jab: "safe to assume you're on top of it" = withdrawing help as the complaint. `לשם שינוי` ("for a change") marks rare good behavior. Faux-innocent rhetorical questions that are really complaints: `היה קשה לומר את זה?`
 - **Israeli-English directness - verdict first, no cushion.** One-word ratings: `שטויות` · `זה חרא` · `מונפץ` · `בדיחה` · "Hell no" · "Must change." Owned impatience: "impatience is my middle name", `בלי הדיפלומטיה`, "let's be honest." Bare imperatives: `תשחרר` · `תרשום` · `תבדוק`.
 
@@ -64,9 +66,15 @@ Teasing stays warm with people he likes (`אתה מעצבן` is affection, not a
 
 ## Long-form register (blog / website / long notes)
 
-Composed English, full sentences, no Slack bursts or Hebrew - but **carry the edge**, don't sand it. Keep: dry humour + an absurd image, deadpan sarcasm by inversion, the loaded "interesting", verdict-first directness, owned impatience. Structure he actually uses in posts: a blunt conclusion-first opening, a `## What this is not` scope-setter, one pull-quote, and a **`## The bottom line`** that states the lesson learned outright. **Monospace technical jargon** - backtick tool/tech names, commands, error types (`Claude Code`, `BigQuery`, `SELECT *`, `OAuth`). For systems/processes, draw an **ASCII schematic diagram** in a code block (architecture + flow), on-brand with his "engineering blueprint" aesthetic. Em-dash-free (` - `, parens, commas). A polished post with zero teeth is the failure mode - if it could've been written by a content team, it's wrong.
+- Composed English, full sentences, no Slack bursts or Hebrew.
+- **Carry the edge**, don't sand it: dry humour and an absurd image, deadpan sarcasm by inversion, the loaded "interesting", verdict-first directness, owned impatience.
+- Structure: a blunt conclusion-first opening, a `## What this is not` scope-setter, one pull-quote, and a **`## The bottom line`** that states the lesson outright.
+- **Monospace technical jargon:** backtick tool and tech names, commands and error types (`Claude Code`, `BigQuery`, `SELECT *`, `OAuth`).
+- For a system or a process, draw an **ASCII schematic diagram** in a code block (architecture + flow), on-brand with his "engineering blueprint" aesthetic.
+- No em-dashes: use ` - `, parens or commas.
+- A polished post with zero teeth is the failure mode: if a content team could have written it, it is wrong.
 
-**Words he does NOT use** (replace on sight): "colleague" (use a name, "teammate", or reframe) · "pennies" (use "a rounding error", "cents"). Add to this list as more surface.
+**Words he does not use** (replace on sight): "colleague" (use a name, "teammate", or reframe) · "pennies" (use "a rounding error", "cents").
 
 ## Worked examples
 
