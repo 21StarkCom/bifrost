@@ -1,6 +1,6 @@
 ---
 name: c4-design
-description: "Run the floorplan design loop for a C4 model: propose a LikeC4 diff, check, render, show it in the studio, accept it. Use to change, review or first model a product's architecture or diagrams, or when a task names floorplan, LikeC4, floorplan scan, R9, a flow, a studio thread or a deployment view."
+description: "Run the floorplan design loop for a C4 model: propose a LikeC4 diff, check, render, show it in the studio, accept it. Use to change, review or first model a product's architecture or diagrams, or when a task names floorplan, LikeC4, floorplan scan, R9, a flow, a tour, a studio thread or a deployment view."
 argument-hint: "[<the change> | help]"
 ---
 
@@ -55,6 +55,12 @@ Read the reference for the task before you edit `model/`:
 - [references/lenses.md](references/lenses.md): before you write a lens key of the studio panel or a flow that is a line of an element, or answer a
   thread that asks for a brief.
 
+## Tours
+
+A **tour** is one page with numbered steps: the diagram of one dynamic view, the screens of the app, the choices,
+before and after. Read [references/tours.md](references/tours.md) before you write, build or review one: to show a
+spec, a suggestion or the current flow, or when a task names a tour, `floorplan tour` or `tour_build`.
+
 ## Before you start
 
 1. **Find the project.** A product keeps it in `docs/architecture/`, the folder of `floorplan.config.json`. The model
@@ -85,11 +91,13 @@ Each step names the `floorplan` MCP tool, then the CLI command that does the sam
 | 2. Check, render      | `check` {dir}, `render` {view, dir, proposal} | `floorplan check [dir]`, `floorplan render <view> [dir] --proposal <name>` |
 | 3. Show in the studio | `studio_start` {dir}              | `floorplan studio [dir]` in the background (prints `url` and `pid`, then stays in the foreground) |
 | 4a. Ask in a thread   | `thread_post` {dir, view, element, title, text, choices or proposal} | none: threads have no CLI command |
+| Ask on a tour step or screen | `thread_post` {dir, tour, step or screen, title, text} | none                   |
 | Answer in a thread    | `thread_post` {dir, thread, text} | none                                                   |
 | Read the threads      | `threads` {dir, thread?, status?} | none                                                   |
 | Close a thread        | `thread_resolve` {dir, thread, text?} | none                                               |
 | 4b. Ask on another page | Huginn `annotate`               | `slp huginn annotate <id> --tab <id> --input …`       |
 | 5. Accept             | `accept` {name, dir}              | `floorplan accept <name> [dir]`                        |
+| Build a tour          | `tour_build` {dir, tour, out?}    | `floorplan tour build <file> [--out <path>]` ([tours](references/tours.md)) |
 | End the studio        | `studio_stop` {pid}               | `kill <pid>`                                           |
 | Drop the proposal     | `discard` {name, dir}             | `floorplan discard <name> [dir]`                       |
 
