@@ -23,7 +23,8 @@ decisions is a flow of the flow kit ([flow-kit.md](flow-kit.md)).
 ## The tour file
 
 Keep it at `tours/<name>.tour.yaml` of the project folder, the folder of `floorplan.config.json`. The studio serves
-only the tour files there, and a thread can only name a tour there. `<name>` is the name of the tour.
+only the tour files there, and a thread can only name a tour there. `<name>` is the name of the tour: the view id
+for a tour of a current flow, as `tour new` writes it, else a short name of the change.
 
 A tour file in another folder builds too, when the project must not change (a scratch folder, a review of another
 team's repo). Write it by hand, with `model:` relative to the tour file or absolute. The page then opens from disk
@@ -57,6 +58,7 @@ after:
 
 - `title`, `model` and `flow` are required. Each other key is optional, and the build refuses a key that is not
   above.
+- Quote a value that holds `: `, as YAML needs: `title: 'Flow: checkout'`.
 - Each path is relative to the tour file.
 - The first screen of each tour is `flow`: the diagram, the steps, before and after. Do not list it. `flow` is not a
   free screen id.
@@ -92,8 +94,9 @@ spaceOwner -> folkvang.backend 'the switch' {
 
 - A step with no `description` is a warning: its panel shows `<from> → <to> · <title>`. Give each step of a new flow
   a description. Keep a current flow as it is, and accept the warning.
-- The diagram draws one wire for each pair of boxes. Its label shows the title of the active step. A wire of one
-  step shows its title always. Each other wire shows only the numbers of its steps.
+- The diagram draws one wire for each pair of boxes. Its label shows the title of the active step, and a wire of one
+  step shows its title always. Each other wire shows only the numbers of its steps. A label with no clear place
+  between two boxes drops its title and keeps its numbers.
 - Change the words of a step in the view, never in the tour file. A small fix of a view is not a design change: edit
   `model/` by the skill's small-fix rule.
 - The tour draws the diagram, also for a view with `variant sequence`.
@@ -158,7 +161,9 @@ tool.
 | Step                        | MCP tool                         | CLI                                              |
 | --------------------------- | -------------------------------- | ------------------------------------------------ |
 | Write a tour file of a view | none                             | `floorplan tour new --view <id> [dir]`           |
-| Build the page              | `tour_build` {tour, dir?, out?}  | `floorplan tour build <file> [--out <path>] [--json]` |
+| Build the page              | `tour_build` {tour, out?}        | `floorplan tour build <file> [--out <path>] [--json]` |
+
+The MCP tool and the CLI run the same build: use either one. Huginn is needed only for the studio review below.
 
 1. **Start the file.** `floorplan tour new --view <id> <dir>` writes `<dir>/tours/<id>.tour.yaml` with `title` (the
    title of the view), `model: ".."` and `flow`. It refuses to write over a file, and it writes only into the
@@ -175,16 +180,25 @@ tool.
    - an error of the model;
    - a screen file or a `css` file that is not on disk, a `role` that `roles` does not name, or two screens with one id.
 5. **Read each warning:** a step with no description, a screen with no notes.
-6. **Look at the page.** Open it in Huginn, or take a headless Chrome screenshot. The URL holds the state: `s` (the
-   screen), `step` (from 1), `m` (`asis` or `tobe`), and each key of a part. Look at these states:
+6. **Look at the page.** The URL holds the state: `s` (the screen), `step` (from 1), `m` (`asis` or `tobe`), and
+   each key of a part. A `file://` URL takes the state too. Look at these states:
    - step 1, the first step of each `alt` branch, and the last step: `<page>?s=flow&step=4`;
    - with `asis:`, the As-is and the To-be: `<page>?s=flow&m=asis`;
    - each screen, and each state that its notes name: `<page>?s=settings&p=on`.
+
+   Take each screenshot with headless Chrome, or open the page in Huginn:
+
+   ```bash
+   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --window-size=1440,900 \
+     --virtual-time-budget=6000 --screenshot=/tmp/step4.png 'file:///tmp/x/tours/flowPublish.tour.html?s=flow&step=4'
+   ```
+
+   A diagram wider than its frame scrolls sideways, so a screenshot shows only its left part. Use a wider window.
 7. **Check the words** of the flow by the flow checks of [review.md](review.md#flow-checks). The page shows the
-   title of a step on its wire only while the step is active, so the picture checks of a rendered PNG do not apply.
-8. **Sort each fault.** Unclear words, a wrong box or a missing step is a fix of the view in `model/`. A fault of the
-   page itself, such as a step number that covers a box title, is a bug of floorplan: tell the operator, and do not
-   change the model to hide it.
+   title of a step on its wire only while the step is active, so P4 and P5 of the picture checks do not apply.
+8. **Sort each fault.** Unclear words, a wrong box, a missing step, or text cut short on a box (P6) is a fix of the
+   model in `model/`. A fault of the page itself, such as a step number that covers a box title, is a bug of
+   floorplan: tell the operator, and do not change the model to hide it.
 
 ## Review in the studio
 
