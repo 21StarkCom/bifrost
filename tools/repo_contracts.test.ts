@@ -377,21 +377,18 @@ test("plugin hooks are declared inline on stark-ops alone and run tools from thi
     `${MARKETPLACE_REL}: stark-ops must wire tools/fact_routing_hook.ts on PostToolUse as two command hooks, ` +
       `gated to auto-memory files by \`if\`, one for Write and one for Edit.`,
   );
-  // The agent-doc gate: the `if` gates start node only for a `ghx pr-merge`, or
-  // a `njord pr-merge` through the tap's link to ghx, never for every Bash call.
+  // The agent-doc gate: the `if` gate starts node only for a `ghx pr-merge`,
+  // never for every Bash call.
   assert.deepEqual(
     groups.PreToolUse?.map((g) => [g.matcher, g.hooks?.map((h) => [h.type, h.if, h.command])]),
     [
       [
         "Bash",
-        [
-          ["command", "Bash(ghx pr-merge *)", 'node "${CLAUDE_PLUGIN_ROOT}/tools/rules_gate_hook.ts"'],
-          ["command", "Bash(njord pr-merge *)", 'node "${CLAUDE_PLUGIN_ROOT}/tools/rules_gate_hook.ts"'],
-        ],
+        [["command", "Bash(ghx pr-merge *)", 'node "${CLAUDE_PLUGIN_ROOT}/tools/rules_gate_hook.ts"']],
       ],
     ],
-    `${MARKETPLACE_REL}: stark-ops must wire tools/rules_gate_hook.ts on PreToolUse as two Bash command hooks, ` +
-      `gated by \`if\` to \`ghx pr-merge\` and to \`njord pr-merge\`, the tap's link to ghx.`,
+    `${MARKETPLACE_REL}: stark-ops must wire tools/rules_gate_hook.ts on PreToolUse as one Bash command hook, ` +
+      `gated by \`if\` to \`ghx pr-merge\`.`,
   );
   // The tell-on-stop hook: Stop takes no matcher and no `if`, so it runs on
   // each stop and decides from the transcript itself.
