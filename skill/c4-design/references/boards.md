@@ -60,7 +60,8 @@ outside the git top level, and a doc that no glob matches.
 4. Run `board_read` again. Fix the flow file, and run it again, until `problems` holds no problem of the flow file
    ([below](#the-problems-of-a-flow-file)).
 5. Check that `nodes` holds each node of your flows, as `f:<flow id>:<node id>`. `board_point` and `thread_post`
-   take that id.
+   take that id. `board_read` lists a `start` or an `end` with the kind `step`, and a node with no quote with
+   `lines: null`.
 
 ### The form
 
@@ -100,12 +101,14 @@ The form is `flow/1` of `@21starkcom/board/core`. The reader refuses each key th
 | `nodes` | Optional: `[{ quote, lane?, title?, when?, then?, exit? }]`. One entry refines one node of the text. |
 | `flows` | Optional: `[{ id, title, hint?, lanes, inputs?, nodes, edges }]`. One flow is one band of the board. |
 | a flow's `lanes` | `[{ id, title, hint? }]`. |
-| a flow's `inputs` | `[{ id, label, hint?, type, options?, value }]`. `type` is `boolean` or `select`; `value` is the start value. |
+| a flow's `inputs` | `[{ id, label, hint?, type, options?, value }]`. `type` is `boolean` or `select`. `options` is a list of strings, the values of a select. `value` is the start value: for a select, one of `options`. |
 | a flow's `nodes` | `[{ id, kind, lane, title, text?, when?, pass?, quote? }]`. `kind` is `start`, `step`, `rule` or `end`. |
 | a flow's `edges` | `[{ from, to, label?, on? }]`. `on` is `yes` or `no`: the answer of the rule that takes this way. |
 
-- **A quote** is the exact words of one line of the document, its Markdown marks (`` ` ``, `**`) included. The board
-  binds it to the first node whose text holds it, so copy words that only one node holds.
+- **A quote** is an exact piece of the text of the document, its Markdown marks (`` ` ``, `**`) and its list number
+  included. A part of one line is enough. The board binds it to the first part of the text that holds it: a heading,
+  a list item, a paragraph, a table or a code block. The node takes the lines of that whole part, so a quote of one
+  table row binds the whole table. Copy words that no earlier part of the text holds.
 - **An entry of `nodes`** binds by its `quote`. `lane` moves the node to a lane of the top `lanes`: the board ignores
   a lane id that is not there, and reports no problem. On a rule, `when` and `then` are its IF and THEN in short
   words, and `exit` is where a matching item goes, such as `output.dropped`.
@@ -115,8 +118,12 @@ The form is `flow/1` of `@21starkcom/board/core`. The reader refuses each key th
   ids of the inputs of its flow: names, `true`, `false`, quoted strings, numbers, `==`, `!=`, `not`, `and`, `or`
   and brackets, such as `kind == "feature" or spans`. `pass` (`yes` or `no`, default `no`) is the way out that the
   flow takes when the operator removes the rule.
-- **An id** of a flow, a lane, an input or a node is new in its list. The id of a flow has no `:`.
-- **A playbook's flow file** has `lanes` and `nodes`, and no `flows`.
+- **The board checks no `when`.** A name that no input has reads as false, with no problem: copy the ids of the
+  inputs.
+- **An id** of a flow, a lane or a node is new in its list. The id of a flow has no `:`. The id of an input is new in
+  the whole file: the board shows the inputs of all flows in one scenario, with one value for each id.
+- **The top `lanes` and `nodes`** refine the nodes of the text, in a playbook or in a spec. **A playbook's flow file**
+  has no `flows`.
 
 ### The problems of a flow file
 
