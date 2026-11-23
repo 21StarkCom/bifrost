@@ -1,6 +1,6 @@
 ---
 name: c4-design
-description: "Run the floorplan design loop for a C4 model: propose a LikeC4 diff, check, render, show it in the studio, accept it. Use to change, review or first model a product's architecture or diagrams, or when a task names floorplan, LikeC4, R9, a flow, a tour, a studio thread or a deployment view."
+description: "Run the floorplan design loop for a C4 model: propose a LikeC4 diff, check, render, show it in the studio, accept it. Use to change, review or first model a product's architecture or diagrams, or when a task names floorplan, LikeC4, R9, a flow, a board, a tour, a studio thread or a deployment view."
 argument-hint: "[<the change> | help]"
 ---
 
@@ -48,8 +48,10 @@ Read the reference for the task before you edit `model/`:
 - [references/code-keys.md](references/code-keys.md): before you write a `code`, `deploy`, `terraform` or `infra`
   key, run `floorplan scan` or `floorplan infra pull`, fix an R9 error or an R14 warning, or show the deployments.
 - [references/flows.md](references/flows.md): before you write a flow, a sequence view of one main path.
-- [references/flow-kit.md](references/flow-kit.md): before you model a process (an odin playbook, a feature, a loop)
-  as steps and decisions, or run `floorplan import`.
+- [references/flow-kit.md](references/flow-kit.md): before you model a process (a feature, a loop, a playbook in the
+  landscape) as C4 steps and decisions, or run `floorplan import`.
+- [references/boards.md](references/boards.md): when the operator wants to see, play with or change a playbook or a
+  spec: its board, its flow file, a patch of its words, a pointer.
 - [references/logos.md](references/logos.md): before you give an element a logo, or when an icon name fails
   `floorplan check`.
 - [references/lenses.md](references/lenses.md): before you write a lens key of the studio panel or a flow that is a line of an element, or answer a
@@ -70,12 +72,8 @@ Read the reference for the task before you edit `model/`:
 3. **Pass an absolute `dir`** to each `floorplan` MCP tool. The server resolves a relative path against its own
    start folder, not yours.
 4. **Find Huginn.** `list_huginns` (MCP server `sleipnir`) names each installation. Pick one that is `online`, not
-   `stale`, with the features that [huginn-annotate.md](references/huginn-annotate.md#the-huginn-build) names.
-   - The loop needs the grants `open`, `click`, `screenshot`, `focus`, `annotate` and `close`. A missing grant is
-     refused with its name. A grant is a local CLI step: `slp huginn allow <id> <grant>`.
-   - Each mutation takes `confirm:true`.
-   - On the MCP `huginn` tool, `confirm` and `timeoutMs` (the call's wall clock) are top-level fields. The
-     action's own fields (`tab`, `url`, `op`, `items`, the `answers` wait's `timeoutMs`) go in `args`.
+   `stale`. Before your first Huginn call, read [huginn-annotate.md](references/huginn-annotate.md#the-huginn-build)
+   for its features, its grants and the fields of a call.
 
 ## The loop
 
@@ -88,6 +86,7 @@ Each step names the `floorplan` MCP tool, then the CLI command that does the sam
 | 3. Show in the studio | `studio_start` {dir} | `floorplan studio [dir]` in the background (prints `url` and `pid`, then stays in the foreground) |
 | 4a. Ask in a thread | `thread_post` {dir, view, element, title, text, choices or proposal} | none: threads have no CLI command |
 | Ask on a tour | `thread_post` {dir, tour, step or screen, title, text} | none |
+| Ask on a board | `thread_post` {dir, doc, node, quote?, title, text, choices or patch} | none |
 | Answer in a thread | `thread_post` {dir, thread, text} | none |
 | Read the threads | `threads` {dir, thread?, status?} | none |
 | Close a thread | `thread_resolve` {dir, thread, text?} | none |

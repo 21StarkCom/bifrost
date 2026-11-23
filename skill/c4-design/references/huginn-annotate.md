@@ -12,6 +12,14 @@ and wait for Send with `answers` (`timeoutMs:120000`, again at `sent:false`); ea
 and `block` need `annotateGuide` (Huginn 0.69.54); with an older build, leave both out. Each `annotate` op is a
 mutation, `answers` and `clear` included, so each takes `confirm:true`.
 
+The skill's item 4 of "Before you start" sends you here before your first Huginn call, step 3 of the loop included:
+
+- The loop needs the grants `open`, `click`, `screenshot`, `focus`, `annotate` and `close`. A missing grant is
+  refused with its name. A grant is a local CLI step: `slp huginn allow <id> <grant>`.
+- Each mutation takes `confirm:true`.
+- On the MCP `huginn` tool, `confirm` and `timeoutMs` (the call's wall clock) are top-level fields. The action's own
+  fields (`tab`, `url`, `op`, `items`, the `answers` wait's `timeoutMs`) go in `args`.
+
 ## Ask
 
 Huginn `annotate` draws a box around an element of the page, with a label. When the operator holds the pointer on
