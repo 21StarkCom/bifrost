@@ -19,10 +19,11 @@ its panel says **No session**.
 
 ## Ask in a thread
 
-A **thread** is a talk between the operator and you on one element or on one view. It is one file,
-`threads/<id>.jsonl` in the project, beside `proposals/`, and it goes into git with the design. The panel shows it in
-Discussion. A thread waits for the operator when its last message is yours, and for you when it is the operator's.
-The design is in § 5 to § 7 of the floorplan spec `docs/specs/2026-11-13-flow-views-and-design-threads.md`.
+A **thread** is a talk between the operator and you on one element, on one view, or on one node of a document on a
+[board](boards.md). It is one file, `threads/<id>.jsonl` in the project, beside `proposals/`, and it goes into git
+with the design. The panel shows it in Discussion. A thread waits for the operator when its last message is yours,
+and for you when it is the operator's. The design is in § 5 to § 7 of the floorplan spec
+`docs/specs/2026-11-13-flow-views-and-design-threads.md`, and § D9 of the boards spec of draupnir for a document.
 
 1. **Ask.** Run `thread_post` with `dir`, `view`, `element` (leave it out for a thread on the view), a short
    `title` and `text` (1 to 2000 characters, plain text: no Markdown, links or code). It opens the thread and
@@ -33,8 +34,14 @@ The design is in § 5 to § 7 of the floorplan spec `docs/specs/2026-11-13-flow-
      set to its `name`. The panel shows a proposal card: its title, its counts, and **Show on canvas**, **Accept**
      and **Discard**. Show on canvas sets the diagram to the proposal, in Changes.
    - **A question with no fixed answers:** `text` alone.
-   - `thread_post` refuses a view, an element or a proposal that the project does not have, and a thread of 200
-     messages.
+   - **On a node of a board:** give `doc` and `node` (an id that `board_read` lists) in place of `view` and
+     `element`. With no `quote`, the thread takes the words of the first line of the node. A new thread takes
+     `element`, `tour` or `doc`, never two.
+   - **A change of the words of a document:** on a thread on a document, add `patch`
+     ([boards.md](boards.md#offer-a-change-of-the-words)). The panel shows a patch card with **Accept** and
+     **Discard**. Only a thread on a document takes a patch.
+   - `thread_post` refuses a view, an element or a proposal that the project does not have, a doc that is no file
+     of the repo, a quote that no line of the doc holds, and a thread of 200 messages.
 2. **Tell the operator** in this session which threads you opened, on which elements. The marks show them on the
    canvas.
 3. **Answer each studio message.** Each line that the operator writes in a thread arrives in this session as a
@@ -45,6 +52,8 @@ The design is in § 5 to § 7 of the floorplan spec `docs/specs/2026-11-13-flow-
    The operator wrote: "Why not keep them only for unattended runs?"
    Answer with the floorplan MCP tool thread_post, thread "20261113-s7y-3f2a".
    ```
+
+   A thread on a document names `on the node <id> ("<words>") of <doc> (project <dir>)`, with no view.
 
    Answer with `thread_post`: `thread` is the id from the message, `dir` is its `project`, and `text` is your
    answer. The panel shows the answer with no reload. An answer can ask again with `choices` or a `proposal`.
@@ -64,6 +73,13 @@ The design is in § 5 to § 7 of the floorplan spec `docs/specs/2026-11-13-flow-
    4. Run `thread_resolve` with `thread` and a `text` that says what you ran and its result, such as "Accepted:
       the model has the change, and the check passes."
    5. Go on with the skill's step 5 from its item 4.
+
+   **Accept or Discard on a patch card.** The second line reads `The operator pressed Accept on the patch <id> of
+   <doc>. The board applied the patch to its working text: the file changes on the next Save of the board.` (or
+   `Discard`, `The board did not apply it.`). Run `threads` with `thread`: the verdict line has `from: "you"`,
+   `verdict` and `patchId`. After an Accept, wait for the message of the Save
+   ([boards.md](boards.md#the-message-of-a-save)), then close the thread. After a Discard, answer with
+   `thread_post`.
 6. **Close** a thread whose question is settled with `thread_resolve`, `thread` and a last `text`. A new message
    after it opens the thread again.
 7. **No inbox.** A studio that another shell started sends no messages here. Run `threads` with `status:"open"`

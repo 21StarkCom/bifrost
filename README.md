@@ -160,7 +160,7 @@ The weekly agent-doc sweep runs on the devbox, not as a Mac job. It triages the 
 | Skill | What it does |
 |---|---|
 | [`/stark-design-tokens`](skill/stark-design-tokens/SKILL.md) | Builds, names, themes and governs design tokens: the three-tier model, OKLCH scales, DTCG, Style Dictionary, contrast gates. |
-| [`/c4-design`](skill/c4-design/SKILL.md) | Runs the floorplan design loop on a product's C4 model: propose a change, check and render it, show it in the studio, ask on the canvas with Huginn, accept it. |
+| [`/c4-design`](skill/c4-design/SKILL.md) | Runs the floorplan design loop on a product's C4 model: propose a change, check and render it, show it in the studio, ask on the canvas with Huginn, accept it. Also opens the board of a playbook or a spec, and writes its flow file. |
 | [`/stark-design-bible`](skill/stark-design-bible/SKILL.md) | Loads the design bible for one page type from the vault-docs clone: its index, its playbook and the rule cards that the playbook links. The builder runs each card's Check on the page before it reports done. Loads on its own when an agent builds a web page. |
 
 ## Architecture

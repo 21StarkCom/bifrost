@@ -7,6 +7,10 @@ element of the kind `flow`, and its children are the steps. A decision is a diam
 It is not the sequence flow of [flows.md](flows.md), a `dynamic view` of the calls between the containers on one
 path through the code. Use the flow kit for a process with steps and decisions. Use a sequence flow for the calls.
 
+A C4 flow is not the design of a playbook or of a spec. The playbook file is the design of a playbook, and the flow
+file next to a spec holds the flows of the spec: both show on a [board](boards.md). A C4 flow shows a process in the
+landscape of the product, with the containers and the systems that its steps use.
+
 The design is in the floorplan spec `docs/specs/2026-11-13-flow-views-and-design-threads.md`, § 4.
 
 ## The four kinds
@@ -34,6 +38,9 @@ R6 asks for no title on a relationship between two flow elements: the order of t
 
 ## An odin playbook: import it
 
+Import a playbook to show it in the landscape of the product. To see, play with or change the playbook itself, open
+its board ([boards.md](boards.md)).
+
 1. In the product repo, run `floorplan import playbook <file> [dir] --in <element>`, such as
    `floorplan import playbook playbooks/a11y-audit.md docs/architecture --in odin`. `--in` puts the flow inside an
    element that exists, such as the product's system. With no `--in`, the flow is at the top level.
@@ -45,8 +52,8 @@ R6 asks for no title on a relationship between two flow elements: the order of t
    - a `decision` `<name>?` for each Liquid `{% if <name> %} … {% else %} … {% endif %}` block around items, with
      the ways out `yes` and `no`;
    - one relationship from each element to the next, and the view `<name>-flow`, top to bottom.
-3. It writes a flow one time. It refuses to write over a flow file that exists. From then on, the model is the design:
-   change it by hand.
+3. It writes a flow one time. It refuses to write over a `model/flows/<name>.c4` that exists. The playbook file stays
+   the design. When the playbook changes, change its C4 flow by hand where the landscape must show the change.
 4. Add the decisions by hand (below), run `floorplan build`, and commit. The first flow of a playbook records code
    that exists, so it is a small fix: skip the loop.
 
@@ -75,8 +82,9 @@ a retry from `d3` back to `s3`, and stops that go to `answer`.
 
 ## A flow with no playbook
 
-A spec, an epic or another feature design has no importer. Run `floorplan import flow-kit [dir]`, which writes only
-`kit/flow.c4`. Then write `model/flows/<name>.c4` by hand, in the form that the import writes. An element id must
+A spec has no importer: write the flows of a spec in its flow file, on its board ([boards.md](boards.md)), not in the
+model. A process of the landscape that no playbook holds, such as a feature or a loop of the code, has no importer
+either. Run `floorplan import flow-kit [dir]`, which writes only `kit/flow.c4`. Then write `model/flows/<name>.c4` by hand, in the form that the import writes. An element id must
 not be a word of the DSL: `order = terminal 'Order'` fails to parse, so the example names it `done`.
 
 ```likec4
@@ -124,6 +132,10 @@ views {
 
 ## Change a flow
 
-A change to a flow that exists is a design change: run the loop of the skill. In the proposal, `extend` the flow to
-add steps and decisions, and `add` and `remove` its relationships. To ask about a step or a decision, open a thread on
-it in the studio (step 4 of the loop).
+A change goes to the board or to the loop, by what it changes:
+
+- **The board** ([boards.md](boards.md)): a change of a playbook (a step, a rule, a branch, a tool, a limit), and a
+  change of a flow of a spec. The operator saves it on the board, and you ship it as a PR of the repo.
+- **The loop of the skill:** a change of a C4 flow that exists, such as the steps of a feature or the containers
+  that a step uses. In the proposal, `extend` the flow to add steps and decisions, and `add` and `remove` its
+  relationships. To ask about a step or a decision, open a thread on it in the studio (step 4 of the loop).
