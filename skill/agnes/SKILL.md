@@ -105,7 +105,11 @@ chat (`/ticket-board` opens it), or one band row above the prompt while the
 pane is not placed. Append each big step to its log by
 [the spine's log file](../../standards/worker-spine.md#log-file). Your `closed` is once
 [self-confirmation](#self-confirmation) passes; one that stays wrong after its
-fix is a stopping exit, so `blocked`.
+fix is a stopping exit, so `blocked`. On a Jira ticket, also comment each
+stage on the ticket, by
+[the spine's Jira progress comments](../../standards/worker-spine.md#jira-progress-comments).
+Your hold, stop and [report](#report) comments are those comments at their
+points.
 
 The pane's Settings tab is the operator's: it writes your ticket's settings
 file, which you read at the spine's
