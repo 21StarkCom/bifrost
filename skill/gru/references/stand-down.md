@@ -22,7 +22,10 @@ the contract's "after `ghx pr-merge` and the ticket close":
   tab. A ticket that your leader's `stand down` left unstarted does not.
   With a muninn leader or with none, these terms are the same.
 - **Your report.** With a [muninn leader](leader-muninn.md), it is step 6's
-  `report:` send, completed when `send.sh` exits 0. With none, the report in
+  `report:` send, completed when `send.sh` exits 0. On a Jira epic, also
+  comment it on the epic first, by
+  [the spine's Jira progress comments](../../../standards/worker-spine.md#jira-progress-comments).
+  With none, the report in
   your tab closes with the tab. So first comment it on the epic, or on the
   first ticket of `--tickets`
   (`alfred task comment --body-file <file> STARK-n`). Write the file under

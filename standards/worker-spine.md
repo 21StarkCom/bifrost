@@ -54,6 +54,50 @@ Gru and Super-Gru take a Jira epic or Jira ids too, with these changes:
 - Each alfred write of yours on a Jira ticket, a `task comment` included,
   carries `TYR_JIRA_ISSUE_WRITES_ENABLE=1`.
 
+### Jira progress comments
+
+Evinced's team reads the Jira ticket. It does not read your tab, the
+progress panes or the messages between sessions. So comment on a Jira ticket
+or a Jira epic at each point below, as the point lands. A ClickUp ticket gets
+none of these comments: its progress file and its pane show the same steps.
+
+| Who | Comment on | When, and what |
+|---|---|---|
+| A worker (`/minion`, `/agnes`) | its ticket | The `ticket` stage: the plan, in one or two lines. |
+| | | The `pr` stage: the PR link, and what the PR changes. |
+| | | The `closed` stage: the PR link, the merge sha, the link of the PR comment with the live check, and the version of a [§8](#8-releases-and-other-repos) release. |
+| | | A [hold](#holds): `held: <merge or release> by the ticket's settings`. |
+| | | A `blocked` stop, or a follow-up that stops the ticket: the reason, and the repo and the PR, run or step it waits on. |
+| Gru | its epic | Step 1: the children in scope, in order, and what each waits on. |
+| | | Step 4: each child that its worker reports `blocked`, and the reason. |
+| | | Step 5: each confirmed child, with its PR link. |
+| | | Step 6: the report, also with a muninn leader. |
+| Super-Gru | each epic | Step 1: an epic that waits for a slot, and the epic before it. |
+| | | Step 6: a cleared shared block, on each epic that waited on it. |
+| | | Step 8: the move of the epic to done, or what stays open. |
+
+Agnes's own ticket comments (a hold, a stop, her report) are her comments at
+those points, so she posts no second one. Gru's step 6 comment is the report
+that its stand-down names, so it posts no second one. A Gru run on
+`--tickets` has no epic: it posts only that report, where its stand-down
+terms say.
+
+Write each comment this way:
+
+- Post it with
+  `TYR_JIRA_ISSUE_WRITES_ENABLE=1 alfred task comment --body-file <file> EI-n`.
+  Write the file under `mktemp -d`, outside your worktree.
+- Write Markdown. alfred turns it into Jira's rich text.
+- Start it with `**Agent update:**`. The comment posts under the operator's
+  name, so the reader must see that an agent wrote it.
+- Write five lines or fewer, for a reader who knows the ticket but not the
+  fleet: no tool name, no worker name, and no stage name. A report that a
+  skill names in full (Agnes's report, Gru's step 6 report) keeps its full
+  content.
+- Never put a secret, a token or the output of an auth command in it.
+- A comment that fails costs one line in your report, and never holds the
+  ticket. Do not retry it in a loop.
+
 ### Title your tab
 
 In cmux or tmux, rename your own tab, since its name does not say what is

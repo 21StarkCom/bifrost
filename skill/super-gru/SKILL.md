@@ -73,6 +73,8 @@ holds the run.
    shared block: an open ticket that children of more than one epic wait on.
    The launch id is `SUPER-<n>`, `<n>` the first epic's number, and the
    muninn team is `super-<n>`. Write the run file with each epic `queued`.
+   On each Jira epic, comment at steps 1, 6 and 8, by
+   [the spine's Jira progress comments](../../standards/worker-spine.md#jira-progress-comments).
 2. **Join the team.** Run
    `~/.agents/skills/muninn/scripts/join.sh super-<n> super-gru claude-code "$(pwd)"`,
    then `/muninn actas super-gru`. Take each choice it asks for from this

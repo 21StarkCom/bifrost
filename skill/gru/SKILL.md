@@ -89,7 +89,8 @@ is the one exception to the peer rules in
    split. Then write the run's [progress file](#progress-pane) with every ticket in
    scope, and write it again whenever a split adds one. Append a line to the
    run's [log](#progress-pane) for the start, and for each ticket that joins
-   or splits.
+   or splits. On a Jira epic, comment on it at steps 1, 4, 5 and 6, by
+   [the spine](../../standards/worker-spine.md#jira-progress-comments).
 2. **Read the board.** Ticket `done`/`Closed` → run step 5's confirm on it, then
    skip; a Minion can die between closing its ticket and sending its report, so a
    `done` status on its own is a closed ticket, not a confirmed one. With no
