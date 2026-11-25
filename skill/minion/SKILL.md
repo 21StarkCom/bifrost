@@ -67,7 +67,9 @@ sets, is `MINION (<n>)`. Four things are yours on top of it:
   `closed` once `alfred task move STARK-n done` lands, `blocked` when you stop
   on a `blocked` or `follow-up … stopping` report. Append each big step to
   its log by [the spine's log file](../../standards/worker-spine.md#log-file).
-  On a Jira ticket, also comment each stage, hold and stop on the ticket, by
+  On a Jira ticket, also move its status by
+  [the spine's Jira statuses](../../standards/worker-spine.md#jira-statuses),
+  and comment each point on the ticket the moment it lands, by
   [the spine's Jira progress comments](../../standards/worker-spine.md#jira-progress-comments).
   Leave the log in place at the close: Gru's pane shows it. Once the close lands, also
   delete your ticket's settings file:

@@ -89,8 +89,10 @@ is the one exception to the peer rules in
    split. Then write the run's [progress file](#progress-pane) with every ticket in
    scope, and write it again whenever a split adds one. Append a line to the
    run's [log](#progress-pane) for the start, and for each ticket that joins
-   or splits. On a Jira epic, comment on it at steps 1, 4, 5 and 6, by
-   [the spine](../../standards/worker-spine.md#jira-progress-comments).
+   or splits. On a Jira epic, move it to In Progress now, and at step 6 to
+   Done, by [the spine's Jira statuses](../../standards/worker-spine.md#jira-statuses).
+   Comment on it at steps 1, 3, 4, 5 and 6, the moment each point lands, by
+   [the spine's Jira progress comments](../../standards/worker-spine.md#jira-progress-comments).
 2. **Read the board.** Ticket `done`/`Closed` → run step 5's confirm on it, then
    skip; a Minion can die between closing its ticket and sending its report, so a
    `done` status on its own is a closed ticket, not a confirmed one. With no
@@ -128,8 +130,9 @@ is the one exception to the peer rules in
    ([Authority](#authority)).
    - Read each launch's exit code before its ack. Only **0** with
      `verified: true` is a launch: append it to the run's
-     [log](#progress-pane). Every other exit makes the ticket blocked or
-     owned, as the reference says; never relaunch over one.
+     [log](#progress-pane), and comment it on a Jira epic. Every other exit
+     makes the ticket blocked or owned, as the reference says; never
+     relaunch over one.
    - Once the ack is verified, and only when its `coordination` is
      `SendMessage`, send the reference's first contact.
 4. **Wait.** Minions report `done <PR> merged <sha> verified <check>`,
@@ -164,6 +167,7 @@ is the one exception to the peer rules in
    live check's run posted on the PR, with a second comment after a `--fix`
    round
    ([the spine's §5](../../standards/worker-spine.md#5-re-verify-after---fix-and-post-the-runs-on-the-pr)).
+   A Jira child must also read Done in Jira.
    Only when each check passes, count it finished, stamp its
    [progress file](#progress-pane) `closed`, append the confirm to the run's
    [log](#progress-pane), and release the tickets that depended on it. The
