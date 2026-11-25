@@ -21,6 +21,39 @@ launch naming one names the other.
 names, and the repo's agent instructions file. Read a linked dependency ticket
 too — what it is landing is context you need before you touch the same files.
 
+### A Jira ticket
+
+`STARK-n` in the worker docs stands for the ticket's id. A Jira ticket, such
+as `EI-n`, takes the same commands, with these changes:
+
+- alfred reads a Jira id only in a checkout of an org that alfred binds to
+  Jira, such as `GetEvinced`. A checkout of a ClickUp org refuses it:
+  `"EI-n" is not a ticket id`. A Jira-bound checkout reads `STARK-n` too.
+- Put `TYR_JIRA_ISSUE_WRITES_ENABLE=1` on each alfred write on it: `task use`,
+  `task comment`, `task move` and `task new`. Without it, alfred refuses:
+  `jira writes are disabled`.
+- In EI, `task use` walks the ticket through Accept and Commit to Ready, and
+  each step refuses until its fields are set. When a field is missing, alfred
+  binds the ticket, exits 1 and names the `task move` to run. Set the field as
+  [the EI reference](../skill/stark-ticket/references/ei.md#read-it-back)
+  says, then run that move.
+- File a follow-up of an EI ticket in EI, written and filed by that
+  reference. `alfred task new` files in Jira only from a checkout of a repo
+  that `[jira.repos]` of `~/.config/alfred/config.toml` maps to the project.
+  When your repo has no entry there, run that one command from the main
+  checkout of a mapped repo, such as `~/Code/Evinced/devops-infra` for EI.
+  Your work stays in your worktree.
+
+Gru and Super-Gru take a Jira epic or Jira ids too, with these changes:
+
+- Run from a checkout of a Jira-bound org, such as the EI epic's own
+  `GetEvinced` repo (`--new-tab --repo <name>`), by the first rule above.
+- alfred's `list_children` tool reads ClickUp only, and `alfred task show`
+  prints no children. List a Jira epic's children with
+  `frigg atlassian search jql -json -fields summary,status 'parent = EI-n'`.
+- Each alfred write of yours on a Jira ticket, a `task comment` included,
+  carries `TYR_JIRA_ISSUE_WRITES_ENABLE=1`.
+
 ### Title your tab
 
 In cmux or tmux, rename your own tab, since its name does not say what is
@@ -60,7 +93,7 @@ syntax.
 3. **Neither** prints anything: skip this.
 
 `<ROLE>` is your skill's name in capitals and `<n>` is the ticket number without
-its `STARK-` prefix: `MINION (1234)`, `AGNES (1234)`. Your own tab only, never
+its project prefix (`STARK-`, `EI-`): `MINION (1234)`, `AGNES (1234)`. Your own tab only, never
 another's. The title is cosmetic: a rename that fails costs one line saying so
 and never holds the ticket.
 

@@ -4,7 +4,7 @@ runtimes:
   - claude
   - codex
 description: "Gru drives an epic or a list of tickets to done with one Minion per ticket. Use when the operator hands over several tickets to be worked in parallel and carried through merge and closure."
-argument-hint: "start <STARK-epic | --tickets STARK-n,...> [--max-workers N] [--agent claude|codex] [--new-tab [--repo <name>]]"
+argument-hint: "start <epic | --tickets id,...> [--max-workers N] [--agent claude|codex] [--new-tab [--repo <name>]]"
 ---
 
 ## Help
@@ -75,11 +75,11 @@ is the one exception to the peer rules in
 0. **Title your tab**, if you are in cmux or tmux — the mechanics are
    [the worker spine's](../../standards/worker-spine.md#title-your-tab), and
    the rule is the same: own tab only, cosmetic, never a blocker. Your title is
-   `GRU (<n>)`, where `<n>` is the epic's number without its `STARK-` prefix,
+   `GRU (<n>)`, where `<n>` is the epic's number without its project prefix,
    or the first ticket's when you were given `--tickets`: `GRU (1234)`. A rerun
    `start` sets it again; that is harmless.
 1. **Expand.** Resolve the epic to its children with alfred's `list_children`
-   tool (`alfred task show` prints one ticket, never its children). Read every
+   tool; a Jira epic by [the spine](../../standards/worker-spine.md#a-jira-ticket). Read every
    ticket and its comments, and note each ticket's repo. A ticket that names
    another in-scope ticket as a dependency waits for it; otherwise tickets are
    independent. Read [references/scope.md](references/scope.md) before a

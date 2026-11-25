@@ -15,6 +15,8 @@ All notable changes to `bifrost`. The format follows [Keep a Changelog](https://
 - **houston dashboard reporting is removed from `/gru` and `/minion`.** It was ported in from stark-skills hours earlier and is withdrawn by operator decision: houston is not built yet, so both skills were instructing an agent to register a roster and report gates to a CLI that is not there. Hermod reporting and the poison-pill are untouched — those predate houston and are the actual reporting surface. Note the review that ran on the port found the upstream protocol text was itself wrong in six ways (a rerun over finished work would have read `0 closed of N` forever; a Minion stopped *waiting on a human* rendered as `needs: agent`); none of that matters now, but it is why this is a removal rather than a revert.
 
 ### Added
+<!-- idun:pr-merge pr=533 runId=533 sha=93461058 -->
+- Gru, Super-Gru, Minion and Agnes now work EI (Jira) tickets and epics, with the Jira rules in the worker spine (stark-ops 0.69.0).
 <!-- idun:pr-merge pr=532 runId=532 sha=ca06bb1d -->
 - `c4-design` now says how a session works on a board: the flow file (`flow/1`), `board_read`, `thread_post` patches and `board_point`. `stark-design` 0.5.0.
 <!-- idun:pr-merge pr=530 runId=530 sha=94d8f5ee -->

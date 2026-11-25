@@ -40,7 +40,11 @@ repo by its own Minion. File the sub-ticket only when the run's
 [settings](../SKILL.md#progress-pane) set `decideForMe` true. Otherwise stamp the
 ticket `blocked`, do not launch it, and name the split in step 6's report.
 Write the sub-ticket with `/stark-ticket` (`$stark-ticket` on Codex), file it with
-`alfred task new --on-repo <other repo>`, and comment on the ticket with
+`alfred task new --on-repo <other repo>`. `--on-repo` reaches ClickUp only:
+for a repo that `[jira.repos]` maps to a Jira project, run `alfred task new`
+from that repo's main checkout, by
+[the spine's Jira section](../../../standards/worker-spine.md#a-jira-ticket).
+Then comment on the ticket with
 `alfred task comment --body-file <file> STARK-n`, the file opening
 `Gru: split — <the half that moved> moved to STARK-m`, since the ticket's
 Minion reads its comments. A sub-ticket the operator already filed for
