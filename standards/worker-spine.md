@@ -32,8 +32,8 @@ as `EI-n`, takes the same commands, with these changes:
 - Put `TYR_JIRA_ISSUE_WRITES_ENABLE=1` on each alfred write on it: `task use`,
   `task comment`, `task move` and `task new`. Without it, alfred refuses:
   `jira writes are disabled`.
-- In EI, `task use` walks the ticket through Accept and Commit to Ready, and
-  each step refuses until its fields are set. When a field is missing, alfred
+- In EI, `task use` walks the ticket through Accept, Commit to Ready and
+  Start, to In Progress, and each step refuses until its fields are set. When a field is missing, alfred
   binds the ticket, exits 1 and names the `task move` to run. Set the field as
   [the EI reference](../skill/stark-ticket/references/ei.md#read-it-back)
   says, then run that move.
@@ -54,27 +54,67 @@ Gru and Super-Gru take a Jira epic or Jira ids too, with these changes:
 - Each alfred write of yours on a Jira ticket, a `task comment` included,
   carries `TYR_JIRA_ISSUE_WRITES_ENABLE=1`.
 
+### Jira statuses
+
+Evinced's team reads the status of each ticket and epic on its board. Keep
+each status true from the start of the run to its end, with the moves below.
+A ClickUp ticket keeps the one move it has today: the close.
+
+| Who | When | Move to | Command |
+|---|---|---|---|
+| A worker (`/minion`, `/agnes`) | [§1](#1-bind-and-read), the bind | In Progress | `alfred task use EI-n` walks the ticket there |
+| | The `pr` stage | In Review | `alfred task move EI-n review` |
+| | The close, by [§4](#4-the-spine) | Done | `alfred task move EI-n done` |
+| Gru | Step 1 | the epic to In Progress, when it is in Triage, Backlog or Ready for work | `alfred task move EI-n "in progress"` |
+| | Step 5 | no move: the confirm reads the child as Done | `frigg atlassian issue get EI-n --fields status` |
+| | Step 6 | the epic to Done, when each child is Done or Cancelled | `alfred task move EI-n done` |
+
+- Put `TYR_JIRA_ISSUE_WRITES_ENABLE=1` on each move. Read the status back with
+  `frigg atlassian issue get EI-n --fields status`.
+- A hold and a `blocked` stop move nothing. Their comment says why the ticket
+  waits.
+- A relaunch or a resume moves only a status that is behind. A move to the
+  status that the ticket holds changes nothing.
+- When the epic stays open at step 6, the step 6 comment names each open
+  child and what it waits on.
+- alfred maps `review` to In Review by `[jira.status_map.EI]` in
+  `~/.config/alfred/config.toml`.
+- A refused move to In Progress or In Review, or a refused move of the epic,
+  costs one line in your report and one comment, and never holds the ticket.
+- A refused close is not a done: [§4](#4-the-spine) and Gru's confirm still
+  need the ticket Done.
+
 ### Jira progress comments
 
 Evinced's team reads the Jira ticket. It does not read your tab, the
 progress panes or the messages between sessions. So comment on a Jira ticket
-or a Jira epic at each point below, as the point lands. A ClickUp ticket gets
-none of these comments: its progress file and its pane show the same steps.
+or a Jira epic at each point below.
 
-| Who | Comment on | When, and what |
-|---|---|---|
-| A worker (`/minion`, `/agnes`) | its ticket | The `ticket` stage: the plan, in one or two lines. |
-| | | The `pr` stage: the PR link, and what the PR changes. |
-| | | The `closed` stage: the PR link, the merge sha, the link of the PR comment with the live check, and the version of a [§8](#8-releases-and-other-repos) release. |
-| | | A [hold](#holds): `held: <merge or release> by the ticket's settings`. |
-| | | A `blocked` stop, or a follow-up that stops the ticket: the reason, and the repo and the PR, run or step it waits on. |
-| Gru | its epic | Step 1: the children in scope, in order, and what each waits on. |
-| | | Step 4: each child that its worker reports `blocked`, and the reason. |
-| | | Step 5: each confirmed child, with its PR link. |
-| | | Step 6: the report, also with a muninn leader. |
-| Super-Gru | each epic | Step 1: an epic that waits for a slot, and the epic before it. |
-| | | Step 6: a cleared shared block, on each epic that waited on it. |
-| | | Step 8: the move of the epic to done, or what stays open. |
+- Post each comment the moment its point lands, before you start the next
+  step.
+- Never keep comments for later, and never put two points in one comment.
+- A ClickUp ticket gets none of these comments: its progress file and its
+  pane show the same steps.
+
+| Who | Comment on | When, and what | Kind |
+|---|---|---|---|
+| A worker (`/minion`, `/agnes`) | its ticket | The `ticket` stage: the plan, in one or two bullets. | start |
+| | | A decision that changes the plan of this ticket or of a later ticket: the decision and its reason. | decision |
+| | | The `pr` stage: the PR link, and what the PR changes. | review |
+| | | The end of the review: the number of findings, and each one fixed or answered. | review |
+| | | The live check of [§3](#3-verify-live): pass or fail, with the link of the PR comment that holds the run. | check |
+| | | The `closed` stage: the PR link, the merge sha, and the version of a [§8](#8-releases-and-other-repos) release. | done |
+| | | A [hold](#holds): `held: <merge or release> by the ticket's settings`. | hold |
+| | | A `blocked` stop, or a follow-up that stops the ticket: the reason, and the repo and the PR, run or step it waits on. | blocked |
+| Gru | its epic | Step 1: the table of the children in scope, in order, and what each waits on. | plan |
+| | | Step 3: each verified launch: the child whose work starts. | start |
+| | | Step 4: each child that its worker reports `blocked`, and the reason. | blocked |
+| | | Step 4: each decision that a worker reports for a later child. | decision |
+| | | Step 5: each confirmed child, with its PR link and the table. | done |
+| | | Step 6: the report, with the table, also with a muninn leader. | done or blocked |
+| Super-Gru | each epic | Step 1: an epic that waits for a slot, and the epic before it. | plan |
+| | | Step 6: a cleared shared block, on each epic that waited on it. | start |
+| | | Step 8: the move of the epic to done, or what stays open. | done or blocked |
 
 Agnes's own ticket comments (a hold, a stop, her report) are her comments at
 those points, so she posts no second one. Gru's step 6 comment is the report
@@ -82,21 +122,68 @@ that its stand-down names, so it posts no second one. A Gru run on
 `--tickets` has no epic: it posts only that report, where its stand-down
 terms say.
 
-Write each comment this way:
+Post each comment this way:
 
 - Post it with
   `TYR_JIRA_ISSUE_WRITES_ENABLE=1 alfred task comment --body-file <file> EI-n`.
   Write the file under `mktemp -d`, outside your worktree.
-- Write Markdown. alfred turns it into Jira's rich text.
-- Start it with `**Agent update:**`. The comment posts under the operator's
-  name, so the reader must see that an agent wrote it.
-- Write five lines or fewer, for a reader who knows the ticket but not the
-  fleet: no tool name, no worker name, and no stage name. A report that a
-  skill names in full (Agnes's report, Gru's step 6 report) keeps its full
-  content.
+- Write it in [the shape of a Jira comment](#the-shape-of-a-jira-comment).
 - Never put a secret, a token or the output of an auth command in it.
 - A comment that fails costs one line in your report, and never holds the
   ticket. Do not retry it in a loop.
+
+### The shape of a Jira comment
+
+Write Markdown. alfred converts it to rich Jira text (ADF), with tyr's
+`MarkdownToADF`. Each comment has the same shape, so the team can scan the
+ticket's history.
+
+1. The first line is bold and stands alone. It holds the emoji of its kind,
+   the words `Agent update`, and a few words of what happened. The comment
+   posts under the operator's name, so these words show that an agent wrote it.
+2. Then one to five bullets of 20 words or fewer. Start each bullet with a bold
+   label, such as `**PR:**`, `**Why:**` or `**Next:**`.
+3. Gru's comments at steps 1, 5 and 6 then hold one table of the children:
+   `| Ticket | Status | PR | Waits on |`, one row for each child, in order.
+
+| Kind | First line |
+|---|---|
+| plan | `**🧭 Agent update: the plan**` |
+| start | `**🚀 Agent update: the work started**` |
+| decision | `**💡 Agent update: <the decision, in a few words>**` |
+| review | `**🔍 Agent update: the PR is in review**`, or `**🔍 Agent update: the review is done**` |
+| check | `**🧪 Agent update: the live check passed**`, or `failed` |
+| done | `**✅ Agent update: merged and closed**` |
+| hold | `**⏸️ Agent update: held**` |
+| blocked | `**⛔ Agent update: blocked**` |
+
+- Write each link as a Markdown link with short text, such as
+  `[gong-replica #3](https://github.com/GetEvinced/gong-replica/pull/3)` or
+  `[EI-2760](https://evinced.atlassian.net/browse/EI-2760)`. Never write a
+  bare URL.
+- Put each name, path, command and sha in a code span.
+- Write in the table's Status cell the Jira status with its emoji:
+  `📥 Triage`, `⏳ Ready for work`, `🚀 In Progress`, `🔍 In Review`, `✅ Done`.
+  Start the Waits on cell of a blocked child with `⛔`.
+- Write for a reader who knows the ticket but not the fleet: no tool name, no
+  worker name, and no stage name.
+- A report that a skill names in full (Agnes's report, Gru's step 6 report)
+  keeps its full content, in the same shape: the bold line, then a bold label
+  over each group of bullets.
+- Never write what the converter keeps as literal text: raw HTML, an image,
+  a setext heading, indented code, or a heading, table or quote inside a list
+  item. Never write Jira wiki markup (`h2.`, `{code}`, `[text|url]`).
+- Read the first comment of your run back one time:
+  `frigg atlassian issue comments EI-n --json`. A text node that holds `**`,
+  `](` or `|---` is Markdown that did not convert. Fix the shape in the next
+  comment.
+
+````markdown
+**🔍 Agent update: the PR is in review**
+
+- **PR:** [gong-replica #3](https://github.com/GetEvinced/gong-replica/pull/3) adds the Terraform of the project.
+- **Next:** the code review, then the live check with `terraform plan`.
+````
 
 ### Title your tab
 
