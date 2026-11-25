@@ -64,11 +64,12 @@ holds the run.
    [the worker spine's](../../standards/worker-spine.md#title-your-tab), and
    the rule is the same: your own tab only, cosmetic, never a blocker. Your
    title is `SUPER-GRU (<n>)`, `<n>` the number of the first epic without its
-   `STARK-` prefix: `SUPER-GRU (18470)`. `valkyrie super-gru` names the tab
+   project prefix: `SUPER-GRU (18470)`. `valkyrie super-gru` names the tab
    `SUPER-<n>`, which does not say that a Super-Gru runs in it. A rerun
    `start` sets the title again; that is harmless.
 1. **Expand.** Read each epic with `alfred task show` and its children with
-   alfred's `list_children` tool. Note the repo of each epic. Note each known
+   alfred's `list_children` tool, a Jira epic by
+   [the spine's Jira section](../../standards/worker-spine.md#a-jira-ticket). Note the repo of each epic. Note each known
    shared block: an open ticket that children of more than one epic wait on.
    The launch id is `SUPER-<n>`, `<n>` the first epic's number, and the
    muninn team is `super-<n>`. Write the run file with each epic `queued`.
