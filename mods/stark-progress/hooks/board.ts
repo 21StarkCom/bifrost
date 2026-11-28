@@ -385,7 +385,6 @@ export function buildBoard(
     done,
     inProgress: rows.length - done - notStarted,
     notStarted,
-    next: rows.filter(r => r.tone === 'none').map(r => r.id),
     others: runs
       .filter(r => r !== chosen && r.active > now - ACTIVE_MIN * MIN)
       .map(r => ({ launchId: r.launchId, epic: r.epic })),

@@ -67,10 +67,6 @@ bragi · 4 tickets · started 11:02, 1h51m ago
   ●━━━━━━●━━━━━━●━━━━━━●━━━━━━●  DONE
 Select a name to see more, or a highlighted id to go to its tab.
 
-👉 Up next
-Start STARK-1204
-Then close STARK-1200 once all 4 tickets close.
-
 Read from ~/.cache/stark-progress at 12:53.
 ```
 
@@ -299,10 +295,12 @@ left.
   On a closed ticket, a call the heartbeat still marks running is ignored,
   in the hour, the detail and the band: a worker stands down inside its last
   call, which never ends.
-- `👉 Up next`: the tickets with no file yet, in run order.
 
-Each ticket the pane names (its row, the box of tickets worth a look, Up
-next and the Log tab) reads `[STARK-n] <title>`: the id in its own color,
+The Overview has no list of the tickets to start: the `NOT STARTED` rows
+already name them.
+
+Each ticket the pane names (its row, the box of tickets worth a look and
+the Log tab) reads `[STARK-n] <title>`: the id in its own color,
 then the title in the text's color, dimmed on a done or not started row (and
 on the Log tab). In the terminal the id is lavender (`#c9b3f5`, 8.1:1 on the
 pane), a color no state uses; elsewhere it takes the app's accent. The title is
@@ -320,7 +318,7 @@ start, the toast gives muxctl's. The title beside it is a button of its
 own that opens the row's detail (`details` when no file names a title). A tab
 is open when the ticket's heartbeat is under 3 minutes old and names a
 surface: a worker's tab writes it at least once a minute, with no call too.
-Only the list's rows draw it; the box, Up next and the Log and Stats tabs keep
+Only the list's rows draw it; the box and the Log and Stats tabs keep
 `[STARK-n]`.
 
 **Log.** `l` opens it. The big steps of the run, newest first: Gru's own,

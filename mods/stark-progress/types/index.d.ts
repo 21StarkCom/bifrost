@@ -258,8 +258,6 @@ export type Board = {
   done: number
   inProgress: number
   notStarted: number
-  /** The tickets with no file yet, in run order. */
-  next: string[]
   /** The other runs with a change in the last hour. */
   others: { launchId: string; epic: string }[]
   settings: GruSettings
