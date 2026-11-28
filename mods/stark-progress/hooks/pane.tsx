@@ -13,11 +13,33 @@ import type {
   LogView,
   Mark,
   PaneTab,
+  StatShare,
   StatsView,
+  Tokens,
 } from '../types'
 import { clockOf, MAX_WORKERS, stepCounts } from './board'
 import { secs } from './github'
 import { dayOf } from './log'
+import {
+  boardPicture,
+  BURN_ROWS,
+  burnUp,
+  hasHour,
+  HOUR_ROWS,
+  hourPicture,
+  hourScale,
+  logPicture,
+  prPicture,
+  CLOCK_KEY,
+  clockPicture,
+  SHARE_INK,
+  SHARE_PARTS,
+  sharePicture,
+  STEP_INK,
+  stepsPicture,
+  trackPicture,
+} from './pictures'
+import type { Picture } from './pictures'
 import { counted, grouped, short } from './stats'
 import { bar, dur, STAGES, STATION_LABELS } from './view'
 
@@ -44,8 +66,23 @@ export type Palette = Record<
   string
 >
 
-/** The elements a pane draws with, and the palette of the surface it draws on. */
-export type UI = Pick<Elements['terminal'], 'Box' | 'Text' | 'Button'> & { P: Palette }
+/**
+ * The elements a pane draws with, and the palette of the surface it draws on.
+ * `Image` is the terminal's picture element while the pane's Pictures choice
+ * is On: with it, the Gru pane draws its graphs as pictures (pictures.ts);
+ * without it, as text.
+ */
+export type UI = Pick<Elements['terminal'], 'Box' | 'Text' | 'Button'> & { P: Palette; Image?: Elements['terminal']['Image'] }
+
+/** A picture in its box of cells; nothing on a pane that draws text. */
+export function picture(ui: UI, key: string, p: Picture) {
+  const { Image } = ui
+
+  return Image === undefined ? null : <Image key={key} source={{ png: p.png }} columns={p.columns} rows={p.rows} alt={p.alt} />
+}
+
+/** The cells a picture as wide as the pane takes: a minute of a worker's hour is one cell at 60. */
+const wideFor = (w: number) => Math.max(20, Math.min(w - 2, 60))
 
 // The terminal's, for its dark theme. Contrast on the pane's #262626 (WCAG):
 // text 8.1:1, id 8.1:1, gray 6.8:1, hint 5.9:1; the states' words: blue 8.5:1,
@@ -97,7 +134,7 @@ const THEMED: Palette = {
 export const paletteFor = (surface: string): Palette => (surface === 'terminal' ? TERMINAL : THEMED)
 
 const TONE: Record<BoardTone, keyof Palette> = { done: 'green', move: 'blue', warn: 'amber', idle: 'gray', none: 'track' }
-const toneOf = (P: Palette, tone: BoardTone) => P[TONE[tone]]
+export const toneOf = (P: Palette, tone: BoardTone) => P[TONE[tone]]
 
 /**
  * How each state reads: its word in UPPERCASE, in its own color. Only a state
@@ -143,6 +180,11 @@ export type PaneView = {
   /** The pane's own choice: done tickets listed last. */
   doneLast: boolean
   flipDoneLast: () => unknown
+  /** The pane's own choice: its graphs as pictures, in a terminal. */
+  pictures: boolean
+  flipPictures: () => unknown
+  /** The time of the last poll: the run clock on the Stats tab starts from it, and a blit moves it on each second. */
+  now: number
   pick: (launchId: string) => unknown
   /** Brings the open tab of a ticket's worker to the front. */
   openTab: (id: string) => unknown
@@ -360,9 +402,148 @@ function graph(ui: UI, w: number, rows: BoardRow[]) {
   })
 }
 
+/** A column of axis labels beside a picture: `labels[i]` on the picture's row `i`, right-aligned. */
+function axis(ui: UI, rows: number, labels: Record<number, string>) {
+  const { Box, Text, P } = ui
+  const width = Math.max(...Object.values(labels).map(l => l.length))
+
+  return (
+    <Box flexDirection="column" width={width} flexShrink={0}>
+      {Array.from({ length: rows }, (_, r) => (
+        <Text key={`y${r}`} color={P.hint}>
+          {(labels[r] ?? '').padStart(width)}
+        </Text>
+      ))}
+    </Box>
+  )
+}
+
+/** The words under a picture's ends and middle, as wide as the picture, after `indent` cells. */
+function under(ui: UI, indent: number, columns: number, words: readonly string[]) {
+  const { Box, Text, P } = ui
+
+  return (
+    <Box paddingLeft={indent} width={indent + columns} justifyContent="space-between">
+      {words.map((word, i) => (
+        <Text key={`x${i}`} color={P.hint}>
+          {word}
+        </Text>
+      ))}
+    </Box>
+  )
+}
+
+/** One entry of a picture's legend: its mark in the mark's color, then its words. */
+function keyOf(ui: UI, ink: string, mark: string, words: string) {
+  const { Text, P } = ui
+
+  return (
+    <Text key={`k${words}`}>
+      <Text color={ink}>{`${mark} `}</Text>
+      <Text color={P.text}>{words}</Text>
+    </Text>
+  )
+}
+
+/**
+ * The Overview's graph as pictures: the tickets at each step as one bar, with
+ * each step's count in words under it, then the tickets done over the run.
+ */
+function progress(ui: UI, w: number, board: Board) {
+  const { Box, Text, P } = ui
+  const steps = stepCounts(board.rows)
+  const total = board.rows.length
+  const digits = String(total).length
+  const burn = burnUp(P, wideFor(w) - digits - 1, board)
+
+  return (
+    <Box flexDirection="column" gap={1}>
+      <Box flexDirection="column">
+        {picture(ui, 'steps', stepsPicture(P, wideFor(w), steps))}
+        <Box columnGap={2} flexWrap="wrap">
+          {steps.map((s, i) =>
+            s.count === 0 ? null : (
+              <Text key={`s${s.label}`}>
+                <Text color={P[STEP_INK[i] ?? 'gray']}>■ </Text>
+                <Text color={P.text}>{`${s.label} ${s.count}`}</Text>
+                {s.looks > 0 && <Text color={P.amber}>{` · ${s.looks} worth a look`}</Text>}
+              </Text>
+            ),
+          )}
+        </Box>
+      </Box>
+      {burn !== null && (
+        <Box flexDirection="column">
+          <Text bold>📈 Tickets done over the run</Text>
+          <Box columnGap={2} flexWrap="wrap">
+            {keyOf(ui, P.green, '━', `${board.done} done`)}
+            {keyOf(ui, P.blue, '━', 'started')}
+            {keyOf(ui, P.hint, '┄', `all ${total} tickets`)}
+          </Box>
+          <Box columnGap={1}>
+            {axis(ui, BURN_ROWS, {
+              0: String(total),
+              ...(total % 2 === 0 ? { [(BURN_ROWS - 1) / 2]: String(total / 2) } : {}),
+              [BURN_ROWS - 1]: '0',
+            })}
+            {picture(ui, 'burn', burn)}
+          </Box>
+          {under(ui, digits + 1, burn.columns, [sinceOf(burn.start, board.readAt), 'now'])}
+        </Box>
+      )}
+    </Box>
+  )
+}
+
+/** A ticket's last hour as a picture with an axis: the calls of each minute. `indent` is the cells its box stands in from the pane's edge. */
+export function hourChart(ui: UI, w: number, r: Pick<BoardRow, 'id' | 'hour' | 'cells'>, max: number, indent = 2) {
+  const { Box, Text, P } = ui
+  if (r.hour === null) return null
+  const digits = String(max).length
+  const columns = wideFor(w) - indent - digits - 1
+  // As the burn-up's axis: the half has a name only when it is a whole count, so no label is wider than the scale's.
+  const half = max % 2 === 0 ? { [(HOUR_ROWS - 1) / 2]: String(max / 2) } : {}
+  const ends = ['60m ago', 'now'] as const
+
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      <Text color={P.hint}>Last hour, calls a minute</Text>
+      <Box columnGap={1}>
+        {axis(ui, HOUR_ROWS, { 0: String(max), ...half, [HOUR_ROWS - 1]: '0' })}
+        {picture(ui, `hc${r.id}`, hourPicture(P, columns, HOUR_ROWS, r.hour, max, hourAlt(r.cells)))}
+      </Box>
+      {/* Both ends take the same cells, so the middle's words stand under the middle of the picture. */}
+      {under(ui, digits + 1, columns, [ends[0], '30m ago', ends[1].padStart(ends[0].length)])}
+    </Box>
+  )
+}
+
+/** What each mark of an hour's picture says. */
+export function hourKey(ui: UI) {
+  const { Box, Text, P } = ui
+
+  return (
+    <Box columnGap={2} flexWrap="wrap" marginTop={1}>
+      <Text color={P.hint}>Last hour:</Text>
+      {keyOf(ui, P.blue, '█', 'calls a minute')}
+      {keyOf(ui, P.blocked, '█', 'failed')}
+      {keyOf(ui, P.green, '●', 'milestone')}
+      {keyOf(ui, P.amber, '┄', 'one long call')}
+    </Box>
+  )
+}
+
+/** An hour's words for a terminal with no pictures: the 12 cells the pane draws as text. */
+const hourAlt = (cells: readonly Cell[]) => `Last hour  ${cells.map(markOf).join('')}  now`
+
 function overview(ui: UI, w: number, board: Board, view: PaneView) {
   const { Box, Button, Text, P } = ui
   const rows = board.rows
+  const pics = ui.Image !== undefined
+  // One scale for every row's hour, so two rows compare.
+  const scale = pics ? hourScale(rows) : 0
+  /** A row in progress with an hour to show draws it as a strip under its line. */
+  const hasStrip = (r: BoardRow) => pics && r.tone !== 'done' && r.tone !== 'none' && hasHour(r.hour)
   const looks = rows.filter(r => r.attention !== null)
   // The list keeps the run's order, or groups the tickets under a line each, done last, each group in that order.
   const groups: { name: string | null; rows: BoardRow[] }[] = view.doneLast
@@ -396,7 +577,7 @@ function overview(ui: UI, w: number, board: Board, view: PaneView) {
         <Text color={P.text}>
           {`${board.done} of ${rows.length} done · ${board.inProgress} in progress · ${board.notStarted} not started`}
         </Text>
-        {graph(ui, w, rows)}
+        {pics ? progress(ui, w, board) : graph(ui, w, rows)}
       </Box>
 
       {looks.length === 0 ? (
@@ -435,10 +616,23 @@ function overview(ui: UI, w: number, board: Board, view: PaneView) {
                   {ticketLabel(ui, r.id, r.name, w - 1, { bold: isOpen, dim: isQuiet })}
                 </Button>
               )}
-              <Box columnGap={2} paddingLeft={2}>
-                <Box flexShrink={0}>{line(ui, r, seg)}</Box>
-                {stateText(ui, r.state, r.status)}
-              </Box>
+              {pics ? (
+                // The picture has a cell of room at each end, so its stations stand where the text's do.
+                <Box columnGap={1} paddingLeft={1}>
+                  <Box flexShrink={0}>
+                    {picture(ui, `tk${r.id}`, trackPicture(P, seg, r, r.state === 'blocked' ? P.blocked : toneOf(P, r.tone)))}
+                  </Box>
+                  {stateText(ui, r.state, r.status)}
+                </Box>
+              ) : (
+                <Box columnGap={2} paddingLeft={2}>
+                  <Box flexShrink={0}>{line(ui, r, seg)}</Box>
+                  {stateText(ui, r.state, r.status)}
+                </Box>
+              )}
+              {!isOpen && hasStrip(r) && r.hour !== null && (
+                <Box paddingLeft={2}>{picture(ui, `hr${r.id}`, hourPicture(P, wideFor(w) - 2, 2, r.hour, scale, hourAlt(r.cells)))}</Box>
+              )}
               {isOpen && (
                 <Box flexDirection="column" paddingLeft={2} marginBottom={isLast ? 0 : 1}>
                   {r.detail.map((words, i) => (
@@ -446,13 +640,14 @@ function overview(ui: UI, w: number, board: Board, view: PaneView) {
                       {words}
                     </Text>
                   ))}
-                  {hour(ui, r.cells)}
+                  {pics && hasHour(r.hour) ? hourChart(ui, w, r, scale) : hour(ui, r.cells)}
                 </Box>
               )}
             </Box>
           )
           }),
         ])}
+        {rows.some(r => hasStrip(r) || (pics && view.focus === r.id && hasHour(r.hour))) && hourKey(ui)}
         {view.focus === '' && (
           <Text color={P.hint}>
             {rows.some(r => r.tab !== null)
@@ -478,12 +673,12 @@ function overview(ui: UI, w: number, board: Board, view: PaneView) {
 // A setting's value draws in a frame, so it reads as a control: a native button
 // on the desktop, `[ ● On ]` in the terminal.
 
-/** A setting's on and off value, which a press flips. */
-export const toggle = (ui: UI, key: string, on: boolean, onPress: () => unknown) => {
+/** A setting's on and off value, which a press, or its `hotkey`, flips. */
+export const toggle = (ui: UI, key: string, on: boolean, onPress: () => unknown, hotkey?: string) => {
   const { Button, Text, P } = ui
 
   return (
-    <Button key={`set-${key}`} onPress={onPress}>
+    <Button key={`set-${key}`} hotkey={hotkey} onPress={onPress}>
       {on ? <Text color={P.green}>● On</Text> : <Text color={P.gray}>○ Off</Text>}
     </Button>
   )
@@ -565,9 +760,19 @@ export function tabBar(
  * files that hold every step, the older ones the tab leaves out included;
  * null once those files are gone (an ended Super-Gru run's kept board).
  */
-export function logTab(ui: UI, w: number, log: LogView, empty: string, files: string | null) {
+export function logTab(ui: UI, w: number, log: LogView, empty: string, files: string | null, now?: number) {
   const { Box, Text, P } = ui
   const steps = log.days.reduce((n, d) => n + d.entries.length, 0)
+  // With pictures and the time, the steps shown draw over the run on one line: Gru's above, the tickets' below.
+  const strip =
+    ui.Image === undefined || now === undefined
+      ? null
+      : logPicture(
+          P,
+          wideFor(w),
+          log.days.flatMap(d => d.entries),
+          now,
+        )
 
   return (
     <Box flexDirection="column" gap={1}>
@@ -577,6 +782,18 @@ export function logTab(ui: UI, w: number, log: LogView, empty: string, files: st
           {steps === 0 ? empty : 'The big steps, newest first, each told in plain words by whoever did it.'}
         </Text>
       </Box>
+      {strip !== null && now !== undefined && (
+        <Box flexDirection="column">
+          {picture(ui, 'log', strip)}
+          {under(ui, 0, strip.columns, [sinceOf(strip.start, now), 'now'])}
+          {strip.isSplit && (
+            <Box columnGap={2}>
+              {keyOf(ui, P.blue, '●', "Gru's steps")}
+              {keyOf(ui, P.id, '●', "the tickets' steps")}
+            </Box>
+          )}
+        </Box>
+      )}
       {log.days.map((day, d) => (
         <Box key={`day${d}`} flexDirection="column">
           {day.label !== null && <Text bold>{day.label}</Text>}
@@ -652,7 +869,7 @@ export function statsTab(
   w: number,
   view: StatsView,
   now: number,
-  words: { title: string; who: string; empty: string; after?: ReturnType<typeof divider> | null },
+  words: { title: string; who: string; empty: string; before?: ReturnType<typeof divider> | null; after?: ReturnType<typeof divider> | null },
 ) {
   const { Box, Text, P } = ui
   if (view.since === null && view.sessions.length === 0) {
@@ -679,6 +896,8 @@ export function statsTab(
           {`${words.who}${view.since === null ? '' : ` Counted since ${sinceOf(view.since, now)}.`}`}
         </Text>
       </Box>
+
+      {words.before ?? null}
 
       <Box flexDirection="column">
         {view.columns.length > 0 && (
@@ -744,6 +963,125 @@ export function statsTab(
   )
 }
 
+/**
+ * The Stats tab's share bars: for each count, each session's part of the
+ * run's whole as one bar, Gru's part first in gray, then the tickets' largest
+ * first; the parts past SHARE_PARTS are one, `others`.
+ */
+function shares(ui: UI, w: number, list: readonly StatShare[]) {
+  const { Box, Text, P } = ui
+  if (list.length === 0) return null
+
+  return (
+    <Box flexDirection="column" gap={1}>
+      {list.map(share => {
+        const total = share.parts.reduce((n, p) => n + p.value, 0)
+        const gru = share.parts.filter(p => p.id === null)
+        const tickets = share.parts.filter(p => p.id !== null).sort((a, b) => b.value - a.value)
+        const named = tickets.slice(0, SHARE_PARTS)
+        const rest = tickets.slice(SHARE_PARTS).reduce((n, p) => n + p.value, 0)
+        const parts = [
+          ...gru.map(p => ({ ...p, ink: P.gray })),
+          ...named.map((p, i) => ({ ...p, ink: P[SHARE_INK[i % SHARE_INK.length] ?? 'gray'] })),
+          ...(rest > 0 ? [{ id: 'others', value: rest, ink: P.track }] : []),
+        ]
+        const percent = (v: number) => `${Math.round((v / total) * 100)}%`
+
+        return (
+          <Box key={`sh${share.title}`} flexDirection="column">
+            <Text bold>{`${share.title}, by session`}</Text>
+            {picture(
+              ui,
+              `sh${share.title}`,
+              sharePicture(
+                wideFor(w),
+                parts.map(p => p.value),
+                parts.map(p => p.ink),
+                parts.map(p => `${p.id ?? 'Gru'} ${percent(p.value)}`).join(' · '),
+              ),
+            )}
+            <Box columnGap={2} flexWrap="wrap">
+              {parts.map(p => (
+                <Text key={`p${p.id ?? 'gru'}`}>
+                  <Text color={p.ink}>■ </Text>
+                  {p.id === null || p.id === 'others' ? <Text color={P.text}>{p.id ?? 'Gru'}</Text> : <Text color={P.id}>{`[${p.id}]`}</Text>}
+                  <Text color={P.text}>{` ${percent(p.value)}`}</Text>
+                </Text>
+              ))}
+            </Box>
+          </Box>
+        )
+      })}
+    </Box>
+  )
+}
+
+/**
+ * The Stats tab's clock: the time since the run, or the ticket, started, in
+ * seven-segment digits. The pane draws it as of the last poll, and the poll swaps its
+ * picture each second (register.tsx), with no redraw of the pane.
+ */
+function runClock(ui: UI, what: 'run' | 'ticket', started: number, now: number) {
+  const { Box, Text, P } = ui
+
+  return (
+    <Box flexDirection="column">
+      <Text bold>{what === 'run' ? '⏱ Run time' : '⏱ Ticket time'}</Text>
+      {picture(ui, CLOCK_KEY, clockPicture(now - started))}
+      <Text color={P.hint}>{`Hours, minutes and seconds since the ${what} started, ${sinceOf(started, now)}.`}</Text>
+    </Box>
+  )
+}
+
+/** Token counts as an airport departures board: the whole run's, or the ticket's, as the table's last column counts them. Its title is in the picture. */
+function tokenBoard(ui: UI, w: number, tokens: Tokens) {
+  const { Box } = ui
+
+  return (
+    <Box flexDirection="column">
+      {picture(
+        ui,
+        'board',
+        boardPicture(wideFor(w), [
+          ['IN', tokens.input],
+          ['OUT', tokens.output],
+          ['CACHE READ', tokens.cacheRead],
+          ['CACHE WRITE', tokens.cacheWrite],
+        ]),
+      )}
+    </Box>
+  )
+}
+
+/**
+ * The pictures over a Stats tab's table: the clock since the run, or the
+ * ticket, started, then the token board; null on a pane that draws text, or
+ * with neither.
+ */
+export function statsTop(ui: UI, w: number, what: 'run' | 'ticket', started: number | null, tokens: Tokens | undefined, now: number) {
+  const { Box } = ui
+  if (ui.Image === undefined || (started === null && tokens === undefined)) return null
+
+  return (
+    <Box flexDirection="column" gap={1}>
+      {started !== null && runClock(ui, what, started, now)}
+      {tokens !== undefined && tokenBoard(ui, w, tokens)}
+    </Box>
+  )
+}
+
+/** The Pictures choice of a pane's Settings: On, the pane draws its graphs as pictures in a terminal; `p` flips it. */
+export const picturesRow = (ui: UI, w: number, on: boolean, flip: () => unknown) =>
+  settingRow(
+    ui,
+    w,
+    'Pictures',
+    toggle(ui, 'pictures', on, flip, 'p'),
+    on
+      ? 'In a terminal, the pane draws its graphs as pictures: kitty, Ghostty and iTerm2 show them. Another terminal shows their words.'
+      : 'The pane draws its graphs as text.',
+  )
+
 function settings(ui: UI, w: number, board: Board, view: PaneView) {
   const { Box, Text, P } = ui
   const s = board.settings
@@ -796,6 +1134,7 @@ function settings(ui: UI, w: number, board: Board, view: PaneView) {
           ? 'The ticket list shows in progress, then to do, then done, each under its own line. The GitHub tab shows open and draft PRs, then merged, then closed.'
           : 'The ticket list and the GitHub tab keep the order of the run.',
       )}
+      {picturesRow(ui, w, view.pictures, view.flipPictures)}
     </Box>
   )
 }
@@ -946,6 +1285,20 @@ export function prCard(ui: UI, w: number, item: GithubView['prs'][number], now: 
           <Text color={P.blocked}>{` −${grouped(pr.deletions)}`}</Text>
         </Text>
       </Box>
+      {/* The PR's life on one line: its commits as dots, its merge as a ring, its runs as bars under them. */}
+      {ui.Image !== undefined && (
+        <Box paddingLeft={2}>
+          {picture(
+            ui,
+            `pt${id}`,
+            prPicture(P, wideFor(w) - 2, pr, now, {
+              state: P[PR_INK[pr.state]],
+              marks: { '✓': P[MARK_INK['✓']], '✕': P[MARK_INK['✕']], '●': P[MARK_INK['●']], '○': P[MARK_INK['○']], '–': P[MARK_INK['–']] },
+              plain: P.text,
+            }),
+          )}
+        </Box>
+      )}
       {runsLine(ui, 'Checks', pr.runs, now, `rk${id}`)}
       {pr.mergeRuns.length > 0 && runsLine(ui, 'After merge', pr.mergeRuns, now, `ra${id}`)}
       <Box paddingLeft={2}>
@@ -1107,6 +1460,7 @@ export function drawPane(ui: UI, w: number, view: PaneView) {
               board.log,
               'No step yet. Gru and each worker add one line here at each big step.',
               `~/.cache/stark-progress/run-${board.launchId}.log.jsonl and each ticket's .log.jsonl`,
+              board.readAt,
             )
           : view.tab === 'stats'
             ? statsTab(ui, w, board.stats, board.readAt, {
@@ -1118,6 +1472,8 @@ export function drawPane(ui: UI, w: number, view: PaneView) {
                     : ` The run started ${startedWords(board.started, board.readAt)}.`
                 }`,
                 empty: "No stats yet. The mod counts in Gru's tab and in each worker's tab, once each has the mod.",
+                before: statsTop(ui, w, 'run', board.started, board.stats.tokens, Math.max(view.now, board.readAt)),
+                after: ui.Image === undefined ? null : shares(ui, w, board.stats.shares ?? []),
               })
             : overview(ui, w, board, view)}
     </Box>

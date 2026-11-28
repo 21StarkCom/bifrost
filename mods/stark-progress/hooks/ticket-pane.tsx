@@ -3,19 +3,26 @@ import { clockOf } from './board'
 import {
   choice,
   hour,
+  hourChart,
+  hourKey,
   line,
   logTab,
+  picture,
+  picturesRow,
   segFor,
   settingRow,
   startedWords,
   stateText,
   stationHeader,
   statsTab,
+  statsTop,
   tabBar,
   ticketLabel,
   toggle,
+  toneOf,
 } from './pane'
 import type { UI } from './pane'
+import { hasHour, hourScale, trackPicture } from './pictures'
 
 // The ticket pane, in a Minion's or Agnes's own tab: one ticket, all of it at
 // once (Overview), and the settings its worker reads before its review, its
@@ -29,6 +36,11 @@ export type TicketPaneView = {
   setTab: (tab: PaneTab) => unknown
   /** A change made from the settings as they are when it is written, so two quick presses both count. */
   set: (change: (s: TicketSettings) => Partial<TicketSettings>) => unknown
+  /** The panes' own choice: their graphs as pictures, in a terminal. */
+  pictures: boolean
+  flipPictures: () => unknown
+  /** The time of the last poll: the clock on the Stats tab starts from it, and a blit moves it on each second. */
+  now: number
 }
 
 /** What clears a hold, said where the hold is. */
@@ -63,10 +75,18 @@ function overview(ui: UI, w: number, t: TicketBoard) {
       <Box flexDirection="column">
         <Text bold>🚇 Where it is</Text>
         <Text mono color={P.hint}>{`  ${stationHeader(seg)}`}</Text>
-        <Box columnGap={2} paddingLeft={2}>
-          <Box flexShrink={0}>{line(ui, t, seg)}</Box>
-          {stateText(ui, t.state, t.status)}
-        </Box>
+        {ui.Image === undefined ? (
+          <Box columnGap={2} paddingLeft={2}>
+            <Box flexShrink={0}>{line(ui, t, seg)}</Box>
+            {stateText(ui, t.state, t.status)}
+          </Box>
+        ) : (
+          // As the Gru pane's row: the picture has a cell of room at each end, so its stations stand where the text's do.
+          <Box columnGap={1} paddingLeft={1}>
+            <Box flexShrink={0}>{picture(ui, 'track', trackPicture(P, seg, t, t.state === 'blocked' ? P.blocked : toneOf(P, t.tone)))}</Box>
+            {stateText(ui, t.state, t.status)}
+          </Box>
+        )}
       </Box>
 
       {t.attention === null ? (
@@ -88,7 +108,8 @@ function overview(ui: UI, w: number, t: TicketBoard) {
             {words}
           </Text>
         ))}
-        {hour(ui, t.cells)}
+        {ui.Image !== undefined && hasHour(t.hour) ? hourChart(ui, w, t, hourScale([t]), 0) : hour(ui, t.cells)}
+        {ui.Image !== undefined && hasHour(t.hour) && hourKey(ui)}
       </Box>
 
       {t.next !== null && (
@@ -145,6 +166,11 @@ function settings(ui: UI, w: number, t: TicketBoard, view: TicketPaneView) {
           ? 'The worker stops before the release publishes, and waits until you set run the chain.'
           : "The worker runs the repo's release chain after the merge.",
       )}
+      <Box flexDirection="column">
+        <Text bold>This pane</Text>
+        <Text color={P.text}>Only the panes use this setting, in every run. The worker does not read it.</Text>
+      </Box>
+      {picturesRow(ui, w, view.pictures, view.flipPictures)}
     </Box>
   )
 }
@@ -179,6 +205,7 @@ export function drawTicketPane(ui: UI, w: number, view: TicketPaneView) {
               t.log,
               'No step yet. The worker adds one line here at each big step.',
               `~/.cache/stark-progress/${t.id}.log.jsonl`,
+              t.readAt,
             )
           : view.tab === 'stats'
             ? statsTab(ui, w, t.stats, t.readAt, {
@@ -188,6 +215,7 @@ export function drawTicketPane(ui: UI, w: number, view: TicketPaneView) {
                   t.started === null || t.started === t.stats.since ? '' : ` The ticket started ${startedWords(t.started, t.readAt)}.`
                 }`,
                 empty: "No stats file yet. This tab writes one within a few seconds, if the worker's session has the mod.",
+                before: statsTop(ui, w, 'ticket', t.started, t.stats.tokens, Math.max(view.now, t.readAt)),
               })
             : overview(ui, w, t)}
     </Box>

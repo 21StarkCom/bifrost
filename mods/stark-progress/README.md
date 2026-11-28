@@ -15,7 +15,9 @@ epics of its run in groups by state, the steps of Super-Gru and of each Gru,
 the counts of the whole run, the PR activity of every epic, and the settings
 Super-Gru reads. No pane ever
 forecasts the time left. All three draw in
-the terminal and in the Claude desktop app's Code tab. The mod polls
+the terminal and in the Claude desktop app's Code tab; in a terminal that
+shows pictures, the Gru pane and the ticket pane draw their graphs as
+[pictures](#pictures). The mod polls
 the state files below once a second, and git once every 30 seconds; it asks
 alfred for an epic's title until it has one, and GitHub once a minute while
 the Gru pane or the Super-Gru pane shows its GitHub tab.
@@ -422,7 +424,8 @@ store (`$.store`, key `doneLast`) keeps it across sessions; it loads in the
 background at session start, and presses apply one at a time behind it. It is
 never in the run's settings file, and Gru never reads it. A store that cannot
 be read leaves it Off; a write that fails keeps the press on screen and says
-`The choice was not saved.`
+`The choice was not saved.` A second row there, `Pictures`, is in
+[Pictures](#pictures).
 
 **Colors.** In the terminal, every text color is 4.5:1 or more on the pane's
 `#262626` (secondary text 8.1:1); the track's lines and rings, which carry no
@@ -540,6 +543,89 @@ over the one before it. The worker reads the file at three points of
 
 A hold is no stop: the worker writes `hold` into its ticket file, reports
 `held`, and waits in one background command until you clear the setting.
+
+Under `This pane`, one more row, which only the panes read: `Pictures`, in
+[Pictures](#pictures).
+
+## Pictures
+
+In a terminal, the Gru pane and the ticket pane draw their graphs as
+pictures, with the terminal's `Image` element. kitty, Ghostty (cmux uses it)
+and iTerm2 3.5 or later show them; another terminal draws each picture's
+words (its `alt`) in its place, which say what the text graph says. The
+desktop app's Code tab, the Super-Gru pane and the band row draw text.
+
+The choice is `Pictures`, a row under `This pane` on the Settings tab of
+each pane, On by default; `p` flips it there. Off, each pane draws the text
+that the sections above describe. The plugin's own store (`$.store`, key
+`pictures`) keeps it across sessions, one choice for both panes: it is never
+in a settings file, and no worker reads it. It loads in the background at
+session start, and presses apply one at a time behind it. A store that cannot
+be read leaves it On; a write that fails keeps the press on screen and says
+`The choice was not saved.`
+
+A picture holds marks only: every word and number stays text beside it, and
+each row you select stays a text button, since a picture takes no press. A
+picture is clear behind its marks, so it sits on the terminal's own
+background. No picture forecasts: each shows counts and time so far.
+
+**The Gru pane's Overview.**
+
+- The tickets at each step, as one bar: a part for each step with a ticket, as
+  wide as its share, in that station's state color. Under it, each of those
+  steps with its count, and `· <k> worth a look` in amber. It takes the place
+  of the bar graph.
+- `📈 Tickets done over the run`: the tickets done as a green line with a soft
+  fill and a dot at each close, the tickets started as a thinner blue line,
+  and all the run's tickets as a dashed line, from the run's start to now. Its
+  axis names all, half (an even count) and 0. A ticket found closed counts as
+  started when it closed. It draws once the run has a start and a minute of
+  time, and changes once a minute.
+- Each ticket's metro line: a dot at each station passed, a ring at the one it
+  is at, a small ring at each one to come, and a cross where a blocked ticket
+  stopped, in red. Its stations stand where the text line's do.
+- Under the line of each ticket in progress, its last hour, a bar a minute:
+  the calls, the failed ones as a red cap over a clear line, a green mark at
+  each milestone, and a dashed amber line while one call has run a minute or
+  more. The text shows the same
+  hour in 12 cells of 5 minutes, and only in an opened row. All rows share one
+  scale: the busiest minute of the run's tickets, up to the next 5, and 10 at
+  the least. A ticket with no call, milestone or running call in its hour
+  draws none.
+- An opened row draws that hour as a chart with an axis, in place of its strip
+  and of the `Last hour` cells. Its axis names the scale, its half (an even
+  scale) and 0.
+
+**The Gru pane's other tabs.**
+
+- Log: the steps shown, over the run, on one line: Gru's above and the
+  tickets' below.
+- Stats, over the table: `⏱ Run time`, the time since the run started as a
+  red clock of seven-segment digits, `HH:MM:SS` (a third hours digit past 99),
+  each segment that is not lit drawn dark; then the whole run's token counts
+  as an airport departures board of split flaps, `IN`, `OUT`, `CACHE READ`
+  and `CACHE WRITE`, each count with its commas (its digits alone when 13
+  tiles do not hold the commas). The pane redraws once a minute, so while it is placed and
+  shows the tab, each poll swaps the clock's picture in place (`$.ui.blit`).
+- Stats, under the table: a share bar for `Output tokens` and for `Working
+  time`, each session's part of the run's whole: Gru's first in gray, then the
+  tickets' largest first, the parts past 6 as one, `others`. A count with one
+  part draws no bar.
+- GitHub: under each PR's first line, its life on one line, from its first
+  commit or its opening to its merge, its close or now: a dot for each commit
+  in its checks' color, a ring at the merge or the close, and a bar for each
+  Actions run from its start to its end, in its mark's color, in two lanes.
+
+**The ticket pane.** Its metro line; its last hour as the chart with an axis,
+under `🔧 Activity`; the Log tab's steps on one line; on the Stats tab,
+`⏱ Ticket time`, the clock since the ticket started, and the token board of
+its own counts; and the `Pictures` row under `This pane` in Settings.
+
+`hooks/pixels.ts` draws: a canvas with soft edges and a PNG encoder, with no
+engine call, since the mod's runtime has no `CompressionStream`.
+`hooks/pictures.ts` says what each picture shows, and keeps each one drawn
+until what it shows changes. The engine takes at most 2 MiB of picture data in
+one pane; a tab of a run of 9 tickets holds under 100 KB.
 
 ## The Super-Gru pane
 
@@ -936,6 +1022,12 @@ write: its counts are in memory after that.
 - On the GitHub tab: commits that are not pushed, a branch with no PR, reviews
   and review threads, a GitHub tab in the ticket pane, and any write to GitHub
   (a re-run of a failed job, a merge, a comment).
+- Pictures in the desktop app's Code tab, VS Code and mobile: they have `Svg`
+  and no `Image`, so each picture needs a second drawer.
+- Pictures in the Super-Gru pane and in the band row above the prompt.
+- A way to tell if the terminal shows pictures: the engine gives the mod no
+  such fact, so a terminal that shows none draws each picture's words.
+- A press or a hover on a picture: the engine's `Image` takes neither.
 
 ## Develop
 

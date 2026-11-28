@@ -4,7 +4,7 @@ import { calm, callsOf, epicTitleOf, nameOf, parse, runsOf, startOf } from './bo
 import type { RunEntry } from './board'
 import { buildLog, logName } from './log'
 import { statsName, ticketStats } from './stats'
-import { holdOf, row } from './view'
+import { holdOf, hourOf, row } from './view'
 
 // What the ticket pane draws (ticket-pane.tsx), from the contract's files
 // (../README.md): a worker's own ticket, read as the Gru pane reads a row, and
@@ -89,6 +89,7 @@ export function buildTicket(
     attention: hold === null ? reading.attention : `Held by your settings: ${hold}`,
     activity,
     cells: r.cells,
+    hour: hourOf(id, files, git, now),
     next: hold === null ? NEXT[r.stage] : `Wait for your ${hold} OK.`,
     settings: ticketSettingsOf(files[ticketSettingsName(id)]),
     log: buildLog([{ who: null, text: files[logName(id)] }], now),
