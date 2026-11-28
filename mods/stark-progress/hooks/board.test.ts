@@ -169,7 +169,6 @@ test('each verdict reads calmly, and the ones worth a look say why', () => {
   expect(by('STARK-6')).toMatchObject({ tone: 'warn', state: 'pr', attention: '6 of the last 10 calls failed' })
   expect(by('STARK-7')).toMatchObject({ tone: 'none', state: 'todo', status: '', at: -1 })
   expect([board.done, board.inProgress, board.notStarted]).toEqual([1, 5, 1])
-  expect(board.next).toEqual(['STARK-7'])
   expect(board.isOwn).toBe(true)
   expect(board.rows.map(r => `${r.state} ${r.status} ${r.attention ?? ''}`).join(' ')).not.toMatch(/left|ETA|~\d/)
 })

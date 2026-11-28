@@ -286,7 +286,7 @@ test('a background subagent that runs after the main turn ended counts as workin
   expect(JSON.parse(disk['STARK-1.stats.json'] ?? '{}')).toMatchObject({ openMs: 60_000, busyMs: 4000 })
 })
 
-test('the pane draws the run: counts, a ticket worth a look, Up next, and a row opened to its detail', async ($, on) => {
+test('the pane draws the run: counts, a ticket worth a look, and a row opened to its detail', async ($, on) => {
   const iso = (minutesAgo: number) => new Date(T0 - minutesAgo * MIN).toISOString()
   const disk: Record<string, string> = {
     'run-STARK-10.json': JSON.stringify({
@@ -334,9 +334,10 @@ test('the pane draws the run: counts, a ticket worth a look, Up next, and a row 
   expect((await pane.find({ type: 'Text', text: /^\[STARK-2\]$/ }))?.props.color).toBe('#c9b3f5')
   expect((await pane.find({ type: 'Text', text: /^Read the words file$/ }))?.props.color).toBeUndefined()
   expect((await pane.find({ type: 'Text', text: /^Say the names$/ }))?.props.color).toBe('#b8bdd0')
-  // A ticket with no file yet takes its title from the run file, in its row and in Up next.
-  expect(await pane.find({ type: 'Text', text: /^\[STARK-4\] Speak the hints$/ })).toBeDefined()
-  expect(await pane.find({ type: 'Text', text: /^Start \[STARK-4\] Speak the hints$/ })).toBeDefined()
+  // A ticket with no file yet takes its title from the run file, in its row; the list names it once, with no Up next below.
+  expect(await pane.findAll({ type: 'Text', text: /^\[STARK-4\] Speak the hints$/ })).toHaveLength(1)
+  expect(await pane.find({ type: 'Text', text: '👉 Up next' })).toBeUndefined()
+  expect(await pane.find({ type: 'Text', text: /^Then close / })).toBeUndefined()
   // A file that names no title shows the id alone, in its row and in the box of tickets worth a look.
   expect(await pane.findAll({ type: 'Text', text: /^\[STARK-3\]$/ })).toHaveLength(4)
   expect(await pane.find({ type: 'Text', text: /^\[STARK-3\] / })).toBeUndefined()

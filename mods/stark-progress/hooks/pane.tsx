@@ -363,7 +363,6 @@ function graph(ui: UI, w: number, rows: BoardRow[]) {
 function overview(ui: UI, w: number, board: Board, view: PaneView) {
   const { Box, Button, Text, P } = ui
   const rows = board.rows
-  const names = new Map(rows.map(r => [r.id, r.name]))
   const looks = rows.filter(r => r.attention !== null)
   // The list keeps the run's order, or groups the tickets under a line each, done last, each group in that order.
   const groups: { name: string | null; rows: BoardRow[] }[] = view.doneLast
@@ -462,22 +461,6 @@ function overview(ui: UI, w: number, board: Board, view: PaneView) {
           </Text>
         )}
       </Box>
-
-      {board.next.length > 0 && (
-        <Box flexDirection="column">
-          <Text bold>👉 Up next</Text>
-          {board.next.map(id => (
-            <Text key={`n${id}`}>
-              {'Start '}
-              {ticketLabel(ui, id, names.get(id) ?? '', w - 'Start '.length)}
-            </Text>
-          ))}
-          {/* A `--tickets` run's epic is its first ticket, which no one closes as an epic. */}
-          {!rows.some(r => r.id === board.epic) && (
-            <Text color={P.text}>{`Then close ${board.epic} once all ${rows.length} tickets close.`}</Text>
-          )}
-        </Box>
-      )}
 
       {next !== undefined && (
         <Box columnGap={1}>
