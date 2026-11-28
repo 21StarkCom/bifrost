@@ -501,15 +501,19 @@ export function hourChart(ui: UI, w: number, r: Pick<BoardRow, 'id' | 'hour' | '
   if (r.hour === null) return null
   const digits = String(max).length
   const columns = wideFor(w) - indent - digits - 1
+  // As the burn-up's axis: the half has a name only when it is a whole count, so no label is wider than the scale's.
+  const half = max % 2 === 0 ? { [(HOUR_ROWS - 1) / 2]: String(max / 2) } : {}
+  const ends = ['60m ago', 'now'] as const
 
   return (
     <Box flexDirection="column" marginTop={1}>
       <Text color={P.hint}>Last hour, calls a minute</Text>
       <Box columnGap={1}>
-        {axis(ui, HOUR_ROWS, { 0: String(max), [(HOUR_ROWS - 1) / 2]: String(max / 2), [HOUR_ROWS - 1]: '0' })}
+        {axis(ui, HOUR_ROWS, { 0: String(max), ...half, [HOUR_ROWS - 1]: '0' })}
         {picture(ui, `hc${r.id}`, hourPicture(P, columns, HOUR_ROWS, r.hour, max, hourAlt(r.cells)))}
       </Box>
-      {under(ui, digits + 1, columns, ['60m ago', '30m ago', 'now'])}
+      {/* Both ends take the same cells, so the middle's words stand under the middle of the picture. */}
+      {under(ui, digits + 1, columns, [ends[0], '30m ago', ends[1].padStart(ends[0].length)])}
     </Box>
   )
 }

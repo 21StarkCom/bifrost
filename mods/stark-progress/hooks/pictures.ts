@@ -4,6 +4,7 @@ import type { StepCount } from './board'
 import type { Palette } from './pane'
 import { base64, Canvas, CELL_H, CELL_W, png, rgb } from './pixels'
 import type { Pt } from './pixels'
+import { counted } from './stats'
 import { STAGES } from './view'
 
 // The Gru pane's graphs as pictures, for a terminal that draws them (kitty,
@@ -171,9 +172,9 @@ export const hasHour = (hour: RowHour | null): hour is RowHour =>
 export const HOUR_ROWS = 5
 
 /**
- * A ticket's last hour, a bar a minute: the calls, the failed ones on top in
- * red, a green mark at each milestone, and a dashed line while one long call
- * runs. `rows` 2 is the strip under a row; HOUR_ROWS is the chart of an opened
+ * A ticket's last hour, a bar a minute: the calls, the failed ones as a red
+ * cap over a clear line, a green mark at each milestone, and a dashed line
+ * while one long call runs. `rows` 2 is the strip under a row; HOUR_ROWS is the chart of an opened
  * row, with 0 and `max` on the centers of its last and first row.
  */
 export function hourPicture(P: Palette, columns: number, rows: number, hour: RowHour, max: number, alt: string): Picture {
@@ -194,8 +195,10 @@ export function hourPicture(P: Palette, columns: number, rows: number, hour: Row
       for (const [m, minute] of hour.minutes.entries()) {
         if (minute.calls <= 0) continue
         const h = Math.max(3, (Math.min(minute.calls, max) / max) * (base - top))
-        const failed = (Math.min(minute.fails, minute.calls) / minute.calls) * h
-        cv.rect(m * slot + 1, base - h + failed, (m + 1) * slot - 1, base, rgb(P.blue))
+        // The failed calls are a cap over the bar, with a clear line between the two: a failure never rests on its color alone.
+        const failed = minute.fails <= 0 ? 0 : Math.min(h, Math.max(3, (Math.min(minute.fails, minute.calls) / minute.calls) * h))
+        const gap = failed > 0 && failed < h ? 2 : 0
+        if (h - failed - gap > 0) cv.rect(m * slot + 1, base - h + failed + gap, (m + 1) * slot - 1, base, rgb(P.blue))
         if (failed > 0) cv.rect(m * slot + 1, base - h, (m + 1) * slot - 1, base - h + failed, rgb(P.blocked))
       }
       if (hour.runningFrom !== null) {
@@ -250,7 +253,7 @@ export function prPicture(P: Palette, columns: number, pr: GithubPr, now: number
   return {
     columns,
     rows: 1,
-    alt: `${pr.commitCount} commits, ${runs.length} runs.`,
+    alt: `${counted(pr.commitCount, 'commit')}, ${counted(runs.length, 'run')}.`,
     png: shot(`pr|${columns}|${key}|${inks.state}`, () => {
       const cv = new Canvas(columns, 1)
       const x = (t: number) => 8 + ((t - from) / (to - from)) * (cv.w - 16)
@@ -321,8 +324,8 @@ const DIGIT_GAP = 12
 const COLON_W = 32
 /** How faint a segment that is not lit draws: dark, so the lit figure stands out, yet each digit still reads as an `8` behind it. */
 const GHOST = 0.07
-/** The clock's own red, an LED's: 4.5:1 on the pane's #262626, and no state's color, so it never reads as an error. */
-const CLOCK_INK = '#ff453a'
+/** The clock's own red, an LED's: 4.6:1 on the pane's #262626, and no state's color, so it never reads as an error. */
+export const CLOCK_INK = '#ff4d42'
 
 /** `1:02:03` as the clock's digits: `01:02:03`, the hours with a third digit past 99. Never a forecast: the time so far. */
 export const clockWords = (ms: number) => {

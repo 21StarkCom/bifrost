@@ -158,7 +158,7 @@ export type StatsView = {
 /** One share bar of a Stats tab: a count's title, and each session's part (`id` null is Gru's own). */
 export type StatShare = { title: string; parts: { id: string | null; value: number }[] }
 
-export type Tone ='good' | 'warn' | 'bad' | 'dim'
+export type Tone = 'good' | 'warn' | 'bad' | 'dim'
 
 export type Verdict = {
   word: 'done' | 'blocked' | 'held' | 'idle' | 'moving' | 'slow' | 'stalled' | 'waiting'

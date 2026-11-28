@@ -265,7 +265,9 @@ export function hourOf(id: string, files: Record<string, string>, git: GitSignal
   return {
     minutes,
     marks: [...new Set(marks)].sort((a, b) => a - b),
-    runningFrom: running === null ? null : Math.max(0, Math.min(HOUR_MIN - 1, Math.floor(running.since / MIN) - first)),
+    // A call in flight for under a minute is no long call yet: the picture draws its line once the call has run a minute.
+    runningFrom:
+      running === null || now - running.since < MIN ? null : Math.max(0, Math.min(HOUR_MIN - 1, Math.floor(running.since / MIN) - first)),
   }
 }
 

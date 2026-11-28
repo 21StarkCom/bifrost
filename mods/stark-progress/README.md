@@ -585,14 +585,16 @@ background. No picture forecasts: each shows counts and time so far.
   is at, a small ring at each one to come, and a cross where a blocked ticket
   stopped, in red. Its stations stand where the text line's do.
 - Under the line of each ticket in progress, its last hour, a bar a minute:
-  the calls, the failed ones on top in red, a green mark at each milestone,
-  and a dashed amber line while one long call runs. The text shows the same
+  the calls, the failed ones as a red cap over a clear line, a green mark at
+  each milestone, and a dashed amber line while one call has run a minute or
+  more. The text shows the same
   hour in 12 cells of 5 minutes, and only in an opened row. All rows share one
   scale: the busiest minute of the run's tickets, up to the next 5, and 10 at
   the least. A ticket with no call, milestone or running call in its hour
   draws none.
 - An opened row draws that hour as a chart with an axis, in place of its strip
-  and of the `Last hour` cells.
+  and of the `Last hour` cells. Its axis names the scale, its half (an even
+  scale) and 0.
 
 **The Gru pane's other tabs.**
 

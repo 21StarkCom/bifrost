@@ -5,6 +5,7 @@ import { paletteFor } from './pane'
 import {
   boardPicture,
   burnUp,
+  CLOCK_INK,
   clockPicture,
   clockWords,
   hasHour,
@@ -222,6 +223,9 @@ test('an hour has something to show with a call, a milestone or a running call, 
   const at = (x: number, y: number) => [...px.subarray((y * w + x) * 4, (y * w + x) * 4 + 4)]
   expect(at(7 * 16 + 8, h - 6)).toEqual([...rgb(P.blue), 255])
   expect(at(7 * 16 + 8, h - 3 - 40)).toEqual([...rgb(P.blocked), 255])
+  // A clear line stands between the cap and the bar, so the failed part shows by its shape too.
+  expect(at(7 * 16 + 8, 34)[3]).toBe(0)
+  expect(at(7 * 16 + 8, 37)).toEqual([...rgb(P.blue), 255])
   expect(at(20 * 16 + 8, h - 10)[3]).toBe(0)
 })
 
@@ -238,9 +242,16 @@ test('the clock reads hours, minutes and seconds, and grows a digit past 99 hour
   // A lit segment is the clock's red; one that is not lit is there, but faint.
   const { px } = decode(bytesOf(clockPicture(0).png))
   const alphas = new Set<number>()
-  for (let i = 0; i < px.length; i += 4) if (px[i] === 0xff && px[i + 1] === 0x45 && px[i + 2] === 0x3a) alphas.add(px[i + 3] ?? 0)
+  const [red, green, blue] = rgb(CLOCK_INK)
+  for (let i = 0; i < px.length; i += 4) if (px[i] === red && px[i + 1] === green && px[i + 2] === blue) alphas.add(px[i + 3] ?? 0)
   expect(alphas.has(255)).toBe(true)
   expect([...alphas].some(a => a > 0 && a < 40)).toBe(true)
+  // The red reads on the pane's #262626: 4.5:1 or more (WCAG), as each text color of the pane.
+  const light = (hex: string) =>
+    rgb(hex)
+      .map(v => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4))
+      .reduce((sum, v, i) => sum + v * ([0.2126, 0.7152, 0.0722][i] ?? 0), 0)
+  expect((light(CLOCK_INK) + 0.05) / (light('#262626') + 0.05)).toBeGreaterThanOrEqual(4.5)
 })
 
 test('the token board lines up its counts, and drops the commas that do not fit', () => {

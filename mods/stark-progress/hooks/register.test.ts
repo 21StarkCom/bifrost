@@ -2655,6 +2655,51 @@ test('a store that kept Pictures Off starts a session with text', async ($, on) 
   await pane.unmount()
 })
 
+test("an hour's axis names its half only when that is a whole count, and its words stand under its ends and middle", async ($, on) => {
+  const disk = pictureRun()
+  // 12 calls in a minute: the scale is 15, whose half is 7.5.
+  disk['STARK-2.beat.json'] = JSON.stringify({
+    lastActivity: new Date(T0 - MIN).toISOString(),
+    running: null,
+    minutes: [{ at: Math.floor(T0 / MIN) - 2, calls: 12, fails: 1 }],
+    recent: [],
+  })
+  const seen = stage(on, disk, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  seen.isPlaced = true
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  const pane = await $.ui.mount(PANE)
+  await pane.press({ key: 'row-STARK-2' })
+  // The axis is as wide as the scale's digits, which the picture's width and the words under it count on.
+  expect((await pane.find({ type: 'Image', key: 'hcSTARK-2' }))?.props).toMatchObject({ rows: 5, columns: 60 - 2 - 2 - 1 })
+  expect(await pane.find({ type: 'Text', text: '15' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: ' 0' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /7\.5/ })).toBeUndefined()
+  expect(await pane.find({ type: 'Text', text: '60m ago' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '    now' })).toBeDefined()
+  await pane.unmount()
+})
+
+test("the desktop app's pane draws no clock, so no poll sends it a picture", async ($, on) => {
+  const seen = stage(on, pictureRun(), { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  seen.isPlaced = true
+  const blits: string[] = []
+  on('ui.blit', (_$, e) => {
+    blits.push(`${e.requestId} ${e.key}`)
+    return { value: { deny: 'not mounted' } }
+  })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'desktop', isInteractive: true })
+  await clock.advance(1000)
+  const pane = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await pane.press({ key: 'tab-stats' })
+  expect(await pane.findAll({ type: 'Image' })).toEqual([])
+  await clock.advance(2000)
+  expect(blits).toEqual([])
+  await pane.unmount()
+})
+
 test('with Pictures on, the ticket pane draws its line, its hour, its clock and its token board as pictures', async ($, on) => {
   const iso = (minutesAgo: number) => new Date(T0 - minutesAgo * MIN).toISOString()
   const disk: Record<string, string> = {

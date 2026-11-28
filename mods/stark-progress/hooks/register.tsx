@@ -304,6 +304,8 @@ export const register: Register = on => {
   let polling: Promise<void> = Promise.resolve()
   // A log only grows, and a poll reads it each second: keep its text until its size or time changes.
   const logReads = new Map<string, { stamp: string; text: string }>()
+  // The panes this load drew with an Image: only those hold a clock a blit can swap. The desktop app's pane has none.
+  const picturePanes = new Set<string>()
 
   on('session.start', async ($, e, next) => {
     await $.command.register({
@@ -609,7 +611,7 @@ export const register: Register = on => {
         lastBoard = boardKey
         await update($, board, () => shownBoard)
       }
-      if (shownBoard !== null) await tickClock($, PANE, await read($, tabAtom), shownBoard.started, now)
+      if (shownBoard !== null && picturePanes.has(PANE)) await tickClock($, PANE, await read($, tabAtom), shownBoard.started, now)
 
       // A worker's tab opens the ticket pane once, the first time its ticket's file is found, unless the
       // person closed it. The engine counts this open as the mod's own: it waits below 144 columns.
@@ -625,7 +627,7 @@ export const register: Register = on => {
         lastTicket = ticketKey
         await update($, ticketAtom, () => shownTicket)
       }
-      if (shownTicket !== null) await tickClock($, TICKET_PANE, await read($, ticketTabAtom), shownTicket.started, now)
+      if (shownTicket !== null && picturePanes.has(TICKET_PANE)) await tickClock($, TICKET_PANE, await read($, ticketTabAtom), shownTicket.started, now)
 
       const fresh = buildView(root, session, now, files, git)
       const key = JSON.stringify(fresh)
@@ -655,6 +657,7 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { ui, pictures } = await uiOf($, e, $.ui.resolve(e))
+    if (ui.Image !== undefined) picturePanes.add(PANE)
     const { Box, Text, Button } = ui
     const shown = await read($, board)
 
@@ -752,6 +755,7 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'Pane', requestId: TICKET_PANE }, async ($, e) => {
     const { ui, pictures } = await uiOf($, e, $.ui.resolve(e))
+    if (ui.Image !== undefined) picturePanes.add(TICKET_PANE)
     const shown = await read($, ticketAtom)
 
     return drawTicketPane(ui, Math.max(e.props.bodyColumns, 40), {
