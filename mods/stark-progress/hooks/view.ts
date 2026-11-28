@@ -1,4 +1,4 @@
-import type { BeatMinute, Cell, Count, GitSignal, Hold, Row, RunFile, Seg, Stage, Tone, Verdict, View } from '../types'
+import type { BeatMinute, Cell, Count, GitSignal, Hold, Row, RowHour, RunFile, Seg, Stage, Tone, Verdict, View } from '../types'
 import { beatFields, RECENT } from './beat'
 
 // What a tab draws, from the contract's files (../README.md), git's signal for
@@ -237,6 +237,36 @@ export function timeline(b: Beat | null, milestones: number[], now: number): Cel
   }
 
   return cells
+}
+
+const HOUR_MIN = CELLS * CELL_MIN
+
+/**
+ * A ticket's last hour by the minute, for the pane's pictures: what the
+ * timeline's cells sum, before the sum. Null with no heartbeat.
+ */
+export function hourOf(id: string, files: Record<string, string>, git: GitSignal | null, now: number): RowHour | null {
+  const text = files[`${id}.json`]
+  const t = text === undefined ? null : ticket(text)
+  const raw = beat(files[`${id}.beat.json`])
+  if (raw === null) return null
+  // As row() reads it: on a closed ticket, a call still running is the stand-down's, which never ends.
+  const running = t?.stage === 'closed' ? null : raw.running
+  const first = Math.floor(now / MIN) - HOUR_MIN + 1
+  const minutes = Array.from({ length: HOUR_MIN }, (_, i) => {
+    const m = raw.minutes.get(first + i)
+
+    return { calls: m?.calls ?? 0, fails: m?.fails ?? 0 }
+  })
+  const marks = [...(t?.updated == null ? [] : [t.updated]), ...(git?.commits ?? [])]
+    .map(ms => Math.floor(ms / MIN) - first)
+    .filter(i => i >= 0 && i < HOUR_MIN)
+
+  return {
+    minutes,
+    marks: [...new Set(marks)].sort((a, b) => a - b),
+    runningFrom: running === null ? null : Math.max(0, Math.min(HOUR_MIN - 1, Math.floor(running.since / MIN) - first)),
+  }
 }
 
 /** A ticket's row, from its file, its heartbeat and git's signal. */

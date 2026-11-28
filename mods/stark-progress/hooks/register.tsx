@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { Elements, EngineInterface, Register } from 'claude-code'
 
 import type { Cell, GitSignal, GruSettings, PaneTab, Row, Seg, SuperMemory, SuperSettings, TicketSettings, Tone } from '../types'
 import { beatFile, callEnded, callStarted, newBeat, seedBeat } from './beat'
@@ -9,6 +9,7 @@ import { githubQuery, parseGithub, prRefOf, repoKey } from './github'
 import type { PrRef, RepoAnswer } from './github'
 import { logName, runLogName } from './log'
 import { drawPane, paletteFor } from './pane'
+import { CLOCK_KEY, clockPicture } from './pictures'
 import {
   addCall,
   addPrompt,
@@ -54,7 +55,7 @@ const TICKET_PANE = 'ticket-board'
 const SUPER_PANE = 'super-board'
 
 const view = atom({ plugin: 'stark-progress', key: 'view' } as const, null, { shape: 'view-2' })
-const board = atom({ plugin: 'stark-progress', key: 'board' } as const, null, { shape: 'board-7' })
+const board = atom({ plugin: 'stark-progress', key: 'board' } as const, null, { shape: 'board-8' })
 const tabAtom = atom({ plugin: 'stark-progress', key: 'tab' } as const, 'overview' as PaneTab)
 const focusAtom = atom({ plugin: 'stark-progress', key: 'focus' } as const, '')
 const ghFocusAtom = atom({ plugin: 'stark-progress', key: 'ghFocus' } as const, '')
@@ -66,7 +67,11 @@ const ownEpicAtom = atom({ plugin: 'stark-progress', key: 'ownEpic' } as const, 
 const doneLastAtom = atom({ plugin: 'stark-progress', key: 'doneLast' } as const, false)
 /** The `$.store` key that keeps the pane's doneLast choice across sessions. */
 const DONE_LAST = 'doneLast'
-const ticketAtom = atom({ plugin: 'stark-progress', key: 'ticket' } as const, null, { shape: 'ticket-7' })
+/** The panes' Pictures choice: their graphs as pictures, in a terminal. On until the person sets it Off. */
+const picturesAtom = atom({ plugin: 'stark-progress', key: 'pictures' } as const, true)
+/** The `$.store` key that keeps the pane's Pictures choice across sessions. */
+const PICTURES = 'pictures'
+const ticketAtom = atom({ plugin: 'stark-progress', key: 'ticket' } as const, null, { shape: 'ticket-8' })
 const ticketTabAtom = atom({ plugin: 'stark-progress', key: 'ticketTab' } as const, 'overview' as PaneTab)
 const superAtom = atom({ plugin: 'stark-progress', key: 'superBoard' } as const, null, { shape: 'super-3' })
 const superTabAtom = atom({ plugin: 'stark-progress', key: 'superTab' } as const, 'overview' as PaneTab)
@@ -248,6 +253,41 @@ const cellColor = (c: Cell) =>
 const tailWidth = (r: Row) =>
   r.verdict.text.length + (r.failed === null ? 0 : r.failed.length + 3) + (r.diff === null ? 0 : r.diff.length + 3)
 
+/** The Pictures choice's load and its presses, one at a time: a press applies after the load, so the store ends on the value the panes show. */
+let picturesWrites: Promise<void> = Promise.resolve()
+
+/** Flips the panes' Pictures choice, and keeps it in the plugin's store, never in a run's or a ticket's settings file. */
+function flipPictures($: EngineInterface): Promise<void> {
+  picturesWrites = picturesWrites.catch(() => undefined).then(async () => {
+    const isOn = await update($, picturesAtom, now => !now)
+    try {
+      await $.store.set(PICTURES, isOn)
+    } catch {
+      await $.ui.toast('The choice was not saved.')
+    }
+  })
+
+  return picturesWrites
+}
+
+/** The elements a pane draws with: the terminal's Image too, while the Pictures choice is On. Only the terminal has one. */
+async function uiOf($: EngineInterface, e: { surface: string }, els: Pick<Elements['terminal'], 'Box' | 'Text' | 'Button'>) {
+  const pictures = await read($, picturesAtom)
+  const Image = pictures && e.surface === 'terminal' ? (els as Elements['terminal']).Image : undefined
+
+  return { ui: { Box: els.Box, Text: els.Text, Button: els.Button, P: paletteFor(e.surface), Image }, pictures }
+}
+
+/**
+ * A Stats tab's clock ticks each second: while its pane is placed and shows
+ * the tab, a blit swaps the clock's picture in place, with no redraw of the pane.
+ */
+async function tickClock($: EngineInterface, pane: string, tab: PaneTab, started: number | null, now: number): Promise<void> {
+  if (started === null || tab !== 'stats' || !(await read($, picturesAtom))) return
+  if (!(await $.ui.panes()).some(p => p.id === pane && p.isPlaced)) return
+  void $.ui.blit({ requestId: pane, key: CLOCK_KEY, source: { png: clockPicture(now - started).png } }).catch(() => undefined)
+}
+
 export const register: Register = on => {
   // The first poll of each load always draws: after a reload, the session's
   // state still holds what the last load drew, which may be old.
@@ -283,6 +323,10 @@ export const register: Register = on => {
     doneLastWrites = doneLastWrites.catch(() => undefined).then(async () => {
       const stored = await $.store.get(DONE_LAST).catch(() => undefined)
       if (typeof stored === 'boolean') await update($, doneLastAtom, () => stored)
+    })
+    picturesWrites = picturesWrites.catch(() => undefined).then(async () => {
+      const stored = await $.store.get(PICTURES).catch(() => undefined)
+      if (typeof stored === 'boolean') await update($, picturesAtom, () => stored)
     })
     surface = (await $.env.get('CMUX_SURFACE_ID').catch(() => undefined)) || null
     const home = await $.env.get('HOME')
@@ -565,6 +609,7 @@ export const register: Register = on => {
         lastBoard = boardKey
         await update($, board, () => shownBoard)
       }
+      if (shownBoard !== null) await tickClock($, PANE, await read($, tabAtom), shownBoard.started, now)
 
       // A worker's tab opens the ticket pane once, the first time its ticket's file is found, unless the
       // person closed it. The engine counts this open as the mod's own: it waits below 144 columns.
@@ -580,6 +625,7 @@ export const register: Register = on => {
         lastTicket = ticketKey
         await update($, ticketAtom, () => shownTicket)
       }
+      if (shownTicket !== null) await tickClock($, TICKET_PANE, await read($, ticketTabAtom), shownTicket.started, now)
 
       const fresh = buildView(root, session, now, files, git)
       const key = JSON.stringify(fresh)
@@ -608,8 +654,8 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text, Button } = $.ui.resolve(e)
-    const ui = { Box, Text, Button, P: paletteFor(e.surface) }
+    const { ui, pictures } = await uiOf($, e, $.ui.resolve(e))
+    const { Box, Text, Button } = ui
     const shown = await read($, board)
 
     return drawPane(ui, Math.max(e.props.bodyColumns, 40), {
@@ -621,6 +667,9 @@ export const register: Register = on => {
       setFocus: id => update($, focusAtom, () => id),
       ghFocus: await read($, ghFocusAtom),
       setGhFocus: id => update($, ghFocusAtom, () => id),
+      pictures,
+      now: lastTick,
+      flipPictures: () => flipPictures($),
       doneLast: await read($, doneLastAtom),
       // The pane's own choice, kept in the plugin's store, never in the run's settings file: Gru does not read it.
       // Presses apply one at a time, after the load, so the store ends on the value the pane shows.
@@ -702,11 +751,13 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'Pane', requestId: TICKET_PANE }, async ($, e) => {
-    const { Box, Text, Button } = $.ui.resolve(e)
-    const ui = { Box, Text, Button, P: paletteFor(e.surface) }
+    const { ui, pictures } = await uiOf($, e, $.ui.resolve(e))
     const shown = await read($, ticketAtom)
 
     return drawTicketPane(ui, Math.max(e.props.bodyColumns, 40), {
+      pictures,
+      flipPictures: () => flipPictures($),
+      now: lastTick,
       ticket: shown,
       ended: await read($, ownTicketAtom),
       tab: await read($, ticketTabAtom),

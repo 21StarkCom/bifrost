@@ -149,9 +149,16 @@ export type StatsView = {
   missing: string[]
   /** When the earliest count began, or null with no stats file. */
   since: number | null
+  /** The Gru pane's share bars: each session's part of a count; absent on a pane that draws none. */
+  shares?: StatShare[]
+  /** The whole run's token counts, for the Gru pane's token board; absent on a pane that draws none. */
+  tokens?: Tokens
 }
 
-export type Tone = 'good' | 'warn' | 'bad' | 'dim'
+/** One share bar of a Stats tab: a count's title, and each session's part (`id` null is Gru's own). */
+export type StatShare = { title: string; parts: { id: string | null; value: number }[] }
+
+export type Tone ='good' | 'warn' | 'bad' | 'dim'
 
 export type Verdict = {
   word: 'done' | 'blocked' | 'held' | 'idle' | 'moving' | 'slow' | 'stalled' | 'waiting'
@@ -227,7 +234,20 @@ export type BoardRow = {
   cells: Cell[]
   /** The cmux surface of its worker's tab while that tab is open (a heartbeat under 3 min old), else null. */
   tab: string | null
+  /** The last hour by the minute, for the pane's pictures; null with no heartbeat. */
+  hour: RowHour | null
+  /** When its worker started: its log's oldest line, else when its stats began; null with neither. */
+  started: number | null
+  /** When it closed: when its file's `closed` stage was written; null while it is open. */
+  closed: number | null
 }
+
+/**
+ * A ticket's last hour by the minute, oldest first: 60 minutes of calls and
+ * failures, the minutes (0 to 59) with a stage change or a commit, and the
+ * minute its one running call began (0 when before the hour), or null.
+ */
+export type RowHour = { minutes: { calls: number; fails: number }[]; marks: number[]; runningFrom: number | null }
 
 /**
  * One step on a Log tab: its local time, whose step it is (`Gru`, a ticket's
@@ -296,6 +316,8 @@ export type TicketBoard = {
   activity: string[]
   /** The last hour in 12 cells of 5 minutes, as the Gru pane's opened row draws it. */
   cells: Cell[]
+  /** The last hour by the minute, for the pane's pictures; null with no heartbeat. */
+  hour: RowHour | null
   /** The next spine step, or null once the ticket is closed. */
   next: string | null
   settings: TicketSettings
@@ -521,6 +543,8 @@ declare module 'claude-code' {
       ownEpic: string
       /** The pane's own choice: done tickets listed last. `$.store` keeps it across sessions; Gru never reads it. */
       doneLast: boolean
+      /** The pane's own choice: its graphs as pictures, in a terminal. `$.store` keeps it across sessions; Gru never reads it. */
+      pictures: boolean
       /** The ticket pane's model, in a worker's own tab. */
       ticket: Shaped<TicketBoard | null>
       ticketTab: PaneTab

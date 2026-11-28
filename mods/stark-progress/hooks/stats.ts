@@ -1,4 +1,4 @@
-import type { EpicStats, GitSignal, StatGroup, StatModel, StatsFile, StatsView, Tokens, ToolTally } from '../types'
+import type { EpicStats, GitSignal, StatGroup, StatModel, StatShare, StatsFile, StatsView, Tokens, ToolTally } from '../types'
 import { dur, parse as parseAs } from './view'
 
 const parse = (text: string | undefined) => parseAs<Record<string, unknown>>(text)
@@ -440,6 +440,7 @@ export function ticketStats(files: Record<string, string>, id: string, git: GitS
     models: modelsOf(counted),
     missing: [],
     since: s?.since ?? null,
+    ...(s === null ? {} : { tokens: s.tokens }),
   }
 }
 
@@ -459,6 +460,9 @@ export function runStats(
   const work = { added: 0, removed: 0, commits: 0, prs: 0, merged: 0 }
   const sessions: StatModel[] = gru === null ? [] : [{ id: null, words: modelWords(gru) }]
   const missing: string[] = []
+  // Each session's part of the run's output tokens and working time, Gru's first, for the pane's share bars.
+  const output: StatShare['parts'] = gru === null ? [] : [{ id: null, value: gru.tokens.output }]
+  const busy: StatShare['parts'] = gru === null ? [] : [{ id: null, value: gru.busyMs }]
   for (const id of tickets) {
     const s = statsOf(files[statsName(id)])
     // An id like `constructor` must not read a key every object has.
@@ -472,6 +476,8 @@ export function runStats(
     if (s !== null) {
       all = addStats(all, s)
       sessions.push({ id, words: modelWords(s) })
+      output.push({ id, value: s.tokens.output })
+      busy.push({ id, value: s.busyMs })
     } else if (files[`${id}.json`] !== undefined) {
       missing.push(id)
     }
@@ -485,6 +491,11 @@ export function runStats(
     models: modelsOf(all),
     missing,
     since: all.since,
+    tokens: all.tokens,
+    shares: [
+      { title: 'Output tokens', parts: output.filter(p => p.value > 0) },
+      { title: 'Working time', parts: busy.filter(p => p.value > 0) },
+    ].filter(s => s.parts.length > 1),
   }
 }
 

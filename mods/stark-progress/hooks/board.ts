@@ -3,8 +3,8 @@ import { beatFields, RECENT } from './beat'
 import { buildGithub } from './github'
 import type { RepoAnswer } from './github'
 import { buildLog, logName, logOf, runLogName } from './log'
-import { runStats, runStatsName, statsOf } from './stats'
-import { dur, isRunName, row, STAGES, STATION_LABELS, time } from './view'
+import { runStats, runStatsName, statsName, statsOf } from './stats'
+import { dur, hourOf, isRunName, row, STAGES, STATION_LABELS, time } from './view'
 
 // What the Gru pane draws (pane.tsx), from the contract's files (../README.md):
 // one run, picked as register.tsx says, with a calm status per ticket. Pure:
@@ -192,7 +192,7 @@ export function calm(
   hasFile: boolean,
   beat: Record<string, unknown> | null,
   now: number,
-): Omit<BoardRow, 'name' | 'repo' | 'slice' | 'detail' | 'cells' | 'tab'> {
+): Omit<BoardRow, 'name' | 'repo' | 'slice' | 'detail' | 'cells' | 'tab' | 'hour' | 'started' | 'closed'> {
   const base = { id: r.id, at: STAGES.indexOf(r.stage) }
   const v = r.verdict
   if (!hasFile) return { ...base, at: -1, tone: 'none', state: 'todo', status: '', attention: null }
@@ -369,6 +369,9 @@ export function buildBoard(
       detail: detailOf(hasFile, title, words?.slice ?? null, str(t?.pr), Number.isFinite(updated) ? updated : null, r, beat, now),
       cells: r.cells,
       tab: tabOf(beat, now),
+      hour: hasFile ? hourOf(id, files, git[id] ?? null, now) : null,
+      started: hasFile ? startOf(files[logName(id)], files[statsName(id)]) : null,
+      closed: t?.stage === 'closed' && Number.isFinite(updated) ? updated : null,
     }
   })
   const done = chosen.tickets.filter(id => parse(files[`${id}.json`])?.stage === 'closed').length

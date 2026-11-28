@@ -61,6 +61,11 @@ const inkOf = async (
 const panesOf = (opens: string[], isPlaced: boolean) =>
   [...new Set(opens)].map(id => ({ id, title: id, isShown: isPlaced, isFocused: false, isPlaced }))
 
+/** Sets the panes' Pictures choice Off, as a store that kept it does: the panes then draw their graphs as text. */
+function textOnly(on: On) {
+  on('store.get', (_$, e) => ({ value: e.key === 'pictures' ? false : undefined }))
+}
+
 /**
  * A session over `disk`: its id and root, the files' times, the `.tmp` and
  * `mv` a whole write needs, and its panes placed or not.
@@ -301,6 +306,7 @@ test('the pane draws the run: counts, a ticket worth a look, and a row opened to
     // A file that names no title.
     'STARK-3.json': ticket('STARK-3', 'pr', { updated: iso(120), title: undefined }),
   }
+  textOnly(on)
   stage(on, disk, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
   const clock = mock.clock(on, { now: T0 })
   await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
@@ -385,6 +391,7 @@ test("a ticket's hour marks calls, a failed 5 minutes and blanks, and an hour wi
     // No heartbeat, a stage change 20 minutes ago.
     'STARK-3.json': ticket('STARK-3', 'review', { updated: iso(20) }),
   }
+  textOnly(on)
   stage(on, disk, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
   const clock = mock.clock(on, { now: T0 })
   await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
@@ -856,6 +863,7 @@ test('a full bar keeps its note: all tickets at one step, one of them worth a lo
     'STARK-1.json': ticket('STARK-1', 'pr'),
     'STARK-2.json': ticket('STARK-2', 'pr', { updated: new Date(T0 - 120 * MIN).toISOString() }),
   }
+  textOnly(on)
   stage(on, disk, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
   const clock = mock.clock(on, { now: T0 })
   await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
@@ -873,6 +881,7 @@ test('the counts line up on the right in a column as wide as the run count', asy
     'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets }),
     'STARK-1.json': ticket('STARK-1', 'closed'),
   }
+  textOnly(on)
   stage(on, disk, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
   const clock = mock.clock(on, { now: T0 })
   await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
@@ -891,6 +900,7 @@ test('a pane too narrow for a 20-cell bar and the note gives the bar the whole l
     'STARK-1.json': ticket('STARK-1', 'pr'),
     'STARK-2.json': ticket('STARK-2', 'pr', { updated: new Date(T0 - 120 * MIN).toISOString() }),
   }
+  textOnly(on)
   stage(on, disk, { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
   const clock = mock.clock(on, { now: T0 })
   await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
@@ -1336,6 +1346,7 @@ test('the ticket pane draws the whole ticket: name, epic, track, activity and th
       recent: [false, false],
     }),
   }
+  textOnly(on)
   stage(on, disk, { session: 'w', root: WORKTREE })
   const clock = mock.clock(on, { now: T0 })
   await $.session.start({ cwd: WORKTREE, surface: 'terminal', isInteractive: true })
@@ -1739,6 +1750,7 @@ test("the ticket pane's Log tab shows the ticket's steps newest first", async ($
     // Another ticket's log is not this tab's to read.
     'STARK-2.log.jsonl': logFile([5, 'Not this ticket.']),
   }
+  textOnly(on)
   const seen = stage(on, disk, { session: 'w', root: WORKTREE })
   const clock = mock.clock(on, { now: T0 })
   await $.session.start({ cwd: WORKTREE, surface: 'terminal', isInteractive: true })
@@ -2508,4 +2520,205 @@ test("an ended Gru's epic keeps its count, and the pane keeps the last board onc
   expect(await after.find({ type: 'Text', text: /^The run ended, and Super-Gru removed its settings file/ })).toBeDefined()
   const ran = await $.command.run(command('super-board'))
   expect(JSON.stringify(ran)).not.toMatch(/no Super-Gru run/)
+})
+
+// Pictures: the panes' graphs as the terminal's Images (pictures.ts), On unless the store says Off.
+
+const pictureRun = (): Record<string, string> => {
+  const iso = (minutesAgo: number) => new Date(T0 - minutesAgo * MIN).toISOString()
+
+  return {
+    'run-STARK-10.json': JSON.stringify({ epic: 'STARK-10', session: 'gru', tickets: ['STARK-1', 'STARK-2', 'STARK-3'] }),
+    'run-STARK-10.log.jsonl': `${JSON.stringify({ at: iso(130), text: 'Started 3 jobs.' })}\n${JSON.stringify({ at: iso(5), text: 'Checked a job.' })}\n`,
+    'run-STARK-10.stats.json': JSON.stringify({
+      session: 'gru',
+      since: iso(130),
+      updated: iso(1),
+      tokens: { input: 1000, output: 2000, cacheRead: 300_000, cacheWrite: 4000 },
+      busyMs: 10 * MIN,
+    }),
+    'STARK-1.json': ticket('STARK-1', 'closed', { updated: iso(40) }),
+    'STARK-2.json': ticket('STARK-2', 'review'),
+    'STARK-2.beat.json': JSON.stringify({
+      lastActivity: iso(1),
+      running: null,
+      minutes: [{ at: Math.floor(T0 / MIN) - 2, calls: 4, fails: 1 }],
+      recent: [],
+    }),
+    'STARK-2.log.jsonl': `${JSON.stringify({ at: iso(100), text: 'Read the job.' })}\n`,
+    'STARK-2.stats.json': JSON.stringify({
+      session: 'w',
+      since: iso(100),
+      updated: iso(1),
+      tokens: { input: 500, output: 6000, cacheRead: 100_000, cacheWrite: 1000 },
+      busyMs: 50 * MIN,
+    }),
+  }
+}
+
+test('with Pictures on, the Gru pane draws its graphs as pictures in a terminal, and the Settings row turns them to text', async ($, on) => {
+  const seen = stage(on, pictureRun(), { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  seen.isPlaced = true
+  const store: Record<string, unknown> = {}
+  on('store.get', (_$, e) => ({ value: store[e.key] }))
+  on('store.set', (_$, e) => {
+    store[e.key] = e.value
+    return { value: undefined }
+  })
+  const blits: string[] = []
+  on('ui.blit', (_$, e) => {
+    blits.push(`${e.requestId} ${e.key}`)
+    return { value: {} }
+  })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+
+  const pane = await $.ui.mount(PANE)
+  // The tickets at each step are one bar, whose words say each count; the text graph is gone.
+  expect((await pane.find({ type: 'Image', key: 'steps' }))?.props).toMatchObject({
+    rows: 1,
+    columns: 60,
+    alt: 'not started 1 · ticket 0 · PR 0 · review 1 · merge 0 · done 1',
+  })
+  expect(await pane.find({ type: 'Text', text: /^not started  1 █/ })).toBeUndefined()
+  expect(await pane.find({ type: 'Text', text: /^not started 1$/ })).toBeDefined()
+  // The run has a start, so the tickets done draw over its time.
+  expect((await pane.find({ type: 'Image', key: 'burn' }))?.props).toMatchObject({ rows: 5 })
+  expect(await pane.find({ type: 'Text', text: '📈 Tickets done over the run' })).toBeDefined()
+  // Each ticket's line is a picture whose words are the text line; its name stays a text button.
+  expect((await pane.find({ type: 'Image', key: 'tkSTARK-2' }))?.props).toMatchObject({ rows: 1, alt: '●━━━━━━●━━━━━━◉┄┄┄┄┄┄○┄┄┄┄┄┄○' })
+  expect((await pane.find({ type: 'Image', key: 'tkSTARK-3' }))?.props).toMatchObject({ alt: '○┄┄┄┄┄┄○┄┄┄┄┄┄○┄┄┄┄┄┄○┄┄┄┄┄┄○' })
+  expect(await pane.find({ type: 'Text', text: /^●━━━━━━/ })).toBeUndefined()
+  // A worker in progress with calls in its hour shows them under its line; a done ticket shows none.
+  expect((await pane.find({ type: 'Image', key: 'hrSTARK-2' }))?.props).toMatchObject({ rows: 2, columns: 58 })
+  expect(await pane.find({ type: 'Image', key: 'hrSTARK-1' })).toBeUndefined()
+  expect(await pane.find({ type: 'Text', text: 'calls a minute' })).toBeDefined()
+  // Every picture is a PNG file: base64 of its 8 first bytes.
+  for (const image of await pane.findAll({ type: 'Image' })) expect(String((image.props.source as { png: string }).png)).toMatch(/^iVBORw0KGgo/)
+  // An opened row draws its hour as a chart with an axis, in place of the strip.
+  await pane.press({ key: 'row-STARK-2' })
+  expect(await pane.find({ type: 'Image', key: 'hrSTARK-2' })).toBeUndefined()
+  expect((await pane.find({ type: 'Image', key: 'hcSTARK-2' }))?.props).toMatchObject({ rows: 5 })
+  expect(await pane.find({ type: 'Text', text: /^Last hour  / })).toBeUndefined()
+
+  // The Log tab: the steps over the run, Gru's and the tickets'.
+  await pane.press({ key: 'tab-log' })
+  const steps = await pane.find({ type: 'Image', key: 'log' })
+  expect(steps?.props).toMatchObject({ rows: 1, columns: 60 })
+  expect(String(steps?.props.alt)).toMatch(/^3 steps since \d\d:\d\d\.$/)
+  expect(await pane.find({ type: 'Text', text: "Gru's steps" })).toBeDefined()
+
+  // The Stats tab: the run's clock, its token board and its share bars. No blit before the tab shows.
+  expect(blits).toEqual([])
+  await pane.press({ key: 'tab-stats' })
+  const runClock = await pane.find({ type: 'Image', key: 'clock' })
+  expect(runClock?.props).toMatchObject({ rows: 3, columns: 24 })
+  expect(String(runClock?.props.alt)).toMatch(/^02:10:0\d$/)
+  expect((await pane.find({ type: 'Image', key: 'board' }))?.props).toMatchObject({
+    alt: 'IN 1,500 · OUT 8,000 · CACHE READ 400,000 · CACHE WRITE 5,000',
+  })
+  expect((await pane.find({ type: 'Image', key: 'shOutput tokens' }))?.props).toMatchObject({ rows: 1, alt: 'Gru 25% · STARK-2 75%' })
+  expect(await pane.find({ type: 'Image', key: 'shWorking time' })).toBeDefined()
+  // While the placed pane shows the tab, each poll swaps the clock's picture, with no redraw.
+  await clock.advance(1000)
+  expect(blits).toContain('gru-board clock')
+
+  // No other surface has an Image: the desktop app keeps the text.
+  const desk = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await desk.findAll({ type: 'Image' })).toEqual([])
+  await desk.unmount()
+
+  // The Settings row turns the pictures Off, in the store; the pane then draws its graphs as text.
+  await pane.press({ key: 'tab-settings' })
+  expect(await pane.find({ type: 'Text', text: /^In a terminal, the pane draws its graphs as pictures/ })).toBeDefined()
+  await pane.press({ key: 'set-pictures' })
+  expect(store.pictures).toBe(false)
+  expect(await pane.find({ type: 'Text', text: 'The pane draws its graphs as text.' })).toBeDefined()
+  await pane.press({ key: 'tab-overview' })
+  expect(await pane.findAll({ type: 'Image' })).toEqual([])
+  expect(await pane.find({ type: 'Text', text: /^not started  1 █/ })).toBeDefined()
+  const before = blits.length
+  await pane.press({ key: 'tab-stats' })
+  await clock.advance(1000)
+  expect(blits.length).toBe(before)
+})
+
+test('a store that kept Pictures Off starts a session with text', async ($, on) => {
+  stage(on, pictureRun(), { session: 'gru', root: '/r/.claude/worktrees/STARK-10' })
+  textOnly(on)
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: '/r/.claude/worktrees/STARK-10', surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+  const pane = await $.ui.mount(PANE)
+  expect(await pane.findAll({ type: 'Image' })).toEqual([])
+  await pane.unmount()
+})
+
+test('with Pictures on, the ticket pane draws its line, its hour, its clock and its token board as pictures', async ($, on) => {
+  const iso = (minutesAgo: number) => new Date(T0 - minutesAgo * MIN).toISOString()
+  const disk: Record<string, string> = {
+    'STARK-1.json': ticket('STARK-1', 'pr', { title: 'bragi: read the words file (slice 2 of 3)' }),
+    'STARK-1.beat.json': JSON.stringify({
+      session: 'w',
+      lastActivity: iso(1),
+      running: null,
+      minutes: [{ at: Math.floor(T0 / MIN) - 2, calls: 4, fails: 0 }],
+      recent: [false, false],
+    }),
+    'STARK-1.log.jsonl': `${JSON.stringify({ at: iso(90), text: 'Read the job.' })}\n${JSON.stringify({ at: iso(10), text: 'Opened the change.' })}\n`,
+    'STARK-1.stats.json': JSON.stringify({
+      session: 'w',
+      since: iso(90),
+      updated: iso(1),
+      tokens: { input: 500, output: 6000, cacheRead: 100_000, cacheWrite: 1000 },
+    }),
+  }
+  const seen = stage(on, disk, { session: 'w', root: WORKTREE })
+  seen.isPlaced = true
+  const store: Record<string, unknown> = {}
+  on('store.get', (_$, e) => ({ value: store[e.key] }))
+  on('store.set', (_$, e) => {
+    store[e.key] = e.value
+    return { value: undefined }
+  })
+  const blits: string[] = []
+  on('ui.blit', (_$, e) => {
+    blits.push(`${e.requestId} ${e.key}`)
+    return { value: {} }
+  })
+  const clock = mock.clock(on, { now: T0 })
+  await $.session.start({ cwd: WORKTREE, surface: 'terminal', isInteractive: true })
+  await clock.advance(1000)
+
+  const pane = await $.ui.mount(TICKET_PANE)
+  // Its line as the Gru pane draws a row's, and its hour as a chart with an axis under Activity.
+  expect((await pane.find({ type: 'Image', key: 'track' }))?.props).toMatchObject({ rows: 1, alt: '●━━━━━━◉┄┄┄┄┄┄○┄┄┄┄┄┄○┄┄┄┄┄┄○' })
+  expect((await pane.find({ type: 'Image', key: 'hcSTARK-1' }))?.props).toMatchObject({ rows: 5 })
+  expect(await pane.find({ type: 'Text', text: /^Last hour  / })).toBeUndefined()
+  expect(await pane.find({ type: 'Text', text: 'calls a minute' })).toBeDefined()
+
+  // The Log tab's strip has one line, and no key: every step is the worker's.
+  await pane.press({ key: 'tab-log' })
+  expect((await pane.find({ type: 'Image', key: 'log' }))?.props).toMatchObject({ rows: 1 })
+  expect(await pane.find({ type: 'Text', text: "Gru's steps" })).toBeUndefined()
+
+  // The Stats tab: the clock since the ticket started, and the ticket's own token board.
+  await pane.press({ key: 'tab-stats' })
+  expect(await pane.find({ type: 'Text', text: '⏱ Ticket time' })).toBeDefined()
+  expect(String((await pane.find({ type: 'Image', key: 'clock' }))?.props.alt)).toMatch(/^01:30:0\d$/)
+  expect((await pane.find({ type: 'Image', key: 'board' }))?.props).toMatchObject({
+    alt: 'IN 500 · OUT 6,000 · CACHE READ 100,000 · CACHE WRITE 1,000',
+  })
+  await clock.advance(1000)
+  expect(blits).toContain('ticket-board clock')
+
+  // The same choice as the Gru pane's, under This pane; Off draws the text.
+  await pane.press({ key: 'tab-settings' })
+  expect(await pane.find({ type: 'Text', text: 'This pane' })).toBeDefined()
+  await pane.press({ key: 'set-pictures' })
+  expect(store.pictures).toBe(false)
+  await pane.press({ key: 'tab-overview' })
+  expect(await pane.findAll({ type: 'Image' })).toEqual([])
+  expect(await pane.find({ type: 'Text', text: /^Last hour  / })).toBeDefined()
 })
